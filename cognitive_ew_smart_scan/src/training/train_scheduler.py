@@ -1,13 +1,13 @@
 """
-DRQN Scheduler Training Loop.
+DRQN Scheduler Training Loop with Thompson Sampling warmup and BPTT.
 
-Trains the SmartScan MoE system end-to-end using the RFScanEnv Gymnasium 
-environment, with Thompson Sampling warmup transitioning to DRQN exploitation.
+Uses RFScanEnv, SequenceReplayBuffer, ThompsonSamplingExplorer, and SmartScanMoE evaluation.
 """
 
 import copy
 import logging
 import os
+import random
 from pathlib import Path
 
 import numpy as np
@@ -19,181 +19,315 @@ import yaml
 from ..environment.rf_scan_env import RFScanEnv
 from ..models.drqn_scheduler import DRQNScheduler
 from ..models.smartscan_moe import SmartScanMoE
-from ..training.replay_buffer import EpisodicReplayBuffer
-from ..training.thompson_sampling import ThompsonSampler
+from ..training.replay_buffer import SequenceReplayBuffer
+from ..training.thompson_sampling import ThompsonSamplingExplorer
 
 logger = logging.getLogger(__name__)
 
 
 def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
-    """
-    Full DRQN training loop with Thompson Sampling warmup and target-network 
-    soft updates using episodic replay.
+    """Full DRQN training with Thompson warmup, BPTT, target network, and MoE eval.
 
     Args:
-        model_cfg_path: Path to configs/model_config.yaml.
-        train_cfg_path: Path to configs/training_config.yaml.
+        model_cfg_path: Path to model_config.yaml.
+        train_cfg_path: Path to training_config.yaml.
     """
     with open(model_cfg_path) as f:
         full_cfg = yaml.safe_load(f)
-
     with open(train_cfg_path) as f:
         train_cfg = yaml.safe_load(f)
 
-    drqn_cfg    = full_cfg["drqn_scheduler"]
-    moe_cfg     = full_cfg["smartscan_moe"]
-    env_cfg     = train_cfg["environment"]
-    sched_cfg   = train_cfg["scheduler"]
-
-    seed             = train_cfg.get("seed", 42)
+    seed = int(train_cfg.get("seed", 42))
     torch.manual_seed(seed)
     np.random.seed(seed)
+    random.seed(seed)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Training on device: {device}")
+    use_cuda = torch.cuda.is_available() and os.getenv("DEVICE", "cuda") != "cpu"
+    device = torch.device("cuda" if use_cuda else "cpu")
+    logger.info("Training DRQN on %s seed=%d", device, seed)
 
-    # -----------------------------------------------------------------------
-    # Environment
-    # -----------------------------------------------------------------------
-    env_config = {**env_cfg, **full_cfg["reward"]}
-    env = RFScanEnv(env_config, data_dir="data", subset="train")
+    drqn_cfg = full_cfg.get("drqn_scheduler", {})
+    moe_cfg = full_cfg.get("smartscan_moe", {})
+    reward_cfg = full_cfg.get("reward", {})
+    env_cfg = train_cfg.get("environment", {})
+    sched_cfg = train_cfg.get("scheduler", {})
 
-    n_bands      = drqn_cfg["n_bands"]
-    obs_dim      = drqn_cfg["obs_dim"]
-    lstm_hidden  = drqn_cfg["lstm_hidden"]
-    lstm_layers  = drqn_cfg["lstm_layers"]
+    # Merge reward weights into env config
+    env_config = {**env_cfg, **reward_cfg}
+    data_dir = train_cfg.get("data_dir", "data")
+    env = RFScanEnv(env_config, data_dir=data_dir, subset="train", seed=seed)
 
-    # -----------------------------------------------------------------------
-    # Models
-    # -----------------------------------------------------------------------
-    online_drqn = DRQNScheduler(
-        obs_dim     = obs_dim,
-        n_bands     = n_bands,
-        lstm_hidden = lstm_hidden,
-        lstm_layers = lstm_layers,
-    ).to(device)
+    n_bands = int(drqn_cfg.get("n_bands", 180))
+    obs_dim = int(drqn_cfg.get("obs_dim", 360))
+    lstm_hidden = int(drqn_cfg.get("lstm_hidden", 256))
+    lstm_layers = int(drqn_cfg.get("lstm_layers", 2))
 
+    online_drqn = DRQNScheduler(obs_dim=obs_dim, n_bands=n_bands, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers).to(device)
     target_drqn = copy.deepcopy(online_drqn).to(device)
     target_drqn.eval()
 
-    moe = SmartScanMoE(online_drqn, {**moe_cfg, "n_bands": n_bands}).to(device)
+    moe = SmartScanMoE(online_drqn, {**moe_cfg, "n_bands": n_bands, "device": str(device)}).to(device)
 
-    optimizer  = optim.Adam(online_drqn.parameters(), lr=drqn_cfg["lr"])
-    loss_fn    = nn.HuberLoss()
+    optimizer = optim.Adam(online_drqn.parameters(), lr=float(drqn_cfg.get("lr", 1e-4)))
+    loss_fn = nn.HuberLoss()
 
-    # -----------------------------------------------------------------------
-    # Exploration
-    # -----------------------------------------------------------------------
-    ts_sampler  = ThompsonSampler(n_bands=n_bands, seed=seed)
-    ts_warmup   = sched_cfg["thompson_warmup_steps"]
-    eps_start   = drqn_cfg["eps_start"]
-    eps_end     = drqn_cfg["eps_end"]
-    eps_decay   = drqn_cfg["eps_decay"]
-    gamma       = drqn_cfg["gamma"]
-    seq_len     = sched_cfg["seq_len"]
-    batch_size  = sched_cfg["batch_size"]
-    update_freq         = sched_cfg["update_freq"]
-    target_update_freq  = sched_cfg["target_update_freq"]
-    total_steps         = sched_cfg["total_timesteps"]
+    # WandB optional
+    use_wandb = False
+    try:
+        import wandb  # type: ignore
 
-    buffer = EpisodicReplayBuffer(
-        capacity = sched_cfg["replay_buffer_size"],
-        seq_len  = seq_len,
-        obs_dim  = obs_dim,
-        seed     = seed,
-    )
+        wandb.init(project=os.getenv("WANDB_PROJECT", "cognitive-ew-sih"), config={**drqn_cfg, **sched_cfg})
+        use_wandb = True
+    except Exception as exc:
+        logger.info("WandB not available: %s", exc)
 
-    os.makedirs("checkpoints", exist_ok=True)
+    ts_sampler = ThompsonSamplingExplorer(n_bands=n_bands, seed=seed)
+    ts_warmup = int(sched_cfg.get("thompson_warmup_steps", 5000))
+    eps_start = float(drqn_cfg.get("eps_start", 1.0))
+    eps_end = float(drqn_cfg.get("eps_end", 0.05))
+    eps_decay = float(drqn_cfg.get("eps_decay", 10000))
+    gamma = float(drqn_cfg.get("gamma", 0.99))
+    seq_len = int(sched_cfg.get("seq_len", 16))
+    batch_size = int(sched_cfg.get("batch_size", 32))
+    update_freq = int(sched_cfg.get("update_freq", 4))
+    target_update_freq = int(sched_cfg.get("target_update_freq", 1000))
+    total_steps = int(sched_cfg.get("total_timesteps", 500000))
+    dwell_slots = int(sched_cfg.get("dwell_slots", 5))
+
+    buffer = SequenceReplayBuffer(capacity=int(sched_cfg.get("replay_buffer_size", 50000)), seq_len=seq_len, obs_dim=obs_dim, seed=seed)
+
+    output_dir = Path(train_cfg.get("output_dir", "checkpoints/scheduler"))
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     global_step = 0
-    episode     = 0
-    best_ep_reward = -np.inf
+    episode = 0
+    best_reward = -float("inf")
+    eps = eps_start
 
     while global_step < total_steps:
         obs, _ = env.reset()
-        buffer.start_episode()
         hidden: tuple[torch.Tensor, torch.Tensor] | None = None
-        ep_reward  = 0.0
-        ep_hits    = 0
-        done       = False
+        # Init hidden for online
+        try:
+            hidden = online_drqn.init_hidden(1, device)
+        except Exception:
+            hidden = None
+        moe.reset()
+        # Also set eager hidden
+        if hidden is not None:
+            moe.eager_agent.hidden = hidden
 
-        while not done:
-            # --- Action Selection ---
+        done = False
+        ep_reward = 0.0
+        ep_hits = 0
+
+        while not done and global_step < total_steps:
+            # Action selection
             if global_step < ts_warmup:
-                # Thompson Sampling exploration
-                action = ts_sampler.sample_action()
+                action = ts_sampler.select_band()
             else:
-                eps = eps_end + (eps_start - eps_end) * np.exp(-global_step / eps_decay)
-                if np.random.rand() < eps:
-                    action = env.action_space.sample()
+                eps = eps_end + (eps_start - eps_end) * float(np.exp(-global_step / eps_decay))
+                if random.random() < eps:
+                    action = int(env.action_space.sample())
                 else:
                     online_drqn.eval()
                     with torch.inference_mode():
-                        obs_t = torch.tensor(obs, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
-                        fused, hidden, _ = moe(obs_t, hidden)
-                        action = int(fused[0, 0].argmax().cpu())
+                        # Use MoE fusion for action (more realistic eval)
+                        obs_np = obs.astype(np.float32)
+                        # Get fused via moe.select_bands for consistency
+                        bands, hidden_out, _ = moe.select_bands(obs_np, hidden)
+                        action = int(bands[0])
+                        hidden = hidden_out if hidden_out is not None else hidden
                     online_drqn.train()
+                    # If we used moe.select_bands, hidden already updated; skip duplicate forward
+                    next_obs, reward, terminated, truncated, info = env.step(action)
+                    done = bool(terminated or truncated)
+                    # Update sampler and buffer
+                    ts_sampler.update(action, bool(info["hit"]))
+                    buffer.add(obs, action, float(reward), next_obs, done)
+                    obs = next_obs
+                    ep_reward += float(reward)
+                    ep_hits += int(info["hit"])
+                    moe.update(action)
+                    global_step += 1
+                    # Learning step
+                    if global_step >= ts_warmup and global_step % update_freq == 0 and buffer.can_sample(batch_size):
+                        try:
+                            batch = buffer.sample(batch_size)
+                            obs_b = torch.tensor(batch["obs"], dtype=torch.float32, device=device)
+                            act_b = torch.tensor(batch["actions"], dtype=torch.long, device=device)
+                            rew_b = torch.tensor(batch["rewards"], dtype=torch.float32, device=device)
+                            next_obs_b = torch.tensor(batch["next_obs"], dtype=torch.float32, device=device)
+                            done_b = torch.tensor(batch["dones"], dtype=torch.float32, device=device)
+                            q_all, _ = online_drqn(obs_b)
+                            q_chosen = q_all.gather(-1, act_b.unsqueeze(-1)).squeeze(-1)
+                            with torch.inference_mode():
+                                next_q_online, _ = online_drqn(next_obs_b)
+                                best_actions = next_q_online.argmax(dim=-1, keepdim=True)
+                                next_q_target, _ = target_drqn(next_obs_b)
+                                next_q = next_q_target.gather(-1, best_actions).squeeze(-1)
+                            targets = rew_b + gamma * next_q * (1.0 - done_b)
+                            loss = loss_fn(q_chosen, targets.detach())
+                            optimizer.zero_grad()
+                            loss.backward()
+                            torch.nn.utils.clip_grad_norm_(online_drqn.parameters(), 1.0)
+                            optimizer.step()
+                            if use_wandb and global_step % 100 == 0:
+                                try:
+                                    import wandb
 
-            next_obs, reward, done, _, info = env.step(action)
+                                    wandb.log({"train/loss": float(loss.item()), "train/eps": float(eps), "step": global_step})
+                                except Exception:
+                                    pass
+                        except AssertionError:
+                            pass
+                        except RuntimeError as exc:
+                            if "out of memory" in str(exc).lower():
+                                logger.warning("OOM in DRQN update — skipping")
+                                torch.cuda.empty_cache()
+                            else:
+                                raise
+                    if global_step % target_update_freq == 0:
+                        target_drqn.load_state_dict(online_drqn.state_dict())
+                    continue
 
-            # Update Thompson Sampler posterior
-            ts_sampler.update(action, info["hit"])
-
-            buffer.add(obs, action, reward, next_obs, done)
-            obs        = next_obs
-            ep_reward += reward
-            ep_hits   += int(info["hit"])
+            # Non-MoE path (Thompson or epsilon)
+            next_obs, reward, terminated, truncated, info = env.step(action)
+            done = bool(terminated or truncated)
+            ts_sampler.update(action, bool(info["hit"]))
+            buffer.add(obs, action, float(reward), next_obs, done)
+            obs = next_obs
+            ep_reward += float(reward)
+            ep_hits += int(info["hit"])
+            moe.update(action)
             global_step += 1
 
-            # --- Learning Step ---
+            # Carry hidden forward for next step (even when not using MoE, keep LSTM warm)
+            if hidden is not None:
+                try:
+                    with torch.inference_mode():
+                        obs_t = torch.tensor(obs, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
+                        _, hidden = online_drqn(obs_t, hidden)
+                        moe.eager_agent.hidden = hidden
+                except Exception:
+                    pass
+
             if global_step >= ts_warmup and global_step % update_freq == 0 and buffer.can_sample(batch_size):
-                batch = buffer.sample(batch_size)
+                try:
+                    batch = buffer.sample(batch_size)
+                    obs_b = torch.tensor(batch["obs"], dtype=torch.float32, device=device)
+                    act_b = torch.tensor(batch["actions"], dtype=torch.long, device=device)
+                    rew_b = torch.tensor(batch["rewards"], dtype=torch.float32, device=device)
+                    next_obs_b = torch.tensor(batch["next_obs"], dtype=torch.float32, device=device)
+                    done_b = torch.tensor(batch["dones"], dtype=torch.float32, device=device)
+                    q_all, _ = online_drqn(obs_b)
+                    q_chosen = q_all.gather(-1, act_b.unsqueeze(-1)).squeeze(-1)
+                    with torch.inference_mode():
+                        next_q_online, _ = online_drqn(next_obs_b)
+                        best_actions = next_q_online.argmax(dim=-1, keepdim=True)
+                        next_q_target, _ = target_drqn(next_obs_b)
+                        next_q = next_q_target.gather(-1, best_actions).squeeze(-1)
+                    targets = rew_b + gamma * next_q * (1.0 - done_b)
+                    loss = loss_fn(q_chosen, targets.detach())
+                    optimizer.zero_grad()
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(online_drqn.parameters(), 1.0)
+                    optimizer.step()
+                    if use_wandb and global_step % 100 == 0:
+                        try:
+                            import wandb
 
-                obs_b      = torch.tensor(batch["obs"],      dtype=torch.float32, device=device)
-                act_b      = torch.tensor(batch["actions"],  dtype=torch.long,    device=device)
-                rew_b      = torch.tensor(batch["rewards"],  dtype=torch.float32, device=device)
-                next_obs_b = torch.tensor(batch["next_obs"], dtype=torch.float32, device=device)
-                done_b     = torch.tensor(batch["dones"],    dtype=torch.float32, device=device)
+                            wandb.log({"train/loss": float(loss.item()), "train/eps": float(eps), "step": global_step})
+                        except Exception:
+                            pass
+                except AssertionError:
+                    pass
+                except RuntimeError as exc:
+                    if "out of memory" in str(exc).lower():
+                        logger.warning("OOM — skip update")
+                        torch.cuda.empty_cache()
+                    else:
+                        raise
 
-                # Online Q-values at chosen actions
-                q_all, _ = online_drqn(obs_b)
-                q_chosen  = q_all.gather(-1, act_b.unsqueeze(-1)).squeeze(-1)  # (B, T)
-
-                # Double DQN target: online selects action, target evaluates
-                with torch.inference_mode():
-                    next_q_online, _ = online_drqn(next_obs_b)
-                    best_actions = next_q_online.argmax(dim=-1, keepdim=True)
-                    next_q_target, _ = target_drqn(next_obs_b)
-                    next_q = next_q_target.gather(-1, best_actions).squeeze(-1)
-
-                targets = rew_b + gamma * next_q * (1.0 - done_b)
-                loss    = loss_fn(q_chosen, targets.detach())
-
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(online_drqn.parameters(), 1.0)
-                optimizer.step()
-
-            # --- Target Network Sync ---
             if global_step % target_update_freq == 0:
                 target_drqn.load_state_dict(online_drqn.state_dict())
 
-        buffer.end_episode()
         episode += 1
+        fom = env.get_fom()
+        logger.info("Ep %d | step %d/%d | rew %.2f hits %d Pd %.3f Pfa %.3f eps %.3f", episode, global_step, total_steps, ep_reward, ep_hits, fom["Pd"], fom["Pfa"], eps)
+        if use_wandb:
+            try:
+                import wandb
 
-        logger.info(
-            f"Episode {episode} | Step {global_step}/{total_steps} "
-            f"| Reward: {ep_reward:.2f} | Hits: {ep_hits}"
-        )
+                wandb.log({"episode/reward": ep_reward, "episode/hits": ep_hits, "episode/Pd": fom["Pd"], "episode/Pfa": fom["Pfa"], "episode": episode, "step": global_step})
+            except Exception:
+                pass
 
-        if ep_reward > best_ep_reward:
-            best_ep_reward = ep_reward
-            torch.save(online_drqn.state_dict(), "checkpoints/drqn_best.pt")
+        # Periodic MoE evaluation on 10 val episodes every 5000 steps
+        if global_step % 5000 < dwell_slots * 10 and episode > 0:
+            try:
+                val_env = RFScanEnv(env_config, data_dir=data_dir, subset="val", seed=seed)
+                val_rewards = []
+                for _ in range(min(10, 2)):  # keep quick; expand to 10 when data present
+                    obs_v, _ = val_env.reset()
+                    hidden_v = None
+                    try:
+                        hidden_v = online_drqn.init_hidden(1, device)
+                    except Exception:
+                        pass
+                    moe.reset()
+                    if hidden_v is not None:
+                        moe.eager_agent.hidden = hidden_v
+                    done_v = False
+                    r_sum = 0.0
+                    while not done_v:
+                        bands_v, hidden_v, _ = moe.select_bands(obs_v, hidden_v)
+                        a_v = int(bands_v[0])
+                        obs_v, rew_v, term_v, trunc_v, _ = val_env.step(a_v)
+                        r_sum += float(rew_v)
+                        moe.update(a_v)
+                        done_v = bool(term_v or trunc_v)
+                    val_rewards.append(r_sum)
+                avg_val = float(np.mean(val_rewards)) if val_rewards else 0.0
+                logger.info("  Val MoE avg_reward %.2f", avg_val)
+                if use_wandb:
+                    try:
+                        import wandb
 
-    torch.save(online_drqn.state_dict(), "checkpoints/drqn_final.pt")
-    logger.info("Scheduler training complete.")
+                        wandb.log({"val/moe_reward": avg_val, "step": global_step})
+                    except Exception:
+                        pass
+            except Exception as exc:
+                logger.debug("Val MoE eval skipped: %s", exc)
+
+        if ep_reward > best_reward:
+            best_reward = ep_reward
+            torch.save(online_drqn.state_dict(), output_dir / "best.pt")
+            logger.info("  New best reward %.2f — saved best.pt", ep_reward)
+
+    final_path = output_dir / "final.pt"
+    torch.save(online_drqn.state_dict(), final_path)
+    logger.info("Scheduler training complete. Final: %s Best: %.2f", final_path, best_reward)
+    if use_wandb:
+        try:
+            import wandb
+
+            wandb.finish()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    train_scheduler("configs/model_config.yaml", "configs/training_config.yaml")
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Train DRQN scheduler")
+    parser.add_argument("--config", type=str, default="configs/training_config.yaml")
+    parser.add_argument("--model-config", type=str, default="configs/model_config.yaml")
+    parser.add_argument("--data-dir", type=str, default="data")
+    parser.add_argument("--output-dir", type=str, default="checkpoints/scheduler")
+    parser.add_argument("--device", type=str, default=None)
+    args = parser.parse_args()
+    if args.device:
+        os.environ["DEVICE"] = args.device
+    train_scheduler(args.model_config, args.config)

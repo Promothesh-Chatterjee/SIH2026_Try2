@@ -1,123 +1,131 @@
 """
-State Matrix Builder Module
+State Matrix Builder Module.
 
-Constructs binary transmission matrices and extracts PDWs from specific 
+Constructs binary transmission matrices and extracts PDWs from specific
 frequency/time windows to simulate an ES receiver.
 """
 
+import logging
 import numpy as np
 
 try:
     from turing_deinterleaving_challenge import PulseTrain
 except ImportError:
-    # Fallback type for type hinting if library is unavailable in current env
     from typing import Any
-    PulseTrain = Any
+
+    PulseTrain = Any  # type: ignore
+
+logger = logging.getLogger(__name__)
+
 
 def build_transmission_matrix(
-    pt: PulseTrain, 
-    n_bands: int, 
+    pt: PulseTrain,
+    n_bands: int,
     time_resolution_us: float,
     freq_min_mhz: float = 0.0,
-    freq_max_mhz: float = 18000.0
+    freq_max_mhz: float = 18000.0,
 ) -> np.ndarray:
-    """
-    Builds a binary transmission matrix representing band occupancy over time.
-    
+    """Build binary transmission matrix (T, n_bands) from a PulseTrain.
+
+    Entry [t,b]=1 if any pulse arrived in band b during slot t.
+    Uses STARE as oracle ground truth; SCAN for realistic training.
+    Handles empty trains and pulses exactly at band boundaries via clipping.
+
     Args:
-        pt: PulseTrain object containing the ground truth PDWs.
-        n_bands: Number of discrete frequency bins (action space size).
-        time_resolution_us: The duration of one time slot in microseconds.
-        freq_min_mhz: Lower bound of the receiver frequency range.
-        freq_max_mhz: Upper bound of the receiver frequency range.
-        
+        pt: Loaded PulseTrain (pt.data shape (N,5), pt.labels (N,)).
+        n_bands: Number of frequency bands.
+        time_resolution_us: Duration of one time slot in microseconds.
+        freq_min_mhz: Lower frequency bound.
+        freq_max_mhz: Upper frequency bound.
+
     Returns:
-        np.ndarray: Binary matrix of shape (T, n_bands) where T is the total
-                    number of time slots spanning the pulse train.
+        Binary matrix (T, n_bands) dtype int8. Returns (1,n_bands) zeros if empty.
     """
-    if len(pt) == 0:
+    try:
+        n_pulses = len(pt)
+    except Exception:
+        n_pulses = 0 if pt.data is None else pt.data.shape[0]
+    if n_pulses == 0 or pt.data is None or pt.data.size == 0:
+        logger.warning("Empty pulse train — returning zero matrix")
         return np.zeros((1, n_bands), dtype=np.int8)
 
-    toa = pt.data[:, 0]
-    cf = pt.data[:, 1]
-    
-    # Calculate time slots
-    max_toa = np.max(toa)
-    min_toa = np.min(toa)
-    
-    # Total time slots needed (T)
-    # Ensure at least 1 slot if pulse train is extremely short
+    toa = pt.data[:, 0].astype(np.float64)
+    cf = pt.data[:, 1].astype(np.float64)
+
+    min_toa = float(np.min(toa))
+    max_toa = float(np.max(toa))
     num_slots = int(np.ceil((max_toa - min_toa) / time_resolution_us)) + 1
-    
-    # Pre-allocate binary matrix
+    num_slots = max(1, num_slots)
+
     matrix = np.zeros((num_slots, n_bands), dtype=np.int8)
-    
-    # Map ToA to time slot index
+
     t_idx = np.floor((toa - min_toa) / time_resolution_us).astype(int)
-    # Clip to max slot to handle floating point edge cases
     t_idx = np.clip(t_idx, 0, num_slots - 1)
-    
-    # Map CF to band index
+
     band_width = (freq_max_mhz - freq_min_mhz) / n_bands
     b_idx = np.floor((cf - freq_min_mhz) / band_width).astype(int)
-    # Clip to max band (handles pulses exactly at freq_max_mhz or out of bounds)
     b_idx = np.clip(b_idx, 0, n_bands - 1)
-    
-    # Set occupied slots to 1
+
     matrix[t_idx, b_idx] = 1
-    
     return matrix
 
 
 def get_pdws_in_band(
-    pt: PulseTrain, 
-    band_idx: int, 
-    t_start_us: float, 
-    t_end_us: float, 
+    pt: PulseTrain,
+    band_idx: int,
+    t_start_us: float,
+    t_end_us: float,
     n_bands: int,
     freq_min_mhz: float = 0.0,
-    freq_max_mhz: float = 18000.0
+    freq_max_mhz: float = 18000.0,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Retrieves the subset of PDWs and their corresponding labels that fall 
-    within a specified frequency band and time window.
-    
+    """Return subset of PDWs in a band during a time window.
+
+    This is the observation returned by RFScanEnv when the agent tunes to a band.
+
     Args:
-        pt: PulseTrain object containing the data.
-        band_idx: The integer index of the frequency band chosen.
-        t_start_us: Start time of the dwell in microseconds.
-        t_end_us: End time of the dwell in microseconds.
-        n_bands: Total number of bands (to calculate bandwidth).
-        freq_min_mhz: Lower bound of the receiver frequency range.
-        freq_max_mhz: Upper bound of the receiver frequency range.
-        
+        pt: PulseTrain object.
+        band_idx: Index of tuned band [0, n_bands).
+        t_start_us: Dwell start time (µs).
+        t_end_us: Dwell end time (µs, exclusive).
+        n_bands: Total bands.
+        freq_min_mhz: Lower bound.
+        freq_max_mhz: Upper bound.
+
     Returns:
-        tuple containing:
-        - np.ndarray: Filtered PDWs of shape (K, 5)
-        - np.ndarray: Corresponding labels of shape (K,)
+        Tuple (filtered_pdws (K,5) float32, filtered_labels (K,) int32).
+        Returns empty arrays if no pulses match or train empty.
     """
-    if len(pt) == 0:
+    try:
+        n_pulses = len(pt)
+    except Exception:
+        n_pulses = 0 if pt.data is None else pt.data.shape[0]
+    if n_pulses == 0 or pt.data is None or pt.data.size == 0:
         return np.empty((0, 5), dtype=np.float32), np.empty((0,), dtype=np.int32)
-        
+
+    if not (0 <= band_idx < n_bands):
+        raise ValueError(f"band_idx {band_idx} out of range [0,{n_bands})")
+
     band_width = (freq_max_mhz - freq_min_mhz) / n_bands
-    band_f_min = freq_min_mhz + (band_idx * band_width)
-    band_f_max = freq_min_mhz + ((band_idx + 1) * band_width)
-    
+    band_f_min = freq_min_mhz + band_idx * band_width
+    band_f_max = freq_min_mhz + (band_idx + 1) * band_width
+
     toa = pt.data[:, 0]
     cf = pt.data[:, 1]
-    
-    # Boolean mask for time and frequency boundaries
+
     mask_time = (toa >= t_start_us) & (toa < t_end_us)
-    mask_freq = (cf >= band_f_min) & (cf <= band_f_max)
-    
-    combined_mask = mask_time & mask_freq
-    
-    filtered_pdws = pt.data[combined_mask]
-    
-    # Handle the case where labels might be None (unlabeled dataset)
+    # Handle exact boundary: include pulses exactly at upper edge of last band
+    if band_idx == n_bands - 1:
+        mask_freq = (cf >= band_f_min) & (cf <= band_f_max)
+    else:
+        mask_freq = (cf >= band_f_min) & (cf < band_f_max)
+
+    combined = mask_time & mask_freq
+    filtered_pdws = pt.data[combined]
+
     if pt.labels is not None:
-        filtered_labels = pt.labels[combined_mask]
+        filtered_labels = pt.labels[combined]
     else:
         filtered_labels = np.full(filtered_pdws.shape[0], -1, dtype=np.int32)
-        
+
     return filtered_pdws, filtered_labels
