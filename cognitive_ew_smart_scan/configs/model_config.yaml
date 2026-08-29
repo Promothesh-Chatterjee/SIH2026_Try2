@@ -1,0 +1,32 @@
+deinterleaver:
+  pdw_dim: 6  # 6D due to ToA, CF, PW, sin(AoA), cos(AoA), Amplitude
+  d_model: 128
+  nhead: 8
+  num_layers: 4
+  dim_feedforward: 512
+  dropout: 0.1
+  embed_dim: 64
+  triplet_margin: 0.5
+
+drqn_scheduler:
+  n_bands: 180
+  lstm_hidden: 256
+  lstm_layers: 2
+  obs_dim: 360          # 2 * n_bands
+  gamma: 0.99
+  lr: 1e-4
+  eps_start: 1.0
+  eps_end: 0.05
+  eps_decay: 10000
+
+smartscan_moe:
+  eager_weight: 0.6
+  revisit_weight: 0.4
+  k_receivers: 1
+  decay_rate: 0.05
+
+reward:
+  w1: 5.0    # novel intercepts
+  w2: 8.0    # priority threat hits
+  w3: 0.1    # intercept time error penalty
+  w4: 4.0    # miss penalty

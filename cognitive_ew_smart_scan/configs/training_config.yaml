@@ -1,0 +1,28 @@
+seed: 42
+
+deinterleaver:
+  batch_size: 8
+  max_pulses_per_train: 2048    # truncate/sample long pulse trains
+  epochs: 50
+  lr: 3e-4
+  weight_decay: 1e-5
+  scheduler: cosine
+  warmup_steps: 500
+  save_every: 5
+  val_every: 2
+
+scheduler:
+  total_timesteps: 500000
+  replay_buffer_size: 50000
+  batch_size: 32
+  seq_len: 16                   # DRQN sequence length for BPTT
+  update_freq: 4
+  target_update_freq: 1000
+  thompson_warmup_steps: 5000   # Use Thompson Sampling before DRQN exploitation
+  dwell_slots: 5                # time slots per action
+
+environment:
+  n_bands: 180
+  freq_min_mhz: 0.0
+  freq_max_mhz: 18000.0
+  time_resolution_us: 100.0
