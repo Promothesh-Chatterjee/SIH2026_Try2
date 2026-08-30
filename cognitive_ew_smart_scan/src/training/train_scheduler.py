@@ -16,6 +16,7 @@ import torch.nn as nn
 import torch.optim as optim
 import yaml
 
+from ..deployment.api import STATE
 from ..environment.rf_scan_env import RFScanEnv
 from ..models.drqn_scheduler import DRQNScheduler
 from ..models.smartscan_moe import SmartScanMoE
