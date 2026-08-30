@@ -25,7 +25,9 @@ load_dotenv()
 
 import torch
 import yaml
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+import asyncio
+import json
 try:
     from fastapi.middleware.base import BaseHTTPMiddleware  # type: ignore
 except ImportError:
@@ -46,6 +48,20 @@ STATE: dict[str, Any] = {
     "memory": None,
     "fom": None,
     "hidden": None,
+    # Dashboard Streaming Keys
+    "current_band": 0,
+    "eager_pct": 0.6,
+    "revisit_pct": 0.4,
+    "epsilon": 1.0,
+    "replay_buf_size": 0,
+    "infer_latency_ms": 0.0,
+    "band_priorities": [0.0] * 180,
+    "latest_pdws": [],
+    "active_emitters": [],
+    "cluster_metrics": {
+        "vmeasure": 0.0, "ari": 0.0, "ami": 0.0,
+        "homogeneity": 0.0, "completeness": 0.0, "mcc": 0.0, "f1": 0.0
+    }
 }
 
 
@@ -484,3 +500,40 @@ def list_emitters() -> list[dict[str, Any]]:
         return out
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+from fastapi import WebSocket, WebSocketDisconnect
+import asyncio
+import json
+
+_ws_clients: list[WebSocket] = []
+
+@app.websocket("/ws/state")
+async def ws_state(ws: WebSocket):
+    await ws.accept()
+    _ws_clients.append(ws)
+    try:
+        while True:
+            await asyncio.sleep(0.25)  # 4 Hz stream
+            fom = STATE["fom"].summary() if STATE.get("fom") else {}
+            payload = {
+                "metrics": fom,
+                "scheduler": {
+                    "currentBand": STATE.get("current_band", 0),
+                    "eagerPct": STATE.get("eager_pct", 0.6),
+                    "revisitPct": STATE.get("revisit_pct", 0.4),
+                    "epsilon": STATE.get("epsilon", 1.0),
+                    "replayBuf": STATE.get("replay_buf_size", 0),
+                    "inferLatencyMs": STATE.get("infer_latency_ms", 0.0),
+                    "avgReward": fom.get("avg_reward", 0.0),
+                },
+                "bandPriorities": STATE.get("band_priorities", [0.0] * 180),
+                "pdws": STATE.get("latest_pdws", []),
+                "emitters": STATE.get("active_emitters", []),
+                "clusterMetrics": STATE.get("cluster_metrics", {
+                    "vmeasure": 0.0, "ari": 0.0, "ami": 0.0,
+                    "homogeneity": 0.0, "completeness": 0.0, "mcc": 0.0, "f1": 0.0
+                }),
+            }
+            await ws.send_text(json.dumps(payload))
+    except WebSocketDisconnect:
+        _ws_clients.remove(ws)
