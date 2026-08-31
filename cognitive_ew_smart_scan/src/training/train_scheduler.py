@@ -22,6 +22,7 @@ from ..models.drqn_scheduler import DRQNScheduler
 from ..models.smartscan_moe import SmartScanMoE
 from ..training.replay_buffer import SequenceReplayBuffer
 from ..training.thompson_sampling import ThompsonSamplingExplorer
+from ..data.synthetic_dataset import ensure_local_fallback_dataset
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
     # Merge reward weights into env config
     env_config = {**env_cfg, **reward_cfg}
     data_dir = train_cfg.get("data_dir", "data")
+    ensure_local_fallback_dataset(data_root=data_dir, seed=seed)
     env = RFScanEnv(env_config, data_dir=data_dir, subset="train", seed=seed)
 
     n_bands = int(drqn_cfg.get("n_bands", 180))

@@ -33,11 +33,20 @@ PDW Stream (ToA,CF,PW,AoA,Amp)  5D
 
 Dueling: `Q(s,a)=V(s)+A(s,a)-mean(A)` · Thompson Beta(1,1) warmup 5000 steps · BPTT seq_len16
 
-## Quick Start (3 commands)
+## Quick Start (safe default)
 
 ```bash
 pip install -r requirements.txt
-python scripts/download_data.py --output-dir data  # needs HF_TOKEN in .env
+python scripts/download_data.py  # safe default: does not pull the huge TSRD archive
+python -m src.training.train_deinterleaver --model-config configs/model_config.yaml --config configs/training_config.yaml
+```
+
+> The official TSRD download is intentionally opt-in. The project stays in a safe local-training mode unless you explicitly run with `--allow-download` after confirming the dataset size and your teammate’s repo path.
+
+For a real TSRD run when the official repo is ready:
+
+```bash
+python scripts/download_data.py --allow-download --output-dir data --token "$HF_TOKEN"
 python -m src.evaluation.evaluate_full --config configs/model_config.yaml --test-dir data/test --output-dir results --mode scan
 ```
 

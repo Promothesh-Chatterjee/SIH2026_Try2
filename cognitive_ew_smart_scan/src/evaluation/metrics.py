@@ -81,10 +81,12 @@ class FiguresOfMerit:
             self.n_hits += 1
             self.intercept_time_errors.append(float(intercept_time_error_us))
         else:
-            # tuned empty while something was active → miss; else false alarm
+            # Miss events are distinct from false alarms: chosen band was empty while
+            # another band was active. False alarms require no active emissions at all.
             if any_active:
                 self.n_misses += 1
-            self.n_false_alarms += 1
+            else:
+                self.n_false_alarms += 1
 
         # For ROC: treat hit as TP, false alarm as FP
         pd_point = self.n_hits / max(1, self.n_active_opportunities)

@@ -98,7 +98,7 @@ class SmartScanMoE(nn.Module):
         Ensures no band ignored > max_revisit_gap slots.
         """
 
-        def __init__(self, n_bands: int = 180, decay_rate: float = 0.05, max_revisit_gap: int = 200) -> None:
+        def __init__(self, n_bands: int = 180, decay_rate: float = 0.05, max_revisit_gap: int | None = None) -> None:
             """Initialise revisit agent.
 
             Args:
@@ -108,7 +108,7 @@ class SmartScanMoE(nn.Module):
             """
             self.n_bands = n_bands
             self.decay_rate = decay_rate
-            self.max_revisit_gap = max_revisit_gap
+            self.max_revisit_gap = int(max_revisit_gap if max_revisit_gap is not None else 200)
             self.last_visit_time = np.zeros(n_bands, dtype=np.float64)
             self.current_t: int = 0
 
@@ -157,11 +157,16 @@ class SmartScanMoE(nn.Module):
         self.revisit_weight: float = float(config.get("revisit_weight", 0.4))
         self.k_receivers: int = int(config.get("k_receivers", 1))
         self.decay_rate: float = float(config.get("decay_rate", 0.05))
+        self.max_revisit_gap: int = int(config.get("max_revisit_gap", 200))
 
         # Inner agents per spec
         device = config.get("device", "cpu")
         self.eager_agent = SmartScanMoE.EagerAgent(drqn_agent, device=device)
-        self.revisit_agent = SmartScanMoE.RevisitAgent(n_bands=self.n_bands, decay_rate=self.decay_rate)
+        self.revisit_agent = SmartScanMoE.RevisitAgent(
+            n_bands=self.n_bands,
+            decay_rate=self.decay_rate,
+            max_revisit_gap=self.max_revisit_gap,
+        )
 
         # Keep direct refs for torch MoE forward
         self.drqn = drqn_agent

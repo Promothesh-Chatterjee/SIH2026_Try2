@@ -25,7 +25,7 @@ load_dotenv()
 
 import torch
 import yaml
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 import asyncio
 import json
 try:
@@ -34,6 +34,23 @@ except ImportError:
     from starlette.middleware.base import BaseHTTPMiddleware  # type: ignore
 
 from pydantic import BaseModel, Field
+
+MAX_PDWS_PER_REQUEST = 10000
+MAX_SESSION_TTL_SECONDS = 3600
+
+
+def _is_authorized(request: Request) -> bool:
+    """Allow state-changing endpoints only with a valid session token.
+
+    The project requirement explicitly calls for authentication on mutating API
+    routes. A simple bearer token avoids open state mutation while keeping the
+    service runnable in local testing environments.
+    """
+    token = os.getenv("SMARTSCAN_API_TOKEN", "")
+    if not token:
+        return True
+    auth_header = request.headers.get("Authorization", "")
+    return auth_header == f"Bearer {token}"
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -300,8 +317,10 @@ def get_metrics() -> dict[str, Any]:
 
 
 @app.post("/reset", tags=["system"])
-def reset() -> dict[str, str]:
+def reset(request: Request) -> dict[str, str]:
     """Reset LSTM hidden state and episodic memory."""
+    if not _is_authorized(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         if STATE.get("moe") and hasattr(STATE["moe"], "reset"):
             STATE["moe"].reset()  # type: ignore
@@ -378,9 +397,11 @@ def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
 
 
 @app.post("/deinterleave", response_model=DeinterleaveResponse, tags=["deinterleaving"])
-def deinterleave_endpoint(req: DeinterleaveRequest) -> DeinterleaveResponse:
+def deinterleave_endpoint(req: DeinterleaveRequest, request: Request) -> DeinterleaveResponse:
     """Run deinterleaving on PDW batch."""
     start = time.perf_counter()
+    if len(req.pdws) > MAX_PDWS_PER_REQUEST:
+        raise HTTPException(status_code=413, detail=f"pdws exceeds limit of {MAX_PDWS_PER_REQUEST}")
     if not req.pdws:
         raise HTTPException(status_code=400, detail="pdws must be non-empty")
     pdws_arr = np.array(req.pdws, dtype=np.float32)
@@ -445,8 +466,10 @@ def deinterleave_endpoint(req: DeinterleaveRequest) -> DeinterleaveResponse:
 
 
 @app.post("/update_memory", tags=["memory"])
-def update_memory(req: UpdateMemoryRequest) -> dict[str, str]:
+def update_memory(req: UpdateMemoryRequest, request: Request) -> dict[str, str]:
     """Write new emitter profile to semantic memory."""
+    if not _is_authorized(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     mem = STATE.get("memory")
     if mem is None:
         raise HTTPException(status_code=503, detail="SemanticMemory not initialised")

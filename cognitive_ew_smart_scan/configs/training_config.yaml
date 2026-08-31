@@ -1,4 +1,4 @@
-data_dir: "data"
+data_dir: "C:/Users/PromotheshChatterjee/Documents/GitHub/New folder/SIH-2026/TEST FILES"
 output_dir: "checkpoints"
 seed: 42
 

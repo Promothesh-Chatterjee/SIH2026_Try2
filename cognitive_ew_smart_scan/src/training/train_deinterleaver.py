@@ -25,6 +25,8 @@ except ImportError:
 
 from ..models.deinterleaver import PDWTransformerEncoder, TransformerDeinterleaver
 from ..preprocessing.normalise import normalise_pdws
+from ..data.tsrd_manifest import resolve_split_dirs, validate_dataset
+from ..data.synthetic_dataset import ensure_local_fallback_dataset
 
 logger = logging.getLogger(__name__)
 
@@ -74,34 +76,41 @@ def load_file_for_training(
     max_pulses: int,
     fit_stats: dict | None,
 ) -> tuple[np.ndarray, np.ndarray, dict]:
-    """Load single .h5 file, normalise, truncate/sample.
+    """Load a single H5 pulse train, normalise, and truncate it.
 
-    CRITICAL: Labels are file-local. Never compare across files.
-    Assertion enforces isolation.
-
-    Args:
-        file_path: Path to .h5 PulseTrain.
-        max_pulses: Max pulses (sample randomly if N > max_pulses).
-        fit_stats: Normalisation stats (None → compute).
-
-    Returns:
-        Tuple (pdws_norm (N,6), labels (N,), stats).
+    Supports both the official TSRD challenge loader and the synthetic local
+    fallback dataset that writes plain H5 files with `data` and `labels` arrays.
     """
     assert file_path.suffix == ".h5", f"Expected .h5 file, got {file_path}"
-    if PulseTrain is None:
-        raise ImportError("turing_deinterleaving_challenge not installed. pip install -r requirements.txt")
     try:
-        pt = PulseTrain.load(str(file_path))
+        if PulseTrain is not None:
+            try:
+                pt = PulseTrain.load(str(file_path))
+                raw = pt.data
+                labels = pt.labels
+            except Exception:
+                raw = None
+                labels = None
+        else:
+            raw = None
+            labels = None
+
+        if raw is None or labels is None:
+            import h5py
+
+            with h5py.File(str(file_path), "r") as handle:
+                if "data" not in handle or "labels" not in handle:
+                    raise KeyError(f"Missing required datasets in {file_path}")
+                raw = np.asarray(handle["data"])
+                labels = np.asarray(handle["labels"]).reshape(-1)
     except Exception as exc:
         logger.warning("Corrupt H5 %s: %s", file_path, exc)
         return np.empty((0, 6), dtype=np.float32), np.empty((0,), dtype=np.int64), fit_stats or {}
-    raw = pt.data
-    labels = pt.labels
+
     if raw is None or len(raw) == 0:
         logger.warning("Empty pulse train: %s", file_path)
         return np.empty((0, 6), dtype=np.float32), np.empty((0,), dtype=np.int64), fit_stats or {}
     # Enforce file-local constraint comment + assertion
-    # ASSERTION: labels only consistent within this file
     assert labels is not None and len(labels) == len(raw), "Labels mismatch within file"
     if len(raw) > max_pulses:
         idx = np.random.choice(len(raw), max_pulses, replace=False)
@@ -115,7 +124,7 @@ def mine_triplets(
     embeddings: torch.Tensor,
     labels: torch.Tensor,
     margin: float,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:
     """Batch-hard triplet mining within single file.
 
     CRITICAL: embeddings/labels must be from ONE file. Never mix files.
@@ -126,14 +135,16 @@ def mine_triplets(
         margin: Triplet margin.
 
     Returns:
-        Tuple (anchors, positives, negatives) each (K, embed_dim).
+        Tuple (anchors, positives, negatives) each (K, embed_dim), or None when a
+        file does not have enough diversity to form valid triplets.
     """
     # Assertion for file-local constraint
     assert embeddings.size(0) == labels.size(0), "Embeddings/labels length mismatch — possible cross-file mixing"
+    if not torch.isfinite(embeddings).all():
+        return None, None, None
     n = embeddings.size(0)
     if n < 2:
-        z = torch.zeros(1, embeddings.size(1), device=embeddings.device)
-        return z, z, z
+        return None, None, None
     dist_matrix = torch.cdist(embeddings, embeddings, p=2)
     anchors, positives, negatives = [], [], []
     for i in range(n):
@@ -153,8 +164,7 @@ def mine_triplets(
         positives.append(embeddings[hardest_pos])
         negatives.append(embeddings[hardest_neg])
     if not anchors:
-        z = torch.zeros(1, embeddings.size(1), device=embeddings.device)
-        return z, z, z
+        return None, None, None
     return torch.stack(anchors), torch.stack(positives), torch.stack(negatives)
 
 
@@ -197,37 +207,55 @@ def train_deinterleaver(model_cfg_path: str, train_cfg_path: str) -> None:
     logger.info("Training on device: %s (seed=%d)", device, seed)
 
     # Data discovery
-    data_root = Path(train_cfg.get("data_dir", "data/stare"))
-    # Allow both data/stare/train and data/train/stare layouts
-    candidates = [
-        data_root / "train",
-        Path("data/stare/train"),
-        Path("data/train"),
+    data_root = Path(train_cfg.get("data_dir", "data"))
+    validation = validate_dataset(data_root)
+    if not validation["valid"]:
+        logger.warning("Dataset validation reported issues: %s", validation["errors"])
+
+    candidate_roots = [
+        data_root,
         Path("data"),
+        Path("data/stare"),
+        Path("data/scan"),
     ]
     train_files: list[Path] = []
     val_files: list[Path] = []
-    for cand in candidates:
-        if (cand / "train").exists():
-            train_files = sorted((cand / "train").glob("*.h5"))
-            val_files = sorted((cand / "val").glob("*.h5")) if (cand / "val").exists() else []
-            if train_files:
+    for root in candidate_roots:
+        if not root.exists():
+            continue
+        for mode in ["stare", "scan"]:
+            split_dirs = resolve_split_dirs(root, mode)
+            train_candidates = sorted(split_dirs["train"].glob("*.h5")) if split_dirs["train"].exists() else []
+            val_candidates = sorted(split_dirs["val"].glob("*.h5")) if split_dirs["val"].exists() else []
+            if train_candidates:
+                train_files = train_candidates
+                val_files = val_candidates or train_candidates[: max(1, len(train_candidates) // 5)]
+                logger.info("Using split discovery for %s/%s: %d train, %d val", root, mode, len(train_files), len(val_files))
                 break
-        if cand.exists() and list(cand.glob("*.h5")):
-            # Flat layout fallback
-            all_h5 = sorted(cand.glob("*.h5"))
-            split = int(len(all_h5) * 0.8)
+        if train_files:
+            break
+        if root.exists() and list(root.rglob("*.h5")):
+            all_h5 = sorted(root.rglob("*.h5"))
+            split = max(1, int(len(all_h5) * 0.8))
             train_files = all_h5[:split]
             val_files = all_h5[split:]
             break
-    # Default if still empty — try data/stare
     if not train_files:
-        data_root2 = Path("data/stare")
-        if data_root2.exists():
-            train_files = sorted((data_root2 / "train").glob("*.h5")) or sorted(data_root2.glob("*.h5"))
-            val_files = sorted((data_root2 / "val").glob("*.h5"))
+        logger.warning("No dataset found in local roots. Creating synthetic fallback dataset for safe local training.")
+        ensure_local_fallback_dataset(data_root)
+        for root in candidate_roots:
+            if root.exists():
+                for mode in ["stare", "scan"]:
+                    split_dirs = resolve_split_dirs(root, mode)
+                    train_candidates = sorted(split_dirs["train"].glob("*.h5")) if split_dirs["train"].exists() else []
+                    if train_candidates:
+                        train_files = train_candidates
+                        val_files = sorted(split_dirs["val"].glob("*.h5")) if split_dirs["val"].exists() else []
+                        break
+            if train_files:
+                break
     if not train_files:
-        raise FileNotFoundError(f"No training .h5 found. Checked {candidates} and data/stare")
+        raise FileNotFoundError(f"No training .h5 found. Checked dataset roots: {candidate_roots}")
 
     logger.info("Found %d train, %d val files", len(train_files), len(val_files))
 
@@ -303,7 +331,14 @@ def train_deinterleaver(model_cfg_path: str, train_cfg_path: str) -> None:
                 labels_t = torch.tensor(labels, dtype=torch.long, device=device)
                 embeddings = model(pdws_t).squeeze(0)
                 anchors, positives, negatives = mine_triplets(embeddings, labels_t, margin)
+                if anchors is None or positives is None or negatives is None:
+                    continue
+                if not torch.isfinite(anchors).all() or not torch.isfinite(positives).all() or not torch.isfinite(negatives).all():
+                    continue
                 loss = triplet_fn(anchors, positives, negatives)
+                if not torch.isfinite(loss):
+                    logger.warning("Skipping non-finite triplet loss for %s", fp)
+                    continue
                 optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -405,6 +440,19 @@ def train_deinterleaver(model_cfg_path: str, train_cfg_path: str) -> None:
             wandb.finish()
         except Exception:
             pass
+
+
+def train_deinterleaver_safe() -> dict:
+    """Safety wrapper used for local baseline training.
+
+    Creates a synthetic dataset when needed and runs a compact training cycle.
+    This prevents the project from failing when the official TSRD package is not
+    yet available in the external GitHub repo.
+    """
+    seed = 42
+    ensure_local_fallback_dataset(data_root="data", seed=seed)
+    train_deinterleaver("configs/model_config.yaml", "configs/training_config.yaml")
+    return {"status": "ok", "dataset": "synthetic-fallback"}
 
 
 if __name__ == "__main__":

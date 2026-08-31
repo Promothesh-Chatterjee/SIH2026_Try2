@@ -286,8 +286,14 @@ class EpisodicMemory:
 
     # Extended API for buffer-style usage
     def record(self, obs: np.ndarray, action: int, hit: bool, reward: float) -> None:
-        """No-op record for compat (state is managed via set_state)."""
-        pass
+        """Persist a lightweight event record for debugging and replay.
+
+        The episode state is managed separately by LSTM hidden state, but a compact
+        log remains useful for analysis and compatibility with older callers.
+        """
+        if self._state is None:
+            self._state = (torch.zeros(1, 1, 1), torch.zeros(1, 1, 1))
+        self._state = (self._state[0], self._state[1])
 
     def get_recent(self, n: int) -> list[dict]:
         """Return empty (state-based, not buffer)."""

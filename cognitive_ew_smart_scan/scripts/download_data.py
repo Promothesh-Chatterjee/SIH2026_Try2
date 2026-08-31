@@ -39,8 +39,13 @@ def download_tsr_dataset(
     token: str | None = None,
     modes: list[str] | None = None,
     splits: list[str] | None = None,
+    allow_download: bool = False,
 ) -> dict:
     """Download TSRD subsets from HuggingFace.
+
+    The project defaults to a safe local-training mode and blocks large official
+    TSRD downloads unless this is explicitly enabled. This prevents accidental
+    downloads while keeping the path open for later real-data integration.
 
     Dataset: huggingface.co/datasets/alan-turing-institute/turing-synthetic-radar-dataset
     Repo: https://github.com/alan-turing-institute/turing-deinterleaving-challenge
@@ -57,6 +62,20 @@ def download_tsr_dataset(
     Raises:
         RuntimeError: If download fails and no fallback.
     """
+    if not allow_download:
+        logger.warning(
+            "TSRD download is disabled by default for safety. "
+            "Use --allow-download only when you intentionally want the large official dataset. "
+            "Without it, the project stays in local-safe training mode."
+        )
+        return {
+            "status": "skipped",
+            "reason": "download_disabled_by_default",
+            "output_dir": str(output_dir),
+            "modes": modes or ["stare", "scan"],
+            "splits": splits or ["train", "validation", "test"],
+        }
+
     token = token or os.getenv("HF_TOKEN")
     if not token or token == "your_huggingface_token_here":
         logger.warning("HF_TOKEN not set or placeholder — attempting anonymous download (may fail for gated dataset)")
