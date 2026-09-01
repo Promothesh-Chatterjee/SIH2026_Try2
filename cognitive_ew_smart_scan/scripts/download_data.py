@@ -254,11 +254,12 @@ def main() -> None:
     parser.add_argument("--token", type=str, default=None, help="HF token (or set HF_TOKEN env)")
     parser.add_argument("--modes", nargs="+", default=["stare", "scan"], help="Modes to download")
     parser.add_argument("--splits", nargs="+", default=["train", "validation", "test"], help="Splits to download")
+    parser.add_argument("--allow-download", action="store_true", help="Explicitly allow large TSRD download")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
-        summary = download_tsr_dataset(output_dir=args.output_dir, token=args.token, modes=args.modes, splits=args.splits)
+        summary = download_tsr_dataset(output_dir=args.output_dir, token=args.token, modes=args.modes, splits=args.splits, allow_download=args.allow_download)
         print(f"\nDone. Summary: {summary}")
     except Exception as exc:
         logger.error("Download failed: %s", exc)

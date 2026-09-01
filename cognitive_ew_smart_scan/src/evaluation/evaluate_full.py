@@ -48,13 +48,15 @@ def run_full_evaluation(
     """
     import torch
 
-    from ..environment.rf_scan_env import RFScanEnv
+    from ..environment.cognitive_rf_scan_env import CognitiveRFScanEnv
+    from ..environment.scenario_generator import load_h5_records
     from ..evaluation.metrics import FiguresOfMerit
 
     with open(config_path) as f:
         model_cfg = yaml.safe_load(f)
     drqn_cfg = model_cfg.get("drqn_scheduler", {})
     reward_cfg = model_cfg.get("reward", {})
+    env_cfg = model_cfg.get("environment", {})
 
     test_dir = Path(test_dir)
     output_dir = Path(output_dir)
@@ -117,10 +119,10 @@ def run_full_evaluation(
             from ..models.smartscan_moe import SmartScanMoE
 
             scheduler = DRQNScheduler(
-                obs_dim=drqn_cfg.get("obs_dim", 360),
-                n_bands=drqn_cfg.get("n_bands", 180),
-                lstm_hidden=drqn_cfg.get("lstm_hidden", 256),
-                lstm_layers=drqn_cfg.get("lstm_layers", 2),
+                obs_dim=int(drqn_cfg.get("obs_dim", 1620)),
+                n_bands=int(drqn_cfg.get("n_bands", 180)),
+                lstm_hidden=int(drqn_cfg.get("lstm_hidden", 256)),
+                lstm_layers=int(drqn_cfg.get("lstm_layers", 2)),
             )
             state = torch.load(str(scheduler_ckpt), map_location="cpu")
             if isinstance(state, dict) and "state_dict" in state:
@@ -143,9 +145,6 @@ def run_full_evaluation(
     # Env for scheduler metrics (use test dir as data_dir with subset="." workaround)
     # Create a lightweight env that we reset per file via manual pt loading
     # Instead, iterate files and simulate intercepts via RFScanEnv per file
-    # Simpler: create env pointing to test_dir parent and manually set current_pt
-    # For now, instantiate env with test_dir parent; we will override _files
-    env_parent = test_dir.parent if test_dir.is_dir() else Path("data")
     env_config = {**drqn_cfg, **reward_cfg, "n_bands": drqn_cfg.get("n_bands", 180)}
     # Patch training_config environment keys if present
     try:
@@ -155,8 +154,6 @@ def run_full_evaluation(
     except Exception:
         pass
 
-    # We'll run per-file loop using RFScanEnv with synthetic override via direct pt loading
-    # To avoid needing env to load from disk, we load pt manually and set env.current_pt
     try:
         from turing_deinterleaving_challenge import PulseTrain  # type: ignore
         has_pt = True
@@ -207,13 +204,19 @@ def run_full_evaluation(
         per_file.update({"v_measure": v_measure, "ami": ami, "ari": ari, "latency_ms_per_pulse": latency_ms})
         deinter_metrics.append({"v_measure": v_measure, "ami": ami, "ari": ari})
 
-        # --- Scheduler (run one episode per file via RFScanEnv) ---
-        # Create env per file with single-file override
+        # --- Scheduler (run one episode per file via CognitiveRFScanEnv) ---
         try:
-            # Build env that will load this specific file
-            # Hack: create env with data_dir = fpath.parent and override _files
-            env = RFScanEnv(env_config, data_dir=str(fpath.parent), subset=".", mode="scan" if "scan" in mode else "stare")
-            env._files = [Path(fpath)]
+            # Build a cognitive env fed by this single test file's pulses.
+            freq_min = float(env_cfg.get("freq_min_mhz", 0.0))
+            freq_max = float(env_cfg.get("freq_max_mhz", 18000.0))
+            record_limit = int(env_cfg.get("max_pulses", 50000))
+            records = load_h5_records(
+                Path(fpath),
+                freq_min_mhz=freq_min,
+                freq_max_mhz=freq_max,
+                max_pulses=record_limit,
+            )
+            env = CognitiveRFScanEnv({**env_config, **env_cfg}, records=records, seed=42)
             obs, _ = env.reset()
             # Set up MoE hidden if scheduler exists
             hidden = None
@@ -237,9 +240,9 @@ def run_full_evaluation(
                         bands, hidden, _ = scheduler.select_bands(obs, hidden)  # type: ignore
                         action = int(bands[0])
                     except Exception:
-                        action = int(np.random.randint(0, env.n_bands))
+                        action = int(env.action_space.sample())
                 else:
-                    action = int(np.random.randint(0, env.n_bands))
+                    action = int(env.action_space.sample())
                 obs, reward, terminated, truncated, info = env.step(action)
                 if scheduler is not None and hasattr(scheduler, "update"):
                     try:
@@ -249,7 +252,13 @@ def run_full_evaluation(
                 done = bool(terminated or truncated)
                 steps += 1
                 # Accumulate global FoM
-                global_fom.update(info["band_chosen"] if "band_chosen" in info else action, info["ground_truth_active"], info["hit"], info["intercept_time_error_us"], float(reward))
+                global_fom.update(
+                    int(info["band_chosen"]) if "band_chosen" in info else action,
+                    info["ground_truth_active"],
+                    info["hit"],
+                    float(info.get("intercept_time_error_us", 0.0)),
+                    float(reward),
+                )
             fom = env.get_fom()
             per_file.update({f"sched_{k}": v for k, v in fom.items()})
         except Exception as exc:

@@ -1,7 +1,11 @@
 """
-Domain-specific Reward Function for RF Scan Scheduler.
+Domain-specific Reward Functions.
 
-Shaped reward: novel intercepts (+w1), priority hits (+w2), timing penalty (-w3*err), miss penalty (-w4).
+1. compute_reward: shaped reward for RFScanEnv (novel intercepts, timing, miss).
+2. compute_receiver_reward: reward derived purely from ReceiverObservation,
+   designed for the receiver-driven CognitiveRFScanEnv. Ground truth (emitter_id)
+   is only used for the "novel emitter" bonus — it is stripped before the
+   scheduler observation is built and must never reach the policy input.
 """
 
 import logging
@@ -58,3 +62,65 @@ def compute_reward(
             logger.debug("Missed opportunity penalty: -%.1f", w4)
 
     return float(reward), new_emitters
+
+
+def compute_receiver_reward(
+    observation,
+    ground_truth_active: bool,
+    novel_emitter: bool,
+    had_any_opportunity: bool,
+    w_hit: float = 1.0,
+    w_novel: float = 2.0,
+    w_miss: float = -1.0,
+    w_timing: float = 0.001,
+) -> float:
+    """Reward derived from a ReceiverObservation + ground-truth summary.
+
+    The ``observation`` carries ``detections`` (a list of DetectionObservation with
+    ``detected=True/False``). Reward is:
+        +w_hit                       if any detection
+        +w_novel                     if a new emitter was intercepted
+        +w_miss                      if there was an opportunity elsewhere but we missed it
+        -w_timing * abs(peak_time - dwell_start)   small time-shape penalty on hits
+
+    ``ground_truth_active`` and ``had_any_opportunity`` are evaluation-only signals
+    used to shape the "missed opportunity" term. They are NOT part of the scheduler
+    observation vector.
+
+    Args:
+        observation: ReceiverObservation from SieveReceiver.get_observation().
+        ground_truth_active: Whether any emitter was active during this dwell (evaluation only).
+        novel_emitter: Whether this dwell intercepted an emitter not seen before.
+        had_any_opportunity: Whether any pulse was physically interceptable (elsewhere).
+        w_hit: Per-hit reward.
+        w_novel: Novel-emitter bonus.
+        w_miss: Miss penalty (<=0).
+        w_timing: Per-unit timing penalty magnitude.
+
+    Returns:
+        Scalar reward.
+    """
+    detections = getattr(observation, "detections", [])
+    n_hits = len(detections)
+
+    reward = 0.0
+    novel_bonus = 0.0
+    miss_penalty = 0.0
+
+    if n_hits > 0:
+        reward += w_hit
+        # small timing penalty: how far the first detection is from dwell start
+        first_time = getattr(detections[0], "time_us", 0.0)
+        dwell = getattr(observation, "dwell_interval_us", [0.0, 0.0])
+        start = float(dwell[0]) if len(dwell) >= 1 else 0.0
+        reward -= w_timing * abs(first_time - start)
+        # Novel bonus only on an actual interception (not mere opportunity)
+        if novel_emitter:
+            novel_bonus = w_novel
+            reward += w_novel
+    elif had_any_opportunity:
+        # No detection but an opportunity existed elsewhere -> miss penalty (<=0)
+        miss_penalty = w_miss
+        reward += w_miss
+
+    return float(reward)
