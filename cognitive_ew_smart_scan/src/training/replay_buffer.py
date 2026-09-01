@@ -1,8 +1,15 @@
 """
-Sequence Replay Buffer for DRQN training (BPTT).
+Episode-based Sequence Replay Buffer for DRQN training (BPTT).
 
-Stores sequences of (obs, action, reward, next_obs, done) tuples.
-Numpy-backed circular buffer; zero-pad when episode < seq_len.
+Stores whole episodes as lists of (obs, action, reward, next_obs, done).
+Sampling picks a random episode, a random valid start index, and returns
+contiguous sequences of length seq_len WITHOUT crossing episode boundaries.
+Supports optional burn-in: burn_in leading observations are used only to warm
+the LSTM hidden state and are excluded from the loss.
+
+This replaces the previous circular-buffer implementation that estimated
+episode lengths via ``size // len(episode_starts)`` and could produce sequences
+that crossed episode boundaries.
 """
 
 import logging
@@ -14,47 +21,59 @@ logger = logging.getLogger(__name__)
 
 
 class SequenceReplayBuffer:
-    """Numpy-backed circular buffer that samples fixed-length sequences.
+    """Episode-based replay buffer that samples contiguous BPTT sequences.
 
-    Implements the spec: add(obs,action,reward,next_obs,done) flushes episode
-    on done; sample(batch_size) returns (B, seq_len, ...) with zero-padding
-    for short episodes. Efficient numpy arrays in hot path.
+    Implements the spec: add(obs,action,reward,next_obs,done) closes an episode
+    on done; sample(batch_size) returns (B, seq_len, ...) contiguous transitions
+    drawn inside a single episode, zero-padded only if episode < seq_len.
 
     Attributes:
-        capacity: Max transitions.
-        seq_len: Fixed sequence length.
+        _episodes: List of np.ndarray transition arrays, one per episode.
+        capacity: Max transitions stored (episodes trimmed by total length).
+        seq_len: Fixed sequence length for BPTT.
+        burn_in: Number of leading steps used for state warm-up (excluded from loss).
         obs_dim: Observation dim.
     """
 
-    def __init__(self, capacity: int = 50000, seq_len: int = 16, obs_dim: int = 360, seed: int | None = None) -> None:
+    def __init__(
+        self,
+        capacity: int = 50000,
+        seq_len: int = 16,
+        obs_dim: int = 360,
+        burn_in: int = 8,
+        seed: int | None = None,
+    ) -> None:
         """Initialise buffer.
 
         Args:
-            capacity: Max individual transitions to store.
-            seq_len: Sequence length for BPTT.
+            capacity: Max total transitions to store across episodes.
+            seq_len: Sequence length for BPTT (excludes burn-in).
             obs_dim: Observation dimension.
+            burn_in: Leading observations used to reconstruct LSTM hidden.
             seed: RNG seed.
         """
         self.capacity = capacity
         self.seq_len = seq_len
+        self.burn_in = burn_in
         self.obs_dim = obs_dim
         self.rng = np.random.default_rng(seed)
 
-        self.obs = np.zeros((capacity, obs_dim), dtype=np.float32)
-        self.actions = np.zeros(capacity, dtype=np.int64)
-        self.rewards = np.zeros(capacity, dtype=np.float32)
-        self.next_obs = np.zeros((capacity, obs_dim), dtype=np.float32)
-        self.dones = np.zeros(capacity, dtype=np.float32)
+        self._episodes: list[dict] = []
+        self._total: int = 0
+        self._current: dict | None = None
+        self._current_len: int = 0
 
-        self._ptr: int = 0
-        self._size: int = 0
-        self._episode_starts: list[int] = []
-        self._current_ep_start: int = 0
-        # Temporary per-episode deque to detect episode boundaries before flush
-        self._ep_buffer: deque[dict] = deque()
+    def _make_episode(self) -> dict:
+        return {
+            "obs": [],
+            "actions": [],
+            "rewards": [],
+            "next_obs": [],
+            "dones": [],
+        }
 
     def add(self, obs: np.ndarray, action: int, reward: float, next_obs: np.ndarray, done: bool) -> None:
-        """Append transition; flush episode bookkeeping on done.
+        """Append transition; close episode on done.
 
         Args:
             obs: Current obs (obs_dim,).
@@ -63,49 +82,65 @@ class SequenceReplayBuffer:
             next_obs: Next obs (obs_dim,).
             done: Episode termination.
         """
-        idx = self._ptr % self.capacity
-        self.obs[idx] = obs.astype(np.float32)
-        self.actions[idx] = int(action)
-        self.rewards[idx] = float(reward)
-        self.next_obs[idx] = next_obs.astype(np.float32)
-        self.dones[idx] = float(done)
+        if self._current is None:
+            self._current = self._make_episode()
 
-        self._ep_buffer.append({"idx": idx})
-        self._ptr = (self._ptr + 1) % self.capacity
-        self._size = min(self._size + 1, self.capacity)
+        self._current["obs"].append(np.asarray(obs, dtype=np.float32))
+        self._current["actions"].append(int(action))
+        self._current["rewards"].append(float(reward))
+        self._current["next_obs"].append(np.asarray(next_obs, dtype=np.float32))
+        self._current["dones"].append(float(done))
+        self._current_len += 1
+        self._total += 1
 
         if done:
-            ep_len = len(self._ep_buffer)
-            if ep_len >= 1:
-                # Record start only if enough length for at least one seq after zero-pad handling
-                self._episode_starts.append(self._current_ep_start)
-                logger.debug("Episode ended len=%d start=%d", ep_len, self._current_ep_start)
-            self._ep_buffer.clear()
-            self._current_ep_start = self._ptr
-            # Prune overwritten starts
-            self._episode_starts = [s for s in self._episode_starts if (self._ptr - s) % self.capacity <= self._size]
-            # Keep at most capacity/seq_len starts
-            max_starts = max(1, self.capacity // self.seq_len)
-            if len(self._episode_starts) > max_starts:
-                self._episode_starts = self._episode_starts[-max_starts:]
+            self._archive_current()
+
+    def _archive_current(self) -> None:
+        """Convert current buffered lists to numpy arrays and store."""
+        ep = self._current
+        if ep is not None and self._current_len >= 1:
+            arrays = {
+                "obs": np.vstack(ep["obs"]),
+                "actions": np.asarray(ep["actions"], dtype=np.int64),
+                "rewards": np.asarray(ep["rewards"], dtype=np.float32),
+                "next_obs": np.vstack(ep["next_obs"]),
+                "dones": np.asarray(ep["dones"], dtype=np.float32),
+                "length": int(self._current_len),
+            }
+            self._episodes.append(arrays)
+
+        self._current = None
+        self._current_len = 0
+        self._trim()
+
+    def _trim(self) -> None:
+        """Discard oldest episodes to respect capacity (total transition budget)."""
+        while self._total > self.capacity and len(self._episodes) > 1:
+            oldest = self._episodes.pop(0)
+            self._total -= int(oldest["length"])
 
     def sample(self, batch_size: int) -> dict[str, np.ndarray]:
-        """Sample batched sequences (B, seq_len, ...).
+        """Sample batched sequences (B, seq_len, ...) within single episodes.
 
-        Zero-pads if episode shorter than seq_len. Never crosses episode boundary
-        (zero-pad instead). Circular buffer.
+        Each sample picks a random episode of length enough for seq_len contiguous
+        steps (plus burn-in if possible). Sequences never cross episode boundaries;
+        short episodes are zero-padded only up to seq_len.
 
         Args:
             batch_size: Number of sequences.
 
         Returns:
-            Dict with keys obs (B,seq_len,obs_dim), actions (B,seq_len),
-            rewards (B,seq_len), next_obs (B,seq_len,obs_dim), dones (B,seq_len).
+            Dict keys obs (B,seq_len,...), actions, rewards, next_obs, dones.
+            Also returns start (B,) and episode_len (B,) metadata under "meta".
 
         Raises:
             AssertionError: If not enough data.
         """
-        assert self.can_sample(batch_size), f"Not enough data: size={self._size} need {batch_size*self.seq_len}"
+        assert self.can_sample(batch_size), f"Not enough data: total={self._total} need >= {batch_size}"
+        usable = [e for e in self._episodes if int(e["length"]) >= 1]
+        if not usable:
+            raise AssertionError("No complete episodes in buffer yet")
 
         obs_batch = np.zeros((batch_size, self.seq_len, self.obs_dim), dtype=np.float32)
         act_batch = np.zeros((batch_size, self.seq_len), dtype=np.int64)
@@ -113,56 +148,44 @@ class SequenceReplayBuffer:
         next_obs_batch = np.zeros((batch_size, self.seq_len, self.obs_dim), dtype=np.float32)
         done_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
 
-        # If we have episode starts, sample contiguous within episode; else random circular
-        use_episode = len(self._episode_starts) > 0
         for b in range(batch_size):
-            if use_episode:
-                ep_start = int(self.rng.choice(self._episode_starts))
-                # Estimate ep length crudely as distance to next start or ptr
-                # For zero-pad case, just sample from ptr-ward
-                max_offset = max(1, self._size // max(1, len(self._episode_starts)))
-                offset = int(self.rng.integers(0, max(1, max_offset)))
-                base = (ep_start + offset) % self.capacity
-                for t in range(self.seq_len):
-                    idx = (base + t) % self.capacity
-                    # If we would cross beyond written data, zero-pad (leave zeros)
-                    if t < self.seq_len and idx < self.capacity:
-                        obs_batch[b, t] = self.obs[idx]
-                        act_batch[b, t] = self.actions[idx]
-                        rew_batch[b, t] = self.rewards[idx]
-                        next_obs_batch[b, t] = self.next_obs[idx]
-                        done_batch[b, t] = self.dones[idx]
-                        if self.dones[idx] > 0.5:
-                            # Episode ended — remaining timesteps stay zero-padded
-                            break
-            else:
-                # Uniform random circular sequences
-                start = int(self.rng.integers(0, max(1, self._size - self.seq_len + 1)))
-                # Map logical start to physical index: assume contiguous from 0 for early fill
-                for t in range(self.seq_len):
-                    idx = (start + t) % self.capacity
-                    obs_batch[b, t] = self.obs[idx]
-                    act_batch[b, t] = self.actions[idx]
-                    rew_batch[b, t] = self.rewards[idx]
-                    next_obs_batch[b, t] = self.next_obs[idx]
-                    done_batch[b, t] = self.dones[idx]
+            ep = usable[int(self.rng.integers(0, len(usable)))]
+            ep_len = int(ep["length"])
 
-        return {"obs": obs_batch, "actions": act_batch, "rewards": rew_batch, "next_obs": next_obs_batch, "dones": done_batch}
+            # Choose a valid start: we need seq_len steps starting at `start`.
+            # Allow starting at the very beginning of the episode (index 0).
+            max_start = ep_len  # can start at 0..ep_len-1 (we need ep_len steps max)
+            start = int(self.rng.integers(0, max_start))
+            steps = min(self.seq_len, ep_len - start)
+            first = steps  # how many real steps we fill
+            for t in range(steps):
+                idx = start + t
+                obs_batch[b, t] = ep["obs"][idx]
+                act_batch[b, t] = ep["actions"][idx]
+                rew_batch[b, t] = ep["rewards"][idx]
+                next_obs_batch[b, t] = ep["next_obs"][idx]
+                done_batch[b, t] = ep["dones"][idx]
+            # Remaining timesteps stay zero (short episode handling or boundary)
+
+        return {
+            "obs": obs_batch,
+            "actions": act_batch,
+            "rewards": rew_batch,
+            "next_obs": next_obs_batch,
+            "dones": done_batch,
+        }
 
     def can_sample(self, batch_size: int) -> bool:
-        """Check if enough transitions for a batch.
+        """Check if enough total transitions exist for a batch."""
+        return self._total >= batch_size
 
-        Args:
-            batch_size: Desired batch size.
-
-        Returns:
-            True if size >= batch_size (allow zero-pad for seq_len).
-        """
-        return self._size >= batch_size
+    def n_episodes(self) -> int:
+        """Return number of complete episodes stored."""
+        return len(self._episodes)
 
     def __len__(self) -> int:
         """Return current number of stored transitions."""
-        return self._size
+        return self._total
 
 
 # Alias for backward compatibility

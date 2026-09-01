@@ -1,0 +1,40 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Model checkpoints
+checkpoints/
+**/checkpoints/
+
+# Dataset / data (large, machine-specific)
+data/
+*.h5
+
+# Config secrets
+.env
+
+# Results / temp
+temp_*/
+results/
+*.log
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

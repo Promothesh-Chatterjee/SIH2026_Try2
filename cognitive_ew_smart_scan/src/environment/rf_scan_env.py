@@ -76,7 +76,7 @@ class RFScanEnv(gym.Env):
         self.w3: float = float(config.get("w3", 0.1))
         self.w4: float = float(config.get("w4", 4.0))
 
-        self.data_dir = Path(data_dir) / subset / mode
+        self.data_dir = Path(data_dir) / mode / subset
         self.mode = mode
         self.subset = subset
 
@@ -311,6 +311,7 @@ class RFScanEnv(gym.Env):
             "pdws": pdws,
             "labels": labels,
             "hit": hit,
+            "band_chosen": int(action),
             "intercept_time_error_us": float(intercept_time_error_us),
             "missed_opportunity": missed_opportunity,
             "ground_truth_active": gt_active,

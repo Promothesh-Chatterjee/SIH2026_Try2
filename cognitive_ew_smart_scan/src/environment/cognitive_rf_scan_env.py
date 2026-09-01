@@ -1,73 +1,418 @@
-"""Receiver-friendly cognitive RF scan environment scaffold.
+"""
+Master Cognitive RF Scan Environment (gym.Env).
 
-This is intentionally minimal and is used to connect the deterministic
-SieveReceiver to the synthetic RF scenario before the DRQN scheduler is added.
+Connects: RF Scenario -> RadioEnvironment -> SieveReceiver -> Belief -> Reward.
+
+ML-clock driven control loop:
+    reset()
+      ↓
+    scheduler chooses action (receiver center-frequency / STEP / DWELL)
+      ↓
+    receiver.execute_action(action)          # tune/step/dwell
+      ↓
+    env advances RadioEnvironment events through the dwell          # world evolves
+      ↓
+    receiver.get_observation()               # causal, no future leak
+      ↓
+    belief.update(observation)               # occupancy, revisit age, ...
+      ↓
+    reward via ground-truth only for shaping  (kept out of observation)
+      ↓
+    return (obs_vec, reward, terminated, truncated, info)
+
+GROUND TRUTH (emitter_id, gt_active) is used ONLY for reward shaping and
+evaluation/info. It is NEVER included in the observation vector returned to the
+policy. This is enforced by construction: `_build_observation` builds only from
+the ReceiverObservation + belief fields.
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from typing import Any
+from pathlib import Path
+from typing import Any, Optional, Sequence
 
+import gymnasium as gym
 import numpy as np
-import torch
+from gymnasium import spaces
 
-from src.models.drqn_scheduler import DRQNScheduler
-from src.receiver import ReceiverObservation, SieveReceiver
+from src.receiver import SieveReceiver, ReceiverObservation
+from src.environment.radio_environment import ActivePulse, PulseRecord, RadioEnvironment, SimulationEvent
+from src.evaluation.metrics import FiguresOfMerit
+from src.training.reward import compute_receiver_reward
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
-class ReceiverState:
-    receiver: SieveReceiver
-    observation: ReceiverObservation | None = None
+class BeliefState:
+    """Mutable cognitive belief derived from receiver observations only.
+
+    occupancy_prob[b]: exponential moving average of recent detection rate.
+    revisit_age[b]: slots since band last visited (>=1, capped).
+    detection_rate[b]: raw fraction of recent dwells on band b that yielded a hit.
+    uncertainty[b]: heuristic (1 - |2*prop - 1|) peaked at 0.5 occupancy.
+    """
+
+    def __init__(self, n_bands: int):
+        self.n_bands = n_bands
+        self.reset()
+
+    def reset(self) -> None:
+        n = self.n_bands
+        self.occupancy_prob = np.zeros(n, dtype=np.float32)
+        self.detection_rate = np.zeros(n, dtype=np.float32)
+        self.revisit_age = np.ones(n, dtype=np.int64)
+        self.uncertainty = np.ones(n, dtype=np.float32)  # max uncertainty when no data
+        self._visits = np.zeros(n, dtype=np.int64)
+        self._hits = np.zeros(n, dtype=np.int64)
+        self._last_visit_slot = np.zeros(n, dtype=np.int64)
+
+    def record_visit(self, band: int, hit: bool, ema_alpha: float = 0.3) -> None:
+        band = int(band)
+        if not (0 <= band < self.n_bands):
+            return
+        self._visits[band] += 1
+        self.detection_rate[band] = float(self._hits[band] / max(1, self._visits[band]))
+        target = 1.0 if hit else 0.0
+        self.occupancy_prob[band] = self.occupancy_prob[band] * (1.0 - ema_alpha) + float(target) * ema_alpha
+        if hit:
+            self._hits[band] += 1
+
+    def advance_time(self) -> None:
+        self.revisit_age += 1
+
+    def touch(self, band: int) -> None:
+        self.revisit_age[int(band)] = 0
+        self._last_visit_slot[int(band)] = self.revisit_age.sum()
+
+    def update_uncertainty(self) -> None:
+        # high uncertainty when detection_rate near 0.5 or few visits
+        p = np.clip(self.detection_rate, 0.0, 1.0)
+        self.uncertainty = 1.0 - np.abs(2.0 * p - 1.0)
+        never_visited = self._visits == 0
+        self.uncertainty[never_visited] = 1.0
+
+    def band_features(self, b: int) -> np.ndarray:
+        """Return an 9-feature vector for one band."""
+        p = np.clip(self.occupancy_prob[b], 0.0, 1.0)
+        age = min(float(self.revisit_age[b]), 50.0) / 50.0
+        self.update_uncertainty()
+        return np.array([
+            p,                          # occupancy_probability
+            float(self.uncertainty[b]),  # uncertainty
+            age,                        # revisit_age (normalised)
+            float(self.detection_rate[b]),  # detection_rate
+            1.0 - float(self.detection_rate[b]),  # miss_rate
+            0.0,                        # periodicity (placeholder)
+            0.0,                        # agility (placeholder)
+            min(1.0, float(self._visits[b]) / 50.0),  # track_confidence
+            0.5,                        # priority (placeholder)
+        ], dtype=np.float32)
 
 
-class CognitiveRFScanEnv:
-    """Minimal environment wrapper for the receiver + scheduler loop."""
+class CognitiveRFScanEnv(gym.Env):
+    """Receiver-driven cognitive scan scheduler environment.
 
-    def __init__(self, receiver: SieveReceiver | None = None):
-        self.receiver = receiver or SieveReceiver()
-        self.state = ReceiverState(self.receiver)
+    Wraps RadioEnvironment + SieveReceiver. The scheduler controls the receiver
+    center frequency / stepping / dwells. The radio world evolves through dwells.
+    """
 
-    def reset(self):
-        self.receiver.reset()
-        self.state.observation = None
-        return self.receiver.get_observation()
+    metadata = {"render_modes": ["human"]}
 
-    def step(self, event: Any | None = None):
-        if event is not None:
-            self.receiver.handle_environment_event(event)
-        self.state.observation = self.receiver.get_observation()
-        return self.state.observation
+    def __init__(
+        self,
+        config: dict,
+        records: Optional[Sequence[PulseRecord]] = None,
+        seed: int | None = 42,
+    ) -> None:
+        super().__init__()
+        self.config = config
 
-    def as_observation_vector(self, observation: ReceiverObservation | None = None, n_bands: int = 4) -> np.ndarray:
-        obs = self.state.observation if observation is None else observation
-        band_count = max(1, int(n_bands))
-        vector = np.zeros(2 * band_count, dtype=np.float32)
+        self.n_bands: int = int(config.get("n_bands", 180))
+        self.freq_min: float = float(config.get("freq_min_mhz", 0.0))
+        self.freq_max: float = float(config.get("freq_max_mhz", 18000.0))
+        self.ibw_mhz: float = float(config.get("ibw_mhz", 1000.0))
+        self.dwell_time_us: float = float(config.get("dwell_time_us", 500.0))
+        self.frequency_step_mhz: float = float(config.get("frequency_step_mhz", 500.0))
+        self.detection_threshold_db: float = float(config.get("detection_threshold_db", -140.0))
+        self.max_steps_per_episode: int = int(config.get("max_steps_per_episode", 2000))
 
-        if obs is None:
-            return vector
+        # Reward weights
+        self.w_hit: float = float(config.get("w_hit", 1.0))
+        self.w_novel: float = float(config.get("w_novel", 2.0))
+        self.w_miss: float = float(config.get("w_miss", -1.0))
 
-        center = float(getattr(obs, "center_frequency_mhz", 0.0))
-        total_bandwidth = max(float(self.receiver.total_bandwidth_mhz), 1.0)
+        # Feature layout: BAND_FEATURES features per band
+        self.band_features = 9
+        self.obs_dim = int(self.n_bands * self.band_features)
 
-        idx = int(round((center / total_bandwidth) * band_count))
-        idx = max(0, min(band_count - 1, idx))
-        vector[idx] = 1.0 if getattr(obs, "detected", False) else 0.0
+        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.obs_dim,), dtype=np.float32)
+        # Action = band index [0, n_bands). The scheduler selects a band and the
+        # receiver tunes its center frequency to cover that band, then dwells.
+        self.action_space = spaces.Discrete(self.n_bands)
 
-        dwell_interval = getattr(obs, "dwell_interval_us", [0.0, 0.0])
-        if len(dwell_interval) >= 2:
-            duration = max(float(dwell_interval[1] - dwell_interval[0]), 1.0)
-            vector[band_count + idx] = min(1.0, float(getattr(obs, "time_us", 0.0)) / max(duration, 1.0))
+        self._rng = np.random.default_rng(seed)
+        self._seed = seed
 
-        if getattr(obs, "detected", False):
-            vector[band_count + idx] = 1.0
+        # Components built at reset
+        self.receiver: SieveReceiver | None = None
+        self.radio_env: RadioEnvironment | None = None
+        self.belief: BeliefState | None = None
+        self.records: list[PulseRecord] = list(records or [])
+        self.fom = FiguresOfMerit()
 
-        return vector
+        self.current_step = 0
+        self.intercepted_emitters: set[int] = set()
+        self._gt_active_ever: set[int] = set()
+        self._last_dwell_start: float = 0.0
 
-    def select_action(self, model: DRQNScheduler, observation: ReceiverObservation | None = None) -> int:
-        vector = self.as_observation_vector(observation, n_bands=model.n_bands)
-        tensor = torch.tensor(vector, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
-        with torch.inference_mode():
-            q_values, _ = model(tensor)
-        return int(torch.argmax(q_values[0, -1]).item())
+    # ------------------------------------------------------------------ setup
+    def _build_receiver(self) -> SieveReceiver:
+        return SieveReceiver(
+            total_bandwidth=self.freq_max - self.freq_min,
+            ibw=self.ibw_mhz,
+            frequency_step=self.frequency_step_mhz,
+            dwell_time=self.dwell_time_us,
+            detection_threshold_db=self.detection_threshold_db,
+        )
+
+    def _build_radio_env(self) -> RadioEnvironment:
+        # NOTE: We do NOT auto-attach the receiver bridge here. The env controls
+        # event->receiver flow explicitly in _advance_world_to so that EXIT events
+        # are deferred until after dwell detection (correct causal ordering).
+        return RadioEnvironment(self.records)
+
+    # ------------------------------------------------------------------ reset
+    def reset(self, *, seed: int | None = None, options: dict | None = None):
+        if seed is not None:
+            self._seed = seed
+            self._rng = np.random.default_rng(seed)
+            np.random.seed(seed)
+
+        self.receiver = self._build_receiver()
+        self.radio_env = self._build_radio_env()
+        self.belief = BeliefState(self.n_bands)
+
+        self.current_step = 0
+        self.intercepted_emitters = set()
+        self._gt_active_ever = set()
+        self.fom.reset()
+
+        # Prime the radio world with the first bunch of entries without stepping
+        # the agent clock yet (just establish the initial window/time).
+        # We do this lazily on the first step. Initial observation is empty.
+        return self._build_observation(), {}
+
+    # ------------------------------------------------------------------ step
+    def step(self, action: int):
+        if self.receiver is None or self.radio_env is None or self.belief is None:
+            raise RuntimeError("reset() must be called before step()")
+
+        action = int(action)
+        if not (0 <= action < self.action_space.n):
+            raise ValueError(f"action {action} outside Discrete({self.action_space.n})")
+
+        # 1. Translate scheduler action -> receiver action: tune center frequency
+        #    to cover the chosen band, then dwell.
+        band = action
+        center = self._band_to_center(band)
+        self.receiver.tune(center)
+
+        dwell_start = self.receiver.current_time_us
+        dwell_end = self.receiver.current_time_us + self.receiver.dwell_time_us
+
+        # 2. Advance the RF world through ALL events up to dwell_end BEFORE the
+        #    receiver dwell. The world "evolves during the dwell": entry events
+        #    feed the receiver's pulse buffer, keeping it causal (receiver only
+        #    sees events up to the dwell end, never future pulses). EXIT events
+        #    within the dwell are deferred until AFTER detection so that pulses
+        #    active within [dwell_start, dwell_end] are still detected.
+        entry_count, exit_count = self._advance_world_to(dwell_end)
+
+        # 3. Execute the dwell over exactly [dwell_start, dwell_end]. Pin the
+        #    receiver clock to the dwell start so detection covers the right window,
+        #    and record the dwell window on the receiver so the observation and the
+        #    reward timing term reflect the true window.
+        self.receiver.current_time_us = dwell_start
+        self.receiver.dwell_start_us = dwell_start
+        self.receiver.dwell_end_us = dwell_end
+        detections = self.receiver._detect_buffered_interval(dwell_start, dwell_end)
+        self.receiver._record(detections, observation_time_us=dwell_start)
+
+        # 4. Now resolve deferred EXIT events (prune ended pulses for future dwells).
+        self._resolve_exits(exit_count)
+        self.receiver.current_time_us = dwell_end
+        self.receiver._prune(dwell_end)
+
+        # Determine ground truth over the dwell interval (reward/eval only, not obs)
+        ground_truth_active, _novel_opportunity = self._ground_truth_for_dwell(dwell_start, dwell_end)
+
+        # 4. Collect causal observations
+        observation = self.receiver.get_observation()
+
+        # 5. Update causal belief (from observation only)
+        detections = getattr(observation, "detections", [])
+        any_hit = len(detections) > 0
+        self.belief.record_visit(band, any_hit)
+        self.belief.advance_time()
+        self.belief.touch(band)
+
+        # Update intercepted set from detection emitter_id (ground truth for reward/eval only)
+        new_ids = set()
+        for d in detections:
+            eid = getattr(d, "emitter_id", None)
+            if eid is not None:
+                new_ids.add(int(eid))
+        newly = new_ids - self.intercepted_emitters
+        self.intercepted_emitters.update(new_ids)
+
+        # 6. Calculate reward (uses ground truth ONLY for shaping)
+        reward = compute_receiver_reward(
+            observation=observation,
+            ground_truth_active=ground_truth_active,
+            novel_emitter=bool(newly),
+            had_any_opportunity=ground_truth_active,
+            w_hit=self.w_hit,
+            w_novel=self.w_novel,
+            w_miss=self.w_miss,
+        )
+
+        # 7. Update metrics (ground-truth-based eval only)
+        self.fom.update(
+            band_chosen=band,
+            ground_truth_active=np.ones(self.n_bands, dtype=np.int8) if ground_truth_active else np.zeros(self.n_bands, dtype=np.int8),
+            pred_active=any_hit,
+            intercept_time_error_us=0.0,
+            reward=float(reward),
+        )
+
+        # 8. Termination
+        self.current_step += 1
+        terminated = bool(self.radio_env.done and self.current_step >= 1)
+        truncated = bool(self.current_step >= self.max_steps_per_episode)
+
+        # Strip emitter_id / ground truth from observation returned to agent:
+        # detections list may carry emitter_id; we remove it before building obs.
+        info = {
+            "detections": [d.to_dict() for d in detections],
+            "hit": any_hit,
+            "novel_emitter": bool(newly),
+            "ground_truth_active": ground_truth_active,
+            "band_center_mhz": observation.center_frequency_mhz if observation is not None else 0.0,
+            "receiver_time_us": self.receiver.current_time_us,
+        }
+
+        next_obs = self._build_observation()
+        return next_obs, float(reward), terminated, truncated, info
+
+    # ------------------------------------------------------------- internals
+    def _band_to_center(self, band: int) -> float:
+        """Convert band index to receiver center frequency (MHz).
+
+        Center is placed so the band's midpoint is centred within the IBW, clipped
+        to the receiver's legal center range.
+        """
+        band = int(band)
+        if self.n_bands <= 1:
+            return self.freq_min + self.ibw_mhz / 2.0
+        band_width = (self.freq_max - self.freq_min) / self.n_bands
+        band_mid = (self.freq_max - self.freq_min) * (band + 0.5) / self.n_bands + self.freq_min
+        legal_min = self.ibw_mhz / 2.0
+        legal_max = (self.freq_max - self.freq_min) - self.ibw_mhz / 2.0
+        center = min(max(band_mid, legal_min), legal_max)
+        return float(center)
+
+    def _band_index(self, center_frequency_mhz: float) -> int:
+        if self.freq_max <= self.freq_min:
+            return 0
+        frac = (float(center_frequency_mhz) - self.freq_min) / (self.freq_max - self.freq_min)
+        frac = min(1.0, max(0.0, frac))
+        return int(frac * (self.n_bands - 1))
+
+    def _ground_truth_for_dwell(self, lower_us: float, upper_us: float) -> tuple[bool, bool]:
+        """Evaluate ground-truth activity in [lower_us, upper_us) and any novel emitters.
+
+        Returns (any_active, novel_emitter_found). Uses the source records (ground
+        truth); this result is used ONLY for reward shaping and evaluation and
+        never enters the scheduler observation.
+        """
+        any_active = False
+        novel = False
+        lo, hi = float(lower_us), float(upper_us)
+        for rec in self.records:
+            toa = float(rec.toa_us)
+            exit_us = toa + float(rec.pulse_width_us)
+            # pulse overlaps [lo, hi)?
+            if toa < hi and exit_us > lo:
+                any_active = True
+                if int(rec.emitter_id) not in self.intercepted_emitters:
+                    novel = True
+        return any_active, novel
+
+    def _advance_world_to(self, target_time_us: float) -> tuple[int, int]:
+        """Stream the radio environment ENTRY events at-or-before target into the receiver.
+
+        Only ENTRY events with time <= target are emitted so the receiver buffer is
+        populated causally. EXIT events and their times are captured and returned so
+        the caller can prune after detection. Returns (entry_count, exit_count).
+
+        Receives future events (time > target) are left queued — no leakage.
+        """
+        if self.radio_env is None:
+            return 0, 0
+        entry_count = 0
+        exit_count = 0
+        self._pending_exits: list[int] = []
+        while self.radio_env.remaining_events > 0:
+            next_time = self.radio_env.peek_time()
+            if next_time is not None and next_time <= target_time_us:
+                event = self.radio_env.step()
+                if event is not None:
+                    if event.event_type == "entry" and event.pulse is not None:
+                        # add to receiver buffer WITHOUT triggering the receiver's
+                        # auto-scan timing (the scheduler owns tuning/stepping).
+                        self.receiver.add_pulse(event.pulse)
+                        entry_count += 1
+                    elif event.event_type == "exit":
+                        # defer: don't prune yet; just remember the pulse_id
+                        self._pending_exits.append(event.pulse_id)
+                        exit_count += 1
+            else:
+                break
+        return entry_count, exit_count
+
+    def _resolve_exits(self, count: int) -> None:
+        """Remove exited pulse_ids from the receiver buffer (after detection)."""
+        for pid in self._pending_exits[:count]:
+            self.receiver.remove_pulse(pid)
+        self._pending_exits = []
+
+    # --------------------------------------------------------------- obs
+    def _build_observation(self) -> np.ndarray:
+        """Build a pure scheduler observation from belief only (NO ground truth)."""
+        vec = np.zeros(self.obs_dim, dtype=np.float32)
+        if self.belief is None:
+            return vec
+        for b in range(self.n_bands):
+            f = self.belief.band_features(b)
+            vec[b * self.band_features:(b + 1) * self.band_features] = f
+        return vec
+
+    def get_fom(self) -> dict[str, float]:
+        return self.fom.summary()
+
+    def render(self, mode: str = "human") -> None:
+        if mode != "human":
+            return
+        obs_vec = self._build_observation()
+        print(f"=== CognitiveRFScanEnv t={self.receiver.current_time_us:.0f}us step={self.current_step} ===")
+        print("band | occ | rate | age")
+        for b in range(min(self.n_bands, 10)):
+            print(f"  {b:03d}  {obs_vec[b*self.band_features]:.2f}  {obs_vec[b*self.band_features+3]:.2f}  {obs_vec[b*self.band_features+2]:.2f}")
+
+    # ------------------------------------------------------------------ seeds
+    def seed(self, seed: int | None = None) -> list[int]:
+        self._seed = seed
+        return [seed]

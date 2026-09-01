@@ -1,6 +1,8 @@
-data_dir: "C:/Users/PromotheshChatterjee/Documents/GitHub/New folder/SIH-2026/TEST FILES"
+data_dir: "D:/TSRD_data"
 output_dir: "checkpoints"
 seed: 42
+subset: "train"
+mode: "scan"
 
 deinterleaver:
   batch_size: 8
@@ -25,6 +27,14 @@ scheduler:
 
 environment:
   n_bands: 180
+  band_features: 9             # belief features per band -> obs_dim = 180*9 = 1620
+  obs_dim: 1620
   freq_min_mhz: 0.0
   freq_max_mhz: 18000.0
-  time_resolution_us: 100.0
+  ibw_mhz: 1000.0              # instantaneous bandwidth (MHz)
+  dwell_time_us: 500.0         # receiver dwell per action
+  detection_threshold_db: -140.0
+  frequency_step_mhz: 500.0
+  time_horizon_us: 200000.0    # cap scenario ToA for bounded episodes
+  max_pulses: 50000
+  max_steps_per_episode: 1000
