@@ -60,6 +60,13 @@ suite command is `python -m pytest tests/` from `cognitive_ew_smart_scan/`.
   `HighestUncertaintyScheduler`, implementing the same `act`/`step` interface as
   `RandomScheduler` and honoring the `36 / 10` contract for head-to-head
   comparison against the learned MoE controller later.
+- **Baseline comparison wired into `evaluate_full.py`** — new `--baseline` CLI
+  option (`none|random|round_robin|highest_occupancy|highest_uncertainty`). When
+  set, the comparison scheduler runs the same per-file episodes (same env seed)
+  producing `bl_sched_*` columns, a measured `baseline_fom`, `baseline_name` in
+  `aggregate_metrics.json` + run metadata, and a measured "Baseline" column in
+  the printed summary (static literature value is shown only when no real
+  baseline is measured).
 
 ### Tests
 
@@ -71,4 +78,6 @@ suite command is `python -m pytest tests/` from `cognitive_ew_smart_scan/`.
   gating + empty-state no-fabrication).
 - `tests/test_baseline_schedulers.py` — 6 tests (round-robin cycling, occupancy/
   uncertainty argmax selection, contract defaults).
-- Full suite: **96 passed** (was 76 baseline).
+- `tests/test_evaluate_baseline.py` — 7 tests (`_build_baseline` resolves each
+  baseline name, unknown names raise, random bound checks).
+- Full suite: **103 passed** (was 76 baseline).
