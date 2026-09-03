@@ -35,6 +35,6 @@ environment:
   dwell_time_us: 500.0         # receiver dwell per action
   detection_threshold_db: -140.0
   frequency_step_mhz: 500.0
-  time_horizon_us: 200000.0    # cap scenario ToA for bounded episodes
+  time_horizon_us: 30000000.0  # cap scenario ToA; ~30 s spans TSRD scan files
   max_pulses: 50000
   max_steps_per_episode: 1000

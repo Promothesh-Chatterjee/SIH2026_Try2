@@ -101,15 +101,61 @@ def load_h5_records(
     with h5py.File(str(path), "r") as handle:
         data = handle["data"][:max_pulses]
         labels = handle["labels"][:max_pulses] if "labels" in handle else None
-    return records_from_array(data, labels, source_id=f"tsrd:{path.stem}")
+    records = records_from_array(data, labels, source_id=f"tsrd:{path.stem}")
+    if not records:
+        return records
+    # Normalise ToA so the scenario starts at t=0. TSRD ToA are absolute relative
+    # timestamps with an arbitrary per-file offset; only the relative spacing
+    # matters for the receiver simulation. Keep the earliest pulse at 0.
+    t0 = min(r.toa_us for r in records)
+    for r in records:
+        r.toa_us -= t0
+    records.sort(key=lambda r: r.toa_us)
+    return records
+
+
+# Map our {mode}/{split} names onto the official TSRD repo directory naming.
+# Official layout: <mode>/<mode>_<split>/config_*.h5  (e.g. scan/train_scan/).
+# split aliases: train|train_scan|train_stare, val|validation|val_scan|val_stare,
+#                test|test_scan|test_stare.
+_SPLIT_DIR_ALIASES = {
+    "train": {"train", "train_scan", "train_stare"},
+    "val": {"val", "val_scan", "val_stare", "validation"},
+    "test": {"test", "test_scan", "test_stare"},
+    "validation": {"validation", "val", "val_scan", "val_stare"},
+}
+
+
+def _search_subdirs(data_root: Path, mode: str, split: str) -> list[Path]:
+    """Search candidate subdirectories for the mode/split combo."""
+    desired = _SPLIT_DIR_ALIASES.get(split, {split})
+    base_dir = data_root / mode
+    candidates: list[Path] = []
+    if base_dir.exists():
+        for sub in base_dir.iterdir():
+            if sub.is_dir() and sub.name in desired:
+                candidates.append(sub)
+    # Also try data_root directly (some dumps flatten): data_root/<mode>/<split>
+    plain = data_root / mode / split
+    if plain.is_dir() and plain not in candidates:
+        candidates.append(plain)
+    files: list[Path] = []
+    for cand in candidates:
+        files.extend(sorted(cand.glob("*.h5")))
+    return files
 
 
 def discover_h5_files(data_root: str | Path, mode: str = "scan", subset: str = "train") -> list[Path]:
-    """Discover .h5 files under data_root/mode/subset (the fixed path layout)."""
-    base = Path(data_root) / mode / subset
-    if not base.exists():
+    """Discover .h5 files under a TSRD-compatible layout.
+
+    Handles both the official ``<mode>/<mode>_<split>`` layout (e.g.
+    ``scan/train_scan``) and the simpler ``<mode>/<split>`` layout.
+    """
+    data_root = Path(data_root)
+    if not data_root.exists():
         return []
-    return sorted(base.glob("*.h5"))
+    found = _search_subdirs(data_root, mode, subset)
+    return sorted(set(found))
 
 
 def synthetic_records(
@@ -207,3 +253,59 @@ def build_scenario(
     records = synthetic_records(freq_min_mhz=freq_min_mhz, freq_max_mhz=freq_max_mhz, seed=seed)
     logger.info("Scenario[synthetic]: %d pulses (no %s/%s .h5 found)", len(records), mode, subset)
     return records, "synthetic", []
+
+
+class ScenarioSource:
+    """Providers of per-episode PulseRecords from a local TSRD split.
+
+    Each call to :meth:`sample` loads ONE randomly-chosen .h5 file's records
+    (capped to ``max_pulses``, ToA-normalised) so that an RL episode gets a
+    single, diverse, memory-bounded scenario — unlike concatenating every file.
+    Falls back to a fresh synthetic scenario if no .h5 files are present.
+    """
+
+    def __init__(
+        self,
+        data_root: str | Path | None = None,
+        mode: str = "scan",
+        subset: str = "train",
+        freq_min_mhz: float = 0.0,
+        freq_max_mhz: float = 18000.0,
+        time_horizon_us: Optional[float] = None,
+        max_pulses: int = 50000,
+        seed: int = 42,
+        synthetic: bool = False,
+    ) -> None:
+        self.freq_min_mhz = freq_min_mhz
+        self.freq_max_mhz = freq_max_mhz
+        self.time_horizon_us = time_horizon_us
+        self.max_pulses = max_pulses
+        self._rng = np.random.default_rng(seed)
+        self.files: list[Path] = []
+        if data_root is not None and not synthetic:
+            self.files = discover_h5_files(data_root, mode=mode, subset=subset)
+        self.source_label = "tsrd" if self.files else "synthetic"
+        if self.files:
+            logger.info("ScenarioSource[tsrd]: %d files in %s/%s", len(self.files), mode, subset)
+        else:
+            logger.info("ScenarioSource[synthetic]: no %s/%s .h5 found", mode, subset)
+
+    def __len__(self) -> int:
+        return len(self.files)
+
+    def sample(self) -> list[PulseRecord]:
+        """Return records for one episode (a single random file, or synthetic)."""
+        if not self.files:
+            return synthetic_records(
+                freq_min_mhz=self.freq_min_mhz,
+                freq_max_mhz=self.freq_max_mhz,
+                seed=int(self._rng.integers(0, 2**31)),
+            )
+        fpath = Path(self._rng.choice(self.files))
+        return load_h5_records(
+            fpath,
+            freq_min_mhz=self.freq_min_mhz,
+            freq_max_mhz=self.freq_max_mhz,
+            time_horizon_us=self.time_horizon_us,
+            max_pulses=self.max_pulses,
+        )

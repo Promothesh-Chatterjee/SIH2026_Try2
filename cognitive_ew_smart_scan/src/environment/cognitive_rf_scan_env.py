@@ -31,7 +31,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Callable, Optional, Sequence
 
 import gymnasium as gym
 import numpy as np
@@ -126,9 +126,11 @@ class CognitiveRFScanEnv(gym.Env):
         config: dict,
         records: Optional[Sequence[PulseRecord]] = None,
         seed: int | None = 42,
+        records_provider: Optional[Callable[[], Sequence[PulseRecord]]] = None,
     ) -> None:
         super().__init__()
         self.config = config
+        self.records_provider = records_provider
 
         self.n_bands: int = int(config.get("n_bands", 180))
         self.freq_min: float = float(config.get("freq_min_mhz", 0.0))
@@ -190,6 +192,8 @@ class CognitiveRFScanEnv(gym.Env):
             self._seed = seed
             self._rng = np.random.default_rng(seed)
             np.random.seed(seed)
+        if self.records_provider is not None:
+            self.records = list(self.records_provider() or [])
 
         self.receiver = self._build_receiver()
         self.radio_env = self._build_radio_env()
