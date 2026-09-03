@@ -98,7 +98,7 @@ class SmartScanMoE(nn.Module):
         Ensures no band ignored > max_revisit_gap slots.
         """
 
-        def __init__(self, n_bands: int = 180, decay_rate: float = 0.05, max_revisit_gap: int | None = None) -> None:
+        def __init__(self, n_bands: int = 36, decay_rate: float = 0.05, max_revisit_gap: int | None = None) -> None:
             """Initialise revisit agent.
 
             Args:
@@ -254,9 +254,19 @@ class SmartScanMoE(nn.Module):
         q_min = q_values.min(dim=-1, keepdim=True)[0]
         q_max = q_values.max(dim=-1, keepdim=True)[0]
         q_norm = (q_values - q_min) / (q_max - q_min + 1e-8)
-        # Revisit urgency from obs time_since half
+        # Revisit urgency from the 10-feature observation layout.
+        # Canonical per-band features: [occupancy(0), det_rate(1), miss_rate(2),
+        # uncertainty(3), age(4), emitter_count(5), deint_conf(6), per_stab(7),
+        # agility(8), priority(9)]. "Time since last visit" is feature index 4.
         n = self.n_bands
-        time_since = obs[:, :, n:]
+        features_per_band = obs.shape[-1] // n
+        age_idx = 4  # normalized revisit age within each band's feature block
+        if features_per_band > age_idx:
+            b = torch.arange(n, device=obs.device) * features_per_band + age_idx
+            time_since = obs[:, :, b]
+        else:
+            # Fallback for legacy 2-feature layout: second half is time_since.
+            time_since = obs[:, :, n:] if features_per_band == 2 else obs[:, :, :n]
         urgency = 1.0 - torch.exp(-self.decay_rate * time_since * 100.0)
         eager_contrib = self.eager_weight * q_norm
         revisit_contrib = self.revisit_weight * urgency

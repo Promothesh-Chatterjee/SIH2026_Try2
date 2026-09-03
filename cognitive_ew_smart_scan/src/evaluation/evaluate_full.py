@@ -51,6 +51,8 @@ def run_full_evaluation(
     from ..environment.cognitive_rf_scan_env import CognitiveRFScanEnv
     from ..environment.scenario_generator import load_h5_records
     from ..evaluation.metrics import FiguresOfMerit
+    from ..telemetry.publisher import TelemetryPublisher
+    from ..telemetry.run_manager import RunManager
 
     with open(config_path) as f:
         model_cfg = yaml.safe_load(f)
@@ -119,8 +121,8 @@ def run_full_evaluation(
             from ..models.smartscan_moe import SmartScanMoE
 
             scheduler = DRQNScheduler(
-                obs_dim=int(drqn_cfg.get("obs_dim", 1620)),
-                n_bands=int(drqn_cfg.get("n_bands", 180)),
+                obs_dim=int(drqn_cfg.get("obs_dim", 360)),
+                n_bands=int(drqn_cfg.get("n_bands", 36)),
                 lstm_hidden=int(drqn_cfg.get("lstm_hidden", 256)),
                 lstm_layers=int(drqn_cfg.get("lstm_layers", 2)),
             )
@@ -133,7 +135,7 @@ def run_full_evaluation(
             moe_cfg = model_cfg.get("smartscan_moe", {})
             from ..models.smartscan_moe import SmartScanMoE as MoE
 
-            moe = MoE(scheduler, {**moe_cfg, "n_bands": drqn_cfg.get("n_bands", 180)})
+            moe = MoE(scheduler, {**moe_cfg, "n_bands": drqn_cfg.get("n_bands", 36)})
             scheduler = moe  # use MoE for scheduling
             logger.info("Loaded scheduler %s", scheduler_ckpt)
         except Exception as exc:
@@ -145,7 +147,7 @@ def run_full_evaluation(
     # Env for scheduler metrics (use test dir as data_dir with subset="." workaround)
     # Create a lightweight env that we reset per file via manual pt loading
     # Instead, iterate files and simulate intercepts via RFScanEnv per file
-    env_config = {**drqn_cfg, **reward_cfg, "n_bands": drqn_cfg.get("n_bands", 180)}
+    env_config = {**drqn_cfg, **reward_cfg, "n_bands": drqn_cfg.get("n_bands", 36)}
     # Patch training_config environment keys if present
     try:
         with open("configs/training_config.yaml") as f:
@@ -165,6 +167,16 @@ def run_full_evaluation(
     global_fom = FiguresOfMerit()
     deinter_metrics: list[dict] = []
     device = torch.device("cuda" if torch.cuda.is_available() and scheduler is not None else "cpu")
+
+    # P0-9: reproducible evaluation run + real telemetry publisher.
+    run = RunManager(
+        root="runs",
+        config={"mode": mode, "n_files": len(files), "scheduler": str(scheduler_ckpt), "deinterleaver": str(deinterleaver_ckpt)},
+        extras={"split": "test", "mode": mode, "device": str(device)},
+    )
+    run.write_git_revision()
+    telemetry = TelemetryPublisher(run=run)
+    logger.info("Evaluation run %s at %s", run.run_id, run.dir)
 
     for idx, fpath in enumerate(files):
         per_file: dict = {"file": str(fpath), "mode": mode}
@@ -261,6 +273,7 @@ def run_full_evaluation(
                 )
             fom = env.get_fom()
             per_file.update({f"sched_{k}": v for k, v in fom.items()})
+            telemetry.update(step=idx, file=str(fpath), type="eval_file", pd=float(fom.get("Pd", 0.0)), pfa=float(fom.get("Pfa", 0.0)), avg_reward=float(fom.get("avg_reward", 0.0)))
         except Exception as exc:
             logger.warning("Scheduler eval failed for %s: %s", fpath, exc)
             per_file.update({"sched_Pd": float("nan"), "sched_Pfa": float("nan")})
@@ -288,6 +301,7 @@ def run_full_evaluation(
     agg.update({f"sched_{k}": float(v) for k, v in global_fom.summary().items()})
     agg["n_files"] = len(files)
     agg["mode"] = mode
+    telemetry.update(step=len(files), type="done", n_files=len(files), **{f"sched_{k}": float(v) for k, v in global_fom.summary().items()})
 
     # Baseline vs targets table
     baseline = {"v_measure": 0.62, "Pd": 0.65, "Pfa": 0.12}

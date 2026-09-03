@@ -35,6 +35,9 @@ except ImportError:
 
 from pydantic import BaseModel, Field
 
+from src.telemetry.publisher import TelemetryPublisher
+from src.telemetry.discovery import latest_telemetry_snapshot, latest_telemetry_history, find_latest_run
+
 MAX_PDWS_PER_REQUEST = 10000
 MAX_SESSION_TTL_SECONDS = 3600
 
@@ -65,21 +68,14 @@ STATE: dict[str, Any] = {
     "memory": None,
     "fom": None,
     "hidden": None,
-    # Dashboard Streaming Keys
-    "current_band": 0,
-    "eager_pct": 0.6,
-    "revisit_pct": 0.4,
-    "epsilon": 1.0,
-    "replay_buf_size": 0,
-    "infer_latency_ms": 0.0,
-    "band_priorities": [0.0] * 36,
-    "latest_pdws": [],
-    "active_emitters": [],
-    "cluster_metrics": {
-        "vmeasure": 0.0, "ari": 0.0, "ami": 0.0,
-        "homogeneity": 0.0, "completeness": 0.0, "mcc": 0.0, "f1": 0.0
-    }
 }
+
+# P0-10: real telemetry broker. Deliberately no fabricated streaming keys: the
+# dashboard only ever sees values recorded via publisher.update() (or from the
+# latest persisted run on disk). Until an update happens, clients receive an
+# explicit {"live": false} state rather than invented metrics.
+telemetry = TelemetryPublisher(run=None)
+TELEMETRY_ROOT = os.getenv("TELEMETRY_ROOT", "runs")
 
 
 # ── Pydantic Schemas (Pydantic v2) ──────────────────────────────────────────
@@ -239,7 +235,7 @@ async def lifespan(app: FastAPI):  # type: ignore
                     moe_cfg = STATE["model_cfg"].get("smartscan_moe", {})
                     drqn = DRQNScheduler(
                         obs_dim=d_cfg.get("obs_dim", 360),
-                        n_bands=d_cfg.get("n_bands", 180),
+                        n_bands=d_cfg.get("n_bands", 36),
                         lstm_hidden=d_cfg.get("lstm_hidden", 256),
                         lstm_layers=d_cfg.get("lstm_layers", 2),
                     )
@@ -249,7 +245,7 @@ async def lifespan(app: FastAPI):  # type: ignore
                     drqn.load_state_dict(state, strict=False)
                     drqn.to(torch.device(STATE["device"] if STATE["device"] != "cuda" else "cpu"))
                     drqn.eval()
-                    moe = SmartScanMoE(drqn, {**moe_cfg, "n_bands": d_cfg.get("n_bands", 180), "device": STATE["device"]})
+                    moe = SmartScanMoE(drqn, {**moe_cfg, "n_bands": d_cfg.get("n_bands", 36), "device": STATE["device"]})
                     STATE["scheduler"] = drqn
                     STATE["moe"] = moe
                     # Init hidden
@@ -316,6 +312,43 @@ def get_metrics() -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.get("/telemetry/latest", tags=["telemetry"])
+def telemetry_latest() -> dict[str, Any]:
+    """Latest real telemetry snapshot: live in-process data, else latest run on disk.
+
+    Never fabricates values; returns ``{"live": false}`` if no real data exists.
+    """
+    if telemetry.live:
+        return telemetry.latest()
+    return latest_telemetry_snapshot(TELEMETRY_ROOT)
+
+
+@app.get("/telemetry/history", tags=["telemetry"])
+def telemetry_history(limit: int = 200) -> dict[str, Any]:
+    """History of real telemetry records (newest first) from the latest run.
+
+    Args:
+        limit: Maximum number of records to return (clamped to 1..1000).
+    """
+    limit = max(1, min(int(limit), 1000))
+    if telemetry.live:
+        return {"live": True, "records": telemetry.history(limit=limit)}
+    records = latest_telemetry_history(TELEMETRY_ROOT, limit=limit)
+    if not records and not telemetry.live:
+        return {"live": False, "records": []}
+    return {"live": True, "records": records}
+
+
+@app.get("/telemetry/runs", tags=["telemetry"])
+def telemetry_runs() -> dict[str, Any]:
+    """List persisted run directories (newest first) under the telemetry root."""
+    root = Path(TELEMETRY_ROOT)
+    if not root.is_dir():
+        return {"runs": []}
+    runs = sorted((d.name for d in root.iterdir() if d.is_dir()), reverse=True)
+    return {"runs": runs}
+
+
 @app.post("/reset", tags=["system"])
 def reset(request: Request) -> dict[str, str]:
     """Reset LSTM hidden state and episodic memory."""
@@ -350,6 +383,10 @@ def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
     d_cfg = STATE.get("model_cfg", {}).get("drqn_scheduler", {})
     n_bands = d_cfg.get("n_bands", 36)
     expected_dim = d_cfg.get("obs_dim", n_bands * 10)
+    obs = np.asarray(req.obs, dtype=np.float32)
+    if obs.ndim != 1:
+        raise HTTPException(status_code=400, detail=f"obs must be a flat vector, got ndim={obs.ndim}")
+    # Accept obs_dim (10-feature) or legacy 2-feature layout for back-compat.
     if obs.size != expected_dim and obs.size != 2 * n_bands and obs.size != n_bands * 10:
         raise HTTPException(status_code=400, detail=f"obs length must be obs_dim={expected_dim}, got {obs.size}")
     # Try MoE first, then ONNX, then random fallback
@@ -531,33 +568,50 @@ import json
 
 _ws_clients: list[WebSocket] = []
 
+
+def _telemetry_payload() -> dict[str, Any]:
+    """Return the current real telemetry payload for dashboards.
+
+    Prefers the in-process live publisher; otherwise falls back to the newest
+    persisted run on disk. Crucially, it never invents metrics: when no real
+    data exists it returns an explicit ``{"live": false}`` marker.
+    """
+    if telemetry.live:
+        latest = telemetry.latest()
+        return {
+            "live": True,
+            "source": "publisher",
+            "metrics": latest,
+            "bandPriorities": latest.get("band_priorities", []),
+            "pdws": latest.get("pdws", []),
+            "emitters": latest.get("emitters", []),
+        }
+    disk = latest_telemetry_snapshot(TELEMETRY_ROOT)
+    if disk.get("live"):
+        return {
+            "live": True,
+            "source": f"run:{disk.get('run_id')}",
+            "metrics": disk,
+            "bandPriorities": disk.get("band_priorities", []),
+            "pdws": disk.get("pdws", []),
+            "emitters": disk.get("emitters", []),
+        }
+    return {"live": False, "source": "none", "message": disk.get("live_message", "no live telemetry yet")}
+
+
 @app.websocket("/ws/state")
 async def ws_state(ws: WebSocket):
+    """Stream real telemetry at ~4 Hz. Sends ``live:false`` when no real data exists.
+
+    Dashboard clients are expected to gate every metric render behind the
+    ``live`` flag so they never display invented values.
+    """
     await ws.accept()
     _ws_clients.append(ws)
     try:
         while True:
             await asyncio.sleep(0.25)  # 4 Hz stream
-            fom = STATE["fom"].summary() if STATE.get("fom") else {}
-            payload = {
-                "metrics": fom,
-                "scheduler": {
-                    "currentBand": STATE.get("current_band", 0),
-                    "eagerPct": STATE.get("eager_pct", 0.6),
-                    "revisitPct": STATE.get("revisit_pct", 0.4),
-                    "epsilon": STATE.get("epsilon", 1.0),
-                    "replayBuf": STATE.get("replay_buf_size", 0),
-                    "inferLatencyMs": STATE.get("infer_latency_ms", 0.0),
-                    "avgReward": fom.get("avg_reward", 0.0),
-                },
-                "bandPriorities": STATE.get("band_priorities", [0.0] * 180),
-                "pdws": STATE.get("latest_pdws", []),
-                "emitters": STATE.get("active_emitters", []),
-                "clusterMetrics": STATE.get("cluster_metrics", {
-                    "vmeasure": 0.0, "ari": 0.0, "ami": 0.0,
-                    "homogeneity": 0.0, "completeness": 0.0, "mcc": 0.0, "f1": 0.0
-                }),
-            }
+            payload = _telemetry_payload()
             await ws.send_text(json.dumps(payload))
     except WebSocketDisconnect:
         _ws_clients.remove(ws)

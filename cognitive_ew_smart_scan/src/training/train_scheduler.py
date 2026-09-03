@@ -24,10 +24,29 @@ from ..environment.cognitive_rf_scan_env import CognitiveRFScanEnv
 from ..environment.scenario_generator import ScenarioSource
 from ..models.drqn_scheduler import DRQNScheduler
 from ..models.smartscan_moe import SmartScanMoE
+from ..telemetry.publisher import TelemetryPublisher
+from ..telemetry.run_manager import RunManager
 from ..training.replay_buffer import SequenceReplayBuffer
 from ..training.thompson_sampling import ThompsonSamplingExplorer
 
 logger = logging.getLogger(__name__)
+
+
+def _observable_priorities(obs: np.ndarray, features_per_band: int = 10) -> np.ndarray:
+    """Extract per-band observable priority (occupancy, feature index 0) from a flat obs.
+
+    Avoids ground truth entirely: feature 0 is the EMA occupancy from belief,
+    which is a legitimate receiver-observable signal used for prioritisation.
+    """
+    obs_arr = np.asarray(obs, dtype=np.float32)
+    if obs_arr.ndim != 1:
+        raise ValueError(f"observable_priorities expects flat obs, got shape {obs_arr.shape}")
+    if features_per_band <= 0:
+        raise ValueError(f"features_per_band must be > 0, got {features_per_band}")
+    n_bands = obs_arr.shape[0] // features_per_band
+    if n_bands * features_per_band != obs_arr.shape[0]:
+        raise ValueError(f"obs length {obs_arr.shape[0]} not a multiple of {features_per_band}")
+    return obs_arr[::features_per_band]
 
 
 def _do_drqn_update(
@@ -92,8 +111,8 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
     env_cfg = train_cfg.get("environment", {})
     sched_cfg = train_cfg.get("scheduler", {})
 
-    n_bands = int(drqn_cfg.get("n_bands", 180))
-    band_features = int(env_cfg.get("band_features", 9))
+    n_bands = int(drqn_cfg.get("n_bands", 36))
+    band_features = int(env_cfg.get("band_features", 10))
     obs_dim = int(env_cfg.get("obs_dim", n_bands * band_features))
 
     # Merge reward weights into env config
@@ -159,6 +178,16 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
 
     output_dir = Path(train_cfg.get("output_dir", "checkpoints/scheduler"))
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # P0-9: reproducible run directory + telemetry publisher (real metrics only).
+    run = RunManager(
+        root=train_cfg.get("runs_dir", "runs"),
+        config={**full_cfg, **train_cfg},
+        extras={"split": subset, "mode": mode, "seed": seed, "device": str(device)},
+    )
+    run.write_git_revision()
+    telemetry = TelemetryPublisher(run=run)
+    logger.info("Run %s at %s", run.run_id, run.dir)
 
     global_step = 0
     episode = 0
@@ -246,6 +275,21 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
             except Exception:
                 pass
 
+        # P0-9: publish real episode telemetry (band priorities = observable occupancy).
+        band_priorities = [float(v) for v in _observable_priorities(obs)]
+        telemetry.update(
+            step=global_step,
+            episode=episode,
+            type="episode",
+            pd=float(fom["Pd"]),
+            pfa=float(fom["Pfa"]),
+            avg_reward=float(fom["avg_reward"]),
+            ep_reward=float(ep_reward),
+            ep_hits=int(ep_hits),
+            epsilon=float(eps),
+            band_priorities=band_priorities,
+        )
+
         # Periodic MoE evaluation on val scenarios every 5000 steps
         if episode > 0 and global_step % 5000 == 0:
             try:
@@ -282,6 +326,7 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
                     val_rewards.append(r_sum)
                 avg_val = float(np.mean(val_rewards)) if val_rewards else 0.0
                 logger.info("  Val MoE avg_reward %.2f", avg_val)
+                telemetry.update(step=global_step, episode=episode, type="val", val_reward=float(avg_val))
                 if use_wandb:
                     try:
                         import wandb
@@ -300,6 +345,7 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
     final_path = output_dir / "final.pt"
     torch.save(online_drqn.state_dict(), final_path)
     logger.info("Scheduler training complete. Final: %s Best: %.2f", final_path, best_reward)
+    telemetry.update(step=global_step, episode=episode, type="done", best_reward=float(best_reward))
     if use_wandb:
         try:
             import wandb

@@ -1,7 +1,55 @@
 # Project Memory & Progress Tracker
 
+> NOTE (2026-09-04): The canonical dimension contract is now **`n_bands: 36` /
+> `obs_dim: 360` / `band_features: 10`** (single source of truth in
+> `configs/model_config.yaml` + `training_config.yaml`). Earlier log lines that
+> reference `obs (1620,)`, `action 180`, or `Discrete(180)` describe the
+> **pre-contract** state and are superseded — see the current checkpoint below.
+
 ## Status Tracking
 - `[ ]` pending · `[/]` in progress · `[x]` complete
+
+## CHECKPOINT 2026-09-04 — RESUME HERE
+State: P0-1..P0-8 implemented; **P0-9 (run manager + telemetry) and P0-10
+(data-driven dashboard) now implemented** with strict no-fabricated-metrics.
+Full suite `python -m pytest tests/` = **96 passed** (~5s). Training NOT started.
+
+Canonical contract (verified everywhere): `n_bands=36`, `band_features=10`,
+`obs_dim=360`. Per-band 10-feature belief layout (src/environment/
+`cognitive_rf_scan_env.py:band_features()`):
+`[occupancy, det_rate, miss_rate, uncertainty, age(revisit), emitter_count,
+deint_conf, per_stab, agility, priority]` → flat obs is band-major
+`obs[b*10:(b+1)*10]`; occupancy = `obs[::10]`, uncertainty = `obs[3::10]`.
+
+P0-9 telemetry (`src/telemetry/`): `RunManager` (per-run dir: metadata.json,
+telemetry.jsonl, checkpoints/, git_revision.txt, normalization.json),
+`TelemetryPublisher` (thread-safe JSONL; `live:false` until a real record),
+`discovery.py` (find_latest_run / latest_telemetry_snapshot /
+latest_telemetry_history). Wired into `train_scheduler.py` + `evaluate_full.py`.
+`runs/` added to `.gitignore`.
+
+P0-10: `api.py` REST endpoints `GET /telemetry/latest`, `/telemetry/history`,
+`/telemetry/runs` + rewritten `/ws/state` (`_telemetry_payload()`); all STATE
+fake keys removed, returns explicit `{"live": false}` when no real data.
+Frontend (`frontend/src/`) componentized into `components/` (useTelemetry hook,
+LiveGate, MetricBar, MoEAttribution, DrqnState, BandHeatmap, TelemetryHistory,
+PPIScope, SpectrumWaterfall, PDWScatter, PDWFeed); every metric live-gated;
+no hardcoded 36/180/values. Lint clean, `vite build` clean.
+
+Scheduler baselines added to `src/models/baseline_schedulers.py`:
+RoundRobin / HighestOccupancy / HighestUncertainty (interface parity with
+RandomScheduler, honors 36/10 contract) — comparison path NOT yet wired into
+evaluate_full.
+
+Reproducibility smoke VERIFIED (2026-09-04): `RunManager` wrote
+metadata.json + telemetry.jsonl + git_revision.txt (git `3d1fa44`); config
+fingerprint `438213393c42`; 6 telemetry records (5 episode × 36 band_priorities
++ done); discovery + API `_telemetry_payload()` report `live:true` from the
+in-process publisher — no fabricated metrics. Script:
+`C:\Users\PromotheshChatterjee\AppData\Local\Temp\opencode\ew_repro_smoke.py`.
+
+Next action (your call): wire baselines into `evaluate_full.py`, run a full
+benchmark on real TSRD, then start staged TSRD training.
 
 ## Step 1-3: Scaffolding & Configs
 - [x] Directory scaffold and basic documents (PRD, Architecture, Rules, Design, Memory, Implementation Plan)
@@ -48,7 +96,7 @@
 - Smoke: normalise 6D, FoM, Thompson, Periodic (period 1000us), Memory priority boost, MoE select_bands, SequenceReplayBuffer sample
 - No stubs: no TODO/NotImplemented; except-pass only in OOM fallbacks with logging
 
-## CHECKPOINT 2026-09-03 — RESUME HERE
+## HISTORY — CHECKPOINT 2026-09-03 (superseded by 2026-09-04)
 State: codebase wired to real TSRD data on D:\TSRD_data (download VERIFIED: 65GB, 9000 .h5). Working through scientific-alignment review BEFORE training.
 
 Just-completed this session (all verified running against real scan/train_scan data):

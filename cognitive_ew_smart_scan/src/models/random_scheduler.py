@@ -12,7 +12,7 @@ class RandomScheduler:
     Returns a random discrete action index for the current observation.
     """
 
-    def __init__(self, n_bands: int = 180, seed: int | None = None) -> None:
+    def __init__(self, n_bands: int = 36, seed: int | None = None) -> None:
         self.n_bands = int(n_bands)
         self.rng = random.Random(seed)
 

@@ -38,8 +38,14 @@ class FiguresOfMerit:
         rewards: List of per-step rewards.
     """
 
-    def __init__(self) -> None:
-        """Initialise all counters to zero."""
+    def __init__(self, n_bands: int = 36) -> None:
+        """Initialise all counters to zero.
+
+        Args:
+            n_bands: Number of frequency bands in the scan grid. Used to size the
+                scalar ground-truth path (full-band vector path is authoritative).
+        """
+        self.n_bands = int(n_bands)
         self.reset()
 
     def reset(self) -> None:
@@ -101,8 +107,8 @@ class FiguresOfMerit:
         # Standardize ground_truth_active
         if isinstance(ground_truth_active, (bool, int, np.bool_)):
             is_active = bool(ground_truth_active)
-            gt_vec = np.zeros(36, dtype=np.int8)
-            if is_active and 0 <= b < 36:
+            gt_vec = np.zeros(self.n_bands, dtype=np.int8)
+            if is_active and 0 <= b < self.n_bands:
                 gt_vec[b] = 1
         else:
             gt_vec = np.asarray(ground_truth_active).astype(np.int8)

@@ -12,8 +12,14 @@ class DataPipelineTests(unittest.TestCase):
     def test_manifest_handles_split_fallback(self):
         root = Path("data")
         manifest = build_manifest(root, output_path=root / "tsrd_manifest_test.json")
-        self.assertIsInstance(manifest["files"], list)
-        self.assertIn("file_count", manifest)
+        # Current manifest schema is per-split (P0-2), richer than the legacy flat list.
+        self.assertIsInstance(manifest["splits"], dict)
+        self.assertIn("summary", manifest)
+        for split_name in ("train", "val", "test"):
+            self.assertIn(split_name, manifest["splits"])
+        for split in manifest["splits"].values():
+            self.assertIsInstance(split["files"], list)
+            self.assertIn("file_count", split)
 
     def test_split_resolution_works_for_standard_layout(self):
         roots = resolve_split_dirs(Path("data"), "scan")
