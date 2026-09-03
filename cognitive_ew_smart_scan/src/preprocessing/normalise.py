@@ -6,6 +6,9 @@ Transforms 5D PDWs (ToA, CF, PW, AoA, Amplitude) into 6D normalised vectors
 """
 
 import logging
+from pathlib import Path
+from typing import Any
+
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -86,3 +89,97 @@ def normalise_pdws(pdws: np.ndarray, fit_stats: dict | None = None) -> tuple[np.
 
     normalised = np.column_stack((toa_norm, cf_norm, pw_norm, aoa_sin, aoa_cos, amp_norm)).astype(np.float32)
     return normalised, stats
+
+
+def fit_train_statistics(train_files: list[Path | str], max_sample_pulses: int = 200000) -> dict[str, float]:
+    """Fit normalization statistics strictly on training files (P0-4 zero data leakage).
+
+    Samples up to max_sample_pulses across provided train_files.
+    """
+    import h5py
+
+    cf_samples = []
+    pw_samples = []
+    amp_samples = []
+
+    pulses_collected = 0
+    for fp in train_files:
+        path = Path(fp)
+        if not path.exists():
+            continue
+        try:
+            with h5py.File(str(path), "r") as h:
+                if "data" not in h:
+                    continue
+                d = np.asarray(h["data"])
+                if len(d) == 0:
+                    continue
+                # Contiguous chunk from train file
+                chunk_len = min(len(d), 20000)
+                cf_samples.append(d[:chunk_len, 1].astype(np.float64))
+                pw_samples.append(d[:chunk_len, 2].astype(np.float64))
+                amp_samples.append(d[:chunk_len, 4].astype(np.float64))
+                pulses_collected += chunk_len
+                if pulses_collected >= max_sample_pulses:
+                    break
+        except Exception as exc:
+            logger.warning("Could not read %s for normalization stats: %s", path, exc)
+
+    if not cf_samples:
+        logger.warning("No pulse data found to fit normalization stats — using standard EW defaults")
+        return {
+            "cf_median": 9000.0,
+            "cf_iqr": 6000.0,
+            "pw_mean": 2.5,
+            "pw_std": 1.5,
+            "amp_mean": -80.0,
+            "amp_std": 20.0,
+        }
+
+    all_cf = np.concatenate(cf_samples)
+    all_pw = np.concatenate(pw_samples)
+    all_amp = np.concatenate(amp_samples)
+
+    cf_med = float(np.median(all_cf))
+    q75, q25 = np.percentile(all_cf, [75, 25])
+    cf_iqr = float(q75 - q25) if (q75 - q25) > 0 else 1000.0
+
+    pw_log = np.log1p(np.maximum(all_pw, 0.0))
+    pw_mean = float(np.mean(pw_log))
+    pw_std = float(np.std(pw_log)) if np.std(pw_log) > 0 else 1.0
+
+    amp_mean = float(np.mean(all_amp))
+    amp_std = float(np.std(all_amp)) if np.std(all_amp) > 0 else 1.0
+
+    stats = {
+        "cf_median": cf_med,
+        "cf_iqr": cf_iqr,
+        "pw_mean": pw_mean,
+        "pw_std": pw_std,
+        "amp_mean": amp_mean,
+        "amp_std": amp_std,
+        "fitted_sample_size": int(pulses_collected),
+    }
+    logger.info("Fitted train normalization stats from %d pulses: CF_med=%.1f, CF_iqr=%.1f", pulses_collected, cf_med, cf_iqr)
+    return stats
+
+
+def save_normalization_stats(stats: dict[str, Any], path: Path | str) -> None:
+    """Persist train-fitted normalization statistics alongside checkpoints."""
+    import json
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(stats, f, indent=2)
+    logger.info("Saved normalization stats to %s", p)
+
+
+def load_normalization_stats(path: Path | str) -> dict[str, float]:
+    """Load train-fitted normalization statistics for leakage-free evaluation/inference."""
+    import json
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Normalization stats file not found: {p}")
+    with open(p, "r", encoding="utf-8") as f:
+        return json.load(f)
+

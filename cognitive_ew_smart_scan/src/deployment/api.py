@@ -72,7 +72,7 @@ STATE: dict[str, Any] = {
     "epsilon": 1.0,
     "replay_buf_size": 0,
     "infer_latency_ms": 0.0,
-    "band_priorities": [0.0] * 180,
+    "band_priorities": [0.0] * 36,
     "latest_pdws": [],
     "active_emitters": [],
     "cluster_metrics": {
@@ -87,7 +87,7 @@ STATE: dict[str, Any] = {
 class PredictBandsRequest(BaseModel):
     """Request for band prediction."""
 
-    obs: list[float] = Field(..., description="Observation vector length 2*n_bands", min_length=2)
+    obs: list[float] = Field(..., description="Observation vector matching obs_dim (e.g. 360)", min_length=2)
     k: int | None = Field(None, description="Top-K override (default from config)")
 
 
@@ -173,7 +173,7 @@ async def lifespan(app: FastAPI):  # type: ignore
             STATE["model_cfg"] = yaml.safe_load(f)
     else:
         logger.warning("model_config.yaml not found at %s", cfg_path)
-        STATE["model_cfg"] = {"drqn_scheduler": {"n_bands": 180, "obs_dim": 360}, "smartscan_moe": {}}
+        STATE["model_cfg"] = {"drqn_scheduler": {"n_bands": 36, "obs_dim": 360}, "smartscan_moe": {}}
 
     # Try to load PyTorch models (ONNX preferred if available, else PT)
     # Deinterleaver
@@ -347,10 +347,11 @@ def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
     Handles CUDA/CPU via DEVICE env.
     """
     start = time.perf_counter()
-    obs = np.array(req.obs, dtype=np.float32)
-    n_bands = STATE.get("model_cfg", {}).get("drqn_scheduler", {}).get("n_bands", 180)
-    if obs.size != 2 * n_bands:
-        raise HTTPException(status_code=400, detail=f"obs length must be 2*n_bands={2*n_bands}, got {obs.size}")
+    d_cfg = STATE.get("model_cfg", {}).get("drqn_scheduler", {})
+    n_bands = d_cfg.get("n_bands", 36)
+    expected_dim = d_cfg.get("obs_dim", n_bands * 10)
+    if obs.size != expected_dim and obs.size != 2 * n_bands and obs.size != n_bands * 10:
+        raise HTTPException(status_code=400, detail=f"obs length must be obs_dim={expected_dim}, got {obs.size}")
     # Try MoE first, then ONNX, then random fallback
     moe = STATE.get("moe")
     if moe is not None:

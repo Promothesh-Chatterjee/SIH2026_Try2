@@ -76,10 +76,10 @@ class TestCognitiveEnvWiring(unittest.TestCase):
         recs = synthetic_records(n_emitters=3, time_horizon_us=20000.0, seed=2)
         config = {"n_bands": 18, "freq_min_mhz": 0.0, "freq_max_mhz": 18000.0, "ibw_mhz": 1000.0, "dwell_time_us": 500.0}
         env = CognitiveRFScanEnv(config, records=recs, seed=3)
-        self.assertEqual(env.obs_dim, 18 * 9)
+        self.assertEqual(env.obs_dim, 18 * 10)
         self.assertEqual(env.action_space.n, 18)
         obs, _ = env.reset()
-        self.assertEqual(obs.shape, (162,))
+        self.assertEqual(obs.shape, (180,))
         for i in range(10):
             _, r, term, trunc, _ = env.step(int(env.action_space.sample()))
             self.assertIsInstance(r, float)

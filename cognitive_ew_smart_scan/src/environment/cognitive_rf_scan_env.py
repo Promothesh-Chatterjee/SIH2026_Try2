@@ -45,17 +45,27 @@ from src.training.reward import compute_receiver_reward
 logger = logging.getLogger(__name__)
 
 
+STATE_FEATURES_PER_BAND = 10
+
+
 @dataclass
 class BeliefState:
     """Mutable cognitive belief derived from receiver observations only.
 
-    occupancy_prob[b]: exponential moving average of recent detection rate.
-    revisit_age[b]: slots since band last visited (>=1, capped).
-    detection_rate[b]: raw fraction of recent dwells on band b that yielded a hit.
-    uncertainty[b]: heuristic (1 - |2*prop - 1|) peaked at 0.5 occupancy.
+    Canonical 10 features per band:
+    1. current/estimated occupancy (EMA of hit indicator)
+    2. recent detection/hit rate (hits / visits)
+    3. recent miss rate (1 - detection_rate)
+    4. uncertainty (peaked at 0.5 occupancy or unvisited)
+    5. time since last visit (normalized revisit age)
+    6. estimated emitter count (observable diversity in band)
+    7. deinterleaver confidence (clustering confidence proxy)
+    8. PRI/periodicity stability (PRI coefficient of variation inverse)
+    9. frequency-agility indicator (intra-band frequency dispersion)
+    10. risk/priority score (composite cognitive urgency)
     """
 
-    def __init__(self, n_bands: int):
+    def __init__(self, n_bands: int = 36):
         self.n_bands = n_bands
         self.reset()
 
@@ -65,50 +75,109 @@ class BeliefState:
         self.detection_rate = np.zeros(n, dtype=np.float32)
         self.revisit_age = np.ones(n, dtype=np.int64)
         self.uncertainty = np.ones(n, dtype=np.float32)  # max uncertainty when no data
+        self.estimated_emitter_count = np.zeros(n, dtype=np.float32)
+        self.deinterleaver_confidence = np.zeros(n, dtype=np.float32)
+        self.periodicity_stability = np.zeros(n, dtype=np.float32)
+        self.agility_indicator = np.zeros(n, dtype=np.float32)
+        self.priority_score = np.full(n, 0.5, dtype=np.float32)
         self._visits = np.zeros(n, dtype=np.int64)
         self._hits = np.zeros(n, dtype=np.int64)
         self._last_visit_slot = np.zeros(n, dtype=np.int64)
+        self._band_pulse_history: list[list[float]] = [[] for _ in range(n)]
 
-    def record_visit(self, band: int, hit: bool, ema_alpha: float = 0.3) -> None:
+    def record_visit(self, band: int, hit: bool, detections: Sequence[Any] | None = None, ema_alpha: float = 0.3) -> None:
         band = int(band)
         if not (0 <= band < self.n_bands):
             return
         self._visits[band] += 1
+        if hit:
+            self._hits[band] += 1
         self.detection_rate[band] = float(self._hits[band] / max(1, self._visits[band]))
         target = 1.0 if hit else 0.0
         self.occupancy_prob[band] = self.occupancy_prob[band] * (1.0 - ema_alpha) + float(target) * ema_alpha
-        if hit:
-            self._hits[band] += 1
+
+        # Update physical observable features from detected pulses (zero truth leakage)
+        if detections and len(detections) > 0:
+            toas = [float(getattr(d, "time_us", 0.0)) for d in detections]
+            freqs = [float(getattr(d, "frequency_mhz", 0.0)) for d in detections]
+
+            # 8. Periodicity stability via PRI consistency
+            if len(toas) >= 2:
+                toas_sorted = sorted(toas)
+                pris = np.diff(toas_sorted)
+                mean_pri = float(np.mean(pris))
+                std_pri = float(np.std(pris))
+                cv = float(std_pri / max(mean_pri, 1e-6))
+                self.periodicity_stability[band] = float(np.clip(1.0 / (1.0 + cv), 0.0, 1.0))
+            else:
+                self._band_pulse_history[band].extend(toas[-5:])
+                if len(self._band_pulse_history[band]) >= 2:
+                    pris = np.diff(sorted(self._band_pulse_history[band][-5:]))
+                    cv = float(np.std(pris) / max(float(np.mean(pris)), 1e-6))
+                    self.periodicity_stability[band] = float(np.clip(1.0 / (1.0 + cv), 0.0, 1.0))
+
+            # 9. Agility indicator via frequency dispersion within the band
+            if len(freqs) >= 2:
+                std_f = float(np.std(freqs))
+                self.agility_indicator[band] = float(np.clip(std_f / 100.0, 0.0, 1.0))
+
+            # 6. Estimated emitter count & 7. Deinterleaver confidence proxy from AoA / PW
+            aoas = [float(getattr(d, "aoa_deg", 0.0)) for d in detections]
+            unique_bearings = len(set(int(a / 15.0) for a in aoas))
+            self.estimated_emitter_count[band] = float(np.clip(unique_bearings / 5.0, 0.1, 1.0))
+            self.deinterleaver_confidence[band] = float(np.clip(0.6 + 0.08 * min(len(detections), 5), 0.0, 1.0))
+        elif hit:
+            self.estimated_emitter_count[band] = float(np.clip(self.estimated_emitter_count[band] * 0.9 + 0.1, 0.0, 1.0))
+        else:
+            self.periodicity_stability[band] *= 0.95
+            self.agility_indicator[band] *= 0.95
+            self.estimated_emitter_count[band] *= 0.9
+            self.deinterleaver_confidence[band] *= 0.9
 
     def advance_time(self) -> None:
         self.revisit_age += 1
 
     def touch(self, band: int) -> None:
-        self.revisit_age[int(band)] = 0
-        self._last_visit_slot[int(band)] = self.revisit_age.sum()
+        b = int(band)
+        if 0 <= b < self.n_bands:
+            self.revisit_age[b] = 0
 
     def update_uncertainty(self) -> None:
-        # high uncertainty when detection_rate near 0.5 or few visits
         p = np.clip(self.detection_rate, 0.0, 1.0)
         self.uncertainty = 1.0 - np.abs(2.0 * p - 1.0)
         never_visited = self._visits == 0
         self.uncertainty[never_visited] = 1.0
 
+    def update_priority(self) -> None:
+        norm_age = np.clip(self.revisit_age.astype(np.float32) / 50.0, 0.0, 1.0)
+        self.priority_score = np.clip(0.4 * norm_age + 0.4 * self.occupancy_prob + 0.2 * self.uncertainty, 0.0, 1.0)
+
     def band_features(self, b: int) -> np.ndarray:
-        """Return an 9-feature vector for one band."""
-        p = np.clip(self.occupancy_prob[b], 0.0, 1.0)
-        age = min(float(self.revisit_age[b]), 50.0) / 50.0
+        """Return the canonical 10-feature vector for one band."""
+        p = float(np.clip(self.occupancy_prob[b], 0.0, 1.0))
+        age = float(min(float(self.revisit_age[b]), 50.0) / 50.0)
         self.update_uncertainty()
+        self.update_priority()
+        det_rate = float(self.detection_rate[b])
+        miss_rate = 1.0 - det_rate
+        unc = float(self.uncertainty[b])
+        emit_cnt = float(self.estimated_emitter_count[b])
+        deint_conf = float(self.deinterleaver_confidence[b])
+        per_stab = float(self.periodicity_stability[b])
+        agil = float(self.agility_indicator[b])
+        prio = float(self.priority_score[b])
+
         return np.array([
-            p,                          # occupancy_probability
-            float(self.uncertainty[b]),  # uncertainty
-            age,                        # revisit_age (normalised)
-            float(self.detection_rate[b]),  # detection_rate
-            1.0 - float(self.detection_rate[b]),  # miss_rate
-            0.0,                        # periodicity (placeholder)
-            0.0,                        # agility (placeholder)
-            min(1.0, float(self._visits[b]) / 50.0),  # track_confidence
-            0.5,                        # priority (placeholder)
+            p,          # 1. current/estimated occupancy
+            det_rate,   # 2. recent detection/hit rate
+            miss_rate,  # 3. recent miss rate
+            unc,        # 4. uncertainty
+            age,        # 5. time since last visit (normalized)
+            emit_cnt,   # 6. estimated emitter count
+            deint_conf, # 7. deinterleaver confidence
+            per_stab,   # 8. PRI/periodicity stability
+            agil,       # 9. frequency-agility indicator
+            prio,       # 10. risk/priority score
         ], dtype=np.float32)
 
 
@@ -132,10 +201,10 @@ class CognitiveRFScanEnv(gym.Env):
         self.config = config
         self.records_provider = records_provider
 
-        self.n_bands: int = int(config.get("n_bands", 180))
+        self.n_bands: int = int(config.get("n_bands", 36))
         self.freq_min: float = float(config.get("freq_min_mhz", 0.0))
         self.freq_max: float = float(config.get("freq_max_mhz", 18000.0))
-        self.ibw_mhz: float = float(config.get("ibw_mhz", 1000.0))
+        self.ibw_mhz: float = float(config.get("ibw_mhz", 500.0))
         self.dwell_time_us: float = float(config.get("dwell_time_us", 500.0))
         self.frequency_step_mhz: float = float(config.get("frequency_step_mhz", 500.0))
         self.detection_threshold_db: float = float(config.get("detection_threshold_db", -140.0))
@@ -146,14 +215,16 @@ class CognitiveRFScanEnv(gym.Env):
         self.w_novel: float = float(config.get("w_novel", 2.0))
         self.w_miss: float = float(config.get("w_miss", -1.0))
 
-        # Feature layout: BAND_FEATURES features per band
-        self.band_features = 9
+        # Feature layout: STATE_FEATURES_PER_BAND features per band
+        self.band_features = STATE_FEATURES_PER_BAND
         self.obs_dim = int(self.n_bands * self.band_features)
 
         self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.obs_dim,), dtype=np.float32)
-        # Action = band index [0, n_bands). The scheduler selects a band and the
-        # receiver tunes its center frequency to cover that band, then dwells.
         self.action_space = spaces.Discrete(self.n_bands)
+
+        assert self.observation_space.shape[0] == self.obs_dim == self.n_bands * self.band_features, (
+            f"Observation dimension mismatch: space={self.observation_space.shape[0]} vs obs_dim={self.obs_dim}"
+        )
 
         self._rng = np.random.default_rng(seed)
         self._seed = seed
@@ -251,7 +322,7 @@ class CognitiveRFScanEnv(gym.Env):
         self.receiver._prune(dwell_end)
 
         # Determine ground truth over the dwell interval (reward/eval only, not obs)
-        ground_truth_active, _novel_opportunity = self._ground_truth_for_dwell(dwell_start, dwell_end)
+        ground_truth_active, _novel_opportunity, active_bands_vec, active_emitters = self._ground_truth_for_dwell(dwell_start, dwell_end)
 
         # 4. Collect causal observations
         observation = self.receiver.get_observation()
@@ -259,7 +330,7 @@ class CognitiveRFScanEnv(gym.Env):
         # 5. Update causal belief (from observation only)
         detections = getattr(observation, "detections", [])
         any_hit = len(detections) > 0
-        self.belief.record_visit(band, any_hit)
+        self.belief.record_visit(band, any_hit, detections=detections)
         self.belief.advance_time()
         self.belief.touch(band)
 
@@ -284,9 +355,10 @@ class CognitiveRFScanEnv(gym.Env):
         )
 
         # 7. Update metrics (ground-truth-based eval only)
+        self.fom.record_emitters(active_emitters, new_ids)
         self.fom.update(
             band_chosen=band,
-            ground_truth_active=np.ones(self.n_bands, dtype=np.int8) if ground_truth_active else np.zeros(self.n_bands, dtype=np.int8),
+            ground_truth_active=active_bands_vec,
             pred_active=any_hit,
             intercept_time_error_us=0.0,
             reward=float(reward),
@@ -335,25 +407,32 @@ class CognitiveRFScanEnv(gym.Env):
         frac = min(1.0, max(0.0, frac))
         return int(frac * (self.n_bands - 1))
 
-    def _ground_truth_for_dwell(self, lower_us: float, upper_us: float) -> tuple[bool, bool]:
+    def _ground_truth_for_dwell(self, lower_us: float, upper_us: float) -> tuple[bool, bool, np.ndarray, set[int]]:
         """Evaluate ground-truth activity in [lower_us, upper_us) and any novel emitters.
 
-        Returns (any_active, novel_emitter_found). Uses the source records (ground
-        truth); this result is used ONLY for reward shaping and evaluation and
-        never enters the scheduler observation.
+        Returns (any_active, novel_emitter_found, active_bands_vector, active_emitter_ids).
+        Used ONLY internally for reward shaping and evaluation; never enters the observation.
         """
         any_active = False
         novel = False
+        active_bands = np.zeros(self.n_bands, dtype=np.int8)
+        active_emitters: set[int] = set()
         lo, hi = float(lower_us), float(upper_us)
+        band_width = (self.freq_max - self.freq_min) / max(1, self.n_bands)
+
         for rec in self.records:
             toa = float(rec.toa_us)
             exit_us = toa + float(rec.pulse_width_us)
-            # pulse overlaps [lo, hi)?
             if toa < hi and exit_us > lo:
                 any_active = True
-                if int(rec.emitter_id) not in self.intercepted_emitters:
+                eid = int(rec.emitter_id)
+                active_emitters.add(eid)
+                if eid not in self.intercepted_emitters:
                     novel = True
-        return any_active, novel
+                b = int(np.clip((float(rec.frequency_mhz) - self.freq_min) / max(band_width, 1e-6), 0, self.n_bands - 1))
+                active_bands[b] = 1
+
+        return any_active, novel, active_bands, active_emitters
 
     def _advance_world_to(self, target_time_us: float) -> tuple[int, int]:
         """Stream the radio environment ENTRY events at-or-before target into the receiver.
