@@ -9,10 +9,10 @@ deinterleaver:
   triplet_margin: 0.5
 
 drqn_scheduler:
-  n_bands: 180
+  n_bands: 36
   lstm_hidden: 256
   lstm_layers: 2
-  obs_dim: 1620         # n_bands * band_features (180 * 9 belief features)
+  obs_dim: 360         # n_bands * band_features (36 * 10 belief features)
   gamma: 0.99
   lr: 1e-4
   eps_start: 1.0

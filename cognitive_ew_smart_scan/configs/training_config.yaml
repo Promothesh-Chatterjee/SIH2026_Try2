@@ -26,12 +26,12 @@ scheduler:
   dwell_slots: 5                # time slots per action
 
 environment:
-  n_bands: 180
-  band_features: 9             # belief features per band -> obs_dim = 180*9 = 1620
-  obs_dim: 1620
+  n_bands: 36
+  band_features: 10            # belief features per band -> obs_dim = 36*10 = 360
+  obs_dim: 360
   freq_min_mhz: 0.0
   freq_max_mhz: 18000.0
-  ibw_mhz: 1000.0              # instantaneous bandwidth (MHz)
+  ibw_mhz: 500.0               # instantaneous bandwidth (MHz)
   dwell_time_us: 500.0         # receiver dwell per action
   detection_threshold_db: -140.0
   frequency_step_mhz: 500.0

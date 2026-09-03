@@ -28,15 +28,15 @@ class DRQNScheduler(nn.Module):
     def __init__(
         self,
         obs_dim: int = 360,
-        n_bands: int = 180,
+        n_bands: int = 36,
         lstm_hidden: int = 256,
         lstm_layers: int = 2,
     ) -> None:
         """Initialise DRQN.
 
         Args:
-            obs_dim: Observation dim (2*n_bands).
-            n_bands: Action space size.
+            obs_dim: Observation dim (n_bands * features_per_band).
+            n_bands: Action space size (default 36).
             lstm_hidden: LSTM hidden units.
             lstm_layers: LSTM depth.
         """
@@ -89,6 +89,10 @@ class DRQNScheduler(nn.Module):
             Tuple (q_values (B,T,n_bands), (h_n, c_n)).
             Hidden is carried across steps/episodes.
         """
+        if obs.size(-1) != self.obs_dim:
+            raise ValueError(
+                f"Input observation feature dim {obs.size(-1)} does not match expected obs_dim {self.obs_dim}"
+            )
         # LayerNorm over last dim
         x = self.input_norm(obs)
         lstm_out, hidden_out = self.lstm(x, hidden)

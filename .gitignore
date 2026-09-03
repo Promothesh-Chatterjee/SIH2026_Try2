@@ -1,0 +1,43 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Node / Frontend
+node_modules/
+dist/
+build/
+.oxlint-cache/
+
+# Model checkpoints and run outputs
+checkpoints/
+**/checkpoints/
+runs/
+**/runs/
+results/
+
+# Dataset / large archives
+data/
+*.h5
+*.hdf5
+
+# Config secrets & local paths
+.env
+.env.local
+*.log
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

@@ -64,7 +64,7 @@ class RFScanEnv(gym.Env):
             FileNotFoundError: If data_dir/subset/mode has no .h5 files.
         """
         super().__init__()
-        self.n_bands: int = int(config.get("n_bands", 180))
+        self.n_bands: int = int(config.get("n_bands", 36))
         self.freq_min: float = float(config.get("freq_min_mhz", 0.0))
         self.freq_max: float = float(config.get("freq_max_mhz", 18000.0))
         self.time_resolution: float = float(config.get("time_resolution_us", 100.0))

@@ -152,7 +152,7 @@ class SmartScanMoE(nn.Module):
         """
         super().__init__()
         config = config or {}
-        self.n_bands: int = int(config.get("n_bands", getattr(drqn_agent, "n_bands", 180)))
+        self.n_bands: int = int(config.get("n_bands", getattr(drqn_agent, "n_bands", 36)))
         self.eager_weight: float = float(config.get("eager_weight", 0.6))
         self.revisit_weight: float = float(config.get("revisit_weight", 0.4))
         self.k_receivers: int = int(config.get("k_receivers", 1))
