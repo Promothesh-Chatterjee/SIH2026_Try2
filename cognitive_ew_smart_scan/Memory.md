@@ -48,6 +48,21 @@
 - Smoke: normalise 6D, FoM, Thompson, Periodic (period 1000us), Memory priority boost, MoE select_bands, SequenceReplayBuffer sample
 - No stubs: no TODO/NotImplemented; except-pass only in OOM fallbacks with logging
 
+## CHECKPOINT 2026-09-03 — RESUME HERE
+State: codebase wired to real TSRD data on D:\TSRD_data (download VERIFIED: 65GB, 9000 .h5). Working through scientific-alignment review BEFORE training.
+
+Just-completed this session (all verified running against real scan/train_scan data):
+- `discover_h5_files` now maps the official `<mode>/<mode>_<split>` layout (scan/train_scan) + old plain layout; split aliases train/val/test handled.
+- `load_h5_records` now NORMALIZES ToA (subtract file min -> t=0) + handles `labels` shape `(n,1)` (records_from_array already flattens). TSRD ToA have arbitrary per-file offsets (~200K us) spanning ~29M us; without normalization `time_horizon_us: 200000` clipped 100% of pulses.
+- `ScenarioSource` class added (scenario_generator): per-episode sample() loads ONE random .h5 (capped max_pulses, ToA-normalized). Registers 2500 train files; 50K records in 0.2s. Memory-bounded, avoids concatenating 2500 files.
+- `CognitiveRFScanEnv.__init__` gained `records_provider: Callable`; `reset()` swaps in fresh provider records each episode.
+- `train_scheduler.py` uses `ScenarioSource` (train source + val source) as records_provider instead of `build_scenario`.
+- config training_config.yaml: `time_horizon_us: 30000000` (was 200000 — would clip everything).
+- VERIFIED on real scan data: env obs (1620,), action 180, detects pulses (hits=True r=3 first-novel / 1 hit). Fun fact: bands 0-4 all center to 500 MHz (ibw 1000 legal_min 500) — low bands indistinguishable; acceptable for belief-based scheduling.
+- Tests: `pytest tests/` NOT yet completed this session (two runs aborted/timed-out by user; ~64 tests, some involve synthetic env building). Was in progress when user stopped.
+
+NEXT ACTION (resume point): finish `pytest tests/ -q` (PYTHONPATH=cognitive_ew_smart_scan, cd repo), then do scientific-alignment review vs PRD before starting training smoke/full run.
+
 ## Notes & Observations
 - CRITICAL: Emitter labels file-local — enforced via assertion in mine_triplets and load_file_for_training; batch collate keeps per-file tuples.
 - Stare 3.86B vs scan 282M (~14×) — scan is the interception problem; stare is oracle for state_matrix.

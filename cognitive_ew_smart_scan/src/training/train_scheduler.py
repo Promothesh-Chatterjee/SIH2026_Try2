@@ -21,7 +21,7 @@ import torch.optim as optim
 import yaml
 
 from ..environment.cognitive_rf_scan_env import CognitiveRFScanEnv
-from ..environment.scenario_generator import build_scenario
+from ..environment.scenario_generator import ScenarioSource
 from ..models.drqn_scheduler import DRQNScheduler
 from ..models.smartscan_moe import SmartScanMoE
 from ..training.replay_buffer import SequenceReplayBuffer
@@ -104,7 +104,8 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
     data_dir = train_cfg.get("data_dir", "data")
     subset = train_cfg.get("subset", "train")
     mode = train_cfg.get("mode", "scan")
-    scenario_records, _scenario_label, _files = build_scenario(
+
+    train_source = ScenarioSource(
         data_root=data_dir,
         mode=mode,
         subset=subset,
@@ -114,7 +115,9 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
         max_pulses=int(env_config.get("max_pulses", 50000)),
         seed=seed,
     )
-    env = CognitiveRFScanEnv(env_config, records=scenario_records, seed=seed)
+    # One env; reset() draws a fresh random TSRD file each episode.
+    env = CognitiveRFScanEnv(env_config, records=None, seed=seed, records_provider=train_source.sample)
+    env.reset()  # populate first episode's records so obs_dim/action checks are valid
     assert env.obs_dim == obs_dim, f"env obs_dim {env.obs_dim} != configured {obs_dim}"
     assert env.action_space.n == n_bands, f"env action space {env.action_space.n} != n_bands {n_bands}"
 
@@ -246,7 +249,7 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
         # Periodic MoE evaluation on val scenarios every 5000 steps
         if episode > 0 and global_step % 5000 == 0:
             try:
-                val_records, _label, _ = build_scenario(
+                val_source = ScenarioSource(
                     data_root=data_dir,
                     mode=mode,
                     subset="val",
@@ -256,7 +259,7 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
                     max_pulses=int(env_config.get("max_pulses", 50000)),
                     seed=seed,
                 )
-                val_env = CognitiveRFScanEnv(env_config, records=val_records, seed=seed)
+                val_env = CognitiveRFScanEnv(env_config, records=None, seed=seed, records_provider=val_source.sample)
                 val_rewards = []
                 for _ in range(min(10, 2)):  # keep quick; expand to 10 when data present
                     obs_v, _ = val_env.reset()
