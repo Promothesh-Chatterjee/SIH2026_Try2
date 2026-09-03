@@ -121,7 +121,7 @@ def export_scheduler(model_cfg_path: str, ckpt_path: str, output_path: str, opse
     device = torch.device("cpu")
     model = DRQNScheduler(
         obs_dim=cfg.get("obs_dim", 360),
-        n_bands=cfg.get("n_bands", 180),
+        n_bands=cfg.get("n_bands", 36),
         lstm_hidden=cfg.get("lstm_hidden", 256),
         lstm_layers=cfg.get("lstm_layers", 2),
     ).to(device)

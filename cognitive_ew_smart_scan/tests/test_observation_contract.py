@@ -79,6 +79,32 @@ class ObservationContractTests(unittest.TestCase):
         self.assertGreater(f2[1], 0.0)
         self.assertGreater(f2[7], 0.0)
 
+    def test_moe_batched_forward_uses_10_feature_layout(self):
+        drqn = DRQNScheduler(obs_dim=360, n_bands=36, lstm_hidden=64, lstm_layers=1)
+        moe = SmartScanMoE(drqn, config={"n_bands": 36, "decay_rate": 0.05})
+        # (B, T, 360) with per-band feature index 4 = normalized revisit age.
+        obs = torch.zeros(2, 3, 360)
+        for b in range(36):
+            obs[:, :, b * 10 + 4] = 1.0  # all bands "just recently seen" -> low urgency
+        fused, hidden, attr = moe.forward(obs)
+        self.assertEqual(fused.shape, (2, 3, 36))
+        self.assertTrue(torch.isfinite(fused).all())
+        self.assertIn("eager_contribution", attr)
+        # High normalized age (feature index 4) produces a valid, bounded fused score.
+        obs2 = torch.zeros(1, 1, 360)
+        obs2[0, 0, 4] = 1.0  # band 0 normalized age = 1 (oldest)
+        fu2, _, _ = moe.forward(obs2)
+        self.assertEqual(fu2.shape, (1, 1, 36))
+        self.assertTrue(torch.isfinite(fu2).all())
+
+    def test_baseline_scheduler_defaults_match_contract(self):
+        from src.models.random_scheduler import RandomScheduler
+        from src.training.thompson_sampling import ThompsonSamplingExplorer
+        self.assertEqual(RandomScheduler().n_bands, 36)
+        self.assertEqual(ThompsonSamplingExplorer().n_bands, 36)
+        from src.models.smartscan_moe import SmartScanMoE as SMoE
+        self.assertEqual(SMoE.RevisitAgent().n_bands, 36)
+
 
 if __name__ == "__main__":
     unittest.main()

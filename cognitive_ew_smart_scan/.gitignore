@@ -26,6 +26,7 @@ data/
 # Results / temp
 temp_*/
 results/
+runs/
 *.log
 
 # IDE / OS

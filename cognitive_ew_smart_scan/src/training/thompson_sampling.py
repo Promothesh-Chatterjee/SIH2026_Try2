@@ -26,7 +26,7 @@ class ThompsonSamplingExplorer:
         total_pulls: Global pull count.
     """
 
-    def __init__(self, n_bands: int = 180, seed: int | None = None) -> None:
+    def __init__(self, n_bands: int = 36, seed: int | None = None) -> None:
         """Initialise explorer.
 
         Args:
