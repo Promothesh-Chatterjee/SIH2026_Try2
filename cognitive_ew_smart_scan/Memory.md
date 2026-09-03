@@ -38,8 +38,10 @@ no hardcoded 36/180/values. Lint clean, `vite build` clean.
 
 Scheduler baselines added to `src/models/baseline_schedulers.py`:
 RoundRobin / HighestOccupancy / HighestUncertainty (interface parity with
-RandomScheduler, honors 36/10 contract) — comparison path NOT yet wired into
-evaluate_full.
+RandomScheduler, honors 36/10 contract). **Wired into `evaluate_full.py`** via
+`--baseline` CLI arg; runs comparison episodes (same seed) → `bl_sched_*`
+columns + measured Baseline column in the summary.
+Test suite now **103 passed**.
 
 Reproducibility smoke VERIFIED (2026-09-04): `RunManager` wrote
 metadata.json + telemetry.jsonl + git_revision.txt (git `3d1fa44`); config
@@ -48,8 +50,9 @@ fingerprint `438213393c42`; 6 telemetry records (5 episode × 36 band_priorities
 in-process publisher — no fabricated metrics. Script:
 `C:\Users\PromotheshChatterjee\AppData\Local\Temp\opencode\ew_repro_smoke.py`.
 
-Next action (your call): wire baselines into `evaluate_full.py`, run a full
-benchmark on real TSRD, then start staged TSRD training.
+Next action (your call): start staged TSRD training — deinterleaver then
+scheduler — then run `evaluate_full --baseline round_robin` (and
+occupancy/uncertainty) to fill the README achieved table.
 
 ## Step 1-3: Scaffolding & Configs
 - [x] Directory scaffold and basic documents (PRD, Architecture, Rules, Design, Memory, Implementation Plan)

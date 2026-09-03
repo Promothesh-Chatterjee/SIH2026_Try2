@@ -19,7 +19,44 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from ..models.baseline_schedulers import (
+    HighestOccupancyScheduler,
+    HighestUncertaintyScheduler,
+    RoundRobinScheduler,
+)
+from ..models.random_scheduler import RandomScheduler
+
 logger = logging.getLogger(__name__)
+
+
+def _build_baseline(baseline: str, n_bands: int, seed: int = 42):
+    """Construct a comparison scheduler for the given baseline name.
+
+    Args:
+        baseline: One of "random", "round_robin", "highest_occupancy",
+            "highest_uncertainty"; returns None for "none".
+        n_bands: Number of discrete bands.
+        seed: Seed for the random baseline.
+
+    Returns:
+        A scheduler instance exposing ``step(observation) -> int`` (and
+        ``act``), or None if baseline is "none".
+
+    Raises:
+        ValueError: If baseline is not a recognised name.
+    """
+    name = baseline.lower()
+    if name == "random":
+        return RandomScheduler(n_bands=n_bands, seed=seed)
+    if name == "round_robin":
+        return RoundRobinScheduler(n_bands=n_bands)
+    if name == "highest_occupancy":
+        return HighestOccupancyScheduler(n_bands=n_bands)
+    if name == "highest_uncertainty":
+        return HighestUncertaintyScheduler(n_bands=n_bands)
+    if name == "none":
+        return None
+    raise ValueError(f"Unknown baseline '{baseline}'")
 
 
 def run_full_evaluation(
@@ -29,6 +66,7 @@ def run_full_evaluation(
     test_dir: str | Path,
     output_dir: str | Path,
     mode: str = "scan",
+    baseline: str = "none",
 ) -> dict:
     """Run full evaluation over test pulse trains.
 
@@ -39,6 +77,10 @@ def run_full_evaluation(
         test_dir: Directory containing test .h5 files (e.g., data/test/scan).
         output_dir: Output directory for results.
         mode: stare or scan (for reporting).
+        baseline: Comparison controller to run alongside the learned scheduler:
+            one of "none", "random", "round_robin", "highest_occupancy",
+            "highest_uncertainty". When not "none", FoM is also collected for
+            this baseline and reported in the summary table as "Baseline".
 
     Returns:
         Dict with aggregate metrics and per-file DataFrame saved to disk.
@@ -168,10 +210,21 @@ def run_full_evaluation(
     deinter_metrics: list[dict] = []
     device = torch.device("cuda" if torch.cuda.is_available() and scheduler is not None else "cpu")
 
+    # Comparison baseline controller (same env seed for an apples-to-apples run).
+    n_bands = int(drqn_cfg.get("n_bands", 36))
+    baseline_controller = _build_baseline(baseline, n_bands=n_bands)
+    baseline_fom = FiguresOfMerit()
+
     # P0-9: reproducible evaluation run + real telemetry publisher.
     run = RunManager(
         root="runs",
-        config={"mode": mode, "n_files": len(files), "scheduler": str(scheduler_ckpt), "deinterleaver": str(deinterleaver_ckpt)},
+        config={
+            "mode": mode,
+            "n_files": len(files),
+            "scheduler": str(scheduler_ckpt),
+            "deinterleaver": str(deinterleaver_ckpt),
+            "baseline": baseline,
+        },
         extras={"split": "test", "mode": mode, "device": str(device)},
     )
     run.write_git_revision()
@@ -230,25 +283,23 @@ def run_full_evaluation(
             )
             env = CognitiveRFScanEnv({**env_config, **env_cfg}, records=records, seed=42)
             obs, _ = env.reset()
-            # Set up MoE hidden if scheduler exists
+            # Achieved controller episode (learned MoE, or random fallback).
+            done = False
+            steps = 0
             hidden = None
             if scheduler is not None and hasattr(scheduler, "reset"):
                 try:
                     scheduler.reset()
                     if hasattr(scheduler, "eager_agent") and hasattr(scheduler.eager_agent, "hidden"):
-                        # init hidden for DRQN inside MoE
                         drqn_inner = scheduler.eager_agent.drqn if hasattr(scheduler.eager_agent, "drqn") else None
                         if drqn_inner is not None:
                             hidden = drqn_inner.init_hidden(1, device)
                             scheduler.eager_agent.hidden = hidden
                 except Exception:
                     pass
-            done = False
-            steps = 0
             while not done and steps < 5000:
                 if scheduler is not None:
                     try:
-                        # MoE path
                         bands, hidden, _ = scheduler.select_bands(obs, hidden)  # type: ignore
                         action = int(bands[0])
                     except Exception:
@@ -263,7 +314,6 @@ def run_full_evaluation(
                         pass
                 done = bool(terminated or truncated)
                 steps += 1
-                # Accumulate global FoM
                 global_fom.update(
                     int(info["band_chosen"]) if "band_chosen" in info else action,
                     info["ground_truth_active"],
@@ -274,6 +324,30 @@ def run_full_evaluation(
             fom = env.get_fom()
             per_file.update({f"sched_{k}": v for k, v in fom.items()})
             telemetry.update(step=idx, file=str(fpath), type="eval_file", pd=float(fom.get("Pd", 0.0)), pfa=float(fom.get("Pfa", 0.0)), avg_reward=float(fom.get("avg_reward", 0.0)))
+
+            # Comparison baseline episode (same file, same env seed if requested).
+            if baseline_controller is not None:
+                benv = CognitiveRFScanEnv({**env_config, **env_cfg}, records=records, seed=42)
+                bobs, _ = benv.reset()
+                done = False
+                steps = 0
+                while not done and steps < 5000:
+                    try:
+                        action = int(baseline_controller.step(bobs))
+                    except Exception:
+                        action = int(benv.action_space.sample())
+                    bobs, reward, terminated, truncated, info = benv.step(action)
+                    done = bool(terminated or truncated)
+                    steps += 1
+                    baseline_fom.update(
+                        int(info["band_chosen"]) if "band_chosen" in info else action,
+                        info["ground_truth_active"],
+                        info["hit"],
+                        float(info.get("intercept_time_error_us", 0.0)),
+                        float(reward),
+                    )
+                bfom = benv.get_fom()
+                per_file.update({f"bl_sched_{k}": v for k, v in bfom.items()})
         except Exception as exc:
             logger.warning("Scheduler eval failed for %s: %s", fpath, exc)
             per_file.update({"sched_Pd": float("nan"), "sched_Pfa": float("nan")})
@@ -297,17 +371,29 @@ def run_full_evaluation(
                 agg[f"mean_{col}"] = float(vals.mean())
                 agg[f"std_{col}"] = float(vals.std())
                 agg[f"median_{col}"] = float(vals.median())
-    # Scheduler aggregates from global_fom
+    # Scheduler aggregates from global_fom (achieved controller).
     agg.update({f"sched_{k}": float(v) for k, v in global_fom.summary().items()})
+    # Baseline scheduler aggregates (only when a real comparison baseline ran).
+    if baseline_controller is not None:
+        agg["baseline_name"] = baseline
+        agg.update({f"bl_sched_{k}": float(v) for k, v in baseline_fom.summary().items()})
+    else:
+        agg["baseline_name"] = "none"
     agg["n_files"] = len(files)
     agg["mode"] = mode
     telemetry.update(step=len(files), type="done", n_files=len(files), **{f"sched_{k}": float(v) for k, v in global_fom.summary().items()})
 
-    # Baseline vs targets table
+    # Literature/static baseline (for titles) vs the measured comparison baseline
+    # (when a real one ran, it is reported in the printed table as "Baseline").
     baseline = {"v_measure": 0.62, "Pd": 0.65, "Pfa": 0.12}
     targets = {"v_measure": 0.85, "Pd": 0.90, "Pfa": 0.05}
-    agg["baseline"] = baseline
+    agg["static_baseline"] = baseline
     agg["targets"] = targets
+    if baseline_controller is not None:
+        agg["baseline"] = {
+            "Pd": float(baseline_fom.summary().get("Pd", float("nan"))),
+            "Pfa": float(baseline_fom.summary().get("Pfa", float("nan"))),
+        }
 
     with open(output_dir / "aggregate_metrics.json", "w") as f:
         json.dump(agg, f, indent=2)
@@ -343,21 +429,39 @@ def run_full_evaluation(
     print("\n" + "=" * 72)
     print(f" Evaluation Summary — mode={mode} — {len(files)} files")
     print("=" * 72)
+    basename = agg.get("baseline_name", "none")
+    if basename != "none":
+        print(f" Comparison baseline: {basename}")
     print(f" {'Metric':<28} {'Achieved':<12} {'Baseline':<12} {'Target':<12}")
     print("-" * 72)
+
+    def _baseline_val(metric: str) -> float:
+        """Prefer the measured comparison baseline, else the static book value."""
+        if baseline_controller is not None:
+            measured = agg.get(f"bl_sched_{metric}", float("nan"))
+            if measured == measured:  # not NaN
+                return float(measured)
+        return float(baseline.get(metric, float("nan")))
+
     for metric in ["v_measure", "Pd", "Pfa"]:
         achieved = agg.get(f"mean_{metric}", agg.get(f"sched_{metric}", float("nan")))
         if metric == "Pd":
             achieved = agg.get("sched_Pd", float("nan"))
         if metric == "Pfa":
             achieved = agg.get("sched_Pfa", float("nan"))
-        base = baseline.get(metric, float("nan"))
+        base = _baseline_val(metric)
         tgt = targets.get(metric, float("nan"))
         print(f" {metric:<28} {achieved:<12.4f} {base:<12.4f} {tgt:<12.4f}")
+    if baseline_controller is None:
+        print(" (Baseline column = static literature value; pass --baseline to measure one)")
     # Extra scheduler metrics
     for k in ["sched_avg_intercept_rate", "sched_avg_intercept_time_error_us", "sched_avg_reward"]:
         if k in agg:
             print(f" {k:<28} {agg[k]:<12.4f}")
+    if baseline_controller is not None:
+        for k in ["bl_sched_avg_intercept_rate", "bl_sched_avg_intercept_time_error_us", "bl_sched_avg_reward"]:
+            if k in agg:
+                print(f" {k:<28} {agg[k]:<12.4f}")
     print("=" * 72)
     print(f"Results: {results_csv}")
     print(f"Output dir: {output_dir}")
@@ -375,6 +479,13 @@ def main() -> None:
     parser.add_argument("--test-dir", type=str, default="data/test")
     parser.add_argument("--output-dir", type=str, default="results")
     parser.add_argument("--mode", type=str, choices=["scan", "stare"], default="scan")
+    parser.add_argument(
+        "--baseline",
+        type=str,
+        choices=["none", "random", "round_robin", "highest_occupancy", "highest_uncertainty"],
+        default="none",
+        help="Comparison scheduler to run alongside the learned controller (none disables).",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -385,6 +496,7 @@ def main() -> None:
         test_dir=args.test_dir,
         output_dir=args.output_dir,
         mode=args.mode,
+        baseline=args.baseline,
     )
 
 
