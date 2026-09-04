@@ -24,6 +24,46 @@ NEXT ACTION (resume point): smoke-train a few thousand steps on real TSRD data t
 
 ----------------------------------------------------------------------
 
+## CHECKPOINT 2026-09-05 (Cross-Window Cluster ID Bug) — COMPLETE
+State: **Deinterleaver no longer collides isolated clusters across windows.**
+
+### What changed
+- **Root cause**: `windowed_cluster_deinterleave` unioned only clusters that participated in a cross-window merge; any unmerged cluster fell back to its raw local HDBSCAN integer. Local cluster `0` in windows 1/2/3 all mapped to global `0` → distinct emitters collapsed into one.
+- **Fix** (`src/models/deinterleaver.py`): new pure helper `reconcile_cluster_nodes(window_labels, merge_pairs)`:
+  - Every valid `(window_index, local_cluster_id)` non-noise node gets a globally unique **provisional** ID.
+  - Union-find then runs over **ALL** valid nodes (never only merge participants).
+  - Each connected component receives a deterministic global ID (window order); unmerged/isolated clusters keep their own unique IDs.
+  - Raw local label integers are never used as global labels.
+- `windowed_cluster_deinterleave` now calls `reconcile_cluster_nodes` and labels via `node_to_global[(wi, lc)]` only — no `.get(..., lc)` fallback. `-1` noise, pulse ordering, and full sequence coverage preserved. Removed now-unused `_union`.
+- **Tests** (`tests/test_windowed_deinterleave.py`): new `ReconcileClusterNodesTests` — permuted IDs across windows stay distinct; same emitter under different local IDs merges; unrelated local cluster `0` across windows NOT identical (the bug); merged overlapping clusters → one global; isolated clusters distinct; mixed merged/unmerged coverage; noise nodes excluded.
+
+### Verification
+- Full suite: **196 passed, 1 pre-existing failure** (`test_windowed_deinterleave::test_clusters_synthetic` — HDBSCAN all-noise on untrained model; confirmed failing identical on pristine deinterleaver.py before this change).
+
+NEXT ACTION (resume point): smoke-train a few thousand steps on real TSRD data to validate the aux losses converge (intercept-prob BCE, intercept-time Huber), then full scheduler training.
+
+## CHECKPOINT 2026-09-05 (Robust Emitter Tracking by Composite Identity) — COMPLETE
+State: **Identity is now score/gate-driven, no longer reliant on arbitrary HDBSCAN `cluster_label` integers.**
+
+### What changed (`src/perception/emitter_tracker.py`)
+- **Association is prediction-driven**: matches a *predicted* track state, not raw label equality. `EmitterTrack.predict_track_state(now)`/`predict_next_frequency` branch on behaviour: agile → recent mean + envelope half `max(500, 0.75·range)` centred at `(min+max)/2` (midpoint fix prevented a mean-centred 500 MHz floor rejecting a valid 5750 MHz hop); drifting → linear extrapolation by elapsed pulses; fixed → mean + `max(60, 1.5·range + |trend|·20)`.
+- **Composite association score** (`_association_score`) over available factors: freq 0.30, aoa 0.20, pw 0.15, pri 0.15, temporal 0.10, recency 0.05, agility 0.05, embedding 0.10 (embedding only when `use_embedding_similarity=True`). Gates reject physically impossible matches before scoring: `freq_gate_fixed_mhz=60` / `agile_freq_gate_mhz=500`, `max_band_jump_fixed=2`/`agile=8`, `max_aoa_diff_deg=45`, `max_pw_ratio=4.0`, `max_pri_rel_diff=1.0` (PRI gate only when `pri_confidence>=0.3` and cluster PRI exists).
+- **Uniqueness**: greedy one-to-one assignment (sorted by `-score, tid, label`); 1 cluster → ≤1 track; 1 track → ≤1 cluster unless `_split_justified` (requires `allow_track_split=True` + independent gate pass + both clusters PRI≈track PRI + overlapping ToA range). Tracks bootstrap from the cluster they were created from, so label permutations never split/merge identity.
+- **Behaviour classification**: `agility_class` (agile `>0.3`; drifting if `|trend|·n>5`; else fixed), `is_periodic` (`pri_confidence>0.6`). Agility now computed on **detrended** residuals so a slow secular drift is not mis-scored as hopping. `_update_pri_estimate` median-anchored + consistency-window filter rejects cross-dwell silent gaps from corrupting PRI.
+- **Maintained fields** (all preserved): current frequency/range/AoA/PW/amplitude, PRI + confidence, agility_score, trend, last_seen_time/band, observation_count, cluster_confidence, consecutive_misses, embedding_centroid (EMA 0.8/0.2), buffered histories (cap 100).
+
+### Tests (`tests/test_emitter_tracker.py` — new classes)
+- `TestClusterLabelPermutation`: single emitter under labels `0→1→2→0→99` stays 1 track, 25 obs; two emitters (5000/9000 MHz, AoA 30/120, PRI 1000/2000) under swapped/arbitrary labels stay 2 tracks with stable `track_id` 0↔A and 1↔B, correct physics.
+- `TestCompositeGates`: freq 5000→12000, AoA 30→170, PRI 1000→2500, band 5→20 each spawn a new track (not force-merged) and bump `consecutive_misses`.
+- `TestUniquenessConstraints`: twin clusters + 1 matching cluster updates exactly one track (tie-break); split-rejection default vs `allow_track_split=True` for staggered periodic trains (2 vs 1 track).
+- `TestAssociationPrediction`: fixed/drifting prediction, `predict_track_state` shape, drift persistence (`agility_class=="drifting"`, prediction extrapolates beyond 5100 MHz). `TestEmitterBehaviours`: periodic PRI preserved, fixed low agility. `TestEmbeddingSimilarity`: matching centroids → 1 track; cosine −1 → rejected → 2 tracks. `TestRequiredTrackFields`: all fields sane; `_association_score` exposes freq/aoa/pw/pri/temporal/recency/agility/embedding components.
+- `test_frequency_agile.py`: 3 agile tests + `test_adjacent_band_matching_agile_emitter` updated to establish agility in-dwell (deterministic alternating frequencies) — a robust tracker must NOT merge a fixed-seeming track 500 MHz away.
+
+### Verification
+- Tracker+agile module: **34 passed**. Full suite: **215 passed, 1 pre-existing failure** (`test_clusters_synthetic` — HDBSCAN all-noise on untrained model; not a regression).
+
+----------------------------------------------------------------------
+
 > NOTE (2026-09-04): The canonical dimension contract is now **`n_bands: 36` /
 > `obs_dim: 360` / `band_features: 10` / `n_modes: 5` / `n_actions: 180`**
 > (single source of truth in

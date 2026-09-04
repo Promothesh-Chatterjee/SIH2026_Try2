@@ -29,15 +29,15 @@ from ..models.random_scheduler import RandomScheduler
 logger = logging.getLogger(__name__)
 
 
-def _build_baseline(baseline: str, n_bands: int, n_modes: int = 1, seed: int = 42):
+def _build_baseline(baseline: str, n_bands: int, n_modes: int | None = None, seed: int = 42):
     """Construct a comparison scheduler for the given baseline name.
 
     Args:
         baseline: One of "random", "round_robin", "highest_occupancy",
             "highest_uncertainty"; returns None for "none".
         n_bands: Number of discrete bands.
-        n_modes: Number of dwell modes (action = band*n_modes + mode); 1 keeps
-            the legacy flat band action.
+            n_modes: Number of dwell modes (action = band*n_modes + mode). When
+                omitted, preserve the legacy band-only helper behavior.
         seed: Seed for the random baseline.
 
     Returns:
@@ -48,14 +48,15 @@ def _build_baseline(baseline: str, n_bands: int, n_modes: int = 1, seed: int = 4
         ValueError: If baseline is not a recognised name.
     """
     name = baseline.lower()
+    baseline_modes = 1 if n_modes is None else int(n_modes)
     if name == "random":
-        return RandomScheduler(n_bands=n_bands, seed=seed)
+        return RandomScheduler(n_bands=n_bands, n_modes=baseline_modes, seed=seed)
     if name == "round_robin":
-        return RoundRobinScheduler(n_bands=n_bands, n_modes=n_modes)
+        return RoundRobinScheduler(n_bands=n_bands, n_modes=baseline_modes)
     if name == "highest_occupancy":
-        return HighestOccupancyScheduler(n_bands=n_bands, n_modes=n_modes)
+        return HighestOccupancyScheduler(n_bands=n_bands, n_modes=baseline_modes)
     if name == "highest_uncertainty":
-        return HighestUncertaintyScheduler(n_bands=n_bands, n_modes=n_modes)
+        return HighestUncertaintyScheduler(n_bands=n_bands, n_modes=baseline_modes)
     if name == "none":
         return None
     raise ValueError(f"Unknown baseline '{baseline}'")
@@ -203,7 +204,7 @@ def run_full_evaluation(
             # (n_bands * band_features) rather than a hardcoded literal.
             band_features = int(env_cfg.get("band_features", 10))
             n_bands = int(drqn_cfg.get("n_bands", env_cfg.get("n_bands", 36)))
-            n_modes = int(drqn_cfg.get("n_modes", env_cfg.get("n_modes", 1)))
+            n_modes = int(drqn_cfg.get("n_modes", env_cfg.get("n_modes", 5)))
             n_actions = int(drqn_cfg.get("n_actions", n_bands * n_modes))
             obs_dim = int(drqn_cfg.get("obs_dim", n_bands * band_features))
 
@@ -244,7 +245,7 @@ def run_full_evaluation(
     # Env for scheduler metrics (use test dir as data_dir with subset="." workaround)
     # Create a lightweight env that we reset per file via manual pt loading
     # Instead, iterate files and simulate intercepts via RFScanEnv per file
-    env_config = {**drqn_cfg, **reward_cfg, "n_bands": drqn_cfg.get("n_bands", 36), "n_modes": drqn_cfg.get("n_modes", env_cfg.get("n_modes", 1))}
+    env_config = {**drqn_cfg, **reward_cfg, "n_bands": drqn_cfg.get("n_bands", 36), "n_modes": drqn_cfg.get("n_modes", env_cfg.get("n_modes", 5))}
     env_config["n_actions"] = int(env_config["n_bands"]) * int(env_config["n_modes"])
     # Patch training_config environment keys if present
     try:
@@ -268,7 +269,7 @@ def run_full_evaluation(
 
     # Comparison baseline controller (same env seed for an apples-to-apples run).
     n_bands = int(drqn_cfg.get("n_bands", 36))
-    n_modes = int(env_config.get("n_modes", 1))
+    n_modes = int(env_config.get("n_modes", 5))
     baseline_controller = _build_baseline(baseline, n_bands=n_bands, n_modes=n_modes)
     baseline_fom = FiguresOfMerit()
 

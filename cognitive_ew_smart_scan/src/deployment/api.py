@@ -170,7 +170,7 @@ async def lifespan(app: FastAPI):  # type: ignore
             STATE["model_cfg"] = yaml.safe_load(f)
     else:
         logger.warning("model_config.yaml not found at %s", cfg_path)
-        STATE["model_cfg"] = {"drqn_scheduler": {"n_bands": 36, "obs_dim": 360}, "smartscan_moe": {}}
+        STATE["model_cfg"] = {"drqn_scheduler": {"n_bands": 36, "n_modes": 5, "n_actions": 180, "obs_dim": 360}, "smartscan_moe": {}}
 
     # Try to load PyTorch models (ONNX preferred if available, else PT)
     # Deinterleaver
@@ -235,12 +235,13 @@ async def lifespan(app: FastAPI):  # type: ignore
                     d_cfg = STATE["model_cfg"].get("drqn_scheduler", {})
                     moe_cfg = STATE["model_cfg"].get("smartscan_moe", {})
                     n_bands_api = int(d_cfg.get("n_bands", 36))
-                    n_modes_api = int(d_cfg.get("n_modes", 1))
+                    n_modes_api = int(d_cfg.get("n_modes", 5))
                     n_actions_api = int(d_cfg.get("n_actions", n_bands_api * n_modes_api))
                     drqn = DRQNScheduler(
                         obs_dim=int(d_cfg.get("obs_dim", 360)),
                         n_bands=n_bands_api,
                         n_actions=n_actions_api,
+                        n_modes=n_modes_api,
                         lstm_hidden=int(d_cfg.get("lstm_hidden", 256)),
                         lstm_layers=int(d_cfg.get("lstm_layers", 2)),
                     )
@@ -410,7 +411,7 @@ def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
             STATE["hidden"] = hidden
             # Decode flat time-frequency actions to unique bands for the API
             # response, and tick the revisit/preemptive agent with the flat action.
-            n_modes = int(STATE["model_cfg"].get("drqn_scheduler", {}).get("n_modes", 1))
+            n_modes = int(STATE["model_cfg"].get("drqn_scheduler", {}).get("n_modes", 5))
             bands = []
             for a in actions:
                 b = band_of_action(int(a), n_modes)

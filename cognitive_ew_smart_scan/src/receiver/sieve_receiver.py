@@ -13,6 +13,12 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from .models import DetectionObservation, ReceiverObservation
+from src.contracts import (
+    RF_BASE_DWELL_TIME_US,
+    RF_FREQUENCY_STEP_MHZ,
+    RF_FREQ_MAX_MHZ,
+    RF_IBW_MHZ,
+)
 
 __all__ = [
     "SieveReceiver",
@@ -48,10 +54,10 @@ class ReceiverConfigError(ValueError):
 class SieveReceiver:
     def __init__(
         self,
-        total_bandwidth: float = 18e3,
-        ibw: float = 1e3,
-        frequency_step: float = 500.0,
-        dwell_time: float = 100.0,
+        total_bandwidth: float = RF_FREQ_MAX_MHZ,
+        ibw: float = RF_IBW_MHZ,
+        frequency_step: float = RF_FREQUENCY_STEP_MHZ,
+        dwell_time: float = RF_BASE_DWELL_TIME_US,
         detection_threshold_db: float = -140.0,
         spectrum_threshold: float = 5.0,
     ) -> None:

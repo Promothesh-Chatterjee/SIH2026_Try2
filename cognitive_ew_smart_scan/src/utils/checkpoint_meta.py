@@ -16,19 +16,10 @@ from typing import Any
 
 import torch
 
-# Canonical 10-per-band feature order (single source of truth).
-FEATURE_ORDER = [
-    "occupancy",
-    "det_rate",
-    "miss_rate",
-    "uncertainty",
-    "revisit_age",
-    "emitter_count",
-    "deint_confidence",
-    "pri_stability",
-    "agility",
-    "priority",
-]
+from src.contracts import FEATURE_ORDER as _FEATURE_ORDER
+
+# Backward-compatible list export for checkpoint metadata callers.
+FEATURE_ORDER = list(_FEATURE_ORDER)
 PREPROC_VERSION = "v1"  # bump whenever normalise.py feature layout changes
 
 

@@ -8,6 +8,7 @@ from src.models.deinterleaver import (
     _owner_spans,
     embed_pdws_windowed,
     make_windows,
+    reconcile_cluster_nodes,
     windowed_cluster_deinterleave,
 )
 
@@ -76,6 +77,79 @@ class EmbedWindowedTests(unittest.TestCase):
         self.assertEqual(res["pulse_to_window"].shape, (300,))
         self.assertEqual(res["toa_us"].tolist(), toa.tolist())
         self.assertGreater(res["n_windows"], 1)
+
+
+class ReconcileClusterNodesTests(unittest.TestCase):
+    def test_permuted_ids_between_windows_get_distinct_globals(self):
+        """Permuting local IDs between windows never reuses a raw integer."""
+        window_labels = [np.array([0, 0, 1, 1], dtype=np.int32),
+                         np.array([5, 5, 2, 2], dtype=np.int32)]
+        node_to_global, n = reconcile_cluster_nodes(window_labels, [])
+        self.assertEqual(n, 4)
+        # (5,5) cluster and (5,2) cluster are distinct and keep unique IDs
+        self.assertNotEqual(node_to_global[(0, 0)], node_to_global[(1, 5)])
+        self.assertNotEqual(node_to_global[(0, 1)], node_to_global[(1, 2)])
+        # all four nodes get globally unique IDs
+        ids = list(node_to_global.values())
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(len(ids), 4)
+
+    def test_same_emitter_different_local_labels_merge(self):
+        window_labels = [np.array([0, 0], dtype=np.int32),
+                         np.array([7, 7], dtype=np.int32)]
+        node_to_global, n = reconcile_cluster_nodes(
+            window_labels, [((0, 0), (1, 7))]
+        )
+        self.assertEqual(n, 1)
+        self.assertEqual(node_to_global[(0, 0)], node_to_global[(1, 7)])
+
+    def test_unrelated_local_cluster_zero_across_windows_not_identical(self):
+        window_labels = [np.array([0, 0], dtype=np.int32),
+                         np.array([0, 0], dtype=np.int32)]
+        node_to_global, n = reconcile_cluster_nodes(window_labels, [])
+        self.assertEqual(n, 2)
+        self.assertNotEqual(node_to_global[(0, 0)], node_to_global[(1, 0)])
+
+    def test_merged_overlapping_clusters_one_global(self):
+        window_labels = [np.array([0, 0], dtype=np.int32),
+                         np.array([1, 1], dtype=np.int32)]
+        node_to_global, n = reconcile_cluster_nodes(
+            window_labels, [((0, 0), (1, 1))]
+        )
+        self.assertEqual(n, 1)
+        self.assertEqual(node_to_global[(0, 0)], node_to_global[(1, 1)])
+
+    def test_isolated_clusters_get_distinct_ids(self):
+        window_labels = [np.array([0], dtype=np.int32),
+                         np.array([0], dtype=np.int32),
+                         np.array([1], dtype=np.int32)]
+        node_to_global, n = reconcile_cluster_nodes(window_labels, [])
+        self.assertEqual(n, 3)
+        ids = list(node_to_global.values())
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(len(ids), 3)
+
+    def test_unmerged_and_merged_clusters_cover_all_valid_nodes(self):
+        window_labels = [np.array([0, 1], dtype=np.int32),
+                         np.array([0, 2], dtype=np.int32)]
+        node_to_global, n = reconcile_cluster_nodes(
+            window_labels, [((0, 0), (1, 0))]
+        )
+        # (0,0)==(1,0) merged; (0,1) and (1,2) isolated -> 3 components
+        self.assertEqual(n, 3)
+        self.assertEqual(len(node_to_global), 4)
+        self.assertEqual(node_to_global[(0, 0)], node_to_global[(1, 0)])
+        self.assertNotEqual(node_to_global[(0, 1)], node_to_global[(1, 0)])
+        self.assertNotEqual(node_to_global[(1, 2)], node_to_global[(1, 0)])
+        self.assertNotEqual(node_to_global[(0, 1)], node_to_global[(1, 2)])
+
+    def test_noise_labels_excluded(self):
+        window_labels = [np.array([0, -1, -1, 1], dtype=np.int32)]
+        node_to_global, n = reconcile_cluster_nodes(window_labels, [])
+        self.assertEqual(n, 2)
+        self.assertIn((0, 0), node_to_global)
+        self.assertIn((0, 1), node_to_global)
+        self.assertEqual(len(node_to_global), 2)
 
 
 class WindowedClusterTests(unittest.TestCase):

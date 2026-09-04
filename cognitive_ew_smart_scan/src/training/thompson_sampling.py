@@ -12,6 +12,8 @@ import logging
 
 import numpy as np
 
+from src.contracts import CANONICAL_N_BANDS, CANONICAL_N_MODES, NORMAL_DWELL
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +31,12 @@ class ThompsonSamplingExplorer:
         total_pulls: Global pull count.
     """
 
-    def __init__(self, n_bands: int = 36, n_modes: int = 1, seed: int | None = None) -> None:
+    def __init__(
+        self,
+        n_bands: int = CANONICAL_N_BANDS,
+        n_modes: int = CANONICAL_N_MODES,
+        seed: int | None = None,
+    ) -> None:
         """Initialise explorer.
 
         Args:
@@ -62,7 +69,7 @@ class ThompsonSamplingExplorer:
         Returns:
             Flat action = band * n_modes + NORMAL_DWELL (0).
         """
-        return self.select_band() * self.n_modes
+        return self.select_band() * self.n_modes + NORMAL_DWELL
 
     def get_ucb_band(self, c: float = 2.0) -> int:
         """UCB1 alternative selection.
