@@ -25,7 +25,7 @@ except ImportError:
 
 from ..models.deinterleaver import PDWTransformerEncoder, TransformerDeinterleaver
 from ..preprocessing.normalise import normalise_pdws
-from ..data.tsrd_manifest import resolve_split_dirs, validate_dataset
+from ..data.tsrd_manifest import resolve_split_dirs, validate_dataset, generate_dataset_report
 from ..data.synthetic_dataset import ensure_local_fallback_dataset
 
 logger = logging.getLogger(__name__)
@@ -360,6 +360,10 @@ def train_deinterleaver(
     if not validation["valid"]:
         logger.warning("Dataset validation reported issues: %s", validation["errors"])
 
+    # Use SCAN mode for deinterleaver training (realistic observed data)
+    train_mode = train_cfg.get("deinterleaver_mode", "scan")
+    val_mode = train_cfg.get("deinterleaver_val_mode", "scan")
+
     candidate_roots = [
         data_root,
         Path("data"),
@@ -371,15 +375,14 @@ def train_deinterleaver(
     for root in candidate_roots:
         if not root.exists():
             continue
-        for mode in ["scan", "stare"]:
-            split_dirs = resolve_split_dirs(root, mode)
-            train_candidates = sorted(split_dirs["train"].glob("*.h5")) if split_dirs["train"].exists() else []
-            val_candidates = sorted(split_dirs["val"].glob("*.h5")) if split_dirs["val"].exists() else []
-            if train_candidates:
-                train_files = train_candidates
-                val_files = val_candidates or train_candidates[: max(1, len(train_candidates) // 5)]
-                logger.info("Using split discovery for %s/%s: %d train, %d val", root, mode, len(train_files), len(val_files))
-                break
+        split_dirs = resolve_split_dirs(root, train_mode)
+        train_candidates = sorted(split_dirs["train"].glob("*.h5")) if split_dirs["train"].exists() else []
+        val_candidates = sorted(split_dirs["val"].glob("*.h5")) if split_dirs["val"].exists() else []
+        if train_candidates:
+            train_files = train_candidates
+            val_files = val_candidates or train_candidates[: max(1, len(train_candidates) // 5)]
+            logger.info("Using split discovery for %s/%s: %d train, %d val", root, train_mode, len(train_files), len(val_files))
+            break
         if train_files:
             break
 
@@ -395,8 +398,8 @@ def train_deinterleaver(
                         train_files = train_candidates
                         val_files = sorted(split_dirs["val"].glob("*.h5")) if split_dirs["val"].exists() else []
                         break
-            if train_files:
-                break
+                if train_files:
+                    break
 
     if not train_files:
         raise FileNotFoundError(f"No training .h5 found. Checked dataset roots: {candidate_roots}")
@@ -408,6 +411,12 @@ def train_deinterleaver(
     if max_files is not None and max_files > 0:
         train_files = train_files[:max_files]
         val_files = val_files[: max(1, max_files // 5)]
+
+    # Generate dataset report before training
+    logger.info("Generating dataset report...")
+    report = generate_dataset_report(train_files, val_files, train_mode)
+    logger.info("Dataset report: %d train files, %d val files, %d train pulses, %d val pulses",
+                report["train_files"], report["val_files"], report["train_pulses"], report["val_pulses"])
 
     logger.info("Found %d train, %d val files for training", len(train_files), len(val_files))
 

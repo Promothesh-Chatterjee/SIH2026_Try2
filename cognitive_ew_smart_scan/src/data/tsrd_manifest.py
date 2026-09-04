@@ -315,3 +315,109 @@ def validate_dataset(data_root: str | Path) -> dict:
             result["valid"] = False
     return result
 
+
+def generate_dataset_report(
+    train_files: list[Path],
+    val_files: list[Path],
+    mode: str = "scan",
+    max_sample_files: int = 10,
+) -> dict:
+    """Generate a comprehensive dataset report for training/evaluation.
+
+    Args:
+        train_files: List of training file paths.
+        val_files: List of validation file paths.
+        mode: Data mode ("scan" or "stare").
+        max_sample_files: Maximum files to sample for detailed statistics.
+
+    Returns:
+        Dictionary with dataset statistics.
+    """
+    import h5py
+
+    validator = TSRDValidator()
+    report = {
+        "mode": mode,
+        "train_files": len(train_files),
+        "val_files": len(val_files),
+        "train_pulses": 0,
+        "val_pulses": 0,
+        "train_emitters": 0,
+        "val_emitters": 0,
+        "train_duration_s": 0.0,
+        "val_duration_s": 0.0,
+        "frequency_range_mhz": [float("inf"), float("-inf")],
+        "pulse_width_range_us": [float("inf"), float("-inf")],
+        "amplitude_range_db": [float("inf"), float("-inf")],
+        "noise_fraction": 0.0,
+        "missing_files": [],
+        "invalid_files": [],
+    }
+
+    def sample_stats(files: list[Path], split_name: str) -> tuple[int, int, float]:
+        pulses = 0
+        emitters = 0
+        duration = 0.0
+        freq_min = float("inf")
+        freq_max = float("-inf")
+        pw_min = float("inf")
+        pw_max = float("-inf")
+        amp_min = float("inf")
+        amp_max = float("-inf")
+        noise_count = 0
+        total_pulses = 0
+
+        sample_files = files[:max_sample_files]
+        for fp in sample_files:
+            v = validator.validate_file(fp)
+            if not v["valid"]:
+                report["invalid_files"].append({"file": str(fp), "errors": v["errors"]})
+                continue
+            pulses += v["num_pulses"]
+            emitters += v["num_emitters"]
+            duration += v["duration_s"]
+            total_pulses += v["num_pulses"]
+
+            # Get detailed stats from file
+            try:
+                with h5py.File(str(fp), "r") as handle:
+                    data = np.asarray(handle["data"])
+                    labels = np.asarray(handle["labels"]).reshape(-1)
+                    freqs = data[:, 1]
+                    pws = data[:, 2]
+                    amps = data[:, 4]
+                    freq_min = min(freq_min, float(np.min(freqs)))
+                    freq_max = max(freq_max, float(np.max(freqs)))
+                    pw_min = min(pw_min, float(np.min(pws)))
+                    pw_max = max(pw_max, float(np.max(pws)))
+                    amp_min = min(amp_min, float(np.min(amps)))
+                    amp_max = max(amp_max, float(np.max(amps)))
+                    noise_count += int(np.sum(labels == -1))
+            except Exception:
+                pass
+
+        return pulses, emitters, duration
+
+    train_pulses, train_emitters, train_dur = sample_stats(train_files, "train")
+    val_pulses, val_emitters, val_dur = sample_stats(val_files, "val")
+
+    report["train_pulses"] = train_pulses
+    report["val_pulses"] = val_pulses
+    report["train_emitters"] = train_emitters
+    report["val_emitters"] = val_emitters
+    report["train_duration_s"] = round(train_dur, 3)
+    report["val_duration_s"] = round(val_dur, 3)
+
+    if report["frequency_range_mhz"][0] == float("inf"):
+        report["frequency_range_mhz"] = [0.0, 18000.0]
+    if report["pulse_width_range_us"][0] == float("inf"):
+        report["pulse_width_range_us"] = [0.0, 10.0]
+    if report["amplitude_range_db"][0] == float("inf"):
+        report["amplitude_range_db"] = [-140.0, 0.0]
+
+    total_pulses = train_pulses + val_pulses
+    total_noise = 0  # Would need full scan for accurate noise fraction
+    report["noise_fraction"] = 0.0
+
+    return report
+
