@@ -25,7 +25,7 @@ except ImportError:
 
 from ..models.deinterleaver import PDWTransformerEncoder, TransformerDeinterleaver
 from ..preprocessing.normalise import normalise_pdws
-from ..data.tsrd_manifest import resolve_split_dirs, validate_dataset, generate_dataset_report
+from ..data.tsrd_manifest import build_manifest, dataset_fingerprint, resolve_split_dirs, validate_dataset, generate_dataset_report
 from ..data.synthetic_dataset import ensure_local_fallback_dataset
 
 logger = logging.getLogger(__name__)
@@ -322,6 +322,7 @@ def train_deinterleaver(
     quick_smoke: bool = False,
     data_dir_override: str | None = None,
     output_dir_override: str | None = None,
+    training_mode_override: str | None = None,
 ) -> None:
     """Full triplet training loop with checkpointing and early stopping.
 
@@ -354,52 +355,65 @@ def train_deinterleaver(
     device = torch.device(device_str)
     logger.info("Training on device: %s (seed=%d)", device, seed)
 
-    # Data discovery (CLI overrides YAML default: CLI > YAML > default).
+    # Data discovery (CLI > environment > YAML > safe default).
     data_root = Path(data_dir_override) if data_dir_override else Path(train_cfg.get("data_dir", "data"))
-    validation = validate_dataset(data_root)
-    if not validation["valid"]:
-        logger.warning("Dataset validation reported issues: %s", validation["errors"])
+
+    # Check training mode - in real_tsrd mode, synthetic fallback is FORBIDDEN.
+    training_mode = (
+        training_mode_override
+        or os.environ.get("TRAINING_MODE")
+        or train_cfg.get("training_mode", "real_tsrd")
+    )
+    if training_mode not in {"real_tsrd", "synthetic"}:
+        raise ValueError(f"Unsupported training_mode={training_mode!r}; expected real_tsrd or synthetic")
+    allow_synthetic_fallback = training_mode != "real_tsrd"
+    validation = validate_dataset(data_root) if training_mode == "real_tsrd" else {"valid": True, "errors": []}
+    
+    if training_mode == "real_tsrd":
+        logger.info("Training mode: REAL TSRD - synthetic fallback DISABLED")
+        # In real_tsrd mode, the specified data_root MUST exist and contain valid TSRD data
+        if not data_root.exists():
+            raise FileNotFoundError(f"TSRD data root does not exist: {data_root}")
+        # Validate that the data_root actually has TSRD files
+        if not validation["valid"]:
+            raise FileNotFoundError(
+                f"TSRD data root {data_root} does not contain valid TSRD data: {validation['errors']}"
+            )
+    else:
+        logger.info("Training mode: SYNTHETIC - synthetic fallback ENABLED")
+        if not validation["valid"]:
+            logger.warning("Dataset validation reported issues: %s", validation["errors"])
 
     # Use SCAN mode for deinterleaver training (realistic observed data)
     train_mode = train_cfg.get("deinterleaver_mode", "scan")
     val_mode = train_cfg.get("deinterleaver_val_mode", "scan")
 
-    candidate_roots = [
-        data_root,
-        Path("data"),
-        Path("data/stare"),
-        Path("data/scan"),
-    ]
+    candidate_roots = [data_root]
     train_files: list[Path] = []
     val_files: list[Path] = []
-    for root in candidate_roots:
-        if not root.exists():
-            continue
-        split_dirs = resolve_split_dirs(root, train_mode)
+    if data_root.exists():
+        split_dirs = resolve_split_dirs(data_root, train_mode)
         train_candidates = sorted(split_dirs["train"].glob("*.h5")) if split_dirs["train"].exists() else []
-        val_candidates = sorted(split_dirs["val"].glob("*.h5")) if split_dirs["val"].exists() else []
+        val_split_dirs = resolve_split_dirs(data_root, val_mode)
+        val_candidates = sorted(val_split_dirs["val"].glob("*.h5")) if val_split_dirs["val"].exists() else []
         if train_candidates:
             train_files = train_candidates
             val_files = val_candidates or train_candidates[: max(1, len(train_candidates) // 5)]
-            logger.info("Using split discovery for %s/%s: %d train, %d val", root, train_mode, len(train_files), len(val_files))
-            break
-        if train_files:
-            break
+            logger.info("Using split discovery for %s/%s: %d train, %d val", data_root, train_mode, len(train_files), len(val_files))
 
     if not train_files:
-        logger.warning("No dataset found in local roots. Creating synthetic fallback dataset for safe local training.")
-        ensure_local_fallback_dataset(data_root)
-        for root in candidate_roots:
-            if root.exists():
-                for mode in ["scan", "stare"]:
-                    split_dirs = resolve_split_dirs(root, mode)
-                    train_candidates = sorted(split_dirs["train"].glob("*.h5")) if split_dirs["train"].exists() else []
-                    if train_candidates:
-                        train_files = train_candidates
-                        val_files = sorted(split_dirs["val"].glob("*.h5")) if split_dirs["val"].exists() else []
-                        break
-                if train_files:
-                    break
+        if allow_synthetic_fallback:
+            logger.warning("No dataset found in local roots. Creating synthetic fallback dataset for safe local training.")
+            ensure_local_fallback_dataset(data_root)
+            split_dirs = resolve_split_dirs(data_root, train_mode)
+            train_files = sorted(split_dirs["train"].glob("*.h5")) if split_dirs["train"].exists() else []
+            val_files = sorted(split_dirs["val"].glob("*.h5")) if split_dirs["val"].exists() else []
+        else:
+            raise FileNotFoundError(
+                f"No TSRD .h5 files found in real_tsrd mode. "
+                f"Checked dataset roots: {candidate_roots}. "
+                f"Set training_mode: synthetic in config to use synthetic data."
+            )
 
     if not train_files:
         raise FileNotFoundError(f"No training .h5 found. Checked dataset roots: {candidate_roots}")
@@ -451,6 +465,10 @@ def train_deinterleaver(
 
     output_dir = Path(output_dir_override) if output_dir_override else Path(train_cfg.get("output_dir", "checkpoints/deinterleaver"))
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest = build_manifest(data_root, output_path=output_dir / "dataset_manifest.json", mode=train_mode)
+    data_fingerprint = dataset_fingerprint(train_files + val_files, data_root, train_mode)
+    logger.info("Effective dataset root: %s; fingerprint: %s", data_root.resolve(), data_fingerprint)
 
     # Fit stats from training only (prevent leakage, P0-4)
     from ..preprocessing.normalise import fit_train_statistics, save_normalization_stats
@@ -545,7 +563,12 @@ def train_deinterleaver(
                     arch="PDWTransformerEncoder",
                     seed=seed,
                     metrics={"best_val_v_measure": float(avg_v)},
-                    extra={"mode": "deinterleaver", "preproc_version": "v1"},
+                    extra={
+                        "mode": "deinterleaver",
+                        "preproc_version": "v1",
+                        "dataset_fingerprint": data_fingerprint,
+                        "dataset_manifest": str(output_dir / "dataset_manifest.json"),
+                    },
                 )
                 save_state(model, output_dir / "best.pt", meta)
                 logger.info("  New best V-measure %.4f — saved best.pt", avg_v)
@@ -558,7 +581,17 @@ def train_deinterleaver(
             torch.save(model.state_dict(), ckpt)
 
     final_path = output_dir / "final.pt"
-    torch.save(model.state_dict(), final_path)
+    from ..utils.checkpoint_meta import build_train_metadata, save_state
+
+    final_meta = build_train_metadata(
+        split="train",
+        n_bands=int(model_cfg.get("n_bands", 36)),
+        arch="PDWTransformerEncoder",
+        seed=seed,
+        metrics={"best_val_v_measure": float(best_v_measure)},
+        extra={"mode": "deinterleaver", "dataset_fingerprint": data_fingerprint},
+    )
+    save_state(model, final_path, final_meta)
     logger.info("Training complete. Final: %s Best V: %.4f", final_path, best_v_measure)
 
 
@@ -572,6 +605,7 @@ def train_deinterleaver_safe() -> dict:
         max_files=2,
         epochs_override=1,
         quick_smoke=True,
+        training_mode_override="synthetic",
     )
     return {"status": "ok", "dataset": "synthetic-fallback"}
 
@@ -591,9 +625,13 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--quick-smoke", action="store_true")
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--training-mode", type=str, choices=["real_tsrd", "synthetic"], default=None,
+        help="Training mode: real_tsrd (no synthetic fallback) or synthetic (allow fallback).")
     args = parser.parse_args()
     if args.device:
         os.environ["DEVICE"] = args.device
+    if args.training_mode:
+        os.environ["TRAINING_MODE"] = args.training_mode
     train_deinterleaver(
         args.model_config,
         args.config,
@@ -602,4 +640,5 @@ if __name__ == "__main__":
         quick_smoke=args.quick_smoke,
         data_dir_override=args.data_dir,
         output_dir_override=args.output_dir,
+        training_mode_override=args.training_mode,
     )

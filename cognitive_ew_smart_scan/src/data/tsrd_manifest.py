@@ -43,8 +43,6 @@ def resolve_split_dirs(data_root: str | Path, mode: str | None = None) -> dict[s
             root / "train",
             root / m / f"train_{m}",
             root / m / "train",
-            root / "scan" / "train_scan",
-            root / "stare" / "train_stare",
             root / "archive" / "train",
         ],
         "val": [
@@ -57,8 +55,6 @@ def resolve_split_dirs(data_root: str | Path, mode: str | None = None) -> dict[s
             root / "validation",
             root / m / f"val_{m}",
             root / m / "val",
-            root / "scan" / "val_scan",
-            root / "stare" / "val_stare",
             root / "archive" / "validation",
         ],
         "test": [
@@ -68,8 +64,6 @@ def resolve_split_dirs(data_root: str | Path, mode: str | None = None) -> dict[s
             root / "test",
             root / m / f"test_{m}",
             root / m / "test",
-            root / "scan" / "test_scan",
-            root / "stare" / "test_stare",
             root / "archive" / "test",
         ],
     }
@@ -231,12 +225,32 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def dataset_fingerprint(files: list[Path], root: str | Path, mode: str) -> str:
+    """Return a stable fingerprint for files, sizes, split mode, and hashes."""
+    root_path = Path(root).resolve()
+    entries = []
+    for path in sorted(files, key=lambda item: str(item).replace("\\", "/")):
+        resolved = path.resolve()
+        try:
+            relative = resolved.relative_to(root_path).as_posix()
+        except ValueError:
+            relative = resolved.as_posix()
+        entries.append({
+            "path": relative,
+            "size_bytes": path.stat().st_size,
+            "sha256": _sha256(path),
+        })
+    payload = json.dumps({"mode": mode, "files": entries}, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def build_manifest(data_root: str | Path, output_path: str | Path | None = None, mode: str = "scan", max_files: int | None = None) -> dict:
     """Build a comprehensive manifest describing split files, pulse counts, and validation status."""
     root = Path(data_root)
     validator = TSRDValidator()
     split_dirs = resolve_split_dirs(root, mode)
 
+    all_files: list[Path] = []
     manifest: dict[str, Any] = {
         "data_root": str(root),
         "mode": mode,
@@ -251,12 +265,14 @@ def build_manifest(data_root: str | Path, output_path: str | Path | None = None,
 
         records = []
         split_pulses = 0
+        all_files.extend(split_files)
         for fp in split_files:
             v = validator.validate_file(fp)
             records.append({
                 "path": str(fp.relative_to(root)).replace("\\", "/") if root in fp.parents else str(fp),
                 "filename": fp.name,
                 "size_bytes": fp.stat().st_size,
+                "sha256": _sha256(fp),
                 "num_pulses": v["num_pulses"],
                 "num_emitters": v["num_emitters"],
                 "duration_s": round(v["duration_s"], 3),
@@ -272,6 +288,8 @@ def build_manifest(data_root: str | Path, output_path: str | Path | None = None,
         }
         manifest["summary"]["total_files"] += len(records)
         manifest["summary"]["total_pulses"] += split_pulses
+
+    manifest["dataset_fingerprint"] = dataset_fingerprint(all_files, root, mode)
 
     if output_path is not None:
         out = Path(output_path)

@@ -5,6 +5,7 @@ subset: "train"
 mode: "scan"
 world_mode: "stare"
 observation_mode: "scan"
+training_mode: "real_tsrd"
 deinterleaver_ckpt: "checkpoints/deinterleaver/best.pt"
 normalization_stats: "checkpoints/deinterleaver/normalization_stats.json"
 deinterleaver:
