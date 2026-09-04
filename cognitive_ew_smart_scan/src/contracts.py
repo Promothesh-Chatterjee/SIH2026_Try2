@@ -7,11 +7,35 @@ Single source of truth for the time-frequency action space:
 * ``n_actions = n_bands * n_modes``.
 
 The observation contract (``n_bands=36``, ``band_features=10``, ``obs_dim=360``)
-and the per-band 10-feature layout are defined in ``src.utils.checkpoint_meta``
-(``FEATURE_ORDER``). Tests assert env/DRQN/MoE all agree with these constants.
+and the per-band 10-feature layout are defined below. Tests assert env/DRQN/MoE
+all agree with these constants.
 """
 
 from __future__ import annotations
+
+CANONICAL_N_BANDS = 36
+CANONICAL_BAND_FEATURES = 10
+CANONICAL_OBS_DIM = CANONICAL_N_BANDS * CANONICAL_BAND_FEATURES
+
+RF_FREQ_MIN_MHZ = 0.0
+RF_FREQ_MAX_MHZ = 18_000.0
+RF_IBW_MHZ = 500.0
+RF_FREQUENCY_STEP_MHZ = 500.0
+RF_BASE_DWELL_TIME_US = 500.0
+
+# Band-major observation layout. Keep this order stable for checkpoints.
+FEATURE_ORDER: tuple[str, ...] = (
+    "occupancy",
+    "det_rate",
+    "miss_rate",
+    "uncertainty",
+    "revisit_age",
+    "emitter_count",
+    "deint_confidence",
+    "pri_stability",
+    "agility",
+    "priority",
+)
 
 # Canonical dwell-mode taxonomy (order is the mode index — do not reorder).
 DWELL_MODES: tuple[str, ...] = (
@@ -30,6 +54,9 @@ DEFAULT_DWELL_MULTIPLIERS: tuple[float, ...] = (0.25, 1.0, 2.5, 1.0, 0.5)
 SHORT_DWELL, NORMAL_DWELL, LONG_DWELL, REVISIT, PREEMPTIVE_INTERCEPT = range(len(DWELL_MODES))
 
 DWELL_MODE_INDEX: dict[str, int] = {name: i for i, name in enumerate(DWELL_MODES)}
+
+CANONICAL_N_MODES = len(DWELL_MODES)
+CANONICAL_N_ACTIONS = CANONICAL_N_BANDS * CANONICAL_N_MODES
 
 
 def n_modes() -> int:

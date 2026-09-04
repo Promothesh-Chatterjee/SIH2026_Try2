@@ -744,6 +744,7 @@ class CognitiveRFScanEnv(gym.Env):
                 current_time=current_time,
                 band=band,
                 min_cluster_size=min_cluster_size,
+                embeddings=result.get("embeddings"),
             )
 
             # Get band belief from updated tracks

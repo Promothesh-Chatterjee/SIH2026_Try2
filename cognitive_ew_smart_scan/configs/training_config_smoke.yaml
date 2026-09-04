@@ -20,6 +20,8 @@ environment:
   max_pulses: 50000
   max_steps_per_episode: 1000
   n_bands: 36
+  n_modes: 5
+  n_actions: 180
   obs_dim: 360
   time_horizon_us: 30000000.0
 mode: scan

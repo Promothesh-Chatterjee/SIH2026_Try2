@@ -138,7 +138,7 @@ def train_scheduler(
     sched_cfg = train_cfg.get("scheduler", {})
 
     n_bands = int(drqn_cfg.get("n_bands", 36))
-    n_modes = int(drqn_cfg.get("n_modes", env_cfg.get("n_modes", 1)))
+    n_modes = int(drqn_cfg.get("n_modes", env_cfg.get("n_modes", 5)))
     n_actions = int(drqn_cfg.get("n_actions", n_bands * n_modes))
     band_features = int(env_cfg.get("band_features", 10))
     obs_dim = int(env_cfg.get("obs_dim", n_bands * band_features))

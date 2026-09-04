@@ -18,7 +18,14 @@ import logging
 import torch
 import torch.nn as nn
 
-from src.contracts import band_of_action, mode_of_action, n_actions_for
+from src.contracts import (
+    CANONICAL_N_BANDS,
+    CANONICAL_N_MODES,
+    CANONICAL_OBS_DIM,
+    band_of_action,
+    mode_of_action,
+    n_actions_for,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +48,8 @@ class DRQNScheduler(nn.Module):
 
     def __init__(
         self,
-        obs_dim: int = 360,
-        n_bands: int = 36,
+        obs_dim: int = CANONICAL_OBS_DIM,
+        n_bands: int = CANONICAL_N_BANDS,
         n_actions: int | None = None,
         lstm_hidden: int = 256,
         lstm_layers: int = 2,
@@ -63,7 +70,7 @@ class DRQNScheduler(nn.Module):
         self.obs_dim = obs_dim
         self.n_bands = n_bands
         if n_modes is None:
-            n_modes = 1
+            n_modes = CANONICAL_N_MODES
         self.n_modes = n_modes
         self.n_actions = int(n_actions if n_actions is not None else n_actions_for(n_bands, n_modes))
         self.lstm_hidden = lstm_hidden
