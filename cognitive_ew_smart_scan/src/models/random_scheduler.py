@@ -10,6 +10,10 @@ class RandomScheduler:
     """Minimal scheduler for the non-trained path.
 
     Returns a random discrete action index for the current observation.
+
+    The population space is the canonical time-frequency joint action space
+    (``n_bands * n_modes``); ``n_bands`` here is the flat action-space size so
+    ``randrange(0, n_bands)`` samples a valid time-frequency cell.
     """
 
     def __init__(self, n_bands: int = 36, seed: int | None = None) -> None:

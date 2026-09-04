@@ -31,7 +31,13 @@ class CoreRegressionTests(unittest.TestCase):
             deinterleave_endpoint(req, request=SimpleNamespace(headers={}))
 
     def test_rf_scan_env_reset_and_step(self):
-        env = RFScanEnv({"n_bands": 4, "dwell_slots": 1, "time_resolution_us": 100.0}, data_dir="data", subset="train", seed=7)
+        env = RFScanEnv(
+            {"n_bands": 4, "dwell_slots": 1, "time_resolution_us": 100.0},
+            data_dir="data",
+            subset="train",
+            seed=7,
+            allow_synthetic_fallback=True,
+        )
         obs, info = env.reset()
         self.assertEqual(obs.shape, (8,))
         next_obs, reward, terminated, truncated, info = env.step(0)

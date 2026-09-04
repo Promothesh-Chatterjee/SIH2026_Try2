@@ -10,6 +10,8 @@ deinterleaver:
 
 drqn_scheduler:
   n_bands: 36
+  n_modes: 5
+  n_actions: 180         # n_bands * n_modes (time-frequency joint action space)
   lstm_hidden: 256
   lstm_layers: 2
   obs_dim: 360         # n_bands * band_features (36 * 10 belief features)
@@ -19,9 +21,27 @@ drqn_scheduler:
   eps_end: 0.05
   eps_decay: 10000
 
+# Canonical time-frequency action encoding.
+# action = band * n_modes + mode_index  (band in [0, n_bands), mode_index in [0, n_modes))
+# dwell_us(base) = base_dwell_time_us * multiplier
+dwell_modes:
+  base_dwell_time_us: 500.0
+  mode_multipliers:
+    - name: SHORT_DWELL
+      multiplier: 0.25
+    - name: NORMAL_DWELL
+      multiplier: 1.0
+    - name: LONG_DWELL
+      multiplier: 2.5
+    - name: REVISIT
+      multiplier: 1.0
+    - name: PREEMPTIVE_INTERCEPT
+      multiplier: 0.5
+
 smartscan_moe:
   eager_weight: 0.6
   revisit_weight: 0.4
+  preemptive_weight: 0.0  # fraction of selections driven by periodic-intercept urgency
   k_receivers: 1
   decay_rate: 0.05
 
@@ -30,3 +50,9 @@ reward:
   w_novel: 2.0  # novel-emitter bonus
   w_miss: -1.0  # miss penalty (<=0)
   w_timing: 0.001  # per-µs timing penalty on hits
+  w_priority: 0.5       # bonus scaled by priority of intercepted emitters
+  w_information_gain: 0.2  # belief-entropy/novelty gain bonus
+  w_false_alarm: -0.5   # penalty for tuning an empty band
+  w_dwell_cost: -0.001  # per-µs cost of occupying the receiver (scan efficiency)
+  w_redundant_scan: -0.1  # penalty for re-scanning a just-intercepted band
+  w_delay: 0.0          # penalty for late preemptive intercept of overdue periodic emitters

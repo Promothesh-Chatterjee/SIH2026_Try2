@@ -3,6 +3,11 @@ SmartScan Mixture of Experts (MoE) with EagerAgent + RevisitAgent.
 
 EagerAgent wraps DRQN + min-max norm; RevisitAgent is algorithmic exp decay.
 Fused = eager_weight * eager_norm + revisit_weight * revisit_norm; top-K selection.
+
+The MoE operates over the canonical time-frequency joint action space:
+``action = band * n_modes + mode`` (flat index into ``n_bands*n_modes``). The
+RevisitAgent's per-band urgency is broadcast across all dwell modes of each band so
+that visit pressure applies to the whole time-frequency cell of a band.
 """
 
 import logging
@@ -12,13 +17,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from src.contracts import DEFAULT_DWELL_MULTIPLIERS, band_of_action, n_actions_for
 from .drqn_scheduler import DRQNScheduler
 
 logger = logging.getLogger(__name__)
 
 
 class SmartScanMoE(nn.Module):
-    """Mixture of Experts fusing DRQN and revisitation heuristic.
+    """Mixture of Experts fusing DRQN and revisitation heuristic over time-frequency.
 
     Contains inner classes EagerAgent and RevisitAgent per spec.
     """
@@ -37,6 +43,7 @@ class SmartScanMoE(nn.Module):
             self.device = torch.device(device) if isinstance(device, str) else device
             self.hidden: tuple[torch.Tensor, torch.Tensor] | None = None
             self.n_bands = drqn.n_bands
+            self.n_actions = drqn.n_actions
 
         def reset(self, batch_size: int = 1) -> None:
             """Reset LSTM hidden state.
@@ -56,7 +63,7 @@ class SmartScanMoE(nn.Module):
                 obs: (B,T,obs_dim) or (obs_dim,) tensor.
 
             Returns:
-                Tuple (q_values_np (n_bands,), hidden).
+                Tuple (q_values_np (n_actions,), hidden).
             """
             # Ensure (1,1,obs_dim) for single step
             if obs.dim() == 1:
@@ -71,7 +78,7 @@ class SmartScanMoE(nn.Module):
             except Exception:
                 pass
             with torch.inference_mode():
-                q, h = self.drqn(obs_b, self.hidden)
+                q, _aux, h = self.drqn(obs_b, self.hidden)
                 self.hidden = h
                 # Last timestep, first batch
                 q_last = q[0, -1].detach().cpu().numpy()
@@ -81,10 +88,10 @@ class SmartScanMoE(nn.Module):
             """Min-max normalise Q-values to [0,1].
 
             Args:
-                q_values: (n_bands,) raw Q.
+                q_values: (n_actions,) raw Q.
 
             Returns:
-                (n_bands,) normalised.
+                (n_actions,) normalised.
             """
             q_min = float(np.min(q_values))
             q_max = float(np.max(q_values))
@@ -122,7 +129,7 @@ class SmartScanMoE(nn.Module):
             self.current_t += 1
 
         def scores(self) -> np.ndarray:
-            """Return urgency vector exp(decay * (t - last_visit)), normalised to [0,1].
+            """Return per-band urgency vector exp(decay * (t - last_visit)), normalised to [0,1].
 
             Returns:
                 (n_bands,) float32 in [0,1].
@@ -138,6 +145,18 @@ class SmartScanMoE(nn.Module):
             norm[overdue] = 1.0
             return norm.astype(np.float32)
 
+        def action_scores(self, n_modes: int) -> np.ndarray:
+            """Broadcast per-band urgency across all dwell modes of each band.
+
+            Args:
+                n_modes: Number of dwell modes.
+
+            Returns:
+                (n_bands * n_modes,) float32 urgency per time-frequency action.
+            """
+            per_band = self.scores()  # (n_bands,)
+            return np.repeat(per_band, n_modes).astype(np.float32)
+
         def reset(self) -> None:
             """Reset visit times."""
             self.last_visit_time.fill(0.0)
@@ -148,13 +167,17 @@ class SmartScanMoE(nn.Module):
 
         Args:
             drqn_agent: DRQN scheduler instance.
-            config: Dict with eager_weight, revisit_weight, k_receivers, decay_rate, n_bands.
+            config: Dict with eager_weight, revisit_weight, k_receivers, decay_rate,
+                n_bands, n_modes.
         """
         super().__init__()
         config = config or {}
         self.n_bands: int = int(config.get("n_bands", getattr(drqn_agent, "n_bands", 36)))
+        self.n_modes: int = int(config.get("n_modes", getattr(drqn_agent, "n_modes", 1)))
+        self.n_actions: int = int(config.get("n_actions", n_actions_for(self.n_bands, self.n_modes)))
         self.eager_weight: float = float(config.get("eager_weight", 0.6))
         self.revisit_weight: float = float(config.get("revisit_weight", 0.4))
+        self.preemptive_weight: float = float(config.get("preemptive_weight", 0.0))
         self.k_receivers: int = int(config.get("k_receivers", 1))
         self.decay_rate: float = float(config.get("decay_rate", 0.05))
         self.max_revisit_gap: int = int(config.get("max_revisit_gap", 200))
@@ -168,26 +191,73 @@ class SmartScanMoE(nn.Module):
             max_revisit_gap=self.max_revisit_gap,
         )
 
+        # Periodic preemptive prioritisation map: band -> urgency boost.
+        self._preemptive_urgency = np.zeros(self.n_bands, dtype=np.float32)
+
         # Keep direct refs for torch MoE forward
         self.drqn = drqn_agent
         self._config = config
-        logger.info("SmartScanMoE eager=%.1f revisit=%.1f K=%d", self.eager_weight, self.revisit_weight, self.k_receivers)
+        logger.info(
+            "SmartScanMoE eager=%.1f revisit=%.1f preemptive=%.1f K=%d actions=%d",
+            self.eager_weight, self.revisit_weight, self.preemptive_weight,
+            self.k_receivers, self.n_actions,
+        )
 
-    def select_bands(
-        self, obs: np.ndarray | torch.Tensor, eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None
-    ) -> tuple[list[int], tuple[torch.Tensor, torch.Tensor] | None, dict[str, float]]:
-        """Select top-K bands via fused scores.
+    def set_preemptive_urgency(self, band: int | None, urgency: float) -> None:
+        """Fold a periodic-intercept urgency boost into a band's selection pressure.
 
         Args:
-            obs: Observation vector (2*n_bands,) numpy or (B,T,obs_dim) torch.
-            eager_hidden: Optional LSTM hidden state (if torch obs).
+            band: Band index, or None to clear.
+            urgency: Urgency in [0, 1].
+        """
+        if band is not None and 0 <= int(band) < self.n_bands:
+            self._preemptive_urgency[int(band)] = float(np.clip(urgency, 0.0, 1.0))
+
+    def _fused_action_scores(
+        self, eager_norm: np.ndarray, revisit_norm_per_band: np.ndarray
+    ) -> np.ndarray:
+        """Combine eager, revisit and preemptive terms into per-action fused scores."""
+        revisit_action = np.repeat(revisit_norm_per_band, self.n_modes).astype(np.float32)
+        fused = self.eager_weight * eager_norm + self.revisit_weight * revisit_action
+        # Periodic preemptive pressure: parent band urgency broadcast across its modes.
+        preempt_action = np.repeat(self._preemptive_urgency, self.n_modes).astype(np.float32)
+        fused = fused + self.preemptive_weight * preempt_action
+        return fused
+
+    def select_action(
+        self, obs: np.ndarray | torch.Tensor, eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None
+    ) -> tuple[int, tuple[torch.Tensor, torch.Tensor] | None, dict[str, float]]:
+        """Select the single best time-frequency action (band, dwell-mode).
+
+        Args:
+            obs: Observation vector (obs_dim,) numpy or (B,T,obs_dim) torch.
+            eager_hidden: Optional LSTM hidden state.
 
         Returns:
-            Tuple (selected_band_indices List[int] len K, hidden, attribution_dict {eager_pct, revisit_pct}).
+            Tuple (action int, hidden, attribution dict).
+        """
+        top_k, hidden, attribution = self.select_bands(obs, eager_hidden, k=1, return_full=False)
+        return int(top_k[0]), hidden, attribution
+
+    def select_bands(
+        self, obs: np.ndarray | torch.Tensor, eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None,
+        k: int | None = None, return_full: bool = True,
+    ) -> tuple[list[int], tuple[torch.Tensor, torch.Tensor] | None, dict[str, float]]:
+        """Select top-K actions (or bands) via fused time-frequency scores.
+
+        Args:
+            obs: Observation vector (obs_dim,) numpy or (B,T,obs_dim) torch.
+            eager_hidden: Optional LSTM hidden state (if torch obs).
+            k: Number of top actions to return; defaults to k_receivers.
+            return_full: If True, returns top-K *action* indices (time-frequency).
+                If False, returns top-K *band* indices (decoded) for API customers.
+
+        Returns:
+            Tuple (selected_indices List[int] len K, hidden, attribution_dict
+            {eager_pct, revisit_pct}).
         """
         # Handle numpy obs path (most common for env)
         if isinstance(obs, np.ndarray):
-            # Eager via DRQN
             obs_t = torch.from_numpy(obs.astype(np.float32))
             if obs_t.dim() == 1:
                 obs_t = obs_t.unsqueeze(0).unsqueeze(0)
@@ -197,10 +267,8 @@ class SmartScanMoE(nn.Module):
             eager_norm = self.eager_agent.normalised_scores(q_raw)
             revisit_norm = self.revisit_agent.scores()
         else:
-            # Torch path
             if isinstance(obs, torch.Tensor):
-                q, hidden = self.drqn(obs, eager_hidden)
-                # Store hidden for next call
+                q, _aux, hidden = self.drqn(obs, eager_hidden)
                 self.eager_agent.hidden = hidden
                 q_last = q[0, -1].detach().cpu().numpy() if q.dim() == 3 else q.detach().cpu().numpy()
                 if q_last.ndim > 1:
@@ -210,32 +278,44 @@ class SmartScanMoE(nn.Module):
             else:
                 raise TypeError(f"Unsupported obs type {type(obs)}")
 
-        fused = self.eager_weight * eager_norm + self.revisit_weight * revisit_norm
-        # Top-K
-        k = min(self.k_receivers, self.n_bands)
-        top_k = np.argsort(fused)[-k:][::-1].tolist()
+        fused = self._fused_action_scores(eager_norm, revisit_norm)
+        # Top-K actions
+        k_eff = self.k_receivers if k is None else int(k)
+        k_eff = min(k_eff, self.n_actions)
+        top_k = np.argsort(fused)[-k_eff:][::-1].tolist()
+
+        if not return_full:
+            # Decode to unique band indices (per action), dedup preserving order.
+            bands = []
+            for a in top_k:
+                b = band_of_action(a, self.n_modes)
+                if b not in bands:
+                    bands.append(b)
+            top_k = bands
 
         # Attribution for explainability
-        eager_contrib = float(np.sum(self.eager_weight * eager_norm[top_k]))
-        revisit_contrib = float(np.sum(self.revisit_weight * revisit_norm[top_k]))
+        eager_contrib = float(np.sum(self.eager_weight * eager_norm[top_k[:]]))
+        revisit_contrib = float(np.sum(self.revisit_weight * revisit_norm[[band_of_action(a, self.n_modes) for a in top_k[:]]]))
         total = eager_contrib + revisit_contrib + 1e-8
         attribution = {"eager_pct": float(eager_contrib / total), "revisit_pct": float(revisit_contrib / total)}
 
         logger.debug("MoE fused top=%s attribution=%s", top_k, attribution)
         return top_k, hidden if "hidden" in locals() else eager_hidden, attribution
 
-    def update(self, selected_band: int) -> None:
-        """Update revisit agent after action.
+    def update(self, selected_action: int) -> None:
+        """Update revisit agent after a time-frequency action.
 
         Args:
-            selected_band: Band tuned.
+            selected_action: Flat action index (band*n_modes + mode).
         """
-        self.revisit_agent.update(int(selected_band))
+        band = band_of_action(int(selected_action), self.n_modes)
+        self.revisit_agent.update(band)
 
     def reset(self) -> None:
-        """Reset both agents' episodic state."""
+        """Reset both agents' episodic state and preemptive map."""
         self.eager_agent.reset()
         self.revisit_agent.reset()
+        self._preemptive_urgency.fill(0.0)
 
     # Torch forward for batched training (keeps old API)
     def forward(
@@ -244,20 +324,18 @@ class SmartScanMoE(nn.Module):
         """Batched fused scores for training.
 
         Args:
-            obs: (B,T,2*n_bands).
+            obs: (B,T,obs_dim).
             hidden: LSTM hidden.
 
         Returns:
-            Tuple (fused_scores (B,T,n_bands), next_hidden, attribution dict tensors).
+            Tuple (fused_scores (B,T,n_actions), next_hidden, attribution dict tensors).
         """
-        q_values, next_hidden = self.drqn(obs, hidden)
+        q_values, _aux, next_hidden = self.drqn(obs, hidden)
         q_min = q_values.min(dim=-1, keepdim=True)[0]
         q_max = q_values.max(dim=-1, keepdim=True)[0]
         q_norm = (q_values - q_min) / (q_max - q_min + 1e-8)
-        # Revisit urgency from the 10-feature observation layout.
-        # Canonical per-band features: [occupancy(0), det_rate(1), miss_rate(2),
-        # uncertainty(3), age(4), emitter_count(5), deint_conf(6), per_stab(7),
-        # agility(8), priority(9)]. "Time since last visit" is feature index 4.
+        # Revisit urgency from the 10-feature observation layout — feature index 4
+        # is the per-band normalized revisit age.
         n = self.n_bands
         features_per_band = obs.shape[-1] // n
         age_idx = 4  # normalized revisit age within each band's feature block
@@ -265,11 +343,12 @@ class SmartScanMoE(nn.Module):
             b = torch.arange(n, device=obs.device) * features_per_band + age_idx
             time_since = obs[:, :, b]
         else:
-            # Fallback for legacy 2-feature layout: second half is time_since.
-            time_since = obs[:, :, n:] if features_per_band == 2 else obs[:, :, :n]
+            time_since = obs[:, :, :n]
         urgency = 1.0 - torch.exp(-self.decay_rate * time_since * 100.0)
+        # Broadcast revisit urgency across modes: (B,T,n) -> (B,T,n*m).
+        urgency_action = urgency.repeat(1, 1, self.n_modes)
         eager_contrib = self.eager_weight * q_norm
-        revisit_contrib = self.revisit_weight * urgency
+        revisit_contrib = self.revisit_weight * urgency_action
         fused = eager_contrib + revisit_contrib
         attribution = {"eager_contribution": eager_contrib.detach(), "revisit_contribution": revisit_contrib.detach(), "raw_q_values": q_values.detach()}
         return fused, next_hidden, attribution

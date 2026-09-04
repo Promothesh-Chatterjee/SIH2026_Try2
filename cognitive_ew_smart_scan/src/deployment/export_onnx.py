@@ -119,9 +119,13 @@ def export_scheduler(model_cfg_path: str, ckpt_path: str, output_path: str, opse
     from ..models.drqn_scheduler import DRQNScheduler
 
     device = torch.device("cpu")
+    n_bands = int(cfg.get("n_bands", 36))
+    n_modes = int(cfg.get("n_modes", 1))
+    n_actions = int(cfg.get("n_actions", n_bands * n_modes))
     model = DRQNScheduler(
         obs_dim=cfg.get("obs_dim", 360),
-        n_bands=cfg.get("n_bands", 36),
+        n_bands=n_bands,
+        n_actions=n_actions,
         lstm_hidden=cfg.get("lstm_hidden", 256),
         lstm_layers=cfg.get("lstm_layers", 2),
     ).to(device)
@@ -138,15 +142,17 @@ def export_scheduler(model_cfg_path: str, ckpt_path: str, output_path: str, opse
     # Dummy: (1, seq_len, obs_dim) with dynamic seq_len
     dummy_obs = torch.randn(1, 4, cfg.get("obs_dim", 360), device=device)
 
-    # Wrapper to export without hidden state (init to zeros inside)
+    # Wrapper to export without hidden state (init to zeros inside).
+    # Outputs Q-values, per-action interception probability, and per-step
+    # intercept time (the canonical 180-space time-frequency contract).
     class _ExportWrapper(torch.nn.Module):
         def __init__(self, drqn: DRQNScheduler) -> None:
             super().__init__()
             self.drqn = drqn
 
-        def forward(self, obs: torch.Tensor) -> torch.Tensor:
-            q, _ = self.drqn(obs, None)
-            return q
+        def forward(self, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            q, aux, _ = self.drqn(obs, None)
+            return q, aux["intercept_prob"], aux["intercept_time_us"]
 
     wrapper = _ExportWrapper(model).to(device)
 
@@ -159,8 +165,8 @@ def export_scheduler(model_cfg_path: str, ckpt_path: str, output_path: str, opse
             dummy_obs,
             str(output_path),
             input_names=["obs"],
-            output_names=["q_values"],
-            dynamic_axes={"obs": {1: "seq_len"}, "q_values": {1: "seq_len"}},
+            output_names=["q_values", "intercept_prob", "intercept_time_us"],
+            dynamic_axes={"obs": {1: "seq_len"}},
             opset_version=opset,
             do_constant_folding=True,
         )
@@ -173,7 +179,7 @@ def export_scheduler(model_cfg_path: str, ckpt_path: str, output_path: str, opse
 
         sess = ort.InferenceSession(str(output_path), providers=["CPUExecutionProvider"])
         out = sess.run(None, {"obs": dummy_obs.cpu().numpy()})
-        logger.info("Scheduler ONNX verification OK, shape %s", out[0].shape)
+        logger.info("Scheduler ONNX verification OK, shapes %s (q/prob/time)", [o.shape for o in out])
     except Exception as exc:
         logger.warning("Scheduler ONNX verification skipped: %s", exc)
 

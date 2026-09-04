@@ -35,6 +35,7 @@ except ImportError:
 
 from pydantic import BaseModel, Field
 
+from src.contracts import band_of_action
 from src.telemetry.publisher import TelemetryPublisher
 from src.telemetry.discovery import latest_telemetry_snapshot, latest_telemetry_history, find_latest_run
 
@@ -233,11 +234,15 @@ async def lifespan(app: FastAPI):  # type: ignore
 
                     d_cfg = STATE["model_cfg"].get("drqn_scheduler", {})
                     moe_cfg = STATE["model_cfg"].get("smartscan_moe", {})
+                    n_bands_api = int(d_cfg.get("n_bands", 36))
+                    n_modes_api = int(d_cfg.get("n_modes", 1))
+                    n_actions_api = int(d_cfg.get("n_actions", n_bands_api * n_modes_api))
                     drqn = DRQNScheduler(
-                        obs_dim=d_cfg.get("obs_dim", 360),
-                        n_bands=d_cfg.get("n_bands", 36),
-                        lstm_hidden=d_cfg.get("lstm_hidden", 256),
-                        lstm_layers=d_cfg.get("lstm_layers", 2),
+                        obs_dim=int(d_cfg.get("obs_dim", 360)),
+                        n_bands=n_bands_api,
+                        n_actions=n_actions_api,
+                        lstm_hidden=int(d_cfg.get("lstm_hidden", 256)),
+                        lstm_layers=int(d_cfg.get("lstm_layers", 2)),
                     )
                     state = torch.load(str(ckpt), map_location="cpu")
                     if isinstance(state, dict) and "state_dict" in state:
@@ -245,7 +250,10 @@ async def lifespan(app: FastAPI):  # type: ignore
                     drqn.load_state_dict(state, strict=False)
                     drqn.to(torch.device(STATE["device"] if STATE["device"] != "cuda" else "cpu"))
                     drqn.eval()
-                    moe = SmartScanMoE(drqn, {**moe_cfg, "n_bands": d_cfg.get("n_bands", 36), "device": STATE["device"]})
+                    moe = SmartScanMoE(
+                        drqn,
+                        {**moe_cfg, "n_bands": n_bands_api, "n_modes": n_modes_api, "n_actions": n_actions_api, "device": STATE["device"]},
+                    )
                     STATE["scheduler"] = drqn
                     STATE["moe"] = moe
                     # Init hidden
@@ -398,11 +406,17 @@ def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
             orig_k = moe.k_receivers  # type: ignore
             if req.k is not None:
                 moe.k_receivers = int(req.k)  # type: ignore
-            bands, hidden, attribution = moe.select_bands(obs, STATE.get("hidden"))  # type: ignore
+            actions, hidden, attribution = moe.select_bands(obs, STATE.get("hidden"))  # type: ignore
             STATE["hidden"] = hidden
-            # Update revisit
-            for b in bands:
-                moe.update(b)  # type: ignore
+            # Decode flat time-frequency actions to unique bands for the API
+            # response, and tick the revisit/preemptive agent with the flat action.
+            n_modes = int(STATE["model_cfg"].get("drqn_scheduler", {}).get("n_modes", 1))
+            bands = []
+            for a in actions:
+                b = band_of_action(int(a), n_modes)
+                if b not in bands:
+                    bands.append(b)
+                moe.update(int(a))  # type: ignore
             if req.k is not None:
                 moe.k_receivers = orig_k  # type: ignore
             latency = (time.perf_counter() - start) * 1000.0

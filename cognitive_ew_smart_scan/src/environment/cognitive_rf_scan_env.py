@@ -39,6 +39,16 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
+from src.contracts import (
+    DWELL_MODES,
+    DEFAULT_DWELL_MULTIPLIERS,
+    band_of_action,
+    encode_action,
+    mode_of_action,
+    n_actions_for,
+    n_modes as canonical_n_modes,
+    dwell_us_for,
+)
 from src.receiver import SieveReceiver, ReceiverObservation
 from src.environment.radio_environment import ActivePulse, PulseRecord, RadioEnvironment, SimulationEvent
 from src.evaluation.metrics import FiguresOfMerit
@@ -84,6 +94,9 @@ class BeliefState:
         self.periodicity_stability = np.zeros(n, dtype=np.float32)
         self.agility_indicator = np.zeros(n, dtype=np.float32)
         self.priority_score = np.full(n, 0.5, dtype=np.float32)
+        # Observable periodic-imminent-arrival urgency (from PeriodicScanInterceptor
+        # predictions, built purely from prior detections). Feeds priority (feature 9).
+        self.periodic_urgency = np.zeros(n, dtype=np.float32)
         self._visits = np.zeros(n, dtype=np.int64)
         self._hits = np.zeros(n, dtype=np.int64)
         self._last_visit_slot = np.zeros(n, dtype=np.int64)
@@ -184,7 +197,13 @@ class BeliefState:
 
     def update_priority(self) -> None:
         norm_age = np.clip(self.revisit_age.astype(np.float32) / 50.0, 0.0, 1.0)
-        self.priority_score = np.clip(0.4 * norm_age + 0.4 * self.occupancy_prob + 0.2 * self.uncertainty, 0.0, 1.0)
+        # Observable periodic-imminent-arrival urgency contributes to priority so the
+        # scheduler can preempt dwell on a band where a periodic emitter is due.
+        self.priority_score = np.clip(
+            0.4 * norm_age + 0.3 * self.occupancy_prob + 0.2 * self.uncertainty + 0.1 * self.periodic_urgency,
+            0.0,
+            1.0,
+        )
 
     def band_features(self, b: int) -> np.ndarray:
         """Return the canonical 10-feature vector for one band."""
@@ -254,22 +273,38 @@ class CognitiveRFScanEnv(gym.Env):
         self.freq_min: float = float(config.get("freq_min_mhz", 0.0))
         self.freq_max: float = float(config.get("freq_max_mhz", 18000.0))
         self.ibw_mhz: float = float(config.get("ibw_mhz", 500.0))
-        self.dwell_time_us: float = float(config.get("dwell_time_us", 500.0))
+        # Base receiver dwell time (µs); per-action dwell is base * mode multiplier.
+        self.base_dwell_time_us: float = float(config.get("dwell_time_us", 500.0))
+        self.dwell_time_us: float = self.base_dwell_time_us  # default mode multiplier 1.0
         self.frequency_step_mhz: float = float(config.get("frequency_step_mhz", 500.0))
         self.detection_threshold_db: float = float(config.get("detection_threshold_db", -140.0))
         self.max_steps_per_episode: int = int(config.get("max_steps_per_episode", 2000))
 
-        # Reward weights
-        self.w_hit: float = float(config.get("w_hit", 1.0))
-        self.w_novel: float = float(config.get("w_novel", 2.0))
-        self.w_miss: float = float(config.get("w_miss", -1.0))
+        # Canonical dwell-mode action space (time-frequency joint).
+        self.n_modes: int = int(config.get("n_modes", canonical_n_modes()))
+        if self.n_modes != canonical_n_modes():
+            raise ValueError(f"n_modes={self.n_modes} != canonical {canonical_n_modes()}")
+        self.n_actions: int = int(config.get("n_actions", n_actions_for(self.n_bands, self.n_modes)))
+
+        # Complete config-driven reward component weights.
+        reward_cfg = config.get("reward", {})
+        self.w_hit = reward_cfg.get("w_hit", config.get("w_hit", 1.0))
+        self.w_novel = reward_cfg.get("w_novel", config.get("w_novel", 2.0))
+        self.w_miss = reward_cfg.get("w_miss", config.get("w_miss", -1.0))
+        self.w_timing = reward_cfg.get("w_timing", config.get("w_timing", 0.001))
+        self.w_priority = reward_cfg.get("w_priority", 0.5)
+        self.w_information_gain = reward_cfg.get("w_information_gain", 0.2)
+        self.w_false_alarm = reward_cfg.get("w_false_alarm", -0.5)
+        self.w_dwell_cost = reward_cfg.get("w_dwell_cost", -0.001)
+        self.w_redundant_scan = reward_cfg.get("w_redundant_scan", -0.1)
+        self.w_delay = reward_cfg.get("w_delay", 0.0)
 
         # Feature layout: STATE_FEATURES_PER_BAND features per band
         self.band_features = STATE_FEATURES_PER_BAND
         self.obs_dim = int(self.n_bands * self.band_features)
 
         self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.obs_dim,), dtype=np.float32)
-        self.action_space = spaces.Discrete(self.n_bands)
+        self.action_space = spaces.Discrete(self.n_actions)
 
         assert self.observation_space.shape[0] == self.obs_dim == self.n_bands * self.band_features, (
             f"Observation dimension mismatch: space={self.observation_space.shape[0]} vs obs_dim={self.obs_dim}"
@@ -364,9 +399,12 @@ class CognitiveRFScanEnv(gym.Env):
         if not (0 <= action < self.action_space.n):
             raise ValueError(f"action {action} outside Discrete({self.action_space.n})")
 
-        # 1. Translate scheduler action -> receiver action: tune center frequency
-        #    to cover the chosen band, then dwell.
-        band = action
+        # 1. Translate scheduler action -> (band, dwell-mode) time-frequency select.
+        band = band_of_action(action, self.n_modes)
+        mode = mode_of_action(action, self.n_modes)
+        # Set per-dwell duration: base dwell * mode multiplier. NORMAL_DWELL (1.0)
+        # keeps the legacy dwell_time_us so run-to-run timing is stable.
+        self.receiver.set_dwell_time(dwell_us_for(self.base_dwell_time_us, mode))
         center = self._band_to_center(band)
         self.receiver.tune(center)
 
@@ -448,6 +486,7 @@ class CognitiveRFScanEnv(gym.Env):
 
         # Check periodic interceptor for preemptive schedule recommendation
         preemptive_band = None
+        preemptive_urgency = 0.0
         if self.periodic_interceptor is not None:
             schedule = self.periodic_interceptor.get_preemptive_schedule(
                 current_time_us=self.receiver.current_time_us,
@@ -458,8 +497,23 @@ class CognitiveRFScanEnv(gym.Env):
                 next_pred = schedule[0]
                 if next_pred["confidence"] > 0.7:
                     preemptive_band = next_pred["expected_band"]
+                    preemptive_urgency = float(next_pred.get("confidence", 0.8))
                     logger.debug("Periodic preemptive recommendation: band %d (conf=%.2f, t=%.0fus)",
                                 preemptive_band, next_pred["confidence"], next_pred["expected_time_us"])
+
+        # Fold periodic imminent-arrival urgency into the OBSERVABLE priority
+        # feature (index 9). The scheduler sees imminent periodic arrivals through
+        # its belief just as it sees occupancy — no ground-truth leak, since the
+        # periodic interceptor's prediction is built purely from prior detections.
+        if preemptive_band is not None and self.belief is not None:
+            _b = int(preemptive_band)
+            if 0 <= _b < self.belief.n_bands:
+                self.belief.periodic_urgency[_b] = float(
+                    np.clip(self.belief.periodic_urgency[_b] + 0.4 * preemptive_urgency, 0.0, 1.0)
+                )
+        # Decay periodic urgency each step so stale predictions fade (observable only).
+        if self.belief is not None:
+            self.belief.periodic_urgency *= 0.9
 
         # 6. Update causal belief (from observation only)
         self.belief.record_visit(band, any_hit, detections=detections)
@@ -489,6 +543,18 @@ class CognitiveRFScanEnv(gym.Env):
             w_hit=self.w_hit,
             w_novel=self.w_novel,
             w_miss=self.w_miss,
+            w_timing=self.w_timing,
+            w_priority=self.w_priority,
+            w_information_gain=self.w_information_gain,
+            w_false_alarm=self.w_false_alarm,
+            w_dwell_cost=self.w_dwell_cost,
+            w_redundant_scan=self.w_redundant_scan,
+            w_delay=self.w_delay,
+            band=band,
+            belief=self.belief,
+            intercepted_emitters=self.intercepted_emitters,
+            novel_ids=newly,
+            priority_weight_reference=self._intercepted_priority_reference(),
         )
         reward = reward_components["reward"]
         self.fom.record_reward_components(reward_components)
@@ -523,7 +589,16 @@ class CognitiveRFScanEnv(gym.Env):
         # detections list may carry emitter_id; we remove it before building obs.
         info = {
             "detections": [d.to_dict() for d in detections],
+            "band": band,
+            "mode": mode,
+            "band_chosen": band,
+            "dwell_time_us": self.receiver.dwell_time_us,
             "hit": any_hit,
+            # AUX targets for the DRQN prediction heads (still scheduler-observable):
+            # "hit_prob": 1.0 if any interception this dwell, else 0.0
+            # "intercept_time_us": earliest detected ToA within dwell (or nan if none)
+            "hit_prob": 1.0 if any_hit else 0.0,
+            "intercept_time_us": float(intercept_time_error_us),
             "novel_emitter": bool(newly),
             "ground_truth_active": ground_truth_active,
             "intercept_time_error_us": float(intercept_time_error_us),
@@ -534,6 +609,22 @@ class CognitiveRFScanEnv(gym.Env):
 
         next_obs = self._build_observation()
         return next_obs, float(reward), terminated, truncated, info
+
+    def _intercepted_priority_reference(self, band: int | None = None) -> float:
+        """Observable-only priority reference for the priority-shaped reward term.
+
+        Uses the belief priority (feature 9) of a band — which is derived strictly
+        from scheduler-observable signals (revisit age, occupancy, uncertainty,
+        periodic imminent-arrival urgency) — never from ground-truth emitter IDs.
+        Returns a value in [0, 1].
+        """
+        if self.belief is None:
+            return 0.5
+        if band is None:
+            band = 0
+        self.belief.update_uncertainty()
+        self.belief.update_priority()
+        return float(self.belief.priority_score[band])
 
     # ------------------------------------------------------------- internals
     def _band_to_center(self, band: int) -> float:

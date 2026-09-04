@@ -1,13 +1,22 @@
 """
-Gymnasium Environment for RF Scanning Scheduler.
+LEGACY Gymnasium Environment for RF Scanning Scheduler.
 
-Simulates a narrow-band ES receiver sweeping the spectrum to intercept radar pulses.
-Obs: [occupancy_per_band (0/1), normalised_time_since_last_visit] shape (2*n_bands,)
-Action: Discrete(n_bands)
+Deprecated in favour of CognitiveRFScanEnv (src.environment.cognitive_rf_scan_env),
+which is the single canonical environment for all training, evaluation and API
+pipelines. This module exists only for backward compatibility (tests, docs, old
+checkpoints) and must not be used to train new policies.
+
+Obsolete contract (superseded):
+  Obs: [occupancy_per_band (0/1), normalised_time_since_last_visit] shape (2*n_bands,)
+  Action: Discrete(n_bands)
+New canonical contract:
+  Obs: (36, 10) = 360 feature vector per band (see checkpoint_meta.FEATURE_ORDER)
+  Action: Discrete(n_bands * n_modes) time-frequency (band, dwell-mode) select
 """
 
 import logging
 import random
+import warnings
 from pathlib import Path
 
 import gymnasium as gym
@@ -28,8 +37,13 @@ from ..training.reward import compute_reward
 logger = logging.getLogger(__name__)
 
 
-class RFScanEnv(gym.Env):
-    """Cognitive EW Gymnasium environment for frequency-scanning ES receiver.
+class LegacyRFScanEnv(gym.Env):
+    """LEGACY Cognitive EW Gymnasium environment for frequency-scanning ES receiver.
+
+    Deprecated: use CognitiveRFScanEnv instead. Construction emits a DeprecationWarning
+    and synthetic fallback data (when no TSRD .h5 files exist) is only produced when
+    ``allow_synthetic_fallback=True`` is passed explicitly. Use for validation of old
+    artifacts only — never for new training runs.
 
     The agent chooses a band to monitor for dwell_slots time slots. Reward is
     shaped via compute_reward (novel intercepts, timing penalty, miss penalty).
@@ -40,6 +54,7 @@ class RFScanEnv(gym.Env):
         action_space: Discrete(n_bands).
     """
 
+    LEGACY = True
     metadata = {"render_modes": ["human"]}
 
     def __init__(
@@ -49,6 +64,7 @@ class RFScanEnv(gym.Env):
         subset: str = "train",
         mode: str = "scan",
         seed: int | None = 42,
+        allow_synthetic_fallback: bool = False,
     ) -> None:
         """Initialise environment.
 
@@ -59,11 +75,21 @@ class RFScanEnv(gym.Env):
             subset: train/val/test.
             mode: stare (oracle) or scan (realistic).
             seed: RNG seed.
+            allow_synthetic_fallback: If True, generate synthetic PulseTrain when
+                no .h5 files are found (for unit tests of legacy behaviour only).
 
         Raises:
-            FileNotFoundError: If data_dir/subset/mode has no .h5 files.
+            FileNotFoundError: If data_dir/subset/mode has no .h5 files and
+                allow_synthetic_fallback is False.
         """
         super().__init__()
+        warnings.warn(
+            "LegacyRFScanEnv is deprecated; use CognitiveRFScanEnv (canonical "
+            "36-band x 10-feature x time-frequency Discrete(n_bands*n_modes) contract).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.allow_synthetic_fallback = bool(allow_synthetic_fallback)
         self.n_bands: int = int(config.get("n_bands", 36))
         self.freq_min: float = float(config.get("freq_min_mhz", 0.0))
         self.freq_max: float = float(config.get("freq_max_mhz", 18000.0))
@@ -91,7 +117,7 @@ class RFScanEnv(gym.Env):
         if self.data_dir.exists():
             self._files = sorted(self.data_dir.glob("*.h5"))
         if not self._files:
-            logger.warning("No .h5 files found in %s — env will use synthetic fallback", self.data_dir)
+            logger.warning("No .h5 files found in %s — legacy env has no data", self.data_dir)
 
         # Episode state
         self.current_pt: PulseTrain | None = None
@@ -180,7 +206,13 @@ class RFScanEnv(gym.Env):
 
         pt = self._load_random_pt()
         if pt is None:
-            logger.warning("Using synthetic PulseTrain (no dataset found)")
+            if not self.allow_synthetic_fallback:
+                raise FileNotFoundError(
+                    f"No PulseTrain available from {self.data_dir} and synthetic fallback "
+                    "is disabled. Use CognitiveRFScanEnv with a valid TSRD split, or pass "
+                    "allow_synthetic_fallback=True for legacy unit tests."
+                )
+            logger.warning("Legacy env: using SYNTHETIC PulseTrain (explicit opt-in)")
             pt = self._make_synthetic_pt()
 
         self.current_pt = pt
@@ -349,3 +381,7 @@ class RFScanEnv(gym.Env):
         fom = self.fom.summary()
         lines.append(f"Pd={fom['Pd']:.3f} Pfa={fom['Pfa']:.3f} hits={fom['n_hits']:.0f}/{fom['n_steps']:.0f}")
         print("\n".join(lines))
+
+
+# Backward-compatible alias for legacy references (tests, docs, old dashboards).
+RFScanEnv = LegacyRFScanEnv

@@ -25,7 +25,7 @@ class TestDRQNIntegration(unittest.TestCase):
         obs, info = env.reset()
         self.assertIsInstance(obs, np.ndarray)
         self.assertTrue(env.observation_space.contains(obs))
-        self.assertEqual(env.action_space.n, env.n_bands)
+        self.assertEqual(env.action_space.n, env.n_bands * env.n_modes)
 
     def test_env_can_step_with_valid_actions(self):
         env = _small_env()
@@ -58,7 +58,7 @@ class TestDRQNIntegration(unittest.TestCase):
         obs, _ = env.reset()
         # Build a small DRQN matching env obs_dim / action space.
         obs_dim = env.obs_dim
-        model = DRQNScheduler(obs_dim=obs_dim, n_bands=env.action_space.n, lstm_hidden=16, lstm_layers=1)
+        model = DRQNScheduler(obs_dim=obs_dim, n_bands=env.n_bands, n_actions=env.action_space.n, lstm_hidden=16, lstm_layers=1)
         tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
         action, _ = model.act(tensor[0, 0])
         self.assertIsInstance(action, int)
