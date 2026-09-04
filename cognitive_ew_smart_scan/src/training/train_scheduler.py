@@ -30,6 +30,7 @@ from ..telemetry.publisher import TelemetryPublisher
 from ..telemetry.run_manager import RunManager
 from ..training.replay_buffer import SequenceReplayBuffer
 from ..training.thompson_sampling import ThompsonSamplingExplorer
+from ..training.training_gate import require_training_gate
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +130,15 @@ def train_scheduler(
     env_config = {**env_cfg, **reward_cfg}
     env_config.setdefault("n_bands", n_bands)
 
+    training_mode = train_cfg.get("training_mode", "real_tsrd")
+    if training_mode == "real_tsrd":
+        require_training_gate(
+            data_root=train_cfg.get("data_dir", "data"),
+            deinterleaver_checkpoint=train_cfg.get("deinterleaver_ckpt", "checkpoints/deinterleaver/best.pt"),
+            normalization_stats=train_cfg.get("normalization_stats", "checkpoints/deinterleaver/normalization_stats.json"),
+            environment_config=env_config,
+        )
+
     # Load trained deinterleaver and normalization stats for perception
     deinterleaver_ckpt = train_cfg.get("deinterleaver_ckpt", "checkpoints/deinterleaver/best.pt")
     norm_stats_path = train_cfg.get("normalization_stats", "checkpoints/deinterleaver/normalization_stats.json")
@@ -181,7 +191,7 @@ def train_scheduler(
             max_pulses=int(env_config.get("max_pulses", 50000)),
             seed=seed,
             source_type="world",
-            allow_synthetic_fallback=False,  # No silent fallback for real TSRD training
+            allow_synthetic_fallback=training_mode == "synthetic",
         )
         logger.info("Scheduler training: RF world source = TSRD STARE (latent truth)")
     else:
@@ -195,7 +205,7 @@ def train_scheduler(
             time_horizon_us=float(env_config.get("time_horizon_us", 0.0)) or None,
             max_pulses=int(env_config.get("max_pulses", 50000)),
             seed=seed,
-            allow_synthetic_fallback=False,
+            allow_synthetic_fallback=training_mode == "synthetic",
         )
         logger.warning("Scheduler training: RF world source = %s (non-standard)", world_mode)
 
@@ -216,6 +226,9 @@ def train_scheduler(
         logger.info("Perception pipeline ENABLED: trained deinterleaver + EmitterTracker active")
     else:
         logger.warning("Perception pipeline DISABLED: no trained deinterleaver loaded")
+    if training_mode == "real_tsrd":
+        assert env.perception_enabled, "Strict TSRD training requires perception_enabled=True"
+        assert env.emitter_tracker is not None, "Strict TSRD training requires EmitterTracker"
 
     lstm_hidden = int(drqn_cfg.get("lstm_hidden", 256))
     lstm_layers = int(drqn_cfg.get("lstm_layers", 2))
