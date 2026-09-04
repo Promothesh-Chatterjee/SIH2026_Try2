@@ -130,18 +130,37 @@ def train_scheduler(
     # Build the receiver-driven cognitive env from a TSRD/synthetic scenario.
     data_dir = data_dir_override if data_dir_override is not None else train_cfg.get("data_dir", "data")
     subset = train_cfg.get("subset", "train")
-    mode = train_cfg.get("mode", "scan")
+    world_mode = train_cfg.get("world_mode", "stare")
+    observation_mode = train_cfg.get("observation_mode", "scan")
 
-    train_source = ScenarioSource(
-        data_root=data_dir,
-        mode=mode,
-        subset=subset,
-        freq_min_mhz=float(env_config.get("freq_min_mhz", 0.0)),
-        freq_max_mhz=float(env_config.get("freq_max_mhz", 18000.0)),
-        time_horizon_us=float(env_config.get("time_horizon_us", 0.0)) or None,
-        max_pulses=int(env_config.get("max_pulses", 50000)),
-        seed=seed,
-    )
+    # For scheduler training: RF world uses STARE (latent truth), receiver observes through IBW
+    if world_mode == "stare":
+        train_source = ScenarioSource(
+            data_root=data_dir,
+            mode="stare",  # overridden by source_type
+            subset=subset,
+            freq_min_mhz=float(env_config.get("freq_min_mhz", 0.0)),
+            freq_max_mhz=float(env_config.get("freq_max_mhz", 18000.0)),
+            time_horizon_us=float(env_config.get("time_horizon_us", 0.0)) or None,
+            max_pulses=int(env_config.get("max_pulses", 50000)),
+            seed=seed,
+            source_type="world",
+        )
+        logger.info("Scheduler training: RF world source = TSRD STARE (latent truth)")
+    else:
+        # Fallback for compatibility
+        train_source = ScenarioSource(
+            data_root=data_dir,
+            mode=world_mode,
+            subset=subset,
+            freq_min_mhz=float(env_config.get("freq_min_mhz", 0.0)),
+            freq_max_mhz=float(env_config.get("freq_max_mhz", 18000.0)),
+            time_horizon_us=float(env_config.get("time_horizon_us", 0.0)) or None,
+            max_pulses=int(env_config.get("max_pulses", 50000)),
+            seed=seed,
+        )
+        logger.warning("Scheduler training: RF world source = %s (non-standard)", world_mode)
+
     # One env; reset() draws a fresh random TSRD file each episode.
     env = CognitiveRFScanEnv(env_config, records=None, seed=seed, records_provider=train_source.sample)
     env.reset()  # populate first episode's records so obs_dim/action checks are valid
@@ -188,10 +207,11 @@ def train_scheduler(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # P0-9: reproducible run directory + telemetry publisher (real metrics only).
+    world_mode = train_cfg.get("world_mode", "stare")
     run = RunManager(
         root=train_cfg.get("runs_dir", "runs"),
         config={**full_cfg, **train_cfg},
-        extras={"split": subset, "mode": mode, "seed": seed, "device": str(device)},
+        extras={"split": subset, "mode": world_mode, "seed": seed, "device": str(device)},
     )
     run.write_git_revision()
     telemetry = TelemetryPublisher(run=run)
@@ -303,13 +323,14 @@ def train_scheduler(
             try:
                 val_source = ScenarioSource(
                     data_root=data_dir,
-                    mode=mode,
+                    mode="stare",
                     subset="val",
                     freq_min_mhz=float(env_config.get("freq_min_mhz", 0.0)),
                     freq_max_mhz=float(env_config.get("freq_max_mhz", 18000.0)),
                     time_horizon_us=float(env_config.get("time_horizon_us", 0.0)) or None,
                     max_pulses=int(env_config.get("max_pulses", 50000)),
                     seed=seed,
+                    source_type="world",
                 )
                 val_env = CognitiveRFScanEnv(env_config, records=None, seed=seed, records_provider=val_source.sample)
                 val_rewards = []
@@ -355,7 +376,7 @@ def train_scheduler(
                 arch="DRQNScheduler+SmartScanMoE",
                 seed=seed,
                 metrics={"best_episode_reward": float(ep_reward)},
-                extra={"mode": mode, "obs_dim": int(env_config.get("obs_dim", obs_dim))},
+                extra={"mode": world_mode, "obs_dim": int(env_config.get("obs_dim", obs_dim))},
             )
             save_state(online_drqn, output_dir / "best.pt", meta)
             logger.info("  New best reward %.2f — saved best.pt", ep_reward)
