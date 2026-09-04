@@ -67,6 +67,7 @@ def run_full_evaluation(
     output_dir: str | Path,
     mode: str = "scan",
     baseline: str = "none",
+    norm_stats: str | Path | None = None,
 ) -> dict:
     """Run full evaluation over test pulse trains.
 
@@ -81,12 +82,17 @@ def run_full_evaluation(
             one of "none", "random", "round_robin", "highest_occupancy",
             "highest_uncertainty". When not "none", FoM is also collected for
             this baseline and reported in the summary table as "Baseline".
+        norm_stats: Path to train-fitted normalization statistics JSON. When
+            provided it is loaded and applied to test PDWs (leakage-free).
+            If None, normalization stats are sought next to the deinterleaver
+            checkpoint and then in ``configs/normalization_stats.json``.
 
     Returns:
         Dict with aggregate metrics and per-file DataFrame saved to disk.
 
     Raises:
-        FileNotFoundError: If test_dir has no .h5 files.
+        FileNotFoundError: If test_dir has no .h5 files, or normalization stats
+            are required for deinterleaving but cannot be located.
     """
     import torch
 
@@ -101,6 +107,34 @@ def run_full_evaluation(
     drqn_cfg = model_cfg.get("drqn_scheduler", {})
     reward_cfg = model_cfg.get("reward", {})
     env_cfg = model_cfg.get("environment", {})
+
+    # Resolve train-fitted normalization statistics (leakage-safe test evaluation).
+    from ..preprocessing.normalise import load_normalization_stats
+
+    norm_stats_path: Path | None = None
+    if norm_stats:
+        norm_stats_path = Path(norm_stats)
+    if norm_stats_path is None or not norm_stats_path.exists():
+        # Fall back to a stats file stored beside the deinterleaver checkpoint.
+        if deinterleaver_ckpt:
+            cand = Path(deinterleaver_ckpt).parent / "normalization_stats.json"
+            if cand.exists():
+                norm_stats_path = cand
+    if norm_stats_path is None or not norm_stats_path.exists():
+        cand = Path("configs/normalization_stats.json")
+        if cand.exists():
+            norm_stats_path = cand
+    train_stats = None
+    if deinterleaver_ckpt:
+        if norm_stats_path is None or not norm_stats_path.exists():
+            raise FileNotFoundError(
+                "Deinterleaver evaluation requires train-fitted normalization stats "
+                "but none were found at "
+                f"{norm_stats} / {Path(deinterleaver_ckpt).parent / 'normalization_stats.json'} / "
+                "configs/normalization_stats.json. Fit them on TRAIN data first."
+            )
+        train_stats = load_normalization_stats(norm_stats_path)
+        logger.info("Loaded train normalization stats from %s", norm_stats_path)
 
     test_dir = Path(test_dir)
     output_dir = Path(output_dir)
@@ -162,9 +196,15 @@ def run_full_evaluation(
             from ..models.drqn_scheduler import DRQNScheduler
             from ..models.smartscan_moe import SmartScanMoE
 
+            # Derive obs dim from the canonical observation contract
+            # (n_bands * band_features) rather than a hardcoded literal.
+            band_features = int(env_cfg.get("band_features", 10))
+            n_bands = int(drqn_cfg.get("n_bands", env_cfg.get("n_bands", 36)))
+            obs_dim = int(drqn_cfg.get("obs_dim", n_bands * band_features))
+
             scheduler = DRQNScheduler(
-                obs_dim=int(drqn_cfg.get("obs_dim", 360)),
-                n_bands=int(drqn_cfg.get("n_bands", 36)),
+                obs_dim=obs_dim,
+                n_bands=n_bands,
                 lstm_hidden=int(drqn_cfg.get("lstm_hidden", 256)),
                 lstm_layers=int(drqn_cfg.get("lstm_layers", 2)),
             )
@@ -233,41 +273,78 @@ def run_full_evaluation(
 
     for idx, fpath in enumerate(files):
         per_file: dict = {"file": str(fpath), "mode": mode}
-        # --- Deinterleaving ---
-        v_measure = ami = ari = float("nan")
+        # --- Deinterleaving (leakage-safe + windowed inference) ---
+        v_measure = ami = ari = homogeneity = completeness = float("nan")
+        pairwise_mcc = pairwise_f1 = float("nan")
         latency_ms = float("nan")
+        n_clusters = noise_fraction = float("nan")
         if has_pt:
             try:
                 pt = PulseTrain.load(str(fpath))
                 pdws = pt.data  # (N,5)
                 labels_true = pt.labels
                 if pdws is not None and len(pdws) > 0 and deinterleaver is not None:
+                    from ..models.deinterleaver import windowed_cluster_deinterleave
                     from ..preprocessing.normalise import normalise_pdws
-                    from ..models.deinterleaver import deinterleave
 
-                    pdws_norm, _ = normalise_pdws(pdws, None)
+                    d_cfg = model_cfg.get("deinterleaver", {})
+                    window_size = int(d_cfg.get("window_size", 2048))
+                    stride = int(d_cfg.get("window_stride", 1024))
+                    mcs = int(d_cfg.get("min_cluster_size", 10))
+                    ms = int(d_cfg.get("min_samples", 5))
+                    pdws_norm, _ = normalise_pdws(pdws, train_stats)
                     t0 = time.perf_counter()
-                    labels_pred = deinterleave(deinterleaver, pdws_norm, device=str(device))
+                    res = windowed_cluster_deinterleave(
+                        deinterleaver,
+                        pdws_norm,
+                        window_size=window_size,
+                        stride=stride,
+                        device=str(device),
+                        min_cluster_size=mcs,
+                        min_samples=ms,
+                    )
                     latency_ms = (time.perf_counter() - t0) * 1000.0 / max(1, len(pdws))  # ms per pulse avg
-                    # Metrics (ignore noise label -1 for V-measure? Include)
-                    try:
-                        from sklearn.metrics import adjusted_mutual_info_score, adjusted_rand_score, v_measure_score  # type: ignore
+                    labels_pred = res["labels"]
 
-                        # Filter to pulses where pred != -1 or include all? Use all for strict
-                        mask = labels_pred != -1
-                        if np.sum(mask) > 5 and len(set(labels_true[mask])) > 1:
-                            v_measure = float(v_measure_score(labels_true[mask], labels_pred[mask]))
-                            ami = float(adjusted_mutual_info_score(labels_true[mask], labels_pred[mask]))
-                            ari = float(adjusted_rand_score(labels_true[mask], labels_pred[mask]))
-                        elif len(set(labels_true)) > 1:
-                            # fallback on all
-                            v_measure = float(v_measure_score(labels_true, np.where(labels_pred == -1, max(labels_true) + 1, labels_pred)))
-                    except Exception as exc:
-                        logger.debug("Metric failed for %s: %s", fpath, exc)
+                    from ..evaluation.metrics import deinterleaver_train_metrics
+
+                    m = deinterleaver_train_metrics(labels_true, labels_pred, with_pairwise=True)
+                    v_measure = m.get("v_measure", float("nan"))
+                    ami = m.get("ami", float("nan"))
+                    ari = m.get("ari", float("nan"))
+                    homogeneity = m.get("homogeneity", float("nan"))
+                    completeness = m.get("completeness", float("nan"))
+                    pairwise_mcc = m.get("pairwise_mcc", float("nan"))
+                    pairwise_f1 = m.get("pairwise_f1", float("nan"))
+                    n_clusters = m.get("n_clusters_predicted", float("nan"))
+                    noise_fraction = m.get("noise_fraction", float("nan"))
             except Exception as exc:
                 logger.warning("Failed to evaluate deinterleave %s: %s", fpath, exc)
-        per_file.update({"v_measure": v_measure, "ami": ami, "ari": ari, "latency_ms_per_pulse": latency_ms})
-        deinter_metrics.append({"v_measure": v_measure, "ami": ami, "ari": ari})
+        per_file.update(
+            {
+                "v_measure": v_measure,
+                "ami": ami,
+                "ari": ari,
+                "homogeneity": homogeneity,
+                "completeness": completeness,
+                "pairwise_mcc": pairwise_mcc,
+                "pairwise_f1": pairwise_f1,
+                "latency_ms_per_pulse": latency_ms,
+                "n_clusters_predicted": n_clusters,
+                "noise_fraction": noise_fraction,
+            }
+        )
+        deinter_metrics.append(
+            {
+                "v_measure": v_measure,
+                "ami": ami,
+                "ari": ari,
+                "homogeneity": homogeneity,
+                "completeness": completeness,
+                "pairwise_mcc": pairwise_mcc,
+                "pairwise_f1": pairwise_f1,
+            }
+        )
 
         # --- Scheduler (run one episode per file via CognitiveRFScanEnv) ---
         try:
@@ -318,7 +395,7 @@ def run_full_evaluation(
                     int(info["band_chosen"]) if "band_chosen" in info else action,
                     info["ground_truth_active"],
                     info["hit"],
-                    float(info.get("intercept_time_error_us", 0.0)),
+                    float(info.get("intercept_time_error_us", float("nan"))),
                     float(reward),
                 )
             fom = env.get_fom()
@@ -343,7 +420,7 @@ def run_full_evaluation(
                         int(info["band_chosen"]) if "band_chosen" in info else action,
                         info["ground_truth_active"],
                         info["hit"],
-                        float(info.get("intercept_time_error_us", 0.0)),
+                        float(info.get("intercept_time_error_us", float("nan"))),
                         float(reward),
                     )
                 bfom = benv.get_fom()
@@ -362,15 +439,23 @@ def run_full_evaluation(
     df.to_csv(results_csv, index=False)
     logger.info("Saved %s (%d rows)", results_csv, len(df))
 
-    # Aggregate
+    # Aggregate deinterleaver metrics (all official metrics + pairwise MCC/F1).
+    from ..evaluation.metrics import aggregate_deinterleaver_metrics
+
     agg: dict = {}
-    for col in ["v_measure", "ami", "ari", "latency_ms_per_pulse"]:
-        if col in df.columns:
-            vals = pd.to_numeric(df[col], errors="coerce").dropna()
-            if len(vals) > 0:
-                agg[f"mean_{col}"] = float(vals.mean())
-                agg[f"std_{col}"] = float(vals.std())
-                agg[f"median_{col}"] = float(vals.median())
+    deint_agg = aggregate_deinterleaver_metrics(deinter_metrics)
+    for key, value in deint_agg.items():
+        agg[key] = float(value)
+    # Backward-compatible scalar aggregate keys for the summary table.
+    for metric in ["v_measure", "ami", "ari", "homogeneity", "completeness", "pairwise_mcc", "pairwise_f1"]:
+        agg[f"mean_{metric}"] = agg.get(f"{metric}_mean", float("nan"))
+        agg[f"median_{metric}"] = agg.get(f"{metric}_median", float("nan"))
+    # Latency aggregate from per-row values.
+    if "latency_ms_per_pulse" in df.columns:
+        vals = pd.to_numeric(df["latency_ms_per_pulse"], errors="coerce").dropna()
+        if len(vals) > 0:
+            agg["mean_latency_ms_per_pulse"] = float(vals.mean())
+            agg["median_latency_ms_per_pulse"] = float(vals.median())
     # Scheduler aggregates from global_fom (achieved controller).
     agg.update({f"sched_{k}": float(v) for k, v in global_fom.summary().items()})
     # Baseline scheduler aggregates (only when a real comparison baseline ran).
@@ -479,6 +564,8 @@ def main() -> None:
     parser.add_argument("--test-dir", type=str, default="data/test")
     parser.add_argument("--output-dir", type=str, default="results")
     parser.add_argument("--mode", type=str, choices=["scan", "stare"], default="scan")
+    parser.add_argument("--norm-stats", type=str, default=None,
+        help="Path to train-fitted normalization stats JSON (leakage-free test eval).")
     parser.add_argument(
         "--baseline",
         type=str,
@@ -497,6 +584,7 @@ def main() -> None:
         output_dir=args.output_dir,
         mode=args.mode,
         baseline=args.baseline,
+        norm_stats=args.norm_stats,
     )
 
 

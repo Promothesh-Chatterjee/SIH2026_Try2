@@ -320,8 +320,10 @@ def train_deinterleaver(
     max_files: int | None = None,
     epochs_override: int | None = None,
     quick_smoke: bool = False,
+    data_dir_override: str | None = None,
+    output_dir_override: str | None = None,
 ) -> None:
-    """Full triplet training loop with WandB, checkpointing, early stopping.
+    """Full triplet training loop with checkpointing and early stopping.
 
     Args:
         model_cfg_path: Path to model_config.yaml.
@@ -329,6 +331,12 @@ def train_deinterleaver(
         max_files: Optional cap on train files.
         epochs_override: Optional override for epochs count.
         quick_smoke: If True, runs 1 epoch on 2 files for fast integration testing.
+        data_dir_override: CLI override for the dataset root (CLI > YAML > default).
+        output_dir_override: CLI override for the checkpoint output directory
+            (CLI > YAML > default).
+
+    Raises:
+        FileNotFoundError: If no training .h5 files are found.
     """
     with open(model_cfg_path) as f:
         model_cfg = yaml.safe_load(f)["deinterleaver"]
@@ -346,8 +354,8 @@ def train_deinterleaver(
     device = torch.device(device_str)
     logger.info("Training on device: %s (seed=%d)", device, seed)
 
-    # Data discovery
-    data_root = Path(train_cfg.get("data_dir", "data"))
+    # Data discovery (CLI overrides YAML default: CLI > YAML > default).
+    data_root = Path(data_dir_override) if data_dir_override else Path(train_cfg.get("data_dir", "data"))
     validation = validate_dataset(data_root)
     if not validation["valid"]:
         logger.warning("Dataset validation reported issues: %s", validation["errors"])
@@ -432,7 +440,7 @@ def train_deinterleaver(
         scheduler = CosineAnnealingLR(optimizer, T_max=max(1, epochs))
     triplet_fn = nn.TripletMarginLoss(margin=margin, p=2)
 
-    output_dir = Path(train_cfg.get("output_dir", "checkpoints/deinterleaver"))
+    output_dir = Path(output_dir_override) if output_dir_override else Path(train_cfg.get("output_dir", "checkpoints/deinterleaver"))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Fit stats from training only (prevent leakage, P0-4)
@@ -520,7 +528,17 @@ def train_deinterleaver(
 
             if avg_v > best_v_measure:
                 best_v_measure = avg_v
-                torch.save(model.state_dict(), output_dir / "best.pt")
+                from ..utils.checkpoint_meta import build_train_metadata, save_state
+
+                meta = build_train_metadata(
+                    split="train",
+                    n_bands=int(model_cfg.get("n_bands", 36)),
+                    arch="PDWTransformerEncoder",
+                    seed=seed,
+                    metrics={"best_val_v_measure": float(avg_v)},
+                    extra={"mode": "deinterleaver", "preproc_version": "v1"},
+                )
+                save_state(model, output_dir / "best.pt", meta)
                 logger.info("  New best V-measure %.4f — saved best.pt", avg_v)
             if early_stop.step(avg_v):
                 logger.info("Early stopping at epoch %d", epoch)
@@ -556,8 +574,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train deinterleaver")
     parser.add_argument("--config", type=str, default="configs/training_config.yaml")
     parser.add_argument("--model-config", type=str, default="configs/model_config.yaml")
-    parser.add_argument("--data-dir", type=str, default="data")
-    parser.add_argument("--output-dir", type=str, default="checkpoints/deinterleaver")
+    parser.add_argument("--data-dir", type=str, default=None,
+        help="Override dataset root (CLI > YAML data_dir).")
+    parser.add_argument("--output-dir", type=str, default=None,
+        help="Override checkpoint output dir (CLI > YAML output_dir).")
     parser.add_argument("--max-files", type=int, default=None)
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--quick-smoke", action="store_true")
@@ -571,4 +591,6 @@ if __name__ == "__main__":
         max_files=args.max_files,
         epochs_override=args.epochs,
         quick_smoke=args.quick_smoke,
+        data_dir_override=args.data_dir,
+        output_dir_override=args.output_dir,
     )

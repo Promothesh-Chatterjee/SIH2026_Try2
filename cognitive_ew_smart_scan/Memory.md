@@ -9,10 +9,22 @@
 ## Status Tracking
 - `[ ]` pending · `[/]` in progress · `[x]` complete
 
-## CHECKPOINT 2026-09-04 — RESUME HERE
-State: P0-1..P0-8 implemented; **P0-9 (run manager + telemetry) and P0-10
-(data-driven dashboard) now implemented** with strict no-fabricated-metrics.
-Full suite `python -m pytest tests/` = **96 passed** (~5s). Training NOT started.
+## CHECKPOINT 2026-09-04 (Session 2) — RESUME HERE
+State: All P0 blockers and the "7. Evaluation contract" metric todos are now
+implemented and verified:
+- Pairwise MCC/F1 (scalable, permutation-invariant), full deinterleaver metric
+  set (V/ARI/AMI/H/C), windowed safe inference + cross-window reconciliation +
+  full coverage, sklearn-DBSCAN clustering fallback when hdbscan absent,
+  perception->scheduler band-belief adapter (truth-isolated), leakage-free train
+  stats in evaluate_full, real receiver-clock intercept-time error, decision-level
+  Pd/Pfa (unselected active bands NOT a miss), per-component reward logging,
+  canonical best.pt metadata, CLI>YAML>default precedence, obs-dim derived from
+  env space (no hardcoded 360).
+Full suite `python -m pytest tests/` = **139 passed, 1 skipped** (~5s).
+Real-data smoke (D:/TSRD_data 169617-pulse train) PASSED: 82 windows, full
+coverage, clusters + canonical 360-dim obs. **Full/training NOT started** —
+next is stage-gated TSRD training once checkpoints are produced.
+Last git HEAD: 885e1ab (OC Wiring).
 
 Canonical contract (verified everywhere): `n_bands=36`, `band_features=10`,
 `obs_dim=360`. Per-band 10-feature belief layout (src/environment/

@@ -40,7 +40,6 @@ from gymnasium import spaces
 from src.receiver import SieveReceiver, ReceiverObservation
 from src.environment.radio_environment import ActivePulse, PulseRecord, RadioEnvironment, SimulationEvent
 from src.evaluation.metrics import FiguresOfMerit
-from src.training.reward import compute_receiver_reward
 
 logger = logging.getLogger(__name__)
 
@@ -344,7 +343,9 @@ class CognitiveRFScanEnv(gym.Env):
         self.intercepted_emitters.update(new_ids)
 
         # 6. Calculate reward (uses ground truth ONLY for shaping)
-        reward = compute_receiver_reward(
+        from src.training.reward import receiver_reward_components
+
+        reward_components = receiver_reward_components(
             observation=observation,
             ground_truth_active=ground_truth_active,
             novel_emitter=bool(newly),
@@ -353,14 +354,27 @@ class CognitiveRFScanEnv(gym.Env):
             w_novel=self.w_novel,
             w_miss=self.w_miss,
         )
+        reward = reward_components["reward"]
+        self.fom.record_reward_components(reward_components)
 
-        # 7. Update metrics (ground-truth-based eval only)
+        # 7. Update metrics (ground-truth-based eval only).
+        # Real intercept-time error: earliest detected pulse ToA minus the dwell
+        # onset (receiver clock). Never hard-coded to 0.0; reported only for
+        # actual intercepts (a non-intercepted active band is not a 'miss' per
+        # the evaluation contract).
+        detect_toas = [float(getattr(d, "toa_us", getattr(d, "time_us", float("nan")))) for d in detections]
+        detect_toas = [t for t in detect_toas if t == t]
+        if any_hit and detect_toas:
+            first_detect_toa = min(detect_toas)
+            intercept_time_error_us = max(0.0, first_detect_toa - dwell_start)
+        else:
+            intercept_time_error_us = float("nan")
         self.fom.record_emitters(active_emitters, new_ids)
         self.fom.update(
             band_chosen=band,
             ground_truth_active=active_bands_vec,
             pred_active=any_hit,
-            intercept_time_error_us=0.0,
+            intercept_time_error_us=intercept_time_error_us,
             reward=float(reward),
         )
 
@@ -376,6 +390,7 @@ class CognitiveRFScanEnv(gym.Env):
             "hit": any_hit,
             "novel_emitter": bool(newly),
             "ground_truth_active": ground_truth_active,
+            "intercept_time_error_us": float(intercept_time_error_us),
             "band_center_mhz": observation.center_frequency_mhz if observation is not None else 0.0,
             "receiver_time_us": self.receiver.current_time_us,
         }

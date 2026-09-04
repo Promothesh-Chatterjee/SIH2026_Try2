@@ -4,7 +4,12 @@ import numpy as np
 import torch
 
 from src.training.train_deinterleaver import load_file_windows, stitch_and_evaluate, mine_triplets
-from src.preprocessing.normalise import fit_train_statistics, save_normalization_stats, load_normalization_stats
+from src.preprocessing.normalise import (
+    fit_train_statistics,
+    normalise_pdws,
+    save_normalization_stats,
+    load_normalization_stats,
+)
 from src.models.deinterleaver import PDWTransformerEncoder
 
 
@@ -74,6 +79,37 @@ class TemporalWindowingTests(unittest.TestCase):
         self.assertEqual(loaded["cf_iqr"], 4200.0)
         if test_file.exists():
             test_file.unlink()
+
+    def test_leakage_free_train_stats_applied_to_test(self):
+        # Train stats differ strongly from a test file's own statistics.
+        # When passed, normalise_pdws MUST use the provided stats and NOT
+        # recompute test-local stats (P0-4 zero data leakage).
+        train_stats = {
+            "cf_median": 12000.0,
+            "cf_iqr": 500.0,
+            "pw_mean": 0.1,
+            "pw_std": 1.0,
+            "amp_mean": 0.0,
+            "amp_std": 1.0,
+        }
+        # Test file spans a very different CF range -> its own median ~= 2000.
+        rng = np.random.default_rng(0)
+        test_pdws = np.column_stack(
+            (
+                np.linspace(0, 10000, 200),  # ToA
+                np.full(200, 2000.0) + rng.normal(0, 5, 200),  # CF ~ 2000
+                np.full(200, 3.0),  # PW
+                np.full(200, 90.0),  # AoA deg
+                np.full(200, -60.0),  # Amp
+            )
+        )
+        norm_6d, stats_used = normalise_pdws(test_pdws, train_stats)
+        self.assertEqual(norm_6d.shape, (200, 6))
+        # CF normalised by train median (12000), not test median (2000).
+        self.assertAlmostEqual(float(np.mean(norm_6d[:, 1])), (2000 - 12000) / 500, places=3)
+        # The returned stats must be identical to the train stats (not refit).
+        self.assertEqual(stats_used["cf_median"], 12000.0)
+        self.assertNotIn("fitted_sample_size", stats_used)
 
 
 if __name__ == "__main__":
