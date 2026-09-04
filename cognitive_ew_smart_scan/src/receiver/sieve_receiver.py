@@ -129,6 +129,22 @@ class SieveReceiver:
         self.center_frequency_mhz = self._clip_center(frequency_mhz)
         return self.center_frequency_mhz
 
+    def set_dwell_time(self, dwell_time_us: float) -> None:
+        """Set the receiver's dwell duration for the *next* dwell.
+
+        Called by the scheduler when a dwell-mode action (SHORT/NORMAL/LONG/...)
+        changes the amount of time the receiver stays tuned to a band.
+
+        Args:
+            dwell_time_us: New base dwell duration in µs (must be finite and > 0).
+
+        Raises:
+            ReceiverConfigError: If dwell_time_us is non-finite or <= 0.
+        """
+        if not math.isfinite(float(dwell_time_us)) or float(dwell_time_us) <= 0:
+            raise ReceiverConfigError(f"dwell_time must be finite and > 0, got {dwell_time_us!r}")
+        self.dwell_time_us = float(dwell_time_us)
+
     def step_up(self) -> float:
         self.center_frequency_mhz = self._clip_center(self.center_frequency_mhz + self.frequency_step_mhz)
         self._scan_direction = 1

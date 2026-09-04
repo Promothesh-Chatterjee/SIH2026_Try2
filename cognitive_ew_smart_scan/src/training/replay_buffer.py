@@ -1,7 +1,10 @@
 """
 Episode-based Sequence Replay Buffer for DRQN training (BPTT).
 
-Stores whole episodes as lists of (obs, action, reward, next_obs, done).
+Stores whole episodes as lists of (obs, action, reward, next_obs, done) plus the
+auxiliary prediction targets (``hit_prob``, ``intercept_time_us``) that drive the
+DRQN's interception-probability and intercept-time heads.
+
 Sampling picks a random episode, a random valid start index, and returns
 contiguous sequences of length seq_len WITHOUT crossing episode boundaries.
 Supports optional burn-in: burn_in leading observations are used only to warm
@@ -57,6 +60,9 @@ class SequenceReplayBuffer:
         self.burn_in = burn_in
         self.obs_dim = obs_dim
         self.rng = np.random.default_rng(seed)
+        # Default dwell-relative intercept time used to pad no-intercept transitions
+        # in aux targets (matches the canonical 500µs base dwell).
+        self._default_intercept_time = 500.0
 
         self._episodes: list[dict] = []
         self._total: int = 0
@@ -70,17 +76,31 @@ class SequenceReplayBuffer:
             "rewards": [],
             "next_obs": [],
             "dones": [],
+            "hit_probs": [],
+            "intercept_times_us": [],
         }
 
-    def add(self, obs: np.ndarray, action: int, reward: float, next_obs: np.ndarray, done: bool) -> None:
+    def add(
+        self,
+        obs: np.ndarray,
+        action: int,
+        reward: float,
+        next_obs: np.ndarray,
+        done: bool,
+        hit_prob: float | None = None,
+        intercept_time_us: float | None = None,
+    ) -> None:
         """Append transition; close episode on done.
 
         Args:
             obs: Current obs (obs_dim,).
-            action: Band index.
+            action: Time-frequency action (band*n_modes + mode).
             reward: Scalar reward.
             next_obs: Next obs (obs_dim,).
             done: Episode termination.
+            hit_prob: 1.0 if the swept band intercepted, else 0.0 (aux target).
+            intercept_time_us: Dwell-relative time-to-interception (µs), or
+                nan when there was no interception (aux target).
         """
         if self._current is None:
             self._current = self._make_episode()
@@ -90,6 +110,8 @@ class SequenceReplayBuffer:
         self._current["rewards"].append(float(reward))
         self._current["next_obs"].append(np.asarray(next_obs, dtype=np.float32))
         self._current["dones"].append(float(done))
+        self._current["hit_probs"].append(1.0 if hit_prob is None else float(hit_prob))
+        self._current["intercept_times_us"].append(float("nan") if intercept_time_us is None else float(intercept_time_us))
         self._current_len += 1
         self._total += 1
 
@@ -106,6 +128,8 @@ class SequenceReplayBuffer:
                 "rewards": np.asarray(ep["rewards"], dtype=np.float32),
                 "next_obs": np.vstack(ep["next_obs"]),
                 "dones": np.asarray(ep["dones"], dtype=np.float32),
+                "hit_probs": np.asarray(ep["hit_probs"], dtype=np.float32),
+                "intercept_times_us": np.asarray(ep["intercept_times_us"], dtype=np.float32),
                 "length": int(self._current_len),
             }
             self._episodes.append(arrays)
@@ -147,6 +171,10 @@ class SequenceReplayBuffer:
         rew_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
         next_obs_batch = np.zeros((batch_size, self.seq_len, self.obs_dim), dtype=np.float32)
         done_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
+        hit_prob_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
+        # Padded intercept-time target uses the dwell base (500µs) so aux training
+        # is not poisoned by zeros for no-intercept steps.
+        intercept_time_batch = np.full((batch_size, self.seq_len), float(self._default_intercept_time), dtype=np.float32)
 
         for b in range(batch_size):
             ep = usable[int(self.rng.integers(0, len(usable)))]
@@ -165,6 +193,9 @@ class SequenceReplayBuffer:
                 rew_batch[b, t] = ep["rewards"][idx]
                 next_obs_batch[b, t] = ep["next_obs"][idx]
                 done_batch[b, t] = ep["dones"][idx]
+                hit_prob_batch[b, t] = ep["hit_probs"][idx]
+                it = float(ep["intercept_times_us"][idx])
+                intercept_time_batch[b, t] = it if it == it else float(self._default_intercept_time)
             # Remaining timesteps stay zero (short episode handling or boundary)
 
         return {
@@ -173,6 +204,8 @@ class SequenceReplayBuffer:
             "rewards": rew_batch,
             "next_obs": next_obs_batch,
             "dones": done_batch,
+            "hit_probs": hit_prob_batch,
+            "intercept_times_us": intercept_time_batch,
         }
 
     def can_sample(self, batch_size: int) -> bool:

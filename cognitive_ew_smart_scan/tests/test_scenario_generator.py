@@ -77,7 +77,7 @@ class TestCognitiveEnvWiring(unittest.TestCase):
         config = {"n_bands": 18, "freq_min_mhz": 0.0, "freq_max_mhz": 18000.0, "ibw_mhz": 1000.0, "dwell_time_us": 500.0}
         env = CognitiveRFScanEnv(config, records=recs, seed=3)
         self.assertEqual(env.obs_dim, 18 * 10)
-        self.assertEqual(env.action_space.n, 18)
+        self.assertEqual(env.action_space.n, env.n_bands * env.n_modes)
         obs, _ = env.reset()
         self.assertEqual(obs.shape, (180,))
         for i in range(10):

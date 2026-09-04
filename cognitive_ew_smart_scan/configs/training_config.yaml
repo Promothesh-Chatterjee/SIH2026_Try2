@@ -29,16 +29,17 @@ scheduler:
   update_freq: 4
   target_update_freq: 1000
   thompson_warmup_steps: 5000   # Use Thompson Sampling before DRQN exploitation
-  dwell_slots: 5                # time slots per action
 
 environment:
   n_bands: 36
   band_features: 10            # belief features per band -> obs_dim = 36*10 = 360
   obs_dim: 360
+  n_modes: 5                   # dwell modes: SHORT/NORMAL/LONG/REVISIT/PREEMPTIVE
+  n_actions: 180               # n_bands * n_modes (band, mode) joint selection
   freq_min_mhz: 0.0
   freq_max_mhz: 18000.0
   ibw_mhz: 500.0               # instantaneous bandwidth (MHz)
-  dwell_time_us: 500.0         # receiver dwell per action
+  dwell_time_us: 500.0         # BASE receiver dwell per action (mode multiplier applied)
   detection_threshold_db: -140.0
   frequency_step_mhz: 500.0
   time_horizon_us: 30000000.0  # cap scenario ToA; ~30 s spans TSRD scan files

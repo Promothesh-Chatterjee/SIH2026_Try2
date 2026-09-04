@@ -29,13 +29,15 @@ from ..models.random_scheduler import RandomScheduler
 logger = logging.getLogger(__name__)
 
 
-def _build_baseline(baseline: str, n_bands: int, seed: int = 42):
+def _build_baseline(baseline: str, n_bands: int, n_modes: int = 1, seed: int = 42):
     """Construct a comparison scheduler for the given baseline name.
 
     Args:
         baseline: One of "random", "round_robin", "highest_occupancy",
             "highest_uncertainty"; returns None for "none".
         n_bands: Number of discrete bands.
+        n_modes: Number of dwell modes (action = band*n_modes + mode); 1 keeps
+            the legacy flat band action.
         seed: Seed for the random baseline.
 
     Returns:
@@ -49,11 +51,11 @@ def _build_baseline(baseline: str, n_bands: int, seed: int = 42):
     if name == "random":
         return RandomScheduler(n_bands=n_bands, seed=seed)
     if name == "round_robin":
-        return RoundRobinScheduler(n_bands=n_bands)
+        return RoundRobinScheduler(n_bands=n_bands, n_modes=n_modes)
     if name == "highest_occupancy":
-        return HighestOccupancyScheduler(n_bands=n_bands)
+        return HighestOccupancyScheduler(n_bands=n_bands, n_modes=n_modes)
     if name == "highest_uncertainty":
-        return HighestUncertaintyScheduler(n_bands=n_bands)
+        return HighestUncertaintyScheduler(n_bands=n_bands, n_modes=n_modes)
     if name == "none":
         return None
     raise ValueError(f"Unknown baseline '{baseline}'")
@@ -191,6 +193,7 @@ def run_full_evaluation(
         logger.warning("Deinterleaver ckpt not found: %s — skipping deinterleave metrics", deinterleaver_ckpt)
 
     scheduler = None
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if scheduler_ckpt and Path(scheduler_ckpt).exists():
         try:
             from ..models.drqn_scheduler import DRQNScheduler
@@ -200,11 +203,14 @@ def run_full_evaluation(
             # (n_bands * band_features) rather than a hardcoded literal.
             band_features = int(env_cfg.get("band_features", 10))
             n_bands = int(drqn_cfg.get("n_bands", env_cfg.get("n_bands", 36)))
+            n_modes = int(drqn_cfg.get("n_modes", env_cfg.get("n_modes", 1)))
+            n_actions = int(drqn_cfg.get("n_actions", n_bands * n_modes))
             obs_dim = int(drqn_cfg.get("obs_dim", n_bands * band_features))
 
             scheduler = DRQNScheduler(
                 obs_dim=obs_dim,
                 n_bands=n_bands,
+                n_actions=n_actions,
                 lstm_hidden=int(drqn_cfg.get("lstm_hidden", 256)),
                 lstm_layers=int(drqn_cfg.get("lstm_layers", 2)),
             )
@@ -217,7 +223,16 @@ def run_full_evaluation(
             moe_cfg = model_cfg.get("smartscan_moe", {})
             from ..models.smartscan_moe import SmartScanMoE as MoE
 
-            moe = MoE(scheduler, {**moe_cfg, "n_bands": drqn_cfg.get("n_bands", 36)})
+            moe = MoE(
+                scheduler,
+                {
+                    **moe_cfg,
+                    "n_bands": n_bands,
+                    "n_modes": n_modes,
+                    "n_actions": n_actions,
+                    "device": str(device),
+                },
+            )
             scheduler = moe  # use MoE for scheduling
             logger.info("Loaded scheduler %s", scheduler_ckpt)
         except Exception as exc:
@@ -229,7 +244,8 @@ def run_full_evaluation(
     # Env for scheduler metrics (use test dir as data_dir with subset="." workaround)
     # Create a lightweight env that we reset per file via manual pt loading
     # Instead, iterate files and simulate intercepts via RFScanEnv per file
-    env_config = {**drqn_cfg, **reward_cfg, "n_bands": drqn_cfg.get("n_bands", 36)}
+    env_config = {**drqn_cfg, **reward_cfg, "n_bands": drqn_cfg.get("n_bands", 36), "n_modes": drqn_cfg.get("n_modes", env_cfg.get("n_modes", 1))}
+    env_config["n_actions"] = int(env_config["n_bands"]) * int(env_config["n_modes"])
     # Patch training_config environment keys if present
     try:
         with open("configs/training_config.yaml") as f:
@@ -252,7 +268,8 @@ def run_full_evaluation(
 
     # Comparison baseline controller (same env seed for an apples-to-apples run).
     n_bands = int(drqn_cfg.get("n_bands", 36))
-    baseline_controller = _build_baseline(baseline, n_bands=n_bands)
+    n_modes = int(env_config.get("n_modes", 1))
+    baseline_controller = _build_baseline(baseline, n_bands=n_bands, n_modes=n_modes)
     baseline_fom = FiguresOfMerit()
 
     # P0-9: reproducible evaluation run + real telemetry publisher.

@@ -60,25 +60,40 @@ def _do_drqn_update(
     batch: dict[str, np.ndarray],
     gamma: float,
     device: torch.device,
+    aux_coef: float = 0.1,
 ) -> float:
-    """One Double-DQN BPTT update on a sampled batch. Returns loss value."""
+    """One Double-DQN BPTT update on a sampled batch. Returns loss value.
+
+    Optimises the Q target plus auxiliary interception-probability (BCE with
+    ``hit_probs``) and intercept-time (Huber on ``intercept_times_us``) heads.
+    """
     obs_b = torch.tensor(batch["obs"], dtype=torch.float32, device=device)
     act_b = torch.tensor(batch["actions"], dtype=torch.long, device=device)
     rew_b = torch.tensor(batch["rewards"], dtype=torch.float32, device=device)
     next_obs_b = torch.tensor(batch["next_obs"], dtype=torch.float32, device=device)
     done_b = torch.tensor(batch["dones"], dtype=torch.float32, device=device)
 
-    q_all, _ = online_drqn(obs_b)
+    q_all, aux, _ = online_drqn(obs_b)
     q_chosen = q_all.gather(-1, act_b.unsqueeze(-1)).squeeze(-1)
 
     with torch.inference_mode():
-        next_q_online, _ = online_drqn(next_obs_b)
+        next_q_online, _, _ = online_drqn(next_obs_b)
         best_actions = next_q_online.argmax(dim=-1, keepdim=True)
-        next_q_target, _ = target_drqn(next_obs_b)
+        next_q_target, _, _ = target_drqn(next_obs_b)
         next_q = next_q_target.gather(-1, best_actions).squeeze(-1)
 
     targets = rew_b + gamma * next_q * (1.0 - done_b)
     loss = loss_fn(q_chosen, targets.detach())
+
+    # Auxiliary heads (interception-probability and intercept-time prediction).
+    if aux_coef > 0:
+        hit_probs = torch.tensor(batch["hit_probs"], dtype=torch.float32, device=device)
+        intercept_times = torch.tensor(batch["intercept_times_us"], dtype=torch.float32, device=device)
+        prob_pred = aux["intercept_prob"].gather(-1, act_b.unsqueeze(-1)).squeeze(-1)
+        time_pred = aux["intercept_time_us"]  # (B,T)
+        bce = nn.functional.binary_cross_entropy(prob_pred, hit_probs.detach())
+        huber = nn.functional.huber_loss(time_pred, intercept_times.detach(), delta=100.0)
+        loss = loss + aux_coef * (bce + huber)
 
     optimizer.zero_grad()
     loss.backward()
@@ -123,12 +138,16 @@ def train_scheduler(
     sched_cfg = train_cfg.get("scheduler", {})
 
     n_bands = int(drqn_cfg.get("n_bands", 36))
+    n_modes = int(drqn_cfg.get("n_modes", env_cfg.get("n_modes", 1)))
+    n_actions = int(drqn_cfg.get("n_actions", n_bands * n_modes))
     band_features = int(env_cfg.get("band_features", 10))
     obs_dim = int(env_cfg.get("obs_dim", n_bands * band_features))
 
     # Merge reward weights into env config
     env_config = {**env_cfg, **reward_cfg}
     env_config.setdefault("n_bands", n_bands)
+    env_config.setdefault("n_modes", n_modes)
+    env_config.setdefault("n_actions", n_actions)
 
     training_mode = train_cfg.get("training_mode", "real_tsrd")
     if training_mode == "real_tsrd":
@@ -137,6 +156,7 @@ def train_scheduler(
             deinterleaver_checkpoint=train_cfg.get("deinterleaver_ckpt", "checkpoints/deinterleaver/best.pt"),
             normalization_stats=train_cfg.get("normalization_stats", "checkpoints/deinterleaver/normalization_stats.json"),
             environment_config=env_config,
+            model_config=full_cfg,
         )
 
     # Load trained deinterleaver and normalization stats for perception
@@ -220,7 +240,8 @@ def train_scheduler(
     )
     env.reset()  # populate first episode's records so obs_dim/action checks are valid
     assert env.obs_dim == obs_dim, f"env obs_dim {env.obs_dim} != configured {obs_dim}"
-    assert env.action_space.n == n_bands, f"env action space {env.action_space.n} != n_bands {n_bands}"
+    assert env.action_space.n == n_actions, f"env action space {env.action_space.n} != n_actions {n_actions}"
+    assert env.action_space.n == n_bands * n_modes, f"env action space must be n_bands*n_modes = {n_bands * n_modes}"
     
     if env.perception_enabled:
         logger.info("Perception pipeline ENABLED: trained deinterleaver + EmitterTracker active")
@@ -233,11 +254,20 @@ def train_scheduler(
     lstm_hidden = int(drqn_cfg.get("lstm_hidden", 256))
     lstm_layers = int(drqn_cfg.get("lstm_layers", 2))
 
-    online_drqn = DRQNScheduler(obs_dim=obs_dim, n_bands=n_bands, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers).to(device)
+    online_drqn = DRQNScheduler(
+        obs_dim=obs_dim,
+        n_bands=n_bands,
+        n_actions=n_actions,
+        lstm_hidden=lstm_hidden,
+        lstm_layers=lstm_layers,
+    ).to(device)
     target_drqn = copy.deepcopy(online_drqn).to(device)
     target_drqn.eval()
 
-    moe = SmartScanMoE(online_drqn, {**moe_cfg, "n_bands": n_bands, "device": str(device)}).to(device)
+    moe = SmartScanMoE(
+        online_drqn,
+        {**moe_cfg, "n_bands": n_bands, "n_modes": n_modes, "n_actions": n_actions, "device": str(device)},
+    ).to(device)
 
     optimizer = optim.Adam(online_drqn.parameters(), lr=float(drqn_cfg.get("lr", 1e-4)))
     loss_fn = nn.HuberLoss()
@@ -252,7 +282,7 @@ def train_scheduler(
     except Exception as exc:
         logger.info("WandB not available: %s", exc)
 
-    ts_sampler = ThompsonSamplingExplorer(n_bands=n_bands, seed=seed)
+    ts_sampler = ThompsonSamplingExplorer(n_bands=n_bands, n_modes=n_modes, seed=seed)
     ts_warmup = int(sched_cfg.get("thompson_warmup_steps", 5000))
     eps_start = float(drqn_cfg.get("eps_start", 1.0))
     eps_end = float(drqn_cfg.get("eps_end", 0.05))
@@ -303,7 +333,7 @@ def train_scheduler(
             # ---- Action selection ----
             if global_step < ts_warmup:
                 use_ts = True
-                action = ts_sampler.select_band()
+                action = ts_sampler.select_action()
             else:
                 eps = eps_end + (eps_start - eps_end) * float(np.exp(-global_step / eps_decay))
                 use_ts = False
@@ -323,7 +353,15 @@ def train_scheduler(
             done = bool(terminated or truncated)
 
             ts_sampler.update(action, bool(info["hit"]))
-            buffer.add(np.asarray(obs, dtype=np.float32), action, float(reward), np.asarray(next_obs, dtype=np.float32), done)
+            buffer.add(
+                np.asarray(obs, dtype=np.float32),
+                action,
+                float(reward),
+                np.asarray(next_obs, dtype=np.float32),
+                done,
+                hit_prob=float(info.get("hit_prob", 1.0 if info["hit"] else 0.0)),
+                intercept_time_us=float(info.get("intercept_time_us", float("nan"))),
+            )
             obs = next_obs
             ep_reward += float(reward)
             ep_hits += int(info["hit"])

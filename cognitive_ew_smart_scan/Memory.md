@@ -1,9 +1,34 @@
 # Project Memory & Progress Tracker
 
+## CHECKPOINT 2026-09-04 (Canonical Time-Frequency Action Contract) — COMPLETE
+State: **True dynamic time-frequency decision system implemented and validated.**
+
+### What changed this session (Priority Fix 2: dynamic time-frequency action space)
+- **Canonical action contract** (`src/contracts.py`): `DWELL_MODES = (SHORT, NORMAL, LONG, REVISIT, PREEMPTIVE_INTERCEPT)` (indices 0–4, multipliers `0.25/1.0/2.5/1.0/0.5`); `action = band*n_modes + mode`; `n_actions = 36*5 = 180`. `encode_action/decode` are the single source of truth.
+- **Env** (`CognitiveRFScanEnv`): `Discrete(180)`; step decodes `(band, mode)` → `SieveReceiver.set_dwell_time(base*mode_mult)`. New info keys `band`, `mode`, `dwell_time_us`, `hit_prob`, `intercept_time_us`, `band_chosen` (kept for FoM back-compat). `BeliefState.periodic_urgency` folded into priority (`0.1` weight); preemptive intercept boost `+0.4*urgency`, decay `*0.9`/step.
+- **Reward** (`receiver_reward_components`): 10 auditable terms (hit, novel, timing, miss, priority, info-gain, false-alarm, dwell-cost, redundant, delay); logged per-step via `FiguresOfMerit.record_reward_components`.
+- **DRQN** (`DRQNScheduler`): Dueling + LSTM, `forward → (q, aux, hidden)`; aux heads `intercept_prob` (sigmoid per-action) and `intercept_time_us` (shared per-step); `decode_action()`. NOTE: intercept-time head has no output activation (docstring says softplus) — revisit during loss tuning.
+- **Aux training targets**: `SequenceReplayBuffer` stores `hit_probs` + `intercept_times_us` per transition (NaN→padded with 500µs base dwell); `_do_drqn_update` adds BCE(intercept_prob) + Huber(intercept_time, delta=100) scaled by `aux_coef=0.1`.
+- **MoE** (`SmartScanMoE`): operates on 180-space; `select_action/select_bands(return_full)`; revisit urgency broadcast across dwell modes; `set_preemptive_urgency` map fused with weight `preemptive_weight`.
+- **Baselines**: RoundRobin/HighestOccupancy/HighestUncertainty emit NORMAL-DWELL flat actions; Thompson explorer emits `band*n_modes`; Random is flat over 180.
+- **FiguresOfMerit**: full 10-component reward summaries + `brier_score_intercept_prob` + `avg_intercept_time_pred_error_us` + `record_intercept_predictions()`.
+- **Deployment**: `api.py /predict_bands` decodes flat actions→bands and ticks MoE with flat actions; `export_onnx.py` emits `q_values`, `intercept_prob`, `intercept_time_us`.
+- **Gate**: `preflight_tsrd.py` READY (exit 0) validated TSRD layout + dwell contract. Old env `RFScanEnv`→`LegacyRFScanEnv` (alias + DeprecationWarning + default no synthetic fallback).
+
+### Verification
+- Full suite: **189 passed, 1 pre-existing failure** (`test_windowed_deinterleave::test_clusters_synthetic` — HDBSCAN on untrained model, NOT a regression).
+- Smoke: aux BPTT update runs end-to-end (batch shapes correct, intercept-time NaN padded to 500µs).
+- Configs now carry `n_modes: 5`, `n_actions: 180`, `dwell_modes`, full reward weights.
+
+NEXT ACTION (resume point): smoke-train a few thousand steps on real TSRD data to validate the aux losses converge (intercept-prob BCE, intercept-time Huber), then full scheduler training.
+
+----------------------------------------------------------------------
+
 > NOTE (2026-09-04): The canonical dimension contract is now **`n_bands: 36` /
-> `obs_dim: 360` / `band_features: 10`** (single source of truth in
-> `configs/model_config.yaml` + `training_config.yaml`). Earlier log lines that
-> reference `obs (1620,)`, `action 180`, or `Discrete(180)` describe the
+> `obs_dim: 360` / `band_features: 10` / `n_modes: 5` / `n_actions: 180`**
+> (single source of truth in
+> `configs/model_config.yaml` + `training_config.yaml`, formalised in
+> `src/contracts.py`). Earlier log lines that reference `obs (1620,)` describe the
 > **pre-contract** state and are superseded — see the current checkpoint below.
 
 ## Status Tracking

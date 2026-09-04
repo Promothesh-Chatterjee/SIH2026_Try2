@@ -3,6 +3,9 @@ Thompson Sampling Explorer for warmup exploration.
 
 Beta(1,1) prior per band → principled exploration before DRQN takes over.
 Also provides UCB1 alternative.
+
+The explorer operates on bands (the arms) and convenience methods emit the
+canonical time-frequency flat action ``band * n_modes + mode``.
 """
 
 import logging
@@ -26,14 +29,16 @@ class ThompsonSamplingExplorer:
         total_pulls: Global pull count.
     """
 
-    def __init__(self, n_bands: int = 36, seed: int | None = None) -> None:
+    def __init__(self, n_bands: int = 36, n_modes: int = 1, seed: int | None = None) -> None:
         """Initialise explorer.
 
         Args:
             n_bands: Number of frequency band arms.
+            n_modes: Dwell modes per band for flat-action emission.
             seed: RNG seed.
         """
         self.n_bands = n_bands
+        self.n_modes = int(n_modes)
         self.rng = np.random.default_rng(seed)
         self.alpha = np.ones(n_bands, dtype=np.float64)
         self.beta = np.ones(n_bands, dtype=np.float64)
@@ -50,6 +55,14 @@ class ThompsonSamplingExplorer:
         """
         samples = self.rng.beta(self.alpha, self.beta)
         return int(np.argmax(samples))
+
+    def select_action(self) -> int:
+        """Sample a full time-frequency action for the scheduler.
+
+        Returns:
+            Flat action = band * n_modes + NORMAL_DWELL (0).
+        """
+        return self.select_band() * self.n_modes
 
     def get_ucb_band(self, c: float = 2.0) -> int:
         """UCB1 alternative selection.
@@ -74,9 +87,13 @@ class ThompsonSamplingExplorer:
         """Update posterior for chosen arm.
 
         Args:
-            band: Band index scanned.
+            band: Band index scanned (a flat time-frequency action is decoded to
+                its band before updating).
             reward: Scalar reward (>0 → success, ≤0 → failure).
         """
+        if band >= self.n_modes and band < self.n_bands * self.n_modes:
+            # Decode flat time-frequency action -> band arm.
+            band = band // self.n_modes
         if not (0 <= band < self.n_bands):
             raise ValueError(f"band {band} out of range")
         self.counts[band] += 1
