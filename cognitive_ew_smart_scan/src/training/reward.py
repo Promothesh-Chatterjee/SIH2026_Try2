@@ -98,29 +98,74 @@ def compute_receiver_reward(
         w_timing: Per-unit timing penalty magnitude.
 
     Returns:
-        Scalar reward.
+        Scalar reward (sum of component terms).
+    """
+    comps = receiver_reward_components(
+        observation,
+        ground_truth_active=ground_truth_active,
+        novel_emitter=novel_emitter,
+        had_any_opportunity=had_any_opportunity,
+        w_hit=w_hit,
+        w_novel=w_novel,
+        w_miss=w_miss,
+        w_timing=w_timing,
+    )
+    return comps["reward"]
+
+
+def receiver_reward_components(
+    observation,
+    ground_truth_active: bool,
+    novel_emitter: bool,
+    had_any_opportunity: bool,
+    w_hit: float = 1.0,
+    w_novel: float = 2.0,
+    w_miss: float = -1.0,
+    w_timing: float = 0.001,
+) -> dict[str, float]:
+    """Per-component reward breakdown (SIH eval contract: log terms separately).
+
+    Separately reports the hit term, novel-emitter bonus, timing penalty and
+    miss penalty so each shaping signal is auditable rather than collapsed into
+    a single scalar.
+
+    Args:
+        observation: ReceiverObservation from SieveReceiver.get_observation().
+        ground_truth_active: Whether any emitter was active during this dwell.
+        novel_emitter: Whether this dwell intercepted a not-before-seen emitter.
+        had_any_opportunity: Whether any pulse was physically interceptable.
+        w_hit: Per-hit reward.
+        w_novel: Novel-emitter bonus.
+        w_miss: Miss penalty (<=0).
+        w_timing: Per-unit timing penalty magnitude.
+
+    Returns:
+        Dict with keys reward (total), hit_term, novel_term, timing_penalty,
+        miss_penalty.
     """
     detections = getattr(observation, "detections", [])
     n_hits = len(detections)
 
-    reward = 0.0
-    novel_bonus = 0.0
+    hit_term = 0.0
+    timing_penalty = 0.0
+    novel_term = 0.0
     miss_penalty = 0.0
 
     if n_hits > 0:
-        reward += w_hit
-        # small timing penalty: how far the first detection is from dwell start
-        first_time = getattr(detections[0], "time_us", 0.0)
+        hit_term = w_hit
+        first_time = float(getattr(detections[0], "time_us", 0.0))
         dwell = getattr(observation, "dwell_interval_us", [0.0, 0.0])
         start = float(dwell[0]) if len(dwell) >= 1 else 0.0
-        reward -= w_timing * abs(first_time - start)
-        # Novel bonus only on an actual interception (not mere opportunity)
+        timing_penalty = -w_timing * abs(first_time - start)
         if novel_emitter:
-            novel_bonus = w_novel
-            reward += w_novel
+            novel_term = w_novel
     elif had_any_opportunity:
-        # No detection but an opportunity existed elsewhere -> miss penalty (<=0)
         miss_penalty = w_miss
-        reward += w_miss
 
-    return float(reward)
+    return {
+        "reward": float(hit_term + timing_penalty + novel_term + miss_penalty),
+        "hit_term": float(hit_term),
+        "novel_term": float(novel_term),
+        "timing_penalty": float(timing_penalty),
+        "miss_penalty": float(miss_penalty),
+    }

@@ -6,6 +6,60 @@ suite command is `python -m pytest tests/` from `cognitive_ew_smart_scan/`.
 
 ## [Unreleased]
 
+### Added — P0-1 / evaluation-contract metric infra (2026-09-04)
+
+- **Permutation-invariant scalable pairwise MCC/F1** (`metrics.py`) via O(N)
+  contingency counting (`pairwise_cluster_counts`, `pairwise_clustering_metrics`,
+  public `pair_count`), avoiding O(N²) pair matrices. Tested exact vs brute force.
+- **Full deinterleaver metric set** (`deinterleaver_train_metrics`,
+  `aggregate_deinterleaver_metrics`): V-measure, ARI, AMI, homogeneity, completeness
+  + pairwise MCC/F1 + noise/cluster diagnostics, per-train and aggregated.
+- **Safe windowed inference** (`deinterleaver.py`): `make_windows`,
+  `embed_pdws_windowed`, `windowed_cluster_deinterleave` with deterministic full
+  coverage (beginning/middle/end) and permutation-invariant cross-window cluster
+  reconciliation. Never runs full-sequence attention on long trains.
+- **Cluster backend fallback**: `_cluster_embeddings` uses HDBSCAN (optional
+  wheel) otherwise sklearn DBSCAN with a core-distance-scaled epsilon — the
+  pipeline now clusters when hdbscan is unavailable.
+- **Perception → scheduler adapter** (`src/perception/adapters.py`):
+  `build_band_belief_from_tracks` builds the canonical 10-feature-per-band
+  observation solely from deinterleaver cluster outputs + observable ToA/freq
+  (strict truth isolation; permutation-invariant to cluster-renaming).
+- **Decision-level Pd/Pfa contract** (`FiguresOfMerit`): only the chosen band's
+  dwell is an opportunity; unselected active bands are NOT counted as misses
+  (SIH "7. Evaluation contract").
+- **Real intercept-time error**: `CognitiveRFScanEnv` now measures
+  `intercept_time_error_us = first_detect_toa - dwell_start` from the receiver
+  clock (NaN on miss); `FiguresOfMerit.avg_intercept_time_error` drops NaN.
+- **Reward components logged separately** (`reward.py`):
+  `receiver_reward_components` returns hit/novel/timing/miss terms;
+  `FiguresOfMerit.record_reward_components` exposes per-component averages.
+- **Canonical checkpoint metadata** (`src/utils/checkpoint_meta.py`):
+  `best.pt` now saved as `{state_dict, metadata}` with git revision, split,
+  preproc version, feature order, arch, seed, measured metrics, timestamp.
+- **Leakage-safe evaluate_full**: loads persisted train-only normalization stats
+  (raises if absent for deinterleaving), applies them to test PDWs, uses windowed
+  inference + the full metric set via `deinterleaver_train_metrics`.
+- **obs-dim derivation**: `evaluate_full` derives scheduler obs_dim from
+  `n_bands * band_features` (no hardcoded 360); env already space-sourced.
+
+### Fixed
+
+- **P0-CLI**: `train_deinterleaver.py`/`main` now forward `--data-dir` and
+  `--output-dir` (CLI > YAML > default); `scripts/train_deinterleaver.sh` no
+  longer passes the unparseable `--wandb-project` (no wandb in that trainer).
+- **evaluate_full.py**: removed per-test-file self-normalization that recomputed
+  stats on val/test (leakage); removed `intercept_time_error_us` 0.0 default
+  (now NaN when absent).
+- **temporal-windowing test indentation** restored (rewritten via `write`).
+
+### Tests
+
+- `tests/test_pairwise_metrics.py`, `tests/test_windowed_deinterleave.py`,
+  `tests/test_eval_contract.py`, `tests/test_perception_adapters.py`,
+  `tests/test_checkpoint_meta.py` added; leakage test added to
+  `test_temporal_windowing.py`. Suite: **139 passed, 1 skipped** (~5s).
+
 ### Fixed
 
 - **API `/predict_bands` NameError (P0-critical)** — `api.py` now builds `obs`

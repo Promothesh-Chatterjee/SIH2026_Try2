@@ -84,12 +84,20 @@ def _do_drqn_update(
     return float(loss.item())
 
 
-def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
+def train_scheduler(
+    model_cfg_path: str,
+    train_cfg_path: str,
+    data_dir_override: str | None = None,
+    output_dir_override: str | None = None,
+) -> None:
     """Full DRQN training with Thompson warmup, BPTT, target network, and MoE eval.
 
     Args:
         model_cfg_path: Path to model_config.yaml.
         train_cfg_path: Path to training_config.yaml.
+        data_dir_override: CLI override for dataset root (CLI > YAML > default).
+        output_dir_override: CLI override for checkpoint output dir
+            (CLI > YAML > default).
     """
     with open(model_cfg_path) as f:
         full_cfg = yaml.safe_load(f)
@@ -120,7 +128,7 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
     env_config.setdefault("n_bands", n_bands)
 
     # Build the receiver-driven cognitive env from a TSRD/synthetic scenario.
-    data_dir = train_cfg.get("data_dir", "data")
+    data_dir = data_dir_override if data_dir_override is not None else train_cfg.get("data_dir", "data")
     subset = train_cfg.get("subset", "train")
     mode = train_cfg.get("mode", "scan")
 
@@ -176,7 +184,7 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
 
     buffer = SequenceReplayBuffer(capacity=int(sched_cfg.get("replay_buffer_size", 50000)), seq_len=seq_len, obs_dim=obs_dim, seed=seed)
 
-    output_dir = Path(train_cfg.get("output_dir", "checkpoints/scheduler"))
+    output_dir = Path(output_dir_override) if output_dir_override is not None else Path(train_cfg.get("output_dir", "checkpoints/scheduler"))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # P0-9: reproducible run directory + telemetry publisher (real metrics only).
@@ -339,7 +347,17 @@ def train_scheduler(model_cfg_path: str, train_cfg_path: str) -> None:
 
         if ep_reward > best_reward:
             best_reward = ep_reward
-            torch.save(online_drqn.state_dict(), output_dir / "best.pt")
+            from ..utils.checkpoint_meta import build_train_metadata, save_state
+
+            meta = build_train_metadata(
+                split=subset,
+                n_bands=n_bands,
+                arch="DRQNScheduler+SmartScanMoE",
+                seed=seed,
+                metrics={"best_episode_reward": float(ep_reward)},
+                extra={"mode": mode, "obs_dim": int(env_config.get("obs_dim", obs_dim))},
+            )
+            save_state(online_drqn, output_dir / "best.pt", meta)
             logger.info("  New best reward %.2f — saved best.pt", ep_reward)
 
     final_path = output_dir / "final.pt"
@@ -362,10 +380,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train DRQN scheduler")
     parser.add_argument("--config", type=str, default="configs/training_config.yaml")
     parser.add_argument("--model-config", type=str, default="configs/model_config.yaml")
-    parser.add_argument("--data-dir", type=str, default="data")
-    parser.add_argument("--output-dir", type=str, default="checkpoints/scheduler")
+    parser.add_argument("--data-dir", type=str, default=None, help="Override dataset root (CLI > YAML).")
+    parser.add_argument("--output-dir", type=str, default=None, help="Override checkpoint output dir (CLI > YAML).")
     parser.add_argument("--device", type=str, default=None)
     args = parser.parse_args()
     if args.device:
         os.environ["DEVICE"] = args.device
-    train_scheduler(args.model_config, args.config)
+    train_scheduler(args.model_config, args.config, data_dir_override=args.data_dir, output_dir_override=args.output_dir)
