@@ -423,6 +423,7 @@ def embed_pdws_windowed(
     Returns:
         Dict with:
             "embeddings": (N, embed_dim) float32 embeddings, one per original pulse,
+                L2-normalised and averaged over owning windows.
             "pulse_to_window": (N,) int owner window index,
             "window_spans": list of (start, end),
             "toa_us": (N,) ToA (input or -1),
@@ -433,6 +434,7 @@ def embed_pdws_windowed(
     stride = max(1, int(stride))
     spans = make_windows(n, window_size, stride)
     out = np.zeros((n, model.embed_dim), dtype=np.float32)
+    owner_count = np.zeros(n, dtype=np.int32)
     toa = np.asarray(toa_us) if toa_us is not None else np.full(n, -1, dtype=np.float64)
 
     for (s, e) in spans:
@@ -443,14 +445,18 @@ def embed_pdws_windowed(
             emb = emb.detach().cpu().numpy()
         emb = np.asarray(emb, dtype=np.float32)
         if emb.ndim == 2 and emb.shape[0] == window.shape[0]:
-            out[s:e] += emb  # mean over owners handled below
+            out[s:e] += emb  # accumulate over windows
+            owner_count[s:e] += 1  # track how many windows cover each pulse
         else:
             raise RuntimeError(f"Window embedding shape mismatch: got {emb.shape} for {window.shape}")
 
+    # Averaging: divide by owner count so pulses owned by multiple windows
+    # receive the mean embedding instead of a sum.
+    eps = 1e-6  # avoid division by zero for pulses in no window (should not happen)
+    out = out / np.maximum(owner_count[:, np.newaxis], eps)
+    out = out.astype(np.float32)
+
     owner, centers = _owner_spans(spans)
-    # Averaging: pulses owned by one window keep that embedding; pulses appearing
-    # in multiple windows get the mean across all their containing windows.
-    # For determinism use the owner's embedding (simplest, index-safe).
     return {
         "embeddings": out,
         "pulse_to_window": owner,

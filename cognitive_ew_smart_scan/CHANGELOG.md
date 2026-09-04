@@ -18,9 +18,14 @@ suite command is `python -m pytest tests/` from `cognitive_ew_smart_scan/`.
   `embed_pdws_windowed`, `windowed_cluster_deinterleave` with deterministic full
   coverage (beginning/middle/end) and permutation-invariant cross-window cluster
   reconciliation. Never runs full-sequence attention on long trains.
-- **Cluster backend fallback**: `_cluster_embeddings` uses HDBSCAN (optional
-  wheel) otherwise sklearn DBSCAN with a core-distance-scaled epsilon — the
-  pipeline now clusters when hdbscan is unavailable.
+
+- **Embedding averaging fix** (`embed_pdws_windowed`): accumulation `+=` now divided
+  by owner count per pulse so multi-window pulses receive mean (not sum) of their
+  embeddings. Fixes embedding dilution across overlapping windows.
+
+- **Cluster backend fallback** (`_cluster_embeddings`): HDBSCAN (optional wheel)
+  used when installed; otherwise sklearn DBSCAN with a core-distance-scaled epsilon �
+  the pipeline now clusters when hdbscan is unavailable.
 - **Perception → scheduler adapter** (`src/perception/adapters.py`):
   `build_band_belief_from_tracks` builds the canonical 10-feature-per-band
   observation solely from deinterleaver cluster outputs + observable ToA/freq
