@@ -1,7 +1,7 @@
 """
 Master Cognitive RF Scan Environment (gym.Env).
 
-Connects: RF Scenario -> RadioEnvironment -> SieveReceiver -> Belief -> Reward.
+Connects: RF Scenario -> RadioEnvironment -> SieveReceiver -> Perception -> Belief -> Reward.
 
 ML-clock driven control loop:
     reset()
@@ -14,7 +14,9 @@ ML-clock driven control loop:
       ↓
     receiver.get_observation()               # causal, no future leak
       ↓
-    belief.update(observation)               # occupancy, revisit age, ...
+    perception (deinterleaver + emitter tracker) processes detections
+      ↓
+    belief.update(perception)                # occupancy, revisit age, ...
       ↓
     reward via ground-truth only for shaping  (kept out of observation)
       ↓
@@ -40,6 +42,9 @@ from gymnasium import spaces
 from src.receiver import SieveReceiver, ReceiverObservation
 from src.environment.radio_environment import ActivePulse, PulseRecord, RadioEnvironment, SimulationEvent
 from src.evaluation.metrics import FiguresOfMerit
+from src.perception import EmitterTracker, build_band_belief_from_tracks
+from src.cognitive.memory import SemanticMemory, EmitterProfile
+from src.cognitive.periodic_interceptor import PeriodicScanInterceptor
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +138,36 @@ class BeliefState:
             self.estimated_emitter_count[band] *= 0.9
             self.deinterleaver_confidence[band] *= 0.9
 
+    def update_from_perception(self, perception_result: dict) -> None:
+        """Update belief state from perception (emitter tracker) output.
+
+        Args:
+            perception_result: Dict from EmitterTracker.get_band_belief() with keys:
+                - "bands": (n_bands, 10) feature array
+                - "obs": (n_bands * 10,) flat array
+                - "n_tracks": int
+        """
+        bands = perception_result.get("bands")
+        if bands is None:
+            return
+        bands = np.asarray(bands, dtype=np.float32)
+        if bands.shape != (self.n_bands, 10):
+            logger.warning("Perception bands shape mismatch: %s vs (%d, 10)", bands.shape, self.n_bands)
+            return
+
+        # Blend perception features with existing belief (EMA)
+        alpha = 0.3
+        # Features from perception that we trust: emitter_count, deint_conf, per_stab, agility
+        # Features we keep from local belief: occupancy, detection_rate, revisit_age, priority
+        self.estimated_emitter_count = (1 - alpha) * self.estimated_emitter_count + alpha * bands[:, 5]
+        self.deinterleaver_confidence = (1 - alpha) * self.deinterleaver_confidence + alpha * bands[:, 6]
+        self.periodicity_stability = (1 - alpha) * self.periodicity_stability + alpha * bands[:, 7]
+        self.agility_indicator = (1 - alpha) * self.agility_indicator + alpha * bands[:, 8]
+
+        # Recompute uncertainty and priority with updated features
+        self.update_uncertainty()
+        self.update_priority()
+
     def advance_time(self) -> None:
         self.revisit_age += 1
 
@@ -195,10 +230,25 @@ class CognitiveRFScanEnv(gym.Env):
         records: Optional[Sequence[PulseRecord]] = None,
         seed: int | None = 42,
         records_provider: Optional[Callable[[], Sequence[PulseRecord]]] = None,
+        deinterleaver_model: Optional[Any] = None,
+        deinterleaver_config: Optional[dict] = None,
+        semantic_memory_path: Optional[str] = None,
     ) -> None:
         super().__init__()
         self.config = config
         self.records_provider = records_provider
+
+        # Perception configuration
+        self.deinterleaver_model = deinterleaver_model
+        self.deinterleaver_config = deinterleaver_config or {}
+        self.perception_enabled = deinterleaver_model is not None
+
+        # Semantic memory configuration
+        self.semantic_memory_path = semantic_memory_path or config.get("semantic_memory_path", "data/semantic_memory.db")
+
+        # Periodic interceptor configuration
+        self.periodic_min_obs = config.get("periodic_min_obs", 20)
+        self.periodic_hist_bins = config.get("periodic_hist_bins", 100)
 
         self.n_bands: int = int(config.get("n_bands", 36))
         self.freq_min: float = float(config.get("freq_min_mhz", 0.0))
@@ -232,6 +282,9 @@ class CognitiveRFScanEnv(gym.Env):
         self.receiver: SieveReceiver | None = None
         self.radio_env: RadioEnvironment | None = None
         self.belief: BeliefState | None = None
+        self.emitter_tracker: EmitterTracker | None = None
+        self.semantic_memory: SemanticMemory | None = None
+        self.periodic_interceptor: PeriodicScanInterceptor | None = None
         self.records: list[PulseRecord] = list(records or [])
         self.fom = FiguresOfMerit()
 
@@ -239,6 +292,11 @@ class CognitiveRFScanEnv(gym.Env):
         self.intercepted_emitters: set[int] = set()
         self._gt_active_ever: set[int] = set()
         self._last_dwell_start: float = 0.0
+
+        # Perception: accumulate PDWs for windowed deinterleaving
+        self._pdw_buffer: list[dict] = []
+        self._min_deinterleave_pulses = self.deinterleaver_config.get("min_pulses", 50)
+        self._deinterleave_interval = self.deinterleaver_config.get("interval_steps", 10)
 
     # ------------------------------------------------------------------ setup
     def _build_receiver(self) -> SieveReceiver:
@@ -269,10 +327,28 @@ class CognitiveRFScanEnv(gym.Env):
         self.radio_env = self._build_radio_env()
         self.belief = BeliefState(self.n_bands)
 
+        # Initialize emitter tracker for perception
+        if self.perception_enabled:
+            self.emitter_tracker = EmitterTracker(n_bands=self.n_bands)
+        else:
+            self.emitter_tracker = None
+
+        # Initialize semantic memory
+        self.semantic_memory = SemanticMemory(self.semantic_memory_path)
+
+        # Initialize periodic interceptor
+        self.periodic_interceptor = PeriodicScanInterceptor(
+            min_observations=self.periodic_min_obs,
+            hist_bins=self.periodic_hist_bins,
+        )
+
         self.current_step = 0
         self.intercepted_emitters = set()
         self._gt_active_ever = set()
         self.fom.reset()
+
+        # Perception buffer
+        self._pdw_buffer = []
 
         # Prime the radio world with the first bunch of entries without stepping
         # the agent clock yet (just establish the initial window/time).
@@ -326,12 +402,72 @@ class CognitiveRFScanEnv(gym.Env):
         # 4. Collect causal observations
         observation = self.receiver.get_observation()
 
-        # 5. Update causal belief (from observation only)
+        # 5. Perception pipeline: accumulate PDWs and run deinterleaving
         detections = getattr(observation, "detections", [])
         any_hit = len(detections) > 0
+
+        # Accumulate detected PDWs for deinterleaving
+        if any_hit:
+            for d in detections:
+                self._pdw_buffer.append({
+                    "time_us": float(getattr(d, "time_us", 0.0)),
+                    "frequency_mhz": float(d.frequency_mhz),
+                    "pulse_width_us": float(d.pulse_width_us),
+                    "amplitude_db": float(d.amplitude_db),
+                    "aoa_deg": float(d.aoa_deg),
+                    "emitter_id": getattr(d, "emitter_id", -1),  # GT for evaluation only
+                })
+
+        # Run perception at intervals if enabled
+        perception_result = None
+        if self.perception_enabled and self.emitter_tracker is not None:
+            if len(self._pdw_buffer) >= self._min_deinterleave_pulses and self.current_step % self._deinterleave_interval == 0:
+                perception_result = self._run_perception(band, dwell_start, dwell_end)
+                if perception_result is not None:
+                    self.belief.update_from_perception(perception_result)
+
+                    # Update semantic memory with emitter profiles from tracker
+                    self._update_semantic_memory()
+
+                    # Update periodic interceptor with detections
+                    self._update_periodic_interceptor(detections, band, dwell_start)
+
+                # Clear buffer after processing (keep last N for continuity)
+                self._pdw_buffer = self._pdw_buffer[-self._min_deinterleave_pulses:]
+
+        # Apply semantic memory band priority boost to belief
+        if self.semantic_memory is not None:
+            semantic_boost = self.semantic_memory.get_band_priority_boost(
+                n_bands=self.n_bands,
+                freq_min=self.freq_min,
+                freq_max=self.freq_max,
+            )
+            # Blend into priority score (feature index 9)
+            alpha = 0.2
+            self.belief.priority_score = (1 - alpha) * self.belief.priority_score + alpha * semantic_boost
+
+        # Check periodic interceptor for preemptive schedule recommendation
+        preemptive_band = None
+        if self.periodic_interceptor is not None:
+            schedule = self.periodic_interceptor.get_preemptive_schedule(
+                current_time_us=self.receiver.current_time_us,
+                horizon_us=self.dwell_time_us * 10,  # Look ahead 10 dwells
+            )
+            if schedule:
+                # Use the highest confidence imminent prediction
+                next_pred = schedule[0]
+                if next_pred["confidence"] > 0.7:
+                    preemptive_band = next_pred["expected_band"]
+                    logger.debug("Periodic preemptive recommendation: band %d (conf=%.2f, t=%.0fus)",
+                                preemptive_band, next_pred["confidence"], next_pred["expected_time_us"])
+
+        # 6. Update causal belief (from observation only)
         self.belief.record_visit(band, any_hit, detections=detections)
         self.belief.advance_time()
         self.belief.touch(band)
+
+        # Store preemptive recommendation in info for scheduler
+        self._preemptive_band = preemptive_band
 
         # Update intercepted set from detection emitter_id (ground truth for reward/eval only)
         new_ids = set()
@@ -393,6 +529,7 @@ class CognitiveRFScanEnv(gym.Env):
             "intercept_time_error_us": float(intercept_time_error_us),
             "band_center_mhz": observation.center_frequency_mhz if observation is not None else 0.0,
             "receiver_time_us": self.receiver.current_time_us,
+            "preemptive_band": getattr(self, "_preemptive_band", None),
         }
 
         next_obs = self._build_observation()
@@ -416,11 +553,17 @@ class CognitiveRFScanEnv(gym.Env):
         return float(center)
 
     def _band_index(self, center_frequency_mhz: float) -> int:
+        """Map a frequency to its band index.
+
+        Uses floor(frac * n_bands) with clamping to ensure correct mapping.
+        """
         if self.freq_max <= self.freq_min:
             return 0
         frac = (float(center_frequency_mhz) - self.freq_min) / (self.freq_max - self.freq_min)
         frac = min(1.0, max(0.0, frac))
-        return int(frac * (self.n_bands - 1))
+        # Use n_bands (not n_bands-1) so that freq_max maps to band n_bands-1
+        idx = int(frac * self.n_bands)
+        return min(idx, self.n_bands - 1)
 
     def _ground_truth_for_dwell(self, lower_us: float, upper_us: float) -> tuple[bool, bool, np.ndarray, set[int]]:
         """Evaluate ground-truth activity in [lower_us, upper_us) and any novel emitters.
@@ -448,6 +591,130 @@ class CognitiveRFScanEnv(gym.Env):
                 active_bands[b] = 1
 
         return any_active, novel, active_bands, active_emitters
+
+    def _run_perception(self, band: int, dwell_start: float, dwell_end: float) -> Optional[dict]:
+        """Run deinterleaver on accumulated PDW buffer and update emitter tracker.
+
+        Args:
+            band: Current band index.
+            dwell_start: Dwell start time (µs).
+            dwell_end: Dwell end time (µs).
+
+        Returns:
+            Perception result dict from EmitterTracker.get_band_belief(), or None.
+        """
+        if not self._pdw_buffer:
+            return None
+
+        try:
+            # Prepare PDW data for deinterleaver
+            pdws = np.array([[p["time_us"], p["frequency_mhz"], p["pulse_width_us"],
+                             p["aoa_deg"], p["amplitude_db"]] for p in self._pdw_buffer],
+                           dtype=np.float64)
+
+            # Normalize PDWs
+            from src.preprocessing.normalise import normalise_pdws
+            pdws_norm, _ = normalise_pdws(pdws, fit_stats=self.deinterleaver_config.get("fit_stats"))
+
+            # Run windowed deinterleaving
+            from src.models.deinterleaver import windowed_cluster_deinterleave
+            window_size = self.deinterleaver_config.get("window_size", min(2048, len(pdws_norm)))
+            stride = self.deinterleaver_config.get("stride", window_size // 2)
+            min_cluster_size = self.deinterleaver_config.get("min_cluster_size", 10)
+            min_samples = self.deinterleaver_config.get("min_samples", 5)
+
+            result = windowed_cluster_deinterleave(
+                self.deinterleaver_model,
+                pdws_norm,
+                toa_us=pdws[:, 0],
+                window_size=window_size,
+                stride=stride,
+                device=self.deinterleaver_config.get("device", "cpu"),
+                min_cluster_size=min_cluster_size,
+                min_samples=min_samples,
+            )
+
+            # Update emitter tracker with deinterleaver results
+            labels = result["labels"]
+            toa_us = pdws[:, 0]
+            freq_mhz = pdws[:, 1]
+            aoa_deg = pdws[:, 3]
+            pw_us = pdws[:, 2]
+            amp_db = pdws[:, 4]
+
+            current_time = dwell_end
+            self.emitter_tracker.update_from_deinterleaver(
+                labels=labels,
+                toa_us=toa_us,
+                freq_mhz=freq_mhz,
+                aoa_deg=aoa_deg,
+                pw_us=pw_us,
+                amp_db=amp_db,
+                current_time=current_time,
+                band=band,
+                min_cluster_size=min_cluster_size,
+            )
+
+            # Get band belief from updated tracks
+            perception_result = self.emitter_tracker.get_band_belief(
+                freq_min=self.freq_min,
+                freq_max=self.freq_max,
+                ema_occupancy=self.belief.occupancy_prob,
+            )
+
+            logger.debug("Perception updated: %d tracks, n_clusters=%d",
+                        len(self.emitter_tracker.get_active_tracks()), result["n_clusters"])
+            return perception_result
+
+        except Exception as exc:
+            logger.warning("Perception pipeline failed: %s", exc)
+            return None
+
+    def _update_semantic_memory(self) -> None:
+        """Update semantic memory with profiles from active emitter tracks."""
+        if self.semantic_memory is None or self.emitter_tracker is None:
+            return
+
+        for track in self.emitter_tracker.get_active_tracks():
+            if track.observation_count < 5:
+                continue  # Need minimum observations for reliable profile
+
+            # Create emitter profile from track
+            profile = EmitterProfile(
+                emitter_id=f"track_{track.track_id}",
+                mean_pri_us=track.pri_estimate_us or 0.0,
+                freq_min_mhz=float(np.min(track.frequency_history)) if track.frequency_history else 0.0,
+                freq_max_mhz=float(np.max(track.frequency_history)) if track.frequency_history else 0.0,
+                mean_pw_us=float(np.mean(track.pw_history)) if track.pw_history else 0.0,
+                aoa_mean=float(np.mean(track.aoa_history)) if track.aoa_history else 0.0,
+                amplitude_mean=float(np.mean(track.amplitude_history)) if track.amplitude_history else 0.0,
+                priority_score=track.get_cluster_confidence(),
+                is_periodic=1 if track.pri_confidence > 0.7 else 0,
+                scan_period_us=track.pri_estimate_us,
+                intercept_count=track.observation_count,
+                last_seen_us=track.last_seen_time,
+            )
+            self.semantic_memory.write_emitter(profile)
+
+    def _update_periodic_interceptor(self, detections: list, band: int, dwell_start: float) -> None:
+        """Update periodic interceptor with new detections.
+
+        Args:
+            detections: List of DetectionObservation from current dwell.
+            band: Band index where detections occurred.
+            dwell_start: Dwell start time (µs).
+        """
+        if self.periodic_interceptor is None:
+            return
+
+        for d in detections:
+            emitter_id = getattr(d, "emitter_id", None)
+            if emitter_id is not None:
+                toa = float(getattr(d, "time_us", getattr(d, "toa_us", dwell_start)))
+                # Use track_id as emitter identifier for periodic tracking
+                # For real operation, would use deinterleaver cluster label
+                track_id = f"track_{emitter_id}"
+                self.periodic_interceptor.record_intercept(track_id, toa, band)
 
     def _advance_world_to(self, target_time_us: float) -> tuple[int, int]:
         """Stream the radio environment ENTRY events at-or-before target into the receiver.
