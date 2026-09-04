@@ -1,0 +1,19 @@
+# Repository-level line-ending policy (added Phase 3F).
+#
+# Normalize text files to LF in the repository index while the working
+# tree may be CRLF on Windows (core.autocrlf=true).  This prevents the
+# phantom "every file modified" state that occurs when a checkout's CRLF
+# files are compared against LF blobs under a differing core.autocrlf.
+#
+# This is a minimal, convention-preserving rule set.  It does NOT rewrite
+# any existing file; it only guides future checkouts / renormalization.
+
+* text=auto
+
+# Large IQ binary recordings must never be normalized or treated as text.
+*.dat binary
+
+# Generated / vendored artifacts kept as-is.
+*.grc text
+*.py text
+*.md text
