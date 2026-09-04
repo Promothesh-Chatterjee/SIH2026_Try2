@@ -5,6 +5,8 @@ subset: "train"
 mode: "scan"
 world_mode: "stare"
 observation_mode: "scan"
+deinterleaver_ckpt: "checkpoints/deinterleaver/best.pt"
+normalization_stats: "checkpoints/deinterleaver/normalization_stats.json"
 deinterleaver:
   batch_size: 8
   max_pulses_per_train: 2048    # truncate/sample long pulse trains
@@ -15,6 +17,8 @@ deinterleaver:
   warmup_steps: 500
   save_every: 5
   val_every: 2
+  mode: "scan"
+  val_mode: "scan"
 
 scheduler:
   total_timesteps: 500000
