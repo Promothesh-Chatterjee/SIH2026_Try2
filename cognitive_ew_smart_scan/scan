@@ -1,0 +1,28 @@
+{
+  "data_root": "D:\\TSRD_data\\scan",
+  "mode": "train",
+  "splits": {
+    "train": {
+      "directory": "D:\\TSRD_data\\scan\\train\\train",
+      "file_count": 0,
+      "total_pulses": 0,
+      "files": []
+    },
+    "val": {
+      "directory": "D:\\TSRD_data\\scan\\train\\val",
+      "file_count": 0,
+      "total_pulses": 0,
+      "files": []
+    },
+    "test": {
+      "directory": "D:\\TSRD_data\\scan\\train\\test",
+      "file_count": 0,
+      "total_pulses": 0,
+      "files": []
+    }
+  },
+  "summary": {
+    "total_files": 0,
+    "total_pulses": 0
+  }
+}
