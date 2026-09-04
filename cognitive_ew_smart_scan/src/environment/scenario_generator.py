@@ -215,21 +215,26 @@ def build_scenario(
     time_horizon_us: Optional[float] = None,
     max_pulses: int = 50000,
     seed: int = 42,
+    allow_synthetic_fallback: bool = True,
 ) -> tuple[list[PulseRecord], str, list[Path]]:
-    """Build a PulseRecord scenario from TSRD .h5 files or a synthetic fallback.
+    """Build a PulseRecord scenario from TSRD .h5 files.
 
     Args:
         data_root: Root data dir (contains mode/subset). If None or no .h5 files
-            found, falls back to synthetic.
+            found, falls back to synthetic ONLY if allow_synthetic_fallback=True.
         mode / subset: Dataset split layout.
         freq_min_mhz / freq_max_mhz: Spectral clip range.
         time_horizon_us: Optional toa cap.
         max_pulses: Cap per file.
         seed: RNG seed for synthetic fallback.
+        allow_synthetic_fallback: If False, raise FileNotFoundError when no TSRD data found.
 
     Returns:
         Tuple (records, source_label, file_paths_used).
         source_label is "tsrd" or "synthetic".
+
+    Raises:
+        FileNotFoundError: If no TSRD files found and allow_synthetic_fallback=False.
     """
     files: list[Path] = []
     if data_root is not None:
@@ -247,12 +252,104 @@ def build_scenario(
                     max_pulses=max_pulses,
                 )
             )
-        logger.info("Scenario[tsrd]: %d pulses from %d file(s) in %s", len(records), len(files), Path(data_root) / mode / subset)
+        logger.info("Scenario[tsrd]: %d pulses from %d file(s) in %s/%s", len(records), len(files), mode, subset)
         return records, "tsrd", files
 
+    if not allow_synthetic_fallback:
+        raise FileNotFoundError(
+            f"No TSRD .h5 files found in {data_root}/{mode}/{subset}. "
+            f"Set allow_synthetic_fallback=True to use synthetic data, or provide valid TSRD data."
+        )
+
     records = synthetic_records(freq_min_mhz=freq_min_mhz, freq_max_mhz=freq_max_mhz, seed=seed)
-    logger.info("Scenario[synthetic]: %d pulses (no %s/%s .h5 found)", len(records), mode, subset)
+    logger.warning("Scenario[synthetic]: %d pulses (no %s/%s .h5 found; using synthetic fallback)", len(records), mode, subset)
     return records, "synthetic", []
+
+
+def build_world_scenario(
+    data_root: str | Path,
+    subset: str = "train",
+    freq_min_mhz: float = 0.0,
+    freq_max_mhz: float = 18000.0,
+    time_horizon_us: Optional[float] = None,
+    max_pulses: int = 50000,
+    seed: int = 42,
+) -> tuple[list[PulseRecord], str, list[Path]]:
+    """Build RF world scenario from TSRD STARE data (latent truth).
+
+    This is the ground-truth RF world that the scheduler's receiver observes through
+    its limited IBW. Uses STARE mode exclusively - no synthetic fallback.
+
+    Args:
+        data_root: Root data dir containing stare/ subdirectories.
+        subset: Dataset split (train/val/test).
+        freq_min_mhz / freq_max_mhz: Spectral clip range.
+        time_horizon_us: Optional toa cap.
+        max_pulses: Cap per file.
+        seed: RNG seed (unused for STARE, kept for interface consistency).
+
+    Returns:
+        Tuple (records, source_label, file_paths_used).
+        source_label is always "tsrd_stare".
+
+    Raises:
+        FileNotFoundError: If no STARE .h5 files found.
+    """
+    return build_scenario(
+        data_root=data_root,
+        mode="stare",
+        subset=subset,
+        freq_min_mhz=freq_min_mhz,
+        freq_max_mhz=freq_max_mhz,
+        time_horizon_us=time_horizon_us,
+        max_pulses=max_pulses,
+        seed=seed,
+        allow_synthetic_fallback=False,
+    )
+
+
+def build_observation_scenario(
+    data_root: str | Path,
+    subset: str = "train",
+    freq_min_mhz: float = 0.0,
+    freq_max_mhz: float = 18000.0,
+    time_horizon_us: Optional[float] = None,
+    max_pulses: int = 50000,
+    seed: int = 42,
+) -> tuple[list[PulseRecord], str, list[Path]]:
+    """Build observation scenario from TSRD SCAN data (realistic observed data).
+
+    This represents what a real narrowband receiver would observe. Used for:
+    - Deinterleaver validation
+    - Realistic observed-data comparison
+    - Benchmark evaluation
+
+    Args:
+        data_root: Root data dir containing scan/ subdirectories.
+        subset: Dataset split (train/val/test).
+        freq_min_mhz / freq_max_mhz: Spectral clip range.
+        time_horizon_us: Optional toa cap.
+        max_pulses: Cap per file.
+        seed: RNG seed (unused for SCAN, kept for interface consistency).
+
+    Returns:
+        Tuple (records, source_label, file_paths_used).
+        source_label is always "tsrd_scan".
+
+    Raises:
+        FileNotFoundError: If no SCAN .h5 files found.
+    """
+    return build_scenario(
+        data_root=data_root,
+        mode="scan",
+        subset=subset,
+        freq_min_mhz=freq_min_mhz,
+        freq_max_mhz=freq_max_mhz,
+        time_horizon_us=time_horizon_us,
+        max_pulses=max_pulses,
+        seed=seed,
+        allow_synthetic_fallback=False,
+    )
 
 
 class ScenarioSource:
@@ -275,6 +372,7 @@ class ScenarioSource:
         max_pulses: int = 50000,
         seed: int = 42,
         synthetic: bool = False,
+        source_type: str = "observation",  # "world" (STARE) or "observation" (SCAN)
     ) -> None:
         self.freq_min_mhz = freq_min_mhz
         self.freq_max_mhz = freq_max_mhz
@@ -282,13 +380,19 @@ class ScenarioSource:
         self.max_pulses = max_pulses
         self._rng = np.random.default_rng(seed)
         self.files: list[Path] = []
+        self.source_type = source_type
+        self.source_mode = "stare" if source_type == "world" else "scan"
+
         if data_root is not None and not synthetic:
-            self.files = discover_h5_files(data_root, mode=mode, subset=subset)
-        self.source_label = "tsrd" if self.files else "synthetic"
+            self.files = discover_h5_files(data_root, mode=self.source_mode, subset=subset)
+        self.source_label = f"tsrd_{self.source_mode}" if self.files else "synthetic"
         if self.files:
-            logger.info("ScenarioSource[tsrd]: %d files in %s/%s", len(self.files), mode, subset)
+            logger.info("ScenarioSource[%s]: %d files in %s/%s", self.source_label, self.source_mode, subset)
         else:
-            logger.info("ScenarioSource[synthetic]: no %s/%s .h5 found", mode, subset)
+            if synthetic:
+                logger.info("ScenarioSource[synthetic]: explicit synthetic mode")
+            else:
+                logger.warning("ScenarioSource[synthetic]: no %s/%s .h5 found — using synthetic fallback", self.source_mode, subset)
 
     def __len__(self) -> int:
         return len(self.files)
