@@ -61,6 +61,7 @@ def build_band_belief_from_tracks(
     freq_max_mhz: float = 18000.0,
     ema_occupancy: np.ndarray | None = None,
     ema_alpha: float = 0.3,
+    tracks: list | None = None,
 ) -> dict:
     """Build a full band-belief observation from deinterleaver track output.
 
@@ -75,6 +76,7 @@ def build_band_belief_from_tracks(
         freq_max_mhz: Highest band edge (MHz).
         ema_occupancy: Optional (n_bands,) prior per-band occupancy for EMA blending.
         ema_alpha: EMA weight for fresh occupancy evidence.
+        tracks: Optional list of EmitterTrack objects for track-level confidence.
 
     Returns:
         Dict with:
@@ -141,8 +143,17 @@ def build_band_belief_from_tracks(
         unique_clusters = set(sel_labels.tolist())
         unique_clusters.discard(-1)
         bands[b, 5] = float(np.clip(len(unique_clusters) / 5.0, 0.0, 1.0))
-        # 7. Deinterleaver confidence = fraction of band pulses clustered.
-        bands[b, 6] = clustered_frac
+        # 7. Deinterleaver confidence = fraction of band pulses clustered, weighted by track confidence.
+        # Track confidence incorporates observation count, consistency, PRI regularity, and recency.
+        track_confidences = []
+        if tracks is not None:
+            for track in tracks:
+                if track.last_band == b and track.observation_count > 0:
+                    track_confidences.append(track.get_cluster_confidence())
+        if track_confidences:
+            bands[b, 6] = float(np.mean(track_confidences))
+        else:
+            bands[b, 6] = clustered_frac
         # 8. PRI stability / 9. agility from observable toa/freq.
         bands[b, 7] = _pri_stability(sel_toas[sel_clustered] if sel_clustered.any() else sel_toas)
         bands[b, 8] = _agility(sel_freqs)
