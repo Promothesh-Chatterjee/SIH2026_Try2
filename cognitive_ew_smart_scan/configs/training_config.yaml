@@ -3,7 +3,8 @@ output_dir: "checkpoints"
 seed: 42
 subset: "train"
 mode: "scan"
-
+world_mode: "stare"
+observation_mode: "scan"
 deinterleaver:
   batch_size: 8
   max_pulses_per_train: 2048    # truncate/sample long pulse trains
