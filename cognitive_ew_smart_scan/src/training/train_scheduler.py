@@ -22,8 +22,10 @@ import yaml
 
 from ..environment.cognitive_rf_scan_env import CognitiveRFScanEnv
 from ..environment.scenario_generator import ScenarioSource
+from ..models.deinterleaver import PDWTransformerEncoder
 from ..models.drqn_scheduler import DRQNScheduler
 from ..models.smartscan_moe import SmartScanMoE
+from ..preprocessing.normalise import load_normalization_stats
 from ..telemetry.publisher import TelemetryPublisher
 from ..telemetry.run_manager import RunManager
 from ..training.replay_buffer import SequenceReplayBuffer
@@ -127,6 +129,40 @@ def train_scheduler(
     env_config = {**env_cfg, **reward_cfg}
     env_config.setdefault("n_bands", n_bands)
 
+    # Load trained deinterleaver and normalization stats for perception
+    deinterleaver_ckpt = train_cfg.get("deinterleaver_ckpt", "checkpoints/deinterleaver/best.pt")
+    norm_stats_path = train_cfg.get("normalization_stats", "checkpoints/deinterleaver/normalization_stats.json")
+    
+    deinterleaver_model = None
+    fit_stats = None
+    
+    if Path(deinterleaver_ckpt).exists():
+        logger.info("Loading trained deinterleaver from %s", deinterleaver_ckpt)
+        d_cfg = full_cfg.get("deinterleaver", {})
+        deinterleaver_model = PDWTransformerEncoder(
+            pdw_dim=d_cfg.get("pdw_dim", 6),
+            d_model=d_cfg.get("d_model", 128),
+            nhead=d_cfg.get("nhead", 8),
+            num_layers=d_cfg.get("num_layers", 4),
+            dim_feedforward=d_cfg.get("dim_feedforward", 512),
+            dropout=d_cfg.get("dropout", 0.1),
+            embed_dim=d_cfg.get("embed_dim", 64),
+        )
+        state = torch.load(deinterleaver_ckpt, map_location="cpu")
+        if isinstance(state, dict) and "state_dict" in state:
+            state = state["state_dict"]
+        deinterleaver_model.load_state_dict(state, strict=False)
+        deinterleaver_model.eval()
+        
+        # Load normalization stats
+        if Path(norm_stats_path).exists():
+            fit_stats = load_normalization_stats(norm_stats_path)
+            logger.info("Loaded normalization stats from %s", norm_stats_path)
+        else:
+            logger.warning("Normalization stats not found at %s; perception may be degraded", norm_stats_path)
+    else:
+        logger.warning("Deinterleaver checkpoint not found at %s; perception disabled", deinterleaver_ckpt)
+
     # Build the receiver-driven cognitive env from a TSRD/synthetic scenario.
     data_dir = data_dir_override if data_dir_override is not None else train_cfg.get("data_dir", "data")
     subset = train_cfg.get("subset", "train")
@@ -145,6 +181,7 @@ def train_scheduler(
             max_pulses=int(env_config.get("max_pulses", 50000)),
             seed=seed,
             source_type="world",
+            allow_synthetic_fallback=False,  # No silent fallback for real TSRD training
         )
         logger.info("Scheduler training: RF world source = TSRD STARE (latent truth)")
     else:
@@ -158,14 +195,27 @@ def train_scheduler(
             time_horizon_us=float(env_config.get("time_horizon_us", 0.0)) or None,
             max_pulses=int(env_config.get("max_pulses", 50000)),
             seed=seed,
+            allow_synthetic_fallback=False,
         )
         logger.warning("Scheduler training: RF world source = %s (non-standard)", world_mode)
 
     # One env; reset() draws a fresh random TSRD file each episode.
-    env = CognitiveRFScanEnv(env_config, records=None, seed=seed, records_provider=train_source.sample)
+    env = CognitiveRFScanEnv(
+        env_config, 
+        records=None, 
+        seed=seed, 
+        records_provider=train_source.sample,
+        deinterleaver_model=deinterleaver_model,
+        deinterleaver_config={"fit_stats": fit_stats} if fit_stats else {},
+    )
     env.reset()  # populate first episode's records so obs_dim/action checks are valid
     assert env.obs_dim == obs_dim, f"env obs_dim {env.obs_dim} != configured {obs_dim}"
     assert env.action_space.n == n_bands, f"env action space {env.action_space.n} != n_bands {n_bands}"
+    
+    if env.perception_enabled:
+        logger.info("Perception pipeline ENABLED: trained deinterleaver + EmitterTracker active")
+    else:
+        logger.warning("Perception pipeline DISABLED: no trained deinterleaver loaded")
 
     lstm_hidden = int(drqn_cfg.get("lstm_hidden", 256))
     lstm_layers = int(drqn_cfg.get("lstm_layers", 2))
@@ -331,8 +381,16 @@ def train_scheduler(
                     max_pulses=int(env_config.get("max_pulses", 50000)),
                     seed=seed,
                     source_type="world",
+                    allow_synthetic_fallback=False,
                 )
-                val_env = CognitiveRFScanEnv(env_config, records=None, seed=seed, records_provider=val_source.sample)
+                val_env = CognitiveRFScanEnv(
+                    env_config, 
+                    records=None, 
+                    seed=seed, 
+                    records_provider=val_source.sample,
+                    deinterleaver_model=deinterleaver_model,
+                    deinterleaver_config={"fit_stats": fit_stats} if fit_stats else {},
+                )
                 val_rewards = []
                 for _ in range(min(10, 2)):  # keep quick; expand to 10 when data present
                     obs_v, _ = val_env.reset()
