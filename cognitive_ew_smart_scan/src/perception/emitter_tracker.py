@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Set
 import numpy as np
 
 from src.perception.adapters import build_band_belief_from_tracks
+from src.receiver.models import DetectionObservation
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class EmitterTrack:
         """Update track with new detections.
 
         Args:
-            detections: List of DetectionObservation from current dwell.
+            detections: List of DetectionObservation or dict from current dwell.
             current_time: Current receiver time (µs).
             band: Band index where detections occurred.
         """
@@ -62,11 +63,25 @@ class EmitterTrack:
         self.observation_count += len(detections)
 
         for d in detections:
-            self.frequency_history.append(float(d.frequency_mhz))
-            self.aoa_history.append(float(d.aoa_deg))
-            self.pw_history.append(float(d.pulse_width_us))
-            self.amplitude_history.append(float(d.amplitude_db))
-            toa = float(getattr(d, "time_us", getattr(d, "toa_us", current_time)))
+            # Handle both DetectionObservation objects and dicts
+            if isinstance(d, DetectionObservation):
+                freq = float(d.frequency_mhz)
+                aoa = float(d.aoa_deg)
+                pw = float(d.pulse_width_us)
+                amp = float(d.amplitude_db)
+                toa = float(getattr(d, "time_us", getattr(d, "toa_us", current_time)))
+            else:
+                # Dict from update_from_deinterleaver
+                freq = float(d["frequency_mhz"])
+                aoa = float(d["aoa_deg"])
+                pw = float(d["pulse_width_us"])
+                amp = float(d["amplitude_db"])
+                toa = float(d["time_us"])
+            
+            self.frequency_history.append(freq)
+            self.aoa_history.append(aoa)
+            self.pw_history.append(pw)
+            self.amplitude_history.append(amp)
             self.toa_history.append(toa)
 
         # Keep history bounded
@@ -133,11 +148,31 @@ class EmitterTrack:
         self.frequency_dispersion_mhz = float(np.std(self.frequency_history))
 
     def get_cluster_confidence(self) -> float:
-        """Return cluster confidence (based on observation consistency)."""
-        # Higher confidence with more observations and consistent features
+        """Return cluster confidence based on observation consistency and track quality.
+        
+        Confidence is derived from:
+        - Observation count (more observations = higher confidence)
+        - Track consistency (lower agility = more consistent = higher confidence)
+        - PRI regularity (if available)
+        - Cluster compactness (inferred from observation consistency)
+        """
+        # Base confidence from observation count (saturates at 20 observations)
         base = min(self.observation_count / 20.0, 1.0)
+        
+        # Consistency factor: less agile emitters have more stable clusters
         consistency = 1.0 - self.agility_score * 0.5  # Less agile = more consistent
-        return float(np.clip(base * consistency, 0.0, 1.0))
+        
+        # PRI regularity factor (if available)
+        pri_factor = 1.0
+        if self.pri_confidence > 0:
+            pri_factor = self.pri_confidence
+        
+        # Observation recency factor (recent observations are more reliable)
+        recency_factor = 1.0
+        if self.consecutive_misses > 0:
+            recency_factor = max(0.5, 1.0 - self.consecutive_misses * 0.1)
+        
+        return float(np.clip(base * consistency * pri_factor * recency_factor, 0.0, 1.0))
 
     def predict_next_frequency(self) -> Optional[float]:
         """Predict next frequency based on history (for agile emitters)."""
@@ -230,7 +265,7 @@ class EmitterTracker:
 
         for cluster_label, detections in cluster_detections.items():
             # Try to match to existing track
-            track_id = self._match_cluster_to_track(cluster_label, detections, band)
+            track_id = self._match_cluster_to_track(cluster_label, detections, band, matched_tracks)
             if track_id is not None:
                 track = self.tracks[track_id]
                 track.cluster_label = cluster_label
@@ -255,8 +290,11 @@ class EmitterTracker:
         cluster_label: int,
         detections: List[Dict],
         band: int,
+        matched_tracks: Optional[Set[int]] = None,
     ) -> Optional[int]:
         """Match a cluster to an existing track based on feature similarity."""
+        matched_tracks = matched_tracks or set()
+        
         # For now, simple matching: if same cluster_label was seen before in same band
         if cluster_label in self._cluster_to_track:
             track_id = self._cluster_to_track[cluster_label]
@@ -421,6 +459,7 @@ class EmitterTracker:
             freq_min_mhz=freq_min,
             freq_max_mhz=freq_max,
             ema_occupancy=ema_occupancy,
+            tracks=[t for t in self.tracks.values() if t.is_active and t.observation_count > 0],
         )
 
     def get_active_tracks(self) -> List[EmitterTrack]:

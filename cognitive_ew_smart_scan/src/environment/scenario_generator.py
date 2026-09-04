@@ -358,7 +358,9 @@ class ScenarioSource:
     Each call to :meth:`sample` loads ONE randomly-chosen .h5 file's records
     (capped to ``max_pulses``, ToA-normalised) so that an RL episode gets a
     single, diverse, memory-bounded scenario — unlike concatenating every file.
-    Falls back to a fresh synthetic scenario if no .h5 files are present.
+    Falls back to a fresh synthetic scenario ONLY if allow_synthetic_fallback=True
+    and no .h5 files are present. This prevents silent synthetic fallback during
+    real TSRD experiments.
     """
 
     def __init__(
@@ -373,6 +375,7 @@ class ScenarioSource:
         seed: int = 42,
         synthetic: bool = False,
         source_type: str = "observation",  # "world" (STARE) or "observation" (SCAN)
+        allow_synthetic_fallback: bool = True,
     ) -> None:
         self.freq_min_mhz = freq_min_mhz
         self.freq_max_mhz = freq_max_mhz
@@ -382,6 +385,7 @@ class ScenarioSource:
         self.files: list[Path] = []
         self.source_type = source_type
         self.source_mode = "stare" if source_type == "world" else "scan"
+        self.allow_synthetic_fallback = allow_synthetic_fallback
 
         if data_root is not None and not synthetic:
             self.files = discover_h5_files(data_root, mode=self.source_mode, subset=subset)
@@ -391,8 +395,14 @@ class ScenarioSource:
         else:
             if synthetic:
                 logger.info("ScenarioSource[synthetic]: explicit synthetic mode")
+            elif self.allow_synthetic_fallback:
+                logger.warning("ScenarioSource[synthetic]: no %s/%s .h5 found — using synthetic fallback (allow_synthetic_fallback=True)", self.source_mode, subset)
             else:
-                logger.warning("ScenarioSource[synthetic]: no %s/%s .h5 found — using synthetic fallback", self.source_mode, subset)
+                logger.error("ScenarioSource[ERROR]: no %s/%s .h5 found and allow_synthetic_fallback=False", self.source_mode, subset)
+                raise FileNotFoundError(
+                    f"No TSRD .h5 files found in {data_root}/{self.source_mode}/{subset}. "
+                    f"Set allow_synthetic_fallback=True to use synthetic data, or provide valid TSRD data."
+                )
 
     def __len__(self) -> int:
         return len(self.files)
@@ -400,6 +410,10 @@ class ScenarioSource:
     def sample(self) -> list[PulseRecord]:
         """Return records for one episode (a single random file, or synthetic)."""
         if not self.files:
+            if not self.allow_synthetic_fallback:
+                raise FileNotFoundError(
+                    f"No TSRD .h5 files available for sampling and allow_synthetic_fallback=False"
+                )
             return synthetic_records(
                 freq_min_mhz=self.freq_min_mhz,
                 freq_max_mhz=self.freq_max_mhz,
