@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import numpy as np
 
-BAND_FEATURES = 10
+from src.contracts import CANONICAL_BAND_FEATURES
+
+BAND_FEATURES = CANONICAL_BAND_FEATURES
 DEFAULT_BAND_FEATURE = np.array(
     [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5], dtype=np.float32
 )

@@ -1,0 +1,76 @@
+{
+  "data_root": "data",
+  "mode": "scan",
+  "splits": {
+    "train": {
+      "directory": "data\\scan\\train",
+      "file_count": 2,
+      "total_pulses": 1248,
+      "structurally_valid_files": 0,
+      "empty_files": 0,
+      "training_eligible": 0,
+      "evaluation_eligible": 0,
+      "files": [
+        {
+          "path": "scan/train/synthetic_000.h5",
+          "filename": "synthetic_000.h5",
+          "size_bytes": 17024,
+          "sha256": "8de05773cad32ca94715ea5107cbdb0ff1c90a223fe6f1a409466413375394ea",
+          "num_pulses": 624,
+          "num_emitters": 5,
+          "duration_s": 0.05,
+          "structurally_valid": false,
+          "empty_scenario": false,
+          "training_eligible": false,
+          "evaluation_eligible": false
+        },
+        {
+          "path": "scan/train/synthetic_001.h5",
+          "filename": "synthetic_001.h5",
+          "size_bytes": 17024,
+          "sha256": "aaca1b015702809bb8c316333b79fcafc0a5e7b1666a36e4fd3aa04a91b3907b",
+          "num_pulses": 624,
+          "num_emitters": 5,
+          "duration_s": 0.05,
+          "structurally_valid": false,
+          "empty_scenario": false,
+          "training_eligible": false,
+          "evaluation_eligible": false
+        }
+      ]
+    },
+    "val": {
+      "directory": "data\\scan\\val",
+      "file_count": 1,
+      "total_pulses": 624,
+      "structurally_valid_files": 0,
+      "empty_files": 0,
+      "training_eligible": 0,
+      "evaluation_eligible": 0,
+      "files": [
+        {
+          "path": "scan/val/synthetic_000.h5",
+          "filename": "synthetic_000.h5",
+          "size_bytes": 17024,
+          "sha256": "aaca1b015702809bb8c316333b79fcafc0a5e7b1666a36e4fd3aa04a91b3907b",
+          "num_pulses": 624,
+          "num_emitters": 5,
+          "duration_s": 0.05,
+          "structurally_valid": false,
+          "empty_scenario": false,
+          "training_eligible": false,
+          "evaluation_eligible": false
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_files": 3,
+    "total_pulses": 1872,
+    "structurally_valid_files": 0,
+    "empty_files": 0,
+    "training_eligible": 0,
+    "evaluation_eligible": 0
+  },
+  "dataset_fingerprint": "8ae3ffc98644c2d15fae477f8fa863021e578e7374d50772c0f85567965f04eb"
+}

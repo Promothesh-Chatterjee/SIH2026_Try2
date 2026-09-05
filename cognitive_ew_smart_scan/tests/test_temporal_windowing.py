@@ -1,3 +1,4 @@
+import os
 import unittest
 from pathlib import Path
 import numpy as np
@@ -15,12 +16,12 @@ from src.models.deinterleaver import PDWTransformerEncoder
 
 class TemporalWindowingTests(unittest.TestCase):
     def setUp(self):
-        self.data_root = Path("D:/TSRD_data")
+        self.data_root = Path(os.environ.get("TSRD_DATA_ROOT", "D:/TSRD"))
         self.skip_real = not self.data_root.exists()
 
     def test_window_loading_preserves_temporal_order(self):
         if self.skip_real:
-            self.skipTest("D:/TSRD_data not found")
+            self.skipTest("TSRD data not found")
         from src.data.tsrd_manifest import resolve_split_dirs
         splits = resolve_split_dirs(self.data_root, mode="scan")
         first_h5 = next(splits["train"].glob("*.h5"))
@@ -49,7 +50,7 @@ class TemporalWindowingTests(unittest.TestCase):
 
     def test_stitch_and_evaluate_on_real_file(self):
         if self.skip_real:
-            self.skipTest("D:/TSRD_data not found")
+            self.skipTest("TSRD data not found")
         from src.data.tsrd_manifest import resolve_split_dirs
         splits = resolve_split_dirs(self.data_root, mode="scan")
         first_h5 = next(splits["train"].glob("*.h5"))

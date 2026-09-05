@@ -3,11 +3,16 @@ Thompson Sampling Explorer for warmup exploration.
 
 Beta(1,1) prior per band → principled exploration before DRQN takes over.
 Also provides UCB1 alternative.
+
+The explorer operates on bands (the arms) and convenience methods emit the
+canonical time-frequency flat action ``band * n_modes + mode``.
 """
 
 import logging
 
 import numpy as np
+
+from src.contracts import CANONICAL_N_BANDS, CANONICAL_N_MODES, NORMAL_DWELL
 
 logger = logging.getLogger(__name__)
 
@@ -26,21 +31,38 @@ class ThompsonSamplingExplorer:
         total_pulls: Global pull count.
     """
 
-    def __init__(self, n_bands: int = 36, seed: int | None = None) -> None:
+    def __init__(
+        self,
+        n_bands: int = CANONICAL_N_BANDS,
+        n_modes: int = CANONICAL_N_MODES,
+        seed: int | None = None,
+        explore_modes: bool = False,
+    ) -> None:
         """Initialise explorer.
 
         Args:
             n_bands: Number of frequency band arms.
+            n_modes: Dwell modes per band for flat-action emission.
             seed: RNG seed.
+            explore_modes: If False (default) the warmup is a *neutral* band
+                exploration and every emitted action dwells in NORMAL_DWELL mode
+                (mode 1, NEVER mode 0 = SHORT_DWELL). If True the warmup explores
+                the full action space and samples a dwell mode uniformly per draw.
         """
         self.n_bands = n_bands
+        self.n_modes = int(n_modes)
+        self.explore_modes = bool(explore_modes)
         self.rng = np.random.default_rng(seed)
         self.alpha = np.ones(n_bands, dtype=np.float64)
         self.beta = np.ones(n_bands, dtype=np.float64)
         self.counts = np.zeros(n_bands, dtype=np.int64)
         self.total_pulls: int = 0
         self._rewards = np.zeros(n_bands, dtype=np.float64)
-        logger.info("ThompsonSamplingExplorer n_bands=%d Beta(1,1)", n_bands)
+        logger.info(
+            "ThompsonSamplingExplorer n_bands=%d Beta(1,1) explore_modes=%s",
+            n_bands,
+            self.explore_modes,
+        )
 
     def select_band(self) -> int:
         """Sample from each Beta posterior and return argmax.
@@ -50,6 +72,27 @@ class ThompsonSamplingExplorer:
         """
         samples = self.rng.beta(self.alpha, self.beta)
         return int(np.argmax(samples))
+
+    def select_action(self, explore_modes: bool | None = None) -> int:
+        """Sample a full time-frequency action for the scheduler.
+
+        Neutral warmup choice (documented): Thompson sampling explores the BAND
+        space only; unless ``explore_modes`` is enabled the dwell mode is pinned
+        to NORMAL_DWELL. Mode 0 is SHORT_DWELL and is NEVER emitted during the
+        neutral warmup — a 5,000-step warmup must not be spent in SHORT_DWELL.
+
+        Returns:
+            Flat action = band * n_modes + NORMAL_DWELL (mode index 1), or a
+            uniformly sampled mode when ``explore_modes`` is True.
+        """
+        band = self.select_band()
+        if explore_modes is None:
+            explore_modes = self.explore_modes
+        if not explore_modes:
+            mode = NORMAL_DWELL
+        else:
+            mode = int(self.rng.integers(0, self.n_modes))
+        return band * self.n_modes + mode
 
     def get_ucb_band(self, c: float = 2.0) -> int:
         """UCB1 alternative selection.
@@ -74,9 +117,13 @@ class ThompsonSamplingExplorer:
         """Update posterior for chosen arm.
 
         Args:
-            band: Band index scanned.
+            band: Band index scanned (a flat time-frequency action is decoded to
+                its band before updating).
             reward: Scalar reward (>0 → success, ≤0 → failure).
         """
+        if band >= self.n_modes and band < self.n_bands * self.n_modes:
+            # Decode flat time-frequency action -> band arm.
+            band = band // self.n_modes
         if not (0 <= band < self.n_bands):
             raise ValueError(f"band {band} out of range")
         self.counts[band] += 1

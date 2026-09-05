@@ -39,17 +39,37 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
+from src.contracts import (
+    CANONICAL_BAND_FEATURES,
+    CANONICAL_N_BANDS,
+    DEFAULT_DWELL_MULTIPLIERS,
+    DWELL_MODES,
+    DWELL_MODE_SEMANTICS,
+    RF_BASE_DWELL_TIME_US,
+    RF_FREQ_MAX_MHZ,
+    RF_FREQ_MIN_MHZ,
+    RF_FREQUENCY_STEP_MHZ,
+    RF_IBW_MHZ,
+    band_of_action,
+    encode_action,
+    mode_of_action,
+    n_actions_for,
+    n_modes as canonical_n_modes,
+    dwell_us_for,
+    REVISIT,
+    PREEMPTIVE_INTERCEPT,
+)
 from src.receiver import SieveReceiver, ReceiverObservation
 from src.environment.radio_environment import ActivePulse, PulseRecord, RadioEnvironment, SimulationEvent
 from src.evaluation.metrics import FiguresOfMerit
 from src.perception import EmitterTracker, build_band_belief_from_tracks
 from src.cognitive.memory import SemanticMemory, EmitterProfile
 from src.cognitive.periodic_interceptor import PeriodicScanInterceptor
+from src.training.reward import bernoulli_entropy, receiver_reward_components
 
 logger = logging.getLogger(__name__)
 
-
-STATE_FEATURES_PER_BAND = 10
+STATE_FEATURES_PER_BAND = CANONICAL_BAND_FEATURES
 
 
 @dataclass
@@ -69,13 +89,16 @@ class BeliefState:
     10. risk/priority score (composite cognitive urgency)
     """
 
-    def __init__(self, n_bands: int = 36):
+    def __init__(self, n_bands: int = CANONICAL_N_BANDS):
         self.n_bands = n_bands
         self.reset()
 
     def reset(self) -> None:
         n = self.n_bands
-        self.occupancy_prob = np.zeros(n, dtype=np.float32)
+        # Unvisited bands get a neutral (max-entropy) activity prior p=0.5 so the
+        # information-gain term is a true entropy reduction on first observation
+        # (Phase 10); the per-band occupancy belief is still scheduler-observable.
+        self.occupancy_prob = np.full(n, 0.5, dtype=np.float32)
         self.detection_rate = np.zeros(n, dtype=np.float32)
         self.revisit_age = np.ones(n, dtype=np.int64)
         self.uncertainty = np.ones(n, dtype=np.float32)  # max uncertainty when no data
@@ -84,6 +107,9 @@ class BeliefState:
         self.periodicity_stability = np.zeros(n, dtype=np.float32)
         self.agility_indicator = np.zeros(n, dtype=np.float32)
         self.priority_score = np.full(n, 0.5, dtype=np.float32)
+        # Observable periodic-imminent-arrival urgency (from PeriodicScanInterceptor
+        # predictions, built purely from prior detections). Feeds priority (feature 9).
+        self.periodic_urgency = np.zeros(n, dtype=np.float32)
         self._visits = np.zeros(n, dtype=np.int64)
         self._hits = np.zeros(n, dtype=np.int64)
         self._last_visit_slot = np.zeros(n, dtype=np.int64)
@@ -151,8 +177,11 @@ class BeliefState:
         if bands is None:
             return
         bands = np.asarray(bands, dtype=np.float32)
-        if bands.shape != (self.n_bands, 10):
-            logger.warning("Perception bands shape mismatch: %s vs (%d, 10)", bands.shape, self.n_bands)
+        if bands.shape != (self.n_bands, CANONICAL_BAND_FEATURES):
+            logger.warning(
+                "Perception bands shape mismatch: %s vs (%d, %d)",
+                bands.shape, self.n_bands, CANONICAL_BAND_FEATURES,
+            )
             return
 
         # Blend perception features with existing belief (EMA)
@@ -184,7 +213,13 @@ class BeliefState:
 
     def update_priority(self) -> None:
         norm_age = np.clip(self.revisit_age.astype(np.float32) / 50.0, 0.0, 1.0)
-        self.priority_score = np.clip(0.4 * norm_age + 0.4 * self.occupancy_prob + 0.2 * self.uncertainty, 0.0, 1.0)
+        # Observable periodic-imminent-arrival urgency contributes to priority so the
+        # scheduler can preempt dwell on a band where a periodic emitter is due.
+        self.priority_score = np.clip(
+            0.4 * norm_age + 0.3 * self.occupancy_prob + 0.2 * self.uncertainty + 0.1 * self.periodic_urgency,
+            0.0,
+            1.0,
+        )
 
     def band_features(self, b: int) -> np.ndarray:
         """Return the canonical 10-feature vector for one band."""
@@ -248,32 +283,61 @@ class CognitiveRFScanEnv(gym.Env):
 
         # Periodic interceptor configuration
         self.periodic_min_obs = config.get("periodic_min_obs", 20)
-        self.periodic_hist_bins = config.get("periodic_hist_bins", 100)
 
-        self.n_bands: int = int(config.get("n_bands", 36))
-        self.freq_min: float = float(config.get("freq_min_mhz", 0.0))
-        self.freq_max: float = float(config.get("freq_max_mhz", 18000.0))
-        self.ibw_mhz: float = float(config.get("ibw_mhz", 500.0))
-        self.dwell_time_us: float = float(config.get("dwell_time_us", 500.0))
-        self.frequency_step_mhz: float = float(config.get("frequency_step_mhz", 500.0))
+        self.n_bands: int = int(config.get("n_bands", CANONICAL_N_BANDS))
+        self.freq_min: float = float(config.get("freq_min_mhz", RF_FREQ_MIN_MHZ))
+        self.freq_max: float = float(config.get("freq_max_mhz", RF_FREQ_MAX_MHZ))
+        self.ibw_mhz: float = float(config.get("ibw_mhz", RF_IBW_MHZ))
+        # Base receiver dwell time (µs); per-action dwell is base * mode multiplier.
+        self.base_dwell_time_us: float = float(config.get("dwell_time_us", RF_BASE_DWELL_TIME_US))
+        self.dwell_time_us: float = self.base_dwell_time_us  # default mode multiplier 1.0
+        self.frequency_step_mhz: float = float(config.get("frequency_step_mhz", RF_FREQUENCY_STEP_MHZ))
         self.detection_threshold_db: float = float(config.get("detection_threshold_db", -140.0))
         self.max_steps_per_episode: int = int(config.get("max_steps_per_episode", 2000))
 
-        # Reward weights
-        self.w_hit: float = float(config.get("w_hit", 1.0))
-        self.w_novel: float = float(config.get("w_novel", 2.0))
-        self.w_miss: float = float(config.get("w_miss", -1.0))
+        # Canonical dwell-mode action space (time-frequency joint).
+        self.n_modes: int = int(config.get("n_modes", canonical_n_modes()))
+        if self.n_modes != canonical_n_modes():
+            raise ValueError(f"n_modes={self.n_modes} != canonical {canonical_n_modes()}")
+        self.n_actions: int = int(config.get("n_actions", n_actions_for(self.n_bands, self.n_modes)))
+        if self.n_actions != self.n_bands * self.n_modes:
+            raise ValueError(
+                f"n_actions={self.n_actions} != n_bands*n_modes ({self.n_bands * self.n_modes})"
+            )
 
-        # Feature layout: STATE_FEATURES_PER_BAND features per band
-        self.band_features = STATE_FEATURES_PER_BAND
+        # Complete config-driven reward component weights.
+        reward_cfg = config.get("reward", {})
+        self.w_hit = reward_cfg.get("w_hit", config.get("w_hit", 1.0))
+        self.w_novel = reward_cfg.get("w_novel", config.get("w_novel", 2.0))
+        self.w_miss = reward_cfg.get("w_miss", config.get("w_miss", -1.0))
+        self.w_timing = reward_cfg.get("w_timing", config.get("w_timing", 0.001))
+        self.w_priority = reward_cfg.get("w_priority", 0.5)
+        self.w_information_gain = reward_cfg.get("w_information_gain", 0.2)
+        self.w_false_alarm = reward_cfg.get("w_false_alarm", -0.5)
+        self.w_dwell_cost = reward_cfg.get("w_dwell_cost", -0.001)
+        self.w_redundant_scan = reward_cfg.get("w_redundant_scan", -0.1)
+        self.w_delay = reward_cfg.get("w_delay", 0.0)
+
+        # Feature layout: CANONICAL_BAND_FEATURES features per band (contract).
+        self.band_features = CANONICAL_BAND_FEATURES
+        if int(config.get("band_features", CANONICAL_BAND_FEATURES)) != CANONICAL_BAND_FEATURES:
+            raise ValueError(
+                f"band_features={config.get('band_features')} != canonical {CANONICAL_BAND_FEATURES}"
+            )
         self.obs_dim = int(self.n_bands * self.band_features)
+        if int(config.get("obs_dim", self.obs_dim)) != self.obs_dim:
+            raise ValueError(
+                f"obs_dim={config.get('obs_dim')} != n_bands*band_features ({self.obs_dim})"
+            )
 
         self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.obs_dim,), dtype=np.float32)
-        self.action_space = spaces.Discrete(self.n_bands)
+        self.action_space = spaces.Discrete(self.n_actions)
 
-        assert self.observation_space.shape[0] == self.obs_dim == self.n_bands * self.band_features, (
-            f"Observation dimension mismatch: space={self.observation_space.shape[0]} vs obs_dim={self.obs_dim}"
-        )
+        if self.observation_space.shape[0] != self.obs_dim or self.obs_dim != self.n_bands * self.band_features:
+            raise ValueError(
+                f"Observation dimension mismatch: space={self.observation_space.shape[0]} vs "
+                f"obs_dim={self.obs_dim} vs n_bands*band_features={self.n_bands * self.band_features}"
+            )
 
         self._rng = np.random.default_rng(seed)
         self._seed = seed
@@ -295,6 +359,7 @@ class CognitiveRFScanEnv(gym.Env):
 
         # Perception: accumulate PDWs for windowed deinterleaving
         self._pdw_buffer: list[dict] = []
+        self._last_pulse_tracks: np.ndarray | None = None
         self._min_deinterleave_pulses = self.deinterleaver_config.get("min_pulses", 50)
         self._deinterleave_interval = self.deinterleaver_config.get("interval_steps", 10)
 
@@ -339,7 +404,6 @@ class CognitiveRFScanEnv(gym.Env):
         # Initialize periodic interceptor
         self.periodic_interceptor = PeriodicScanInterceptor(
             min_observations=self.periodic_min_obs,
-            hist_bins=self.periodic_hist_bins,
         )
 
         self.current_step = 0
@@ -349,6 +413,7 @@ class CognitiveRFScanEnv(gym.Env):
 
         # Perception buffer
         self._pdw_buffer = []
+        self._last_pulse_tracks = None
 
         # Prime the radio world with the first bunch of entries without stepping
         # the agent clock yet (just establish the initial window/time).
@@ -356,7 +421,7 @@ class CognitiveRFScanEnv(gym.Env):
         return self._build_observation(), {}
 
     # ------------------------------------------------------------------ step
-    def step(self, action: int):
+    def step(self, action: int, mode_context: dict | None = None):
         if self.receiver is None or self.radio_env is None or self.belief is None:
             raise RuntimeError("reset() must be called before step()")
 
@@ -364,40 +429,77 @@ class CognitiveRFScanEnv(gym.Env):
         if not (0 <= action < self.action_space.n):
             raise ValueError(f"action {action} outside Discrete({self.action_space.n})")
 
-        # 1. Translate scheduler action -> receiver action: tune center frequency
-        #    to cover the chosen band, then dwell.
-        band = action
+        # 1. Translate scheduler action -> (band, dwell-mode) time-frequency select.
+        band = band_of_action(action, self.n_modes)
+        mode = mode_of_action(action, self.n_modes)
+        mode_name = DWELL_MODES[mode]
+        # Base per-dwell duration: base dwell * mode multiplier. NORMAL_DWELL (1.0)
+        # keeps the legacy dwell_time_us so run-to-run timing is stable.
+        base_dwell_us = dwell_us_for(self.base_dwell_time_us, mode)
+        self.receiver.set_dwell_time(base_dwell_us)
         center = self._band_to_center(band)
         self.receiver.tune(center)
 
         dwell_start = self.receiver.current_time_us
-        dwell_end = self.receiver.current_time_us + self.receiver.dwell_time_us
+        dwell_end = dwell_start + base_dwell_us
 
-        # 2. Advance the RF world through ALL events up to dwell_end BEFORE the
-        #    receiver dwell. The world "evolves during the dwell": entry events
-        #    feed the receiver's pulse buffer, keeping it causal (receiver only
-        #    sees events up to the dwell end, never future pulses). EXIT events
-        #    within the dwell are deferred until AFTER detection so that pulses
-        #    active within [dwell_start, dwell_end] are still detected.
-        entry_count, exit_count = self._advance_world_to(dwell_end)
+        # --- Mode semantics beyond dwell length (Phase 5) --------------------
+        # REVISIT prioritizes a previously observed / overdue band: re-confirm it
+        # with a temporary sensitivity boost so faint periodic pulses are caught.
+        # PREEMPTIVE_INTERCEPT prioritizes an imminent predicted interception:
+        # align (and cap) the dwell window so the receiver holds through the
+        # predicted arrival — it is not a mere dwell-length tweak.
+        revisit_urgency = self._revisit_urgency_for(band)
+        periodic_urgency = self._periodic_urgency_for(band)
+        threshold_saved = getattr(self.receiver, "detection_threshold_db", None)
+        sensitivity_boost_db = 0.0
+        intercept_hold_us = 0.0
+        try:
+            if mode == REVISIT:
+                sensitivity_boost_db = min(3.0, 1.0 + 2.0 * revisit_urgency)
+                if threshold_saved is not None:
+                    self.receiver.detection_threshold_db = threshold_saved - sensitivity_boost_db
+            elif mode == PREEMPTIVE_INTERCEPT:
+                predicted_toa = self._preemptive_interception_us(band, dwell_start, base_dwell_us)
+                if predicted_toa is not None:
+                    max_hold = dwell_start + 3.0 * self.base_dwell_time_us
+                    target_end = min(predicted_toa + 0.25 * self.base_dwell_time_us, max_hold)
+                    intercept_hold_us = max(0.0, target_end - dwell_start - base_dwell_us)
+                    dwell_end = max(dwell_end, target_end)
 
-        # 3. Execute the dwell over exactly [dwell_start, dwell_end]. Pin the
-        #    receiver clock to the dwell start so detection covers the right window,
-        #    and record the dwell window on the receiver so the observation and the
-        #    reward timing term reflect the true window.
-        self.receiver.current_time_us = dwell_start
-        self.receiver.dwell_start_us = dwell_start
-        self.receiver.dwell_end_us = dwell_end
-        detections = self.receiver._detect_buffered_interval(dwell_start, dwell_end)
-        self.receiver._record(detections, observation_time_us=dwell_start)
+            # 2. Advance the RF world through ALL events up to dwell_end BEFORE the
+            #    receiver dwell. The world "evolves during the dwell": entry events
+            #    feed the receiver's pulse buffer, keeping it causal (receiver only
+            #    sees events up to the dwell end, never future pulses). EXIT events
+            #    within the dwell are deferred until AFTER detection so that pulses
+            #    active within [dwell_start, dwell_end] are still detected.
+            entry_count, exit_count = self._advance_world_to(dwell_end)
 
-        # 4. Now resolve deferred EXIT events (prune ended pulses for future dwells).
-        self._resolve_exits(exit_count)
-        self.receiver.current_time_us = dwell_end
-        self.receiver._prune(dwell_end)
+            # 3. Execute the dwell over exactly [dwell_start, dwell_end]. Pin the
+            #    receiver clock to the dwell start so detection covers the right window,
+            #    and record the dwell window on the receiver so the observation and the
+            #    reward timing term reflect the true window.
+            self.receiver.current_time_us = dwell_start
+            self.receiver.dwell_start_us = dwell_start
+            self.receiver.dwell_end_us = dwell_end
+            actual_dwell_us = dwell_end - dwell_start
+            self.receiver.dwell_time_us = actual_dwell_us
+            detections = self.receiver._detect_buffered_interval(dwell_start, dwell_end)
+            self.receiver._record(detections, observation_time_us=dwell_start)
+
+            # 4. Now resolve deferred EXIT events (prune ended pulses for future dwells).
+            self._resolve_exits(exit_count)
+            self.receiver.current_time_us = dwell_end
+            self.receiver._prune(dwell_end)
+        finally:
+            if threshold_saved is not None:
+                self.receiver.detection_threshold_db = threshold_saved
 
         # Determine ground truth over the dwell interval (reward/eval only, not obs)
         ground_truth_active, _novel_opportunity, active_bands_vec, active_emitters = self._ground_truth_for_dwell(dwell_start, dwell_end)
+        # Phase 9: only the selected dwell is a decision-level opportunity. Active
+        # bands elsewhere are coverage opportunities, never decision-level misses.
+        selected_band_active = bool(int(active_bands_vec[band])) if 0 <= band < len(active_bands_vec) else bool(ground_truth_active)
 
         # 4. Collect causal observations
         observation = self.receiver.get_observation()
@@ -430,7 +532,7 @@ class CognitiveRFScanEnv(gym.Env):
                     self._update_semantic_memory()
 
                     # Update periodic interceptor with detections
-                    self._update_periodic_interceptor(detections, band, dwell_start)
+                    self._update_periodic_interceptor(detections, band, dwell_start, dwell_end)
 
                 # Clear buffer after processing (keep last N for continuity)
                 self._pdw_buffer = self._pdw_buffer[-self._min_deinterleave_pulses:]
@@ -448,6 +550,7 @@ class CognitiveRFScanEnv(gym.Env):
 
         # Check periodic interceptor for preemptive schedule recommendation
         preemptive_band = None
+        preemptive_urgency = 0.0
         if self.periodic_interceptor is not None:
             schedule = self.periodic_interceptor.get_preemptive_schedule(
                 current_time_us=self.receiver.current_time_us,
@@ -458,13 +561,41 @@ class CognitiveRFScanEnv(gym.Env):
                 next_pred = schedule[0]
                 if next_pred["confidence"] > 0.7:
                     preemptive_band = next_pred["expected_band"]
+                    preemptive_urgency = float(next_pred.get("confidence", 0.8))
                     logger.debug("Periodic preemptive recommendation: band %d (conf=%.2f, t=%.0fus)",
                                 preemptive_band, next_pred["confidence"], next_pred["expected_time_us"])
 
-        # 6. Update causal belief (from observation only)
+        # Fold periodic imminent-arrival urgency into the OBSERVABLE priority
+        # feature (index 9). The scheduler sees imminent periodic arrivals through
+        # its belief just as it sees occupancy — no ground-truth leak, since the
+        # periodic interceptor's prediction is built purely from prior detections.
+        if preemptive_band is not None and self.belief is not None:
+            _b = int(preemptive_band)
+            if 0 <= _b < self.belief.n_bands:
+                self.belief.periodic_urgency[_b] = float(
+                    np.clip(self.belief.periodic_urgency[_b] + 0.4 * preemptive_urgency, 0.0, 1.0)
+                )
+        # Decay periodic urgency each step so stale predictions fade (observable only).
+        if self.belief is not None:
+            self.belief.periodic_urgency *= 0.9
+
+        # 6. Update causal belief (from observation only). Phase 10: compute a true
+        # information gain IG = H_before - H_after over the selected band's
+        # occupancy activity belief (Bernoulli entropy).
+        if self.belief is not None and 0 <= band < self.belief.n_bands:
+            p_before = float(self.belief.occupancy_prob[band])
+        else:
+            p_before = 0.5
+        h_before = bernoulli_entropy(p_before)
         self.belief.record_visit(band, any_hit, detections=detections)
         self.belief.advance_time()
         self.belief.touch(band)
+        if self.belief is not None and 0 <= band < self.belief.n_bands:
+            p_after = float(self.belief.occupancy_prob[band])
+        else:
+            p_after = p_before
+        h_after = bernoulli_entropy(p_after)
+        information_gain = h_before - h_after
 
         # Store preemptive recommendation in info for scheduler
         self._preemptive_band = preemptive_band
@@ -479,16 +610,29 @@ class CognitiveRFScanEnv(gym.Env):
         self.intercepted_emitters.update(new_ids)
 
         # 6. Calculate reward (uses ground truth ONLY for shaping)
-        from src.training.reward import receiver_reward_components
-
         reward_components = receiver_reward_components(
             observation=observation,
-            ground_truth_active=ground_truth_active,
+            ground_truth_active=selected_band_active,
             novel_emitter=bool(newly),
-            had_any_opportunity=ground_truth_active,
+            had_any_opportunity=selected_band_active,
             w_hit=self.w_hit,
             w_novel=self.w_novel,
             w_miss=self.w_miss,
+            w_timing=self.w_timing,
+            w_priority=self.w_priority,
+            w_information_gain=self.w_information_gain,
+            w_false_alarm=self.w_false_alarm,
+            w_dwell_cost=self.w_dwell_cost,
+            w_redundant_scan=self.w_redundant_scan,
+            w_delay=self.w_delay,
+            band=band,
+            belief=self.belief,
+            intercepted_emitters=self.intercepted_emitters,
+            novel_ids=newly,
+            priority_weight_reference=self._intercepted_priority_reference(),
+            information_gain=information_gain,
+            entropy_before=h_before,
+            entropy_after=h_after,
         )
         reward = reward_components["reward"]
         self.fom.record_reward_components(reward_components)
@@ -521,9 +665,39 @@ class CognitiveRFScanEnv(gym.Env):
 
         # Strip emitter_id / ground truth from observation returned to agent:
         # detections list may carry emitter_id; we remove it before building obs.
+        mode_ctx = mode_context or {}
+        action_score = float(mode_ctx.get("action_score", 1.0))
+        action_reason = str(mode_ctx.get("reason", DWELL_MODE_SEMANTICS[mode]))
         info = {
             "detections": [d.to_dict() for d in detections],
+            "band": band,
+            "mode": mode,
+            "band_chosen": band,
+            # Phase 5 semantic action record (scheduler-observable, no ground truth):
+            "selected_band": band,
+            "selected_mode": mode,
+            "mode_name": DWELL_MODES[mode],
+            "action_reason": action_reason,
+            "action_score": action_score,
+            "dwell_time_us": float(self.receiver.dwell_time_us),
+            "revisit_urgency": float(revisit_urgency),
+            "periodic_urgency": float(periodic_urgency),
+            "revisit_sensitivity_boost_db": float(sensitivity_boost_db),
+            "intercept_hold_us": float(intercept_hold_us),
             "hit": any_hit,
+            # Phase 9 decision-level opportunity record (eval/debug only):
+            "selected_band_active": selected_band_active,
+            "spectrum_active_opportunities": int(active_bands_vec.sum()),
+            "unselected_active_opportunities": int(active_bands_vec.sum()) - (1 if selected_band_active else 0),
+            # Phase 10 true information gain on the selected band's belief:
+            "entropy_before": float(h_before),
+            "entropy_after": float(h_after),
+            "information_gain": float(information_gain),
+            # AUX targets for the DRQN prediction heads (still scheduler-observable):
+            # "hit_prob": 1.0 if any interception this dwell, else 0.0
+            # "intercept_time_us": earliest detected ToA within dwell (or nan if none)
+            "hit_prob": 1.0 if any_hit else 0.0,
+            "intercept_time_us": float(intercept_time_error_us),
             "novel_emitter": bool(newly),
             "ground_truth_active": ground_truth_active,
             "intercept_time_error_us": float(intercept_time_error_us),
@@ -534,6 +708,59 @@ class CognitiveRFScanEnv(gym.Env):
 
         next_obs = self._build_observation()
         return next_obs, float(reward), terminated, truncated, info
+
+    def _intercepted_priority_reference(self, band: int | None = None) -> float:
+        """Observable-only priority reference for the priority-shaped reward term.
+
+        Uses the belief priority (feature 9) of a band — which is derived strictly
+        from scheduler-observable signals (revisit age, occupancy, uncertainty,
+        periodic imminent-arrival urgency) — never from ground-truth emitter IDs.
+        Returns a value in [0, 1].
+        """
+        if self.belief is None:
+            return 0.5
+        if band is None:
+            band = 0
+        self.belief.update_uncertainty()
+        self.belief.update_priority()
+        return float(self.belief.priority_score[band])
+
+    # ------------------------------------------------------------------ phase 5 mode semantics
+    def _revisit_urgency_for(self, band: int) -> float:
+        """Normalized time-since-last-visit of a band (observable, feature index 4)."""
+        if self.belief is None or not (0 <= int(band) < self.belief.n_bands):
+            return 0.0
+        return float(min(float(self.belief.revisit_age[int(band)]), 50.0) / 50.0)
+
+    def _periodic_urgency_for(self, band: int) -> float:
+        """Observable periodic-imminent-arrival urgency of a band (belief signal)."""
+        if self.belief is None or not (0 <= int(band) < self.belief.n_bands):
+            return 0.0
+        return float(np.clip(self.belief.periodic_urgency[int(band)], 0.0, 1.0))
+
+    def _preemptive_interception_us(self, band: int, current_time_us: float, horizon_us: float) -> float | None:
+        """Earliest predicted interception for ``band`` in the near horizon, or None.
+
+        Built purely from PeriodicScanInterceptor predictions on observable track
+        history (see Phase 4). Used by PREEMPTIVE_INTERCEPT to align the dwell
+        window so the receiver holds through the predicted arrival.
+        """
+        if self.periodic_interceptor is None:
+            return None
+        try:
+            schedule = self.periodic_interceptor.get_preemptive_schedule(
+                current_time_us=float(current_time_us),
+                horizon_us=float(max(horizon_us * 2.0, self.base_dwell_time_us * 4.0)),
+            )
+        except Exception:
+            return None
+        for entry in schedule:
+            if int(entry.get("expected_band", -1)) == int(band):
+                conf = float(entry.get("confidence", 0.0))
+                toa = float(entry.get("expected_time_us", float("nan")))
+                if toa == toa and conf > 0.7 and toa > float(current_time_us) - 1e-6:
+                    return toa
+        return None
 
     # ------------------------------------------------------------- internals
     def _band_to_center(self, band: int) -> float:
@@ -653,6 +880,14 @@ class CognitiveRFScanEnv(gym.Env):
                 current_time=current_time,
                 band=band,
                 min_cluster_size=min_cluster_size,
+                embeddings=result.get("embeddings"),
+            )
+
+            # Persistent, tracker-derived identity per buffer pulse. Downstream
+            # modules (periodic interceptor, etc.) consume this mapping—never the
+            # ground-truth emitter id carried on detection objects.
+            self._last_pulse_tracks = self.emitter_tracker.get_pulse_track_assignment(
+                result["labels"]
             )
 
             # Get band belief from updated tracks
@@ -696,25 +931,43 @@ class CognitiveRFScanEnv(gym.Env):
             )
             self.semantic_memory.write_emitter(profile)
 
-    def _update_periodic_interceptor(self, detections: list, band: int, dwell_start: float) -> None:
-        """Update periodic interceptor with new detections.
+    def _update_periodic_interceptor(self, detections: list, band: int, dwell_start: float, dwell_end: float) -> None:
+        """Feed the periodic interceptor with tracker-derived intercepts.
+
+        The interceptor operates entirely on observable track history: for each
+        pulse of the current dwell window we pass the persistent ``track_id`` from
+        the emitter tracker (not any ground-truth ``emitter_id`` carried on the
+        detection objects), its ToA, the band and the measured frequency.
 
         Args:
-            detections: List of DetectionObservation from current dwell.
+            detections: Detections from the current dwell (unused for identity;
+                kept for interface symmetry with the previous implementation).
             band: Band index where detections occurred.
-            dwell_start: Dwell start time (µs).
+            dwell_start: Dwell window start (µs).
+            dwell_end: Dwell window end (µs).
         """
-        if self.periodic_interceptor is None:
+        if self.periodic_interceptor is None or self.emitter_tracker is None:
             return
 
-        for d in detections:
-            emitter_id = getattr(d, "emitter_id", None)
-            if emitter_id is not None:
-                toa = float(getattr(d, "time_us", getattr(d, "toa_us", dwell_start)))
-                # Use track_id as emitter identifier for periodic tracking
-                # For real operation, would use deinterleaver cluster label
-                track_id = f"track_{emitter_id}"
-                self.periodic_interceptor.record_intercept(track_id, toa, band)
+        pulse_tracks = getattr(self, "_last_pulse_tracks", None)
+        if pulse_tracks is None:
+            return
+
+        # _pdw_buffer order matches the axis of _last_pulse_tracks (labels were
+        # produced by windowed_cluster_deinterleave over this same buffer).
+        for i, p in enumerate(self._pdw_buffer):
+            t = float(p["time_us"])
+            if t < dwell_start or t >= dwell_end:
+                continue
+            track_id = int(pulse_tracks[i]) if i < len(pulse_tracks) else -1
+            if track_id < 0:
+                continue
+            self.periodic_interceptor.record_intercept(
+                track_id=f"track_{track_id}",
+                toa_us=t,
+                band_idx=band,
+                frequency_mhz=float(p["frequency_mhz"]),
+            )
 
     def _advance_world_to(self, target_time_us: float) -> tuple[int, int]:
         """Stream the radio environment ENTRY events at-or-before target into the receiver.

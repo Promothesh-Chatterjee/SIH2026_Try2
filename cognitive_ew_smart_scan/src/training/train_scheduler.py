@@ -22,14 +22,16 @@ import yaml
 
 from ..environment.cognitive_rf_scan_env import CognitiveRFScanEnv
 from ..environment.scenario_generator import ScenarioSource
+from ..data.tsrd_manifest import dataset_fingerprint
 from ..models.deinterleaver import PDWTransformerEncoder
 from ..models.drqn_scheduler import DRQNScheduler
 from ..models.smartscan_moe import SmartScanMoE
-from ..preprocessing.normalise import load_normalization_stats
+from ..preprocessing.normalise import load_normalization_stats, normalization_stats_hash
 from ..telemetry.publisher import TelemetryPublisher
 from ..telemetry.run_manager import RunManager
 from ..training.replay_buffer import SequenceReplayBuffer
 from ..training.thompson_sampling import ThompsonSamplingExplorer
+from ..training.training_gate import require_training_gate
 
 logger = logging.getLogger(__name__)
 
@@ -59,25 +61,67 @@ def _do_drqn_update(
     batch: dict[str, np.ndarray],
     gamma: float,
     device: torch.device,
+    aux_coef: float = 0.1,
 ) -> float:
-    """One Double-DQN BPTT update on a sampled batch. Returns loss value."""
+    """One Double-DQN BPTT update on a sampled batch. Returns loss value.
+
+    Phase 7/8 target-and-mask semantics:
+      * ``hit_probs`` are binary (1.0 = the action intercepted).
+      * ``intercept_times_us`` are genuine dwell-relative times, NaN for misses
+        and padding — never a fabricated 500µs target.
+      * ``valid_mask`` excludes padded transitions from every loss.
+      * ``burn_in_mask`` marks leading window steps that only warm the LSTM
+        hidden state and are excluded from every loss.
+      * Time Huber is applied only where ``valid_mask & ~burn_in_mask &
+        time_target_valid``; probability BCE and Q loss only where
+        ``valid_mask & ~burn_in_mask``.
+    """
+    valid = torch.tensor(batch["valid_mask"], dtype=torch.bool, device=device)
+    burn_in = torch.tensor(batch["burn_in_mask"], dtype=torch.bool, device=device)
+    loss_mask = valid & ~burn_in  # real graded transitions only
+
+    # Pure burn-in window (no graded transitions): warm-up only, no update.
+    if not loss_mask.any():
+        return 0.0
+
+    # The full window is fed through the LSTM: burn-in columns warm the hidden
+    # state, graded columns carry the recurrence forward for the losses.
     obs_b = torch.tensor(batch["obs"], dtype=torch.float32, device=device)
     act_b = torch.tensor(batch["actions"], dtype=torch.long, device=device)
     rew_b = torch.tensor(batch["rewards"], dtype=torch.float32, device=device)
     next_obs_b = torch.tensor(batch["next_obs"], dtype=torch.float32, device=device)
     done_b = torch.tensor(batch["dones"], dtype=torch.float32, device=device)
 
-    q_all, _ = online_drqn(obs_b)
+    q_all, aux, _ = online_drqn(obs_b)
     q_chosen = q_all.gather(-1, act_b.unsqueeze(-1)).squeeze(-1)
 
     with torch.inference_mode():
-        next_q_online, _ = online_drqn(next_obs_b)
+        next_q_online, _, _ = online_drqn(next_obs_b)
         best_actions = next_q_online.argmax(dim=-1, keepdim=True)
-        next_q_target, _ = target_drqn(next_obs_b)
+        next_q_target, _, _ = target_drqn(next_obs_b)
         next_q = next_q_target.gather(-1, best_actions).squeeze(-1)
 
     targets = rew_b + gamma * next_q * (1.0 - done_b)
-    loss = loss_fn(q_chosen, targets.detach())
+    q_loss = loss_fn(q_chosen[loss_mask], targets[loss_mask].detach())
+
+    loss: torch.Tensor = q_loss
+    if aux_coef > 0:
+        hit_probs = torch.tensor(batch["hit_probs"], dtype=torch.float32, device=device)
+        prob_pred = aux["intercept_prob"].gather(-1, act_b.unsqueeze(-1)).squeeze(-1)
+        bce = nn.functional.binary_cross_entropy(prob_pred[loss_mask], hit_probs[loss_mask].detach())
+
+        # Time target only when the transition is a genuine hit.
+        time_valid = (
+            loss_mask
+            & torch.tensor(batch["time_target_valid"], dtype=torch.bool, device=device)
+        )
+        if time_valid.any():
+            intercept_times = torch.tensor(batch["intercept_times_us"], dtype=torch.float32, device=device)
+            time_pred = aux["intercept_time_us"].gather(-1, act_b.unsqueeze(-1)).squeeze(-1)
+            huber = nn.functional.huber_loss(time_pred[time_valid], intercept_times[time_valid].detach(), delta=100.0)
+        else:
+            huber = torch.zeros((), device=device)
+        loss = loss + aux_coef * (bce + huber)
 
     optimizer.zero_grad()
     loss.backward()
@@ -122,12 +166,29 @@ def train_scheduler(
     sched_cfg = train_cfg.get("scheduler", {})
 
     n_bands = int(drqn_cfg.get("n_bands", 36))
+    n_modes = int(drqn_cfg.get("n_modes", env_cfg.get("n_modes", 5)))
+    n_actions = int(drqn_cfg.get("n_actions", n_bands * n_modes))
     band_features = int(env_cfg.get("band_features", 10))
     obs_dim = int(env_cfg.get("obs_dim", n_bands * band_features))
 
     # Merge reward weights into env config
     env_config = {**env_cfg, **reward_cfg}
     env_config.setdefault("n_bands", n_bands)
+    env_config.setdefault("n_modes", n_modes)
+    env_config.setdefault("n_actions", n_actions)
+
+    training_mode = train_cfg.get("training_mode", "real_tsrd")
+    from ..data.tsrd_root import resolve_tsrd_root
+
+    canonical_root = resolve_tsrd_root(cli_value=data_dir_override, config=train_cfg)
+    if training_mode == "real_tsrd":
+        require_training_gate(
+            data_root=canonical_root,
+            deinterleaver_checkpoint=train_cfg.get("deinterleaver_ckpt", "checkpoints/deinterleaver/best.pt"),
+            normalization_stats=train_cfg.get("normalization_stats", "checkpoints/deinterleaver/normalization_stats.json"),
+            environment_config=env_config,
+            model_config=full_cfg,
+        )
 
     # Load trained deinterleaver and normalization stats for perception
     deinterleaver_ckpt = train_cfg.get("deinterleaver_ckpt", "checkpoints/deinterleaver/best.pt")
@@ -164,7 +225,7 @@ def train_scheduler(
         logger.warning("Deinterleaver checkpoint not found at %s; perception disabled", deinterleaver_ckpt)
 
     # Build the receiver-driven cognitive env from a TSRD/synthetic scenario.
-    data_dir = data_dir_override if data_dir_override is not None else train_cfg.get("data_dir", "data")
+    data_dir = canonical_root
     subset = train_cfg.get("subset", "train")
     world_mode = train_cfg.get("world_mode", "stare")
     observation_mode = train_cfg.get("observation_mode", "scan")
@@ -181,7 +242,7 @@ def train_scheduler(
             max_pulses=int(env_config.get("max_pulses", 50000)),
             seed=seed,
             source_type="world",
-            allow_synthetic_fallback=False,  # No silent fallback for real TSRD training
+            allow_synthetic_fallback=training_mode == "synthetic",
         )
         logger.info("Scheduler training: RF world source = TSRD STARE (latent truth)")
     else:
@@ -195,7 +256,7 @@ def train_scheduler(
             time_horizon_us=float(env_config.get("time_horizon_us", 0.0)) or None,
             max_pulses=int(env_config.get("max_pulses", 50000)),
             seed=seed,
-            allow_synthetic_fallback=False,
+            allow_synthetic_fallback=training_mode == "synthetic",
         )
         logger.warning("Scheduler training: RF world source = %s (non-standard)", world_mode)
 
@@ -210,21 +271,34 @@ def train_scheduler(
     )
     env.reset()  # populate first episode's records so obs_dim/action checks are valid
     assert env.obs_dim == obs_dim, f"env obs_dim {env.obs_dim} != configured {obs_dim}"
-    assert env.action_space.n == n_bands, f"env action space {env.action_space.n} != n_bands {n_bands}"
+    assert env.action_space.n == n_actions, f"env action space {env.action_space.n} != n_actions {n_actions}"
+    assert env.action_space.n == n_bands * n_modes, f"env action space must be n_bands*n_modes = {n_bands * n_modes}"
     
     if env.perception_enabled:
         logger.info("Perception pipeline ENABLED: trained deinterleaver + EmitterTracker active")
     else:
         logger.warning("Perception pipeline DISABLED: no trained deinterleaver loaded")
+    if training_mode == "real_tsrd":
+        assert env.perception_enabled, "Strict TSRD training requires perception_enabled=True"
+        assert env.emitter_tracker is not None, "Strict TSRD training requires EmitterTracker"
 
     lstm_hidden = int(drqn_cfg.get("lstm_hidden", 256))
     lstm_layers = int(drqn_cfg.get("lstm_layers", 2))
 
-    online_drqn = DRQNScheduler(obs_dim=obs_dim, n_bands=n_bands, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers).to(device)
+    online_drqn = DRQNScheduler(
+        obs_dim=obs_dim,
+        n_bands=n_bands,
+        n_actions=n_actions,
+        lstm_hidden=lstm_hidden,
+        lstm_layers=lstm_layers,
+    ).to(device)
     target_drqn = copy.deepcopy(online_drqn).to(device)
     target_drqn.eval()
 
-    moe = SmartScanMoE(online_drqn, {**moe_cfg, "n_bands": n_bands, "device": str(device)}).to(device)
+    moe = SmartScanMoE(
+        online_drqn,
+        {**moe_cfg, "n_bands": n_bands, "n_modes": n_modes, "n_actions": n_actions, "device": str(device)},
+    ).to(device)
 
     optimizer = optim.Adam(online_drqn.parameters(), lr=float(drqn_cfg.get("lr", 1e-4)))
     loss_fn = nn.HuberLoss()
@@ -239,29 +313,54 @@ def train_scheduler(
     except Exception as exc:
         logger.info("WandB not available: %s", exc)
 
-    ts_sampler = ThompsonSamplingExplorer(n_bands=n_bands, seed=seed)
+    ts_sampler = ThompsonSamplingExplorer(n_bands=n_bands, n_modes=n_modes, seed=seed)
     ts_warmup = int(sched_cfg.get("thompson_warmup_steps", 5000))
     eps_start = float(drqn_cfg.get("eps_start", 1.0))
     eps_end = float(drqn_cfg.get("eps_end", 0.05))
     eps_decay = float(drqn_cfg.get("eps_decay", 10000))
     gamma = float(drqn_cfg.get("gamma", 0.99))
     seq_len = int(sched_cfg.get("seq_len", 16))
+    burn_in = int(sched_cfg.get("burn_in", 8))
     batch_size = int(sched_cfg.get("batch_size", 32))
     update_freq = int(sched_cfg.get("update_freq", 4))
     target_update_freq = int(sched_cfg.get("target_update_freq", 1000))
     total_steps = int(sched_cfg.get("total_timesteps", 500000))
 
-    buffer = SequenceReplayBuffer(capacity=int(sched_cfg.get("replay_buffer_size", 50000)), seq_len=seq_len, obs_dim=obs_dim, seed=seed)
+    buffer = SequenceReplayBuffer(
+        capacity=int(sched_cfg.get("replay_buffer_size", 50000)),
+        seq_len=seq_len,
+        obs_dim=obs_dim,
+        burn_in=burn_in,
+        seed=seed,
+    )
 
-    output_dir = Path(output_dir_override) if output_dir_override is not None else Path(train_cfg.get("output_dir", "checkpoints/scheduler"))
+    # Phase 17: canonical layout — never resolve to the ambiguous root
+    # (config output_dir="checkpoints" is replaced by the canonical subdir).
+    from ..utils.checkpoint_paths import SCHEDULER_DIR, resolve_checkpoint_dir
+
+    output_dir = resolve_checkpoint_dir(
+        output_dir_override,
+        train_cfg.get("output_dir"),
+        SCHEDULER_DIR,
+        role="scheduler",
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # P0-9: reproducible run directory + telemetry publisher (real metrics only).
     world_mode = train_cfg.get("world_mode", "stare")
+    source_files = list(getattr(train_source, "files", []))
+    data_fingerprint = dataset_fingerprint(source_files, data_dir, world_mode)
     run = RunManager(
         root=train_cfg.get("runs_dir", "runs"),
         config={**full_cfg, **train_cfg},
-        extras={"split": subset, "mode": world_mode, "seed": seed, "device": str(device)},
+        extras={
+            "split": subset,
+            "mode": world_mode,
+            "seed": seed,
+            "device": str(device),
+            "dataset_root": str(data_dir),
+            "dataset_fingerprint": data_fingerprint,
+        },
     )
     run.write_git_revision()
     telemetry = TelemetryPublisher(run=run)
@@ -288,9 +387,17 @@ def train_scheduler(
 
         while not done and global_step < total_steps:
             # ---- Action selection ----
+            # Feed the MoE the observable periodic-imminent-arrival urgency so
+            # PREEMPTIVE_INTERCEPT selection is driven by the actual prediction
+            # pipeline (Phase 5 / Phase 3 no-GT-leakage constraint).
+            if hasattr(moe, "set_periodic_urgency_vector") and getattr(env, "belief", None) is not None:
+                try:
+                    moe.set_periodic_urgency_vector(np.asarray(env.belief.periodic_urgency, dtype=np.float32))
+                except Exception:
+                    pass
             if global_step < ts_warmup:
                 use_ts = True
-                action = ts_sampler.select_band()
+                action = ts_sampler.select_action()
             else:
                 eps = eps_end + (eps_start - eps_end) * float(np.exp(-global_step / eps_decay))
                 use_ts = False
@@ -300,17 +407,28 @@ def train_scheduler(
                     online_drqn.eval()
                     with torch.inference_mode():
                         obs_np = np.asarray(obs, dtype=np.float32)
-                        bands, hidden_out, _ = moe.select_bands(obs_np, hidden)
-                        action = int(bands[0])
+                        action, hidden_out, attr = moe.select_action(obs_np, hidden)
                         hidden = hidden_out if hidden_out is not None else hidden
                     online_drqn.train()
 
             # ---- Step env ----
-            next_obs, reward, terminated, truncated, info = env.step(action)
+            mode_ctx = {
+                "action_score": float(attr.get("action_score", 1.0)),
+                "reason": str(attr.get("reason", "mode_preset")),
+            } if "attr" in locals() and attr else None
+            next_obs, reward, terminated, truncated, info = env.step(action, mode_context=mode_ctx)
             done = bool(terminated or truncated)
 
             ts_sampler.update(action, bool(info["hit"]))
-            buffer.add(np.asarray(obs, dtype=np.float32), action, float(reward), np.asarray(next_obs, dtype=np.float32), done)
+            buffer.add(
+                np.asarray(obs, dtype=np.float32),
+                action,
+                float(reward),
+                np.asarray(next_obs, dtype=np.float32),
+                done,
+                hit_prob=float(info.get("hit_prob", 1.0 if info["hit"] else 0.0)),
+                intercept_time_us=float(info.get("intercept_time_us", float("nan"))),
+            )
             obs = next_obs
             ep_reward += float(reward)
             ep_hits += int(info["hit"])
@@ -440,7 +558,45 @@ def train_scheduler(
             logger.info("  New best reward %.2f — saved best.pt", ep_reward)
 
     final_path = output_dir / "final.pt"
-    torch.save(online_drqn.state_dict(), final_path)
+    from ..utils.checkpoint_meta import build_train_metadata, save_state, write_checkpoint_metadata
+
+    final_meta = build_train_metadata(
+        split=subset,
+        n_bands=n_bands,
+        arch="DRQNScheduler+SmartScanMoE",
+        seed=seed,
+        metrics={"best_episode_reward": float(best_reward)},
+        extra={"mode": world_mode, "obs_dim": int(env_config.get("obs_dim", obs_dim))},
+    )
+    save_state(online_drqn, final_path, final_meta)
+    # Phase 17: human-readable metadata.json sidecar (contract artifact).
+    write_checkpoint_metadata(output_dir / "metadata.json", final_meta, artifacts=["best.pt", "final.pt"])
+    from ..utils.experiment_manifest import write_experiment_manifest
+
+    manifest = write_experiment_manifest(
+        run.dir / "experiment_manifest.json",
+        dataset_fingerprint=data_fingerprint,
+        dataset_root=data_dir,
+        dataset_mode=world_mode,
+        split=subset,
+        seed=seed,
+        model_configuration=full_cfg,
+        training_configuration=train_cfg,
+        normalization_stats_hash=(
+            normalization_stats_hash(fit_stats) if fit_stats is not None else None
+        ),
+        checkpoint_metadata=final_meta,
+        device=str(device),
+        metrics={"best_episode_reward": float(best_reward)},
+    )
+    write_experiment_manifest(output_dir / "experiment_manifest.json", **{
+        key: manifest[key]
+        for key in (
+            "dataset_fingerprint", "dataset_root", "dataset_mode", "split", "seed",
+            "model_configuration", "training_configuration", "normalization_stats_hash",
+            "checkpoint_metadata", "device", "metrics",
+        )
+    })
     logger.info("Scheduler training complete. Final: %s Best: %.2f", final_path, best_reward)
     telemetry.update(step=global_step, episode=episode, type="done", best_reward=float(best_reward))
     if use_wandb:

@@ -164,14 +164,46 @@ def fit_train_statistics(train_files: list[Path | str], max_sample_pulses: int =
     return stats
 
 
+import hashlib
+
+NORM_STATS_VERSION = "v1"
+
+
+def normalization_stats_hash(stats: dict) -> str:
+    """Return a stable content hash of normalisation statistics.
+
+    The hash orders keys canonically (so it is independent of dict insertion
+    order) and covers all stored values. The version key is always folded in
+    and any self-referential ``stats_hash`` key is excluded, so the SAME value
+    is produced whether the input is the raw train-fitted stats, the stamped
+    file payload, or a previously hashed dict. Any change to the train-fitted
+    statistics therefore changes the hash, letting checkpoint metadata, ONNX
+    metadata and the persisted stats file provably agree on the exact
+    normalisation used.
+    """
+    import json
+
+    identity = {str(k): v for k, v in {**dict(stats), "stats_version": NORM_STATS_VERSION}.items()}
+    canonical = json.dumps(
+        {k: v for k, v in identity.items() if k != "stats_hash"},
+        sort_keys=True,
+        separators=(",", ":"),
+        default=repr,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+
+
 def save_normalization_stats(stats: dict[str, Any], path: Path | str) -> None:
     """Persist train-fitted normalization statistics alongside checkpoints."""
     import json
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
+    payload = dict(stats)
+    payload["stats_version"] = NORM_STATS_VERSION
+    payload["stats_hash"] = normalization_stats_hash(payload)
     with open(p, "w", encoding="utf-8") as f:
-        json.dump(stats, f, indent=2)
-    logger.info("Saved normalization stats to %s", p)
+        json.dump(payload, f, indent=2)
+    logger.info("Saved normalization stats to %s (hash %s)", p, payload["stats_hash"])
 
 
 def load_normalization_stats(path: Path | str) -> dict[str, float]:

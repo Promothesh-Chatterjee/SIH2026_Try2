@@ -27,6 +27,14 @@ class DataPipelineTests(unittest.TestCase):
         self.assertIn("val", roots)
         self.assertIn("test", roots)
 
+    def test_split_resolution_rejects_cross_mode_fallback(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "scan" / "train_scan").mkdir(parents=True)
+            (root / "stare" / "train_stare").mkdir(parents=True)
+            self.assertNotEqual(resolve_split_dirs(root, "stare")["train"], root / "scan" / "train_scan")
+            self.assertNotEqual(resolve_split_dirs(root, "scan")["train"], root / "stare" / "train_stare")
+
     def test_validation_returns_dict(self):
         result = validate_dataset(Path("data"))
         self.assertIn("valid", result)

@@ -88,12 +88,15 @@ def load_h5_records(
 
     Args:
         path: Path to .h5 file containing "data" (n,5) and "labels" (n,).
-        freq_min_mhz / freq_max_mhz: Spectral clipping range.
-        time_horizon_us: Optional toa upper bound.
+        freq_min_mhz / freq_max_mhz: Spectral clipping range (forwarded to
+            :func:`records_from_array` so out-of-band pulses are actually dropped).
+        time_horizon_us: Optional toa upper bound (also forwarded).
         max_pulses: Cap on pulses loaded (keeps episodes bounded).
 
     Returns:
-        List of PulseRecord.
+        List of PulseRecord. ToA is normalised so the earliest surviving pulse
+        sits at t=0 — normalisation happens per single file, never across files.
+        Zero-pulse trains return an empty list.
     """
     import h5py
 
@@ -101,7 +104,14 @@ def load_h5_records(
     with h5py.File(str(path), "r") as handle:
         data = handle["data"][:max_pulses]
         labels = handle["labels"][:max_pulses] if "labels" in handle else None
-    records = records_from_array(data, labels, source_id=f"tsrd:{path.stem}")
+    records = records_from_array(
+        data,
+        labels,
+        source_id=f"tsrd:{path.stem}",
+        freq_min_mhz=freq_min_mhz,
+        freq_max_mhz=freq_max_mhz,
+        time_horizon_us=time_horizon_us,
+    )
     if not records:
         return records
     # Normalise ToA so the scenario starts at t=0. TSRD ToA are absolute relative
@@ -156,6 +166,36 @@ def discover_h5_files(data_root: str | Path, mode: str = "scan", subset: str = "
         return []
     found = _search_subdirs(data_root, mode, subset)
     return sorted(set(found))
+
+
+def classify_h5_files(files: Sequence[str | Path]) -> tuple[list[Path], list[Path], list[Path]]:
+    """Classify TSRD .h5 files by usability (header-only scan).
+
+    Returns ``(eligible, empty, unreadable)``:
+        eligible   — readable ``data`` dataset with > 0 rows
+        empty      — readable ``data`` dataset with exactly 0 rows (a legit
+                     official-TSRD empty scene; structurally valid but unusable)
+        unreadable — could not be opened / has no ``data`` dataset
+
+    An empty scene must be SKIPPED for episodes, not crash a run.
+    """
+    import h5py
+
+    eligible: list[Path] = []
+    empty: list[Path] = []
+    unreadable: list[Path] = []
+    for f in sorted(Path(x) for x in files):
+        try:
+            with h5py.File(str(f), "r") as handle:
+                if "data" not in handle:
+                    unreadable.append(f)
+                    continue
+                rows = handle["data"].shape[0]
+        except Exception:
+            unreadable.append(f)
+            continue
+        (empty if rows == 0 else eligible).append(f)
+    return eligible, empty, unreadable
 
 
 def synthetic_records(
@@ -241,19 +281,47 @@ def build_scenario(
         files = discover_h5_files(data_root, mode=mode, subset=subset)
 
     if files:
-        records: list[PulseRecord] = []
-        for f in files:
-            records.extend(
-                load_h5_records(
-                    f,
-                    freq_min_mhz=freq_min_mhz,
-                    freq_max_mhz=freq_max_mhz,
-                    time_horizon_us=time_horizon_us,
-                    max_pulses=max_pulses,
-                )
+        eligible, empty, unreadable = classify_h5_files(files)
+        if empty or unreadable:
+            logger.info(
+                "Scenario[tsrd]: skipping %d empty scenario(s) and %d unreadable file(s) in %s/%s",
+                len(empty), len(unreadable), mode, subset,
             )
-        logger.info("Scenario[tsrd]: %d pulses from %d file(s) in %s/%s", len(records), len(files), mode, subset)
-        return records, "tsrd", files
+        if not eligible:
+            # Files exist but NONE are usable: fail loudly in real-TSRD mode,
+            # and never silently telescope to an empty episode.
+            if not allow_synthetic_fallback:
+                raise FileNotFoundError(
+                    f"Directory {data_root}/{mode}/{subset} contains {len(files)} .h5 "
+                    f"file(s) but none are eligible for episodes "
+                    f"({len(empty)} empty, {len(unreadable)} unreadable) and "
+                    f"allow_synthetic_fallback=False"
+                )
+            records = synthetic_records(
+                freq_min_mhz=freq_min_mhz, freq_max_mhz=freq_max_mhz, seed=seed
+            )
+            logger.warning(
+                "Scenario[synthetic]: no eligible %s/%s .h5 files (%d empty, %d "
+                "unreadable); using synthetic per allow_synthetic_fallback",
+                mode, subset, len(empty), len(unreadable),
+            )
+            return records, "synthetic", []
+        records: list[PulseRecord] = []
+        for f in eligible:
+            try:
+                records.extend(
+                    load_h5_records(
+                        f,
+                        freq_min_mhz=freq_min_mhz,
+                        freq_max_mhz=freq_max_mhz,
+                        time_horizon_us=time_horizon_us,
+                        max_pulses=max_pulses,
+                    )
+                )
+            except Exception as exc:
+                logger.warning("Scenario[tsrd]: load failed for %s — skipped: %s", f, exc)
+        logger.info("Scenario[tsrd]: %d pulses from %d eligible file(s) in %s/%s", len(records), len(eligible), mode, subset)
+        return records, "tsrd", eligible
 
     if not allow_synthetic_fallback:
         raise FileNotFoundError(
@@ -359,8 +427,14 @@ class ScenarioSource:
     (capped to ``max_pulses``, ToA-normalised) so that an RL episode gets a
     single, diverse, memory-bounded scenario — unlike concatenating every file.
     Falls back to a fresh synthetic scenario ONLY if allow_synthetic_fallback=True
-    and no .h5 files are present. This prevents silent synthetic fallback during
-    real TSRD experiments.
+    and no usable .h5 files are present. This prevents silent synthetic fallback
+    during real TSRD experiments.
+
+    Zero-pulse trains are skipped for episodes: discovered files are partitioned
+    at construction into ``eligible_files`` (>0 pulses), ``empty_files`` (0
+    pulses) and ``unreadable_files``. :meth:`sample` draws ONLY from
+    ``eligible_files``, so an unusable empty scene can never silently become an
+    empty episode.
     """
 
     def __init__(
@@ -383,15 +457,24 @@ class ScenarioSource:
         self.max_pulses = max_pulses
         self._rng = np.random.default_rng(seed)
         self.files: list[Path] = []
+        self.eligible_files: list[Path] = []
+        self.empty_files: list[Path] = []
+        self.unreadable_files: list[Path] = []
         self.source_type = source_type
         self.source_mode = "stare" if source_type == "world" else "scan"
         self.allow_synthetic_fallback = allow_synthetic_fallback
 
         if data_root is not None and not synthetic:
-            self.files = discover_h5_files(data_root, mode=self.source_mode, subset=subset)
+            self.files = sorted(discover_h5_files(data_root, mode=self.source_mode, subset=subset))
+            self.eligible_files, self.empty_files, self.unreadable_files = classify_h5_files(self.files)
         self.source_label = f"tsrd_{self.source_mode}" if self.files else "synthetic"
         if self.files:
-            logger.info("ScenarioSource[%s]: %d files in %s/%s", self.source_label, self.source_mode, subset)
+            logger.info(
+                "ScenarioSource[%s]: %d files in %s/%s "
+                "(%d eligible, %d empty skipped, %d unreadable)",
+                self.source_label, len(self.files), self.source_mode, subset,
+                len(self.eligible_files), len(self.empty_files), len(self.unreadable_files),
+            )
         else:
             if synthetic:
                 logger.info("ScenarioSource[synthetic]: explicit synthetic mode")
@@ -403,27 +486,71 @@ class ScenarioSource:
                     f"No TSRD .h5 files found in {data_root}/{self.source_mode}/{subset}. "
                     f"Set allow_synthetic_fallback=True to use synthetic data, or provide valid TSRD data."
                 )
+        # Fail fast when files exist but none are usable (all empty/unreadable).
+        if self.files and not self.eligible_files and not synthetic and not self.allow_synthetic_fallback:
+            raise FileNotFoundError(
+                f"All {len(self.files)} discovered files in {data_root}/{self.source_mode}/{subset} "
+                f"are unusable for episodes ({len(self.empty_files)} empty, "
+                f"{len(self.unreadable_files)} unreadable) and allow_synthetic_fallback=False"
+            )
 
     def __len__(self) -> int:
-        return len(self.files)
+        return len(self.eligible_files)
+
+    @property
+    def n_empty_scenarios(self) -> int:
+        """Number of structurally valid zero-pulse trains skipped for episodes."""
+        return len(self.empty_files)
 
     def sample(self) -> list[PulseRecord]:
-        """Return records for one episode (a single random file, or synthetic)."""
-        if not self.files:
+        """Return records for one episode (a single random ELIGIBLE file, or synthetic).
+
+        One call == one episode == exactly ONE eligible .h5 pulse train (never a
+        concatenation of several files). Empty (zero-pulse) scenarios are never
+        returned — they are skipped. If an eligible file is corrupt or loads to
+        zero records after clipping filters, it is reported and skipped and we
+        retry other eligible files; exhausting all retries raises rather than
+        silently producing an empty episode.
+        """
+        if not self.eligible_files:
             if not self.allow_synthetic_fallback:
                 raise FileNotFoundError(
-                    f"No TSRD .h5 files available for sampling and allow_synthetic_fallback=False"
+                    "No usable TSRD .h5 files available for sampling "
+                    f"(discovered {len(self.files)}, "
+                    f"empty {len(self.empty_files)}, unreadable {len(self.unreadable_files)}) "
+                    "and allow_synthetic_fallback=False"
                 )
             return synthetic_records(
                 freq_min_mhz=self.freq_min_mhz,
                 freq_max_mhz=self.freq_max_mhz,
                 seed=int(self._rng.integers(0, 2**31)),
             )
-        fpath = Path(self._rng.choice(self.files))
-        return load_h5_records(
-            fpath,
-            freq_min_mhz=self.freq_min_mhz,
-            freq_max_mhz=self.freq_max_mhz,
-            time_horizon_us=self.time_horizon_us,
-            max_pulses=self.max_pulses,
+        candidates = list(self.eligible_files)
+        attempts = min(10, max(1, len(candidates)))
+        for _ in range(attempts):
+            fpath = Path(self._rng.choice(candidates))
+            try:
+                records = load_h5_records(
+                    fpath,
+                    freq_min_mhz=self.freq_min_mhz,
+                    freq_max_mhz=self.freq_max_mhz,
+                    time_horizon_us=self.time_horizon_us,
+                    max_pulses=self.max_pulses,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "ScenarioSource: corrupt/unreadable eligible file %s (%s) — "
+                    "reported and skipped for this episode",
+                    fpath, exc,
+                )
+                continue
+            if records:
+                return records
+            logger.warning(
+                "ScenarioSource: file %s yielded 0 records after filters — retrying",
+                fpath,
+            )
+        raise RuntimeError(
+            "All sampled TSRD files yielded empty episodes (unusable or corrupt "
+            "after filtering); refusing to fabricate an episode."
         )
