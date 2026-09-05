@@ -40,9 +40,16 @@ import numpy as np
 from gymnasium import spaces
 
 from src.contracts import (
+    CANONICAL_BAND_FEATURES,
+    CANONICAL_N_BANDS,
+    DEFAULT_DWELL_MULTIPLIERS,
     DWELL_MODES,
     DWELL_MODE_SEMANTICS,
-    DEFAULT_DWELL_MULTIPLIERS,
+    RF_BASE_DWELL_TIME_US,
+    RF_FREQ_MAX_MHZ,
+    RF_FREQ_MIN_MHZ,
+    RF_FREQUENCY_STEP_MHZ,
+    RF_IBW_MHZ,
     band_of_action,
     encode_action,
     mode_of_action,
@@ -62,8 +69,7 @@ from src.training.reward import bernoulli_entropy, receiver_reward_components
 
 logger = logging.getLogger(__name__)
 
-
-STATE_FEATURES_PER_BAND = 10
+STATE_FEATURES_PER_BAND = CANONICAL_BAND_FEATURES
 
 
 @dataclass
@@ -83,7 +89,7 @@ class BeliefState:
     10. risk/priority score (composite cognitive urgency)
     """
 
-    def __init__(self, n_bands: int = 36):
+    def __init__(self, n_bands: int = CANONICAL_N_BANDS):
         self.n_bands = n_bands
         self.reset()
 
@@ -171,8 +177,11 @@ class BeliefState:
         if bands is None:
             return
         bands = np.asarray(bands, dtype=np.float32)
-        if bands.shape != (self.n_bands, 10):
-            logger.warning("Perception bands shape mismatch: %s vs (%d, 10)", bands.shape, self.n_bands)
+        if bands.shape != (self.n_bands, CANONICAL_BAND_FEATURES):
+            logger.warning(
+                "Perception bands shape mismatch: %s vs (%d, %d)",
+                bands.shape, self.n_bands, CANONICAL_BAND_FEATURES,
+            )
             return
 
         # Blend perception features with existing belief (EMA)
@@ -275,14 +284,14 @@ class CognitiveRFScanEnv(gym.Env):
         # Periodic interceptor configuration
         self.periodic_min_obs = config.get("periodic_min_obs", 20)
 
-        self.n_bands: int = int(config.get("n_bands", 36))
-        self.freq_min: float = float(config.get("freq_min_mhz", 0.0))
-        self.freq_max: float = float(config.get("freq_max_mhz", 18000.0))
-        self.ibw_mhz: float = float(config.get("ibw_mhz", 500.0))
+        self.n_bands: int = int(config.get("n_bands", CANONICAL_N_BANDS))
+        self.freq_min: float = float(config.get("freq_min_mhz", RF_FREQ_MIN_MHZ))
+        self.freq_max: float = float(config.get("freq_max_mhz", RF_FREQ_MAX_MHZ))
+        self.ibw_mhz: float = float(config.get("ibw_mhz", RF_IBW_MHZ))
         # Base receiver dwell time (µs); per-action dwell is base * mode multiplier.
-        self.base_dwell_time_us: float = float(config.get("dwell_time_us", 500.0))
+        self.base_dwell_time_us: float = float(config.get("dwell_time_us", RF_BASE_DWELL_TIME_US))
         self.dwell_time_us: float = self.base_dwell_time_us  # default mode multiplier 1.0
-        self.frequency_step_mhz: float = float(config.get("frequency_step_mhz", 500.0))
+        self.frequency_step_mhz: float = float(config.get("frequency_step_mhz", RF_FREQUENCY_STEP_MHZ))
         self.detection_threshold_db: float = float(config.get("detection_threshold_db", -140.0))
         self.max_steps_per_episode: int = int(config.get("max_steps_per_episode", 2000))
 
@@ -291,6 +300,10 @@ class CognitiveRFScanEnv(gym.Env):
         if self.n_modes != canonical_n_modes():
             raise ValueError(f"n_modes={self.n_modes} != canonical {canonical_n_modes()}")
         self.n_actions: int = int(config.get("n_actions", n_actions_for(self.n_bands, self.n_modes)))
+        if self.n_actions != self.n_bands * self.n_modes:
+            raise ValueError(
+                f"n_actions={self.n_actions} != n_bands*n_modes ({self.n_bands * self.n_modes})"
+            )
 
         # Complete config-driven reward component weights.
         reward_cfg = config.get("reward", {})
@@ -305,16 +318,26 @@ class CognitiveRFScanEnv(gym.Env):
         self.w_redundant_scan = reward_cfg.get("w_redundant_scan", -0.1)
         self.w_delay = reward_cfg.get("w_delay", 0.0)
 
-        # Feature layout: STATE_FEATURES_PER_BAND features per band
-        self.band_features = STATE_FEATURES_PER_BAND
+        # Feature layout: CANONICAL_BAND_FEATURES features per band (contract).
+        self.band_features = CANONICAL_BAND_FEATURES
+        if int(config.get("band_features", CANONICAL_BAND_FEATURES)) != CANONICAL_BAND_FEATURES:
+            raise ValueError(
+                f"band_features={config.get('band_features')} != canonical {CANONICAL_BAND_FEATURES}"
+            )
         self.obs_dim = int(self.n_bands * self.band_features)
+        if int(config.get("obs_dim", self.obs_dim)) != self.obs_dim:
+            raise ValueError(
+                f"obs_dim={config.get('obs_dim')} != n_bands*band_features ({self.obs_dim})"
+            )
 
         self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.obs_dim,), dtype=np.float32)
         self.action_space = spaces.Discrete(self.n_actions)
 
-        assert self.observation_space.shape[0] == self.obs_dim == self.n_bands * self.band_features, (
-            f"Observation dimension mismatch: space={self.observation_space.shape[0]} vs obs_dim={self.obs_dim}"
-        )
+        if self.observation_space.shape[0] != self.obs_dim or self.obs_dim != self.n_bands * self.band_features:
+            raise ValueError(
+                f"Observation dimension mismatch: space={self.observation_space.shape[0]} vs "
+                f"obs_dim={self.obs_dim} vs n_bands*band_features={self.n_bands * self.band_features}"
+            )
 
         self._rng = np.random.default_rng(seed)
         self._seed = seed
