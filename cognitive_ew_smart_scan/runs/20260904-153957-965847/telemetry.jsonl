@@ -1,0 +1,12 @@
+{"ts": 1788516599.4922593, "step": 0, "file": "D:\\TSRD_data\\scan\\test_scan\\config_0.h5", "type": "eval_file", "pd": 0.0, "pfa": 0.0, "avg_reward": -0.027}
+{"ts": 1788516606.4916332, "step": 1, "file": "D:\\TSRD_data\\scan\\test_scan\\config_1.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.22402440625}
+{"ts": 1788516616.8043597, "step": 2, "file": "D:\\TSRD_data\\scan\\test_scan\\config_10.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.5876845625}
+{"ts": 1788516627.1797915, "step": 3, "file": "D:\\TSRD_data\\scan\\test_scan\\config_100.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": 0.00012278125000000006}
+{"ts": 1788516637.5385969, "step": 4, "file": "D:\\TSRD_data\\scan\\test_scan\\config_101.h5", "type": "eval_file", "pd": 0.0, "pfa": 0.0, "avg_reward": -0.14}
+{"ts": 1788516647.7384253, "step": 5, "file": "D:\\TSRD_data\\scan\\test_scan\\config_102.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.381263875}
+{"ts": 1788516658.003149, "step": 6, "file": "D:\\TSRD_data\\scan\\test_scan\\config_103.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.640472875}
+{"ts": 1788516668.177993, "step": 7, "file": "D:\\TSRD_data\\scan\\test_scan\\config_104.h5", "type": "eval_file", "pd": 0.0, "pfa": 0.0, "avg_reward": -0.096}
+{"ts": 1788516678.2276857, "step": 8, "file": "D:\\TSRD_data\\scan\\test_scan\\config_105.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.017154250000000003}
+{"ts": 1788516688.2687304, "step": 9, "file": "D:\\TSRD_data\\scan\\test_scan\\config_106.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.2450619375}
+{"ts": 1788516698.5020695, "step": 10, "file": "D:\\TSRD_data\\scan\\test_scan\\config_107.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.37927909375}
+{"ts": 1788516708.6235218, "step": 11, "file": "D:\\TSRD_data\\scan\\test_scan\\config_108.h5", "type": "eval_file", "pd": 0.0, "pfa": 0.0, "avg_reward": -0.102}

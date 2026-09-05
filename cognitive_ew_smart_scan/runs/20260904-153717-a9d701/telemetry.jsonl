@@ -1,0 +1,14 @@
+{"ts": 1788516439.016845, "step": 0, "file": "D:\\TSRD_data\\scan\\test_scan\\config_0.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.023140499999999998}
+{"ts": 1788516444.5692792, "step": 1, "file": "D:\\TSRD_data\\scan\\test_scan\\config_1.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.2130588125}
+{"ts": 1788516453.8306484, "step": 2, "file": "D:\\TSRD_data\\scan\\test_scan\\config_10.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.5450732500000001}
+{"ts": 1788516462.7122836, "step": 3, "file": "D:\\TSRD_data\\scan\\test_scan\\config_100.h5", "type": "eval_file", "pd": 0.0, "pfa": 0.0, "avg_reward": -0.014}
+{"ts": 1788516471.5013516, "step": 4, "file": "D:\\TSRD_data\\scan\\test_scan\\config_101.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.1343593125}
+{"ts": 1788516479.993504, "step": 5, "file": "D:\\TSRD_data\\scan\\test_scan\\config_102.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.3658630625}
+{"ts": 1788516488.8075094, "step": 6, "file": "D:\\TSRD_data\\scan\\test_scan\\config_103.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.598443625}
+{"ts": 1788516497.2953384, "step": 7, "file": "D:\\TSRD_data\\scan\\test_scan\\config_104.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.09227896875000001}
+{"ts": 1788516505.8723996, "step": 8, "file": "D:\\TSRD_data\\scan\\test_scan\\config_105.h5", "type": "eval_file", "pd": 0.0, "pfa": 0.0, "avg_reward": -0.021}
+{"ts": 1788516514.5244684, "step": 9, "file": "D:\\TSRD_data\\scan\\test_scan\\config_106.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.24147018750000002}
+{"ts": 1788516523.2062812, "step": 10, "file": "D:\\TSRD_data\\scan\\test_scan\\config_107.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.33794650000000004}
+{"ts": 1788516531.847289, "step": 11, "file": "D:\\TSRD_data\\scan\\test_scan\\config_108.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.0902767265625}
+{"ts": 1788516540.5745182, "step": 12, "file": "D:\\TSRD_data\\scan\\test_scan\\config_109.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.08426978125}
+{"ts": 1788516549.2040164, "step": 13, "file": "D:\\TSRD_data\\scan\\test_scan\\config_11.h5", "type": "eval_file", "pd": 1.0, "pfa": 0.0, "avg_reward": -0.0650425625}

@@ -1,0 +1,17 @@
+{
+  "config": {
+    "baseline": "random",
+    "deinterleaver": "checkpoints/deinterleaver/best.pt",
+    "mode": "scan",
+    "n_files": 250,
+    "scheduler": "checkpoints/scheduler/best.pt"
+  },
+  "created_at": 1788516437.9191668,
+  "device": "cpu",
+  "host": "DELLg15-C6S8DCG",
+  "mode": "scan",
+  "python": "3.14.7",
+  "run_id": "20260904-153717-a9d701",
+  "split": "test",
+  "torch": "2.13.0+cpu"
+}
