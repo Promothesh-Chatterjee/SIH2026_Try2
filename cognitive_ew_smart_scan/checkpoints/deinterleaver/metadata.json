@@ -19,7 +19,7 @@
     "agility",
     "priority"
   ],
-  "git_revision": "5832202",
+  "git_revision": "6dcc3e5",
   "metrics": {
     "best_val_v_measure": 0.08569486183291143
   },
@@ -30,5 +30,5 @@
   "preproc_version": "v1",
   "seed": 42,
   "split": "train",
-  "timestamp": "2026-09-05T11:49:25.471189+00:00"
+  "timestamp": "2026-09-05T12:23:29.300331+00:00"
 }
