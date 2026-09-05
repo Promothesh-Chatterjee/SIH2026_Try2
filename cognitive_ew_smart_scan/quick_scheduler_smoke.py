@@ -1,6 +1,8 @@
 """Quick scheduler smoke test with reduced timesteps."""
 import sys
-sys.path.insert(0, "C:/Users/PromotheshChatterjee/Documents/GitHub/SIH2026_Try2/cognitive_ew_smart_scan")
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import yaml
 import torch

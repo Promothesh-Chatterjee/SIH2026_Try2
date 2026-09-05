@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -239,6 +240,45 @@ class FullAcquisitionTests(unittest.TestCase):
             self.assertEqual([f["name"] for f in sub["failed_files"]], ["stare/train/bad.h5"])
             self.assertIn("reason", sub["failed_files"][0])
             self.assertFalse((out / "stare" / "train" / "bad.h5").exists())
+
+
+class DeprecatedDownloadShimTests(unittest.TestCase):
+    """The legacy download_tsrd.py must forward to the authoritative path."""
+
+    def test_shim_forwards_to_authoritative_without_allow_download(self):
+        from scripts import download_tsrd
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(download_tsrd, "download_tsr_dataset") as fake:
+                fake.return_value = {
+                    "status": "skipped",
+                    "reason": "download_disabled_by_default",
+                    "output_dir": tmp,
+                }
+                with mock.patch.object(
+                    download_tsrd.sys, "argv", ["download_tsrd.py", "--output-dir", tmp, "--modes", "scan", "--splits", "train"]
+                ):
+                    with mock.patch.object(download_tsrd.sys, "stderr", new=mock.MagicMock()):
+                        download_tsrd.main()
+                fake.assert_called_once()
+                kwargs = fake.call_args.kwargs
+                self.assertEqual(kwargs["output_dir"], tmp)
+                self.assertEqual(kwargs["modes"], ["scan"])
+                self.assertEqual(kwargs["splits"], ["train"])
+                self.assertFalse(kwargs["allow_download"])
+
+    def test_shim_follows_env_root_default(self):
+        from scripts import download_tsrd
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"TSRD_DATA_ROOT": tmp}):
+            with mock.patch.object(download_tsrd, "download_tsr_dataset") as fake:
+                fake.return_value = {"status": "skipped"}
+                with mock.patch.object(
+                    download_tsrd.sys, "argv", ["download_tsrd.py"]
+                ):
+                    with mock.patch.object(download_tsrd.sys, "stderr", new=mock.MagicMock()):
+                        download_tsrd.main()
+                self.assertEqual(fake.call_args.kwargs["output_dir"], tmp)
 
 
 if __name__ == "__main__":

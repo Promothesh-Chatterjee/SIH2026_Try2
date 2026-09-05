@@ -1,6 +1,8 @@
 """Test script to validate the CognitiveRFScanEnv with all new components."""
 import sys
-sys.path.insert(0, "C:/Users/PromotheshChatterjee/Documents/GitHub/SIH2026_Try2/cognitive_ew_smart_scan")
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from src.environment.cognitive_rf_scan_env import CognitiveRFScanEnv
 from src.environment.scenario_generator import synthetic_records

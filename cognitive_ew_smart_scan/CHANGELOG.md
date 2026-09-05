@@ -38,9 +38,47 @@ suite command is `python -m pytest tests/` from `cognitive_ew_smart_scan/`.
   baseline contract (`test_baseline_suite.py` + `test_evaluate_baseline.py`).
   `--skip-behavioral-tests` escapes the pytest gates.
 
+### Added — Canonical TSRD root + split-layout contract (Phase 1, 2026-09-05)
+
+`src/data/tsrd_root.py` is the single source of truth for dataset location and
+layout:
+
+- **Root precedence**: CLI override > env `TSRD_DATA_ROOT` > training YAML
+  `data_dir` > safe relative default `data`. Paths normalized via
+  `pathlib.Path`; no hard-coded developer path remains in the resolver.
+- **Alias-aware split layout**: `resolve_split_dirs` (in `tsrd_manifest.py`)
+  now delegates to `split_candidate_dirs` / `resolve_split_dir`. Candidate
+  order is byte-identical to the legacy list (OK for the `mode=None` quirk),
+  covering Kaggle aliases (`train_scan`/`val_scan`/`test_scan`), conventional
+  (`train`/`val`/`validation`/`test`), archive, flat and nested-root layouts.
+- **Tests** (`tests/test_tsrd_root.py`, 22): resolver precedence, pathlib
+  normalization, per-layout alias resolution for `scan`/`stare`, `mode=None`
+  quirk, invalid-split guard, and the real-TSRD no-synthetic-substitution
+  guard (fallback only when explicitly allowed, never silent).
+
+### Fixed — Phase 0 audit blockers (2026-09-05)
+
+- Machine-specific `sys.path.insert` removed from `quick_scheduler_smoke.py`
+  and `test_env_validation.py` (now repo-relative via `__file__`).
+- Stale `D:\TSRD_data` references updated to the canonical `D:\TSRD` in
+  `Memory.md` and `CHANGELOG.md`.
+- Root-level `output_dir: checkpoints` removed from
+  `configs/training_config_smoke.yaml` (legacy of Phase 17 canonical
+  artifact restructure).
+- **Remaining Phase 0 blocker**: `rf_scan_env.py` builds `Path(data_dir)/mode/subset`
+  directly, bypassing alias resolution (legacy env, only used by unit tests).
+
+### Fixed — Downloader reconciliation (Phase B, 2026-09-05)
+
+`scripts/download_tsrd.py` reduced from a whole-repo `snapshot_download`
+(with no per-file verification, no manifests, no download gate) to a
+deprecation shim that forwards to the one authoritative path
+`scripts/download_data.py`, now requiring `--allow-download`. Two shim
+guard tests added (`tests/test_download_data.py`, now 21).
+
 Verified: current tree → `NOT READY` with exactly ONE blocker — the recorded
 deinterleaver dataset fingerprint (`27e…`) cannot be reproduced from any
-current stare/scan split combination on `D:\TSRD_data` (disk truth for scan
+current stare/scan split combination on `D:\TSRD` (disk truth for scan
 train+val = `27b…`, rebuilt full-scan manifest = `b0…`), while the
 normalization fingerprint still matches. This is genuine provenance drift
 from a prior data state → retrain (or refresh provenance) required; the gate
@@ -111,7 +149,7 @@ now reported instead of one lump "valid" flag:
   `partial` in the summary); a failed download lands in `failed_files` with the
   reason — there is no silent fallback, no synthetic row counts.
 - **Real-TSRD schema alignment**: verified against the full dataset already on
-  `D:\TSRD_data` (official Kaggle layout `stare/` + `scan/` with `train_*` /
+  `D:\TSRD` (official Kaggle layout `stare/` + `scan/` with `train_*` /
   `val_*` / `test_*`): real `labels` are `(N, 1)` → accepted via flatten (same
   as `TSRDValidator`); `metadata.attrs["collection_time_s"]` is recorded; the
   `label length == N` check now accepts both `(N,)` and `(N, 1)`;
@@ -119,7 +157,7 @@ now reported instead of one lump "valid" flag:
   (e.g. `stare/train_stare/config_0.h5`: 2,071,247 pulses, 71 emitters, 30 s
   collection; `scan/val_scan/config_0.h5`: 79,340 pulses, 15 emitters).
   The downloader acquires fresh subsets into the canonical
-  `<output-dir>/<mode>/<split>` layout; the resident `D:\TSRD_data` copy is
+  `<output-dir>/<mode>/<split>` layout; the resident `D:\TSRD` copy is
   consumed via `src/data/tsrd_manifest.py::resolve_split_dirs`.
 - **Tests** (`tests/test_download_data.py`, 19): mode/split normalisation and
   aliases, subset membership, per-file SHA-256, `_verify_h5` happy path plus the

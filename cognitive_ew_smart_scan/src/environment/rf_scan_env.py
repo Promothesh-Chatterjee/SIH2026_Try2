@@ -102,7 +102,7 @@ class LegacyRFScanEnv(gym.Env):
         self.w3: float = float(config.get("w3", 0.1))
         self.w4: float = float(config.get("w4", 4.0))
 
-        self.data_dir = Path(data_dir) / mode / subset
+        self.data_dir = self._resolve_split_dir(data_dir, mode, subset)
         self.mode = mode
         self.subset = subset
 
@@ -136,6 +136,31 @@ class LegacyRFScanEnv(gym.Env):
         if seed is not None:
             np.random.seed(seed)
             random.seed(seed)
+
+    @staticmethod
+    def _resolve_split_dir(
+        data_dir: str | Path, mode: str, subset: str
+    ) -> Path:
+        """Resolve the split directory through the alias-aware layout contract.
+
+        Uses ``tsrd_manifest.resolve_split_dirs`` (Kaggle/conventional/archive
+        layouts) and falls back to the plain ``<root>/<mode>/<subset>`` path
+        for unknown subset names or resolver failures — the legacy ``PulseTrain``
+        default. Never creates directories.
+        """
+        split_key = subset.lower()
+        if split_key == "validation":
+            split_key = "val"
+        if split_key not in ("train", "val", "test"):
+            return Path(data_dir) / mode / subset
+        try:
+            from ..data.tsrd_manifest import resolve_split_dirs
+
+            resolved = resolve_split_dirs(data_dir, mode)
+            return Path(resolved[split_key])
+        except Exception:  # pragma: no cover - defensive fallback
+            logger.exception("resolve_split_dirs failed for %s/%s; using legacy path", mode, subset)
+            return Path(data_dir) / mode / subset
 
     def _load_random_pt(self) -> PulseTrain | None:
         """Load a random PulseTrain from disk (lazy).
