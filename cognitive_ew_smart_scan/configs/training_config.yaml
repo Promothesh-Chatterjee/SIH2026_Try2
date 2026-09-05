@@ -1,4 +1,4 @@
-data_dir: "D:/TSRD"
+data_dir: "data"
 # Phase 17: the root-level `output_dir` is intentionally REMOVED — writing both
 # models into `checkpoints` would create ambiguous root-level best.pt/final.pt.
 # Trainers ALWAYS resolve to their canonical subdirectory

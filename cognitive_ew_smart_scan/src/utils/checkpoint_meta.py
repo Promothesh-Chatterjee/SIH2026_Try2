@@ -17,7 +17,7 @@ from typing import Any
 
 import torch
 
-from src.contracts import FEATURE_ORDER as _FEATURE_ORDER
+from ..contracts import FEATURE_ORDER as _FEATURE_ORDER
 
 # Backward-compatible list export for checkpoint metadata callers.
 FEATURE_ORDER = list(_FEATURE_ORDER)

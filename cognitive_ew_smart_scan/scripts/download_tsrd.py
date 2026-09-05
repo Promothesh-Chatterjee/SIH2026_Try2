@@ -11,7 +11,7 @@ labels, SHA-256) and writes machine-readable manifests, with
 This module is kept as a backward-compatible shim that forwards to
 ``download_tsr_dataset``. New usage:
 
-    python scripts/download_data.py --allow-download --output-dir D:/TSRD
+    python scripts/download_data.py --allow-download --output-dir data
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ DEPRECATION_MSG = (
     "\n[WARNING] scripts/download_tsrd.py is DEPRECATED: it was a whole-repo "
     "snapshot_download with no verification/manifests/gate.\n"
     "Use the one authoritative path instead:\n"
-    "    python scripts/download_data.py --allow-download --output-dir D:/TSRD\n"
+    "    python scripts/download_data.py --allow-download --output-dir data\n"
 )
 
 
