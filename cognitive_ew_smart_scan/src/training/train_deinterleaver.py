@@ -442,6 +442,9 @@ def train_deinterleaver(
     weight_decay = float(train_cfg["deinterleaver"].get("weight_decay", 1e-5))
     margin = float(model_cfg["triplet_margin"])
     save_every = int(train_cfg["deinterleaver"].get("save_every", 5))
+    # Window/stride now configurable from config; fall back to sensible defaults.
+    window_size = int(train_cfg["deinterleaver"].get("window_size", 1024))
+    stride = int(train_cfg["deinterleaver"].get("stride", 512))
     val_every = 1 if quick_smoke else int(train_cfg["deinterleaver"].get("val_every", 2))
     warmup_steps = 0 if quick_smoke else int(train_cfg["deinterleaver"].get("warmup_steps", 500))
 
@@ -500,13 +503,14 @@ def train_deinterleaver(
         np.random.shuffle(train_files)
         epoch_loss = 0.0
         n_batches = 0
+        oom_count = 0
 
         for fp in train_files:
             # Generate contiguous temporal windows (P0-3)
             windows = load_file_windows(
                 fp,
-                window_size=max_pulses,
-                stride=max(1, max_pulses // 2),
+                window_size=window_size,
+                stride=stride,
                 fit_stats=fit_stats,
                 max_windows_per_file=2 if quick_smoke else 4,
             )
@@ -537,6 +541,10 @@ def train_deinterleaver(
                     if "out of memory" in str(exc).lower():
                         logger.warning("CUDA OOM on %s — clearing cache", fp)
                         torch.cuda.empty_cache()
+                        oom_count += 1
+                        if oom_count >= 3:
+                            logger.error("3+ CUDA OOM events on %s — aborting epoch", fp)
+                            raise
                         continue
                     raise
 
