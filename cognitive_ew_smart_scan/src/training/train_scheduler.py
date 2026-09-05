@@ -22,10 +22,11 @@ import yaml
 
 from ..environment.cognitive_rf_scan_env import CognitiveRFScanEnv
 from ..environment.scenario_generator import ScenarioSource
+from ..data.tsrd_manifest import dataset_fingerprint
 from ..models.deinterleaver import PDWTransformerEncoder
 from ..models.drqn_scheduler import DRQNScheduler
 from ..models.smartscan_moe import SmartScanMoE
-from ..preprocessing.normalise import load_normalization_stats
+from ..preprocessing.normalise import load_normalization_stats, normalization_stats_hash
 from ..telemetry.publisher import TelemetryPublisher
 from ..telemetry.run_manager import RunManager
 from ..training.replay_buffer import SequenceReplayBuffer
@@ -347,10 +348,19 @@ def train_scheduler(
 
     # P0-9: reproducible run directory + telemetry publisher (real metrics only).
     world_mode = train_cfg.get("world_mode", "stare")
+    source_files = list(getattr(train_source, "files", []))
+    data_fingerprint = dataset_fingerprint(source_files, data_dir, world_mode)
     run = RunManager(
         root=train_cfg.get("runs_dir", "runs"),
         config={**full_cfg, **train_cfg},
-        extras={"split": subset, "mode": world_mode, "seed": seed, "device": str(device)},
+        extras={
+            "split": subset,
+            "mode": world_mode,
+            "seed": seed,
+            "device": str(device),
+            "dataset_root": str(data_dir),
+            "dataset_fingerprint": data_fingerprint,
+        },
     )
     run.write_git_revision()
     telemetry = TelemetryPublisher(run=run)
@@ -561,6 +571,32 @@ def train_scheduler(
     save_state(online_drqn, final_path, final_meta)
     # Phase 17: human-readable metadata.json sidecar (contract artifact).
     write_checkpoint_metadata(output_dir / "metadata.json", final_meta, artifacts=["best.pt", "final.pt"])
+    from ..utils.experiment_manifest import write_experiment_manifest
+
+    manifest = write_experiment_manifest(
+        run.dir / "experiment_manifest.json",
+        dataset_fingerprint=data_fingerprint,
+        dataset_root=data_dir,
+        dataset_mode=world_mode,
+        split=subset,
+        seed=seed,
+        model_configuration=full_cfg,
+        training_configuration=train_cfg,
+        normalization_stats_hash=(
+            normalization_stats_hash(fit_stats) if fit_stats is not None else None
+        ),
+        checkpoint_metadata=final_meta,
+        device=str(device),
+        metrics={"best_episode_reward": float(best_reward)},
+    )
+    write_experiment_manifest(output_dir / "experiment_manifest.json", **{
+        key: manifest[key]
+        for key in (
+            "dataset_fingerprint", "dataset_root", "dataset_mode", "split", "seed",
+            "model_configuration", "training_configuration", "normalization_stats_hash",
+            "checkpoint_metadata", "device", "metrics",
+        )
+    })
     logger.info("Scheduler training complete. Final: %s Best: %.2f", final_path, best_reward)
     telemetry.update(step=global_step, episode=episode, type="done", best_reward=float(best_reward))
     if use_wandb:

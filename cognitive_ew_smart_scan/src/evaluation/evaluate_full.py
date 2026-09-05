@@ -111,6 +111,27 @@ def _compute_dataset_fingerprint(files: list[Path], n_empty: int, n_unusable: in
     }
 
 
+def _checkpoint_metadata(path: str | Path | None) -> dict:
+    """Read embedded checkpoint provenance without requiring model loading."""
+    if not path or not Path(path).exists():
+        return {}
+
+
+def _dataset_root_for_split(test_dir: Path) -> Path:
+    """Resolve the dataset root from a conventional split directory."""
+    directory = test_dir if test_dir.is_dir() else test_dir.parent
+    if directory.parent.name in {"scan", "stare"}:
+        return directory.parent.parent
+    return directory.parent
+    try:
+        import torch
+
+        payload = torch.load(str(path), map_location="cpu", weights_only=False)
+        return dict(payload.get("metadata") or {}) if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
 def _get_experiment_metadata(
     seed: int,
     mode: str,
@@ -626,6 +647,36 @@ def run_full_evaluation(
     with open(output_dir / "dataset_fingerprint.json", "w") as f:
         json.dump(ds_fp, f, indent=2)
     logger.info("Saved dataset_fingerprint.json")
+
+    from ..preprocessing.normalise import normalization_stats_hash
+    from ..utils.experiment_manifest import write_experiment_manifest
+
+    checkpoint_metadata = {
+        "deinterleaver": _checkpoint_metadata(deinterleaver_ckpt),
+        "scheduler": _checkpoint_metadata(scheduler_ckpt),
+    }
+    manifest_kwargs = {
+        "dataset_fingerprint": ds_fp,
+        "dataset_root": _dataset_root_for_split(test_dir),
+        "dataset_mode": mode,
+        "split": "test",
+        "seed": seed,
+        "model_configuration": model_cfg,
+        "training_configuration": {
+            "evaluation": {
+                "baseline": baseline,
+                "deinterleaver_checkpoint": str(deinterleaver_ckpt) if deinterleaver_ckpt else None,
+                "scheduler_checkpoint": str(scheduler_ckpt) if scheduler_ckpt else None,
+            }
+        },
+        "normalization_stats_hash": normalization_stats_hash(train_stats) if train_stats else None,
+        "checkpoint_metadata": checkpoint_metadata,
+        "device": str(device),
+        "metrics": agg,
+    }
+    write_experiment_manifest(output_dir / "experiment_manifest.json", **manifest_kwargs)
+    write_experiment_manifest(run.dir / "experiment_manifest.json", **manifest_kwargs)
+    logger.info("Saved experiment_manifest.json")
 
     # Generate Plots
     try:

@@ -1,76 +1,76 @@
 {
-  "data_root": "D:\\TSRD",
+  "data_root": "data",
   "mode": "scan",
   "splits": {
     "train": {
-      "directory": "D:\\TSRD\\scan\\train_scan",
+      "directory": "data\\scan\\train",
       "file_count": 2,
-      "total_pulses": 288898,
-      "structurally_valid_files": 2,
+      "total_pulses": 1248,
+      "structurally_valid_files": 0,
       "empty_files": 0,
-      "training_eligible": 2,
-      "evaluation_eligible": 2,
+      "training_eligible": 0,
+      "evaluation_eligible": 0,
       "files": [
         {
-          "path": "scan/train_scan/config_0.h5",
-          "filename": "config_0.h5",
-          "size_bytes": 3629191,
-          "sha256": "761bea81f6231dff9745f2b17a5c335d1aefd1ceb98b83239c49e7495c9bf8ad",
-          "num_pulses": 169617,
-          "num_emitters": 72,
-          "duration_s": 28.995,
-          "structurally_valid": true,
+          "path": "scan/train/synthetic_000.h5",
+          "filename": "synthetic_000.h5",
+          "size_bytes": 17024,
+          "sha256": "8de05773cad32ca94715ea5107cbdb0ff1c90a223fe6f1a409466413375394ea",
+          "num_pulses": 624,
+          "num_emitters": 5,
+          "duration_s": 0.05,
+          "structurally_valid": false,
           "empty_scenario": false,
-          "training_eligible": true,
-          "evaluation_eligible": true
+          "training_eligible": false,
+          "evaluation_eligible": false
         },
         {
-          "path": "scan/train_scan/config_1.h5",
-          "filename": "config_1.h5",
-          "size_bytes": 2302672,
-          "sha256": "c4c813769124ba489b7f46dd7c88bb1fc41f987e6a31e55698cdfbeb26c1d927",
-          "num_pulses": 119281,
-          "num_emitters": 37,
-          "duration_s": 28.558,
-          "structurally_valid": true,
+          "path": "scan/train/synthetic_001.h5",
+          "filename": "synthetic_001.h5",
+          "size_bytes": 17024,
+          "sha256": "aaca1b015702809bb8c316333b79fcafc0a5e7b1666a36e4fd3aa04a91b3907b",
+          "num_pulses": 624,
+          "num_emitters": 5,
+          "duration_s": 0.05,
+          "structurally_valid": false,
           "empty_scenario": false,
-          "training_eligible": true,
-          "evaluation_eligible": true
+          "training_eligible": false,
+          "evaluation_eligible": false
         }
       ]
     },
     "val": {
-      "directory": "D:\\TSRD\\scan\\val_scan",
+      "directory": "data\\scan\\val",
       "file_count": 1,
-      "total_pulses": 79340,
-      "structurally_valid_files": 1,
+      "total_pulses": 624,
+      "structurally_valid_files": 0,
       "empty_files": 0,
-      "training_eligible": 1,
-      "evaluation_eligible": 1,
+      "training_eligible": 0,
+      "evaluation_eligible": 0,
       "files": [
         {
-          "path": "scan/val_scan/config_0.h5",
-          "filename": "config_0.h5",
-          "size_bytes": 1408164,
-          "sha256": "e3f34be9b3347b7d8d514e91bd2787a819bd9d300ef07babb31327363afacc39",
-          "num_pulses": 79340,
-          "num_emitters": 15,
-          "duration_s": 28.221,
-          "structurally_valid": true,
+          "path": "scan/val/synthetic_000.h5",
+          "filename": "synthetic_000.h5",
+          "size_bytes": 17024,
+          "sha256": "aaca1b015702809bb8c316333b79fcafc0a5e7b1666a36e4fd3aa04a91b3907b",
+          "num_pulses": 624,
+          "num_emitters": 5,
+          "duration_s": 0.05,
+          "structurally_valid": false,
           "empty_scenario": false,
-          "training_eligible": true,
-          "evaluation_eligible": true
+          "training_eligible": false,
+          "evaluation_eligible": false
         }
       ]
     }
   },
   "summary": {
     "total_files": 3,
-    "total_pulses": 368238,
-    "structurally_valid_files": 3,
+    "total_pulses": 1872,
+    "structurally_valid_files": 0,
     "empty_files": 0,
-    "training_eligible": 3,
-    "evaluation_eligible": 3
+    "training_eligible": 0,
+    "evaluation_eligible": 0
   },
-  "dataset_fingerprint": "27eca11016df104e4fceec5544ca2153a47b400558cebe4db76f6efab42bf321"
+  "dataset_fingerprint": "8ae3ffc98644c2d15fae477f8fa863021e578e7374d50772c0f85567965f04eb"
 }

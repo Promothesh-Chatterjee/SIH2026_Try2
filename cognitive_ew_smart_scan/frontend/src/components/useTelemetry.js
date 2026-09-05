@@ -10,7 +10,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
  *
  * @param {string} wsUrl WebSocket endpoint (default ws://localhost:8080/ws/state).
  */
-export function useTelemetry(wsUrl = 'ws://localhost:8080/ws/state') {
+export function useTelemetry(wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws/state') {
   const [live, setLive] = useState(false)
   const [source, setSource] = useState('none')
   const [liveMessage, setLiveMessage] = useState('no live telemetry yet')
