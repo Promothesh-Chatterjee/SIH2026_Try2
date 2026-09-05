@@ -1,5 +1,9 @@
-data_dir: "D:/TSRD_data"
-output_dir: "checkpoints"
+data_dir: "D:/TSRD"
+# Phase 17: the root-level `output_dir` is intentionally REMOVED — writing both
+# models into `checkpoints` would create ambiguous root-level best.pt/final.pt.
+# Trainers ALWAYS resolve to their canonical subdirectory
+# (checkpoints/deinterleaver | checkpoints/scheduler) unless --output-dir is
+# passed explicitly.
 seed: 42
 subset: "train"
 mode: "scan"
@@ -10,8 +14,8 @@ deinterleaver_ckpt: "checkpoints/deinterleaver/best.pt"
 normalization_stats: "checkpoints/deinterleaver/normalization_stats.json"
 deinterleaver:
   batch_size: 8
-  max_pulses_per_train: 2048    # truncate/sample long pulse trains
-  epochs: 50
+  max_pulses_per_train: 512    # window size; 2048→512 for CPU-feasible full-dataset triplet training
+  epochs: 3                      # provenance/quality revision (was 50)
   lr: 3e-4
   weight_decay: 1e-5
   scheduler: cosine
@@ -26,6 +30,7 @@ scheduler:
   replay_buffer_size: 50000
   batch_size: 32
   seq_len: 16                   # DRQN sequence length for BPTT
+  burn_in: 8                    # leading window steps: LSTM warm-up, excluded from loss
   update_freq: 4
   target_update_freq: 1000
   thompson_warmup_steps: 5000   # Use Thompson Sampling before DRQN exploitation

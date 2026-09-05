@@ -100,10 +100,15 @@ class TSRDValidator:
         result: dict[str, Any] = {
             "file": str(path),
             "valid": True,
+            "structurally_valid": True,
+            "empty_scenario": False,
+            "training_eligible": False,
+            "evaluation_eligible": False,
             "errors": [],
             "warnings": [],
             "num_pulses": 0,
             "num_emitters": 0,
+            "num_nonnoise_emitters": 0,
             "duration_s": 0.0,
             "features": CANONICAL_FEATURES,
         }
@@ -123,10 +128,12 @@ class TSRDValidator:
                 # 1. Dataset presence
                 if "data" not in handle:
                     result["valid"] = False
+                    result["structurally_valid"] = False
                     result["errors"].append("Missing 'data' dataset")
                     return result
                 if "labels" not in handle:
                     result["valid"] = False
+                    result["structurally_valid"] = False
                     result["errors"].append("Missing 'labels' dataset")
                     return result
 
@@ -134,17 +141,20 @@ class TSRDValidator:
                 labels = np.asarray(handle["labels"]).reshape(-1)
 
                 # 2. Shape check: (N, 5)
+                shape = tuple(int(s) for s in data.shape)
                 if data.ndim != 2 or data.shape[1] != 5:
                     result["valid"] = False
-                    result["errors"].append(f"Data shape must be (N, 5), got {data.shape}")
+                    result["structurally_valid"] = False
+                    result["errors"].append(f"Data shape must be (N, 5), got {shape}")
                     return result
 
                 num_pulses = len(data)
                 result["num_pulses"] = num_pulses
-                if num_pulses == 0:
-                    result["valid"] = False
-                    result["errors"].append("Dataset contains 0 pulses")
-                    return result
+                # Zero-pulse trains (e.g. `data (0,5)` / `labels (0,1)` in official
+                # TSRD splits) are STILL structurally valid — an empty scene is a
+                # legitimate scene, not a corrupt file. We only record it and mark
+                # it ineligible for training/evaluation (see eligibility fields).
+                result["empty_scenario"] = num_pulses == 0
 
                 # 3. Label count match
                 if len(labels) != num_pulses:
@@ -184,6 +194,21 @@ class TSRDValidator:
                 # 7. Emitter labels
                 unique_emitters = np.unique(labels)
                 result["num_emitters"] = int(len(unique_emitters))
+                nonnoise = labels[labels != -1]
+                result["num_nonnoise_emitters"] = int(len(np.unique(nonnoise)))
+
+                # --- Eligibility classification (Phase 19) ---
+                # Three distinct concepts, so a handful of empty trains never
+                # invalidate the whole dataset or crash a training run:
+                #   * structural validity  — shape/readability/label alignment
+                #   * training eligibility — structurally valid AND non-empty
+                #   * evaluation eligibility — training-eligible AND has at least
+                #       one annotated (non-noise) emitter to score against
+                result["structurally_valid"] = result["valid"]
+                result["training_eligible"] = result["valid"] and num_pulses > 0
+                result["evaluation_eligible"] = (
+                    result["training_eligible"] and result["num_nonnoise_emitters"] >= 1
+                )
 
                 # Check metadata group if present
                 if "metadata" in handle and hasattr(handle["metadata"], "attrs"):
@@ -245,7 +270,12 @@ def dataset_fingerprint(files: list[Path], root: str | Path, mode: str) -> str:
 
 
 def build_manifest(data_root: str | Path, output_path: str | Path | None = None, mode: str = "scan", max_files: int | None = None) -> dict:
-    """Build a comprehensive manifest describing split files, pulse counts, and validation status."""
+    """Build a comprehensive manifest describing split files, pulse counts, and validation status.
+
+    Per-split eligibility statistics are reported (structurally valid / empty /
+    training-eligible / evaluation-eligible counts) so a few zero-pulse trains
+    are visible but never treated as dataset-level corruption.
+    """
     root = Path(data_root)
     validator = TSRDValidator()
     split_dirs = resolve_split_dirs(root, mode)
@@ -255,7 +285,14 @@ def build_manifest(data_root: str | Path, output_path: str | Path | None = None,
         "data_root": str(root),
         "mode": mode,
         "splits": {},
-        "summary": {"total_files": 0, "total_pulses": 0},
+        "summary": {
+            "total_files": 0,
+            "total_pulses": 0,
+            "structurally_valid_files": 0,
+            "empty_files": 0,
+            "training_eligible": 0,
+            "evaluation_eligible": 0,
+        },
     }
 
     for split_name, split_dir in split_dirs.items():
@@ -265,9 +302,23 @@ def build_manifest(data_root: str | Path, output_path: str | Path | None = None,
 
         records = []
         split_pulses = 0
+        split_stats = {
+            "structurally_valid_files": 0,
+            "empty_files": 0,
+            "training_eligible": 0,
+            "evaluation_eligible": 0,
+        }
         all_files.extend(split_files)
         for fp in split_files:
             v = validator.validate_file(fp)
+            if v["structurally_valid"]:
+                split_stats["structurally_valid_files"] += 1
+            if v["empty_scenario"]:
+                split_stats["empty_files"] += 1
+            if v["training_eligible"]:
+                split_stats["training_eligible"] += 1
+            if v["evaluation_eligible"]:
+                split_stats["evaluation_eligible"] += 1
             records.append({
                 "path": str(fp.relative_to(root)).replace("\\", "/") if root in fp.parents else str(fp),
                 "filename": fp.name,
@@ -276,7 +327,10 @@ def build_manifest(data_root: str | Path, output_path: str | Path | None = None,
                 "num_pulses": v["num_pulses"],
                 "num_emitters": v["num_emitters"],
                 "duration_s": round(v["duration_s"], 3),
-                "valid": v["valid"],
+                "structurally_valid": v["structurally_valid"],
+                "empty_scenario": v["empty_scenario"],
+                "training_eligible": v["training_eligible"],
+                "evaluation_eligible": v["evaluation_eligible"],
             })
             split_pulses += v["num_pulses"]
 
@@ -284,10 +338,16 @@ def build_manifest(data_root: str | Path, output_path: str | Path | None = None,
             "directory": str(split_dir),
             "file_count": len(records),
             "total_pulses": split_pulses,
+            "structurally_valid_files": split_stats["structurally_valid_files"],
+            "empty_files": split_stats["empty_files"],
+            "training_eligible": split_stats["training_eligible"],
+            "evaluation_eligible": split_stats["evaluation_eligible"],
             "files": records,
         }
         manifest["summary"]["total_files"] += len(records)
         manifest["summary"]["total_pulses"] += split_pulses
+        for key in split_stats:
+            manifest["summary"][key] += split_stats[key]
 
     manifest["dataset_fingerprint"] = dataset_fingerprint(all_files, root, mode)
 
@@ -300,14 +360,41 @@ def build_manifest(data_root: str | Path, output_path: str | Path | None = None,
     return manifest
 
 
+def count_empty_h5(directory: Path) -> int:
+    """Count zero-pulse ``.h5`` trains in a directory (header-only, cheap).
+
+    An empty pulse train is a legitimate official-TSRD scene, so it does NOT
+    affect structural dataset validity — this count exists purely for reporting.
+    """
+    if not directory.is_dir():
+        return 0
+    empty = 0
+    for path in directory.glob("*.h5"):
+        try:
+            import h5py
+            with h5py.File(str(path), "r") as handle:
+                if "data" in handle and handle["data"].shape[0] == 0:
+                    empty += 1
+        except Exception:
+            continue
+    return empty
+
+
 def validate_dataset(data_root: str | Path) -> dict:
-    """Validate dataset split availability without full file traversal."""
+    """Validate dataset split availability without full file traversal.
+
+    Structural validity is checked per-split (the directory exists and contains
+    at least one ``.h5``). Zero-pulse trains are REPORTED (``num_empty``) but do
+    NOT invalidate the split — an empty scene is structurally valid. Individual
+    per-file eligibility lives in ``TSRDValidator`` / ``build_manifest``.
+    """
     root = Path(data_root)
     result = {
         "valid": True,
         "errors": [],
         "splits": {},
     }
+    any_all_empty = False
 
     for mode in ["scan", "stare"]:
         split_dirs = resolve_split_dirs(root, mode)
@@ -315,19 +402,30 @@ def validate_dataset(data_root: str | Path) -> dict:
         for split_name, split_dir in split_dirs.items():
             exists = split_dir.exists()
             h5_count = len(list(split_dir.glob("*.h5"))) if exists else 0
+            num_empty = count_empty_h5(split_dir) if exists else 0
             result["splits"][f"{mode}/{split_name}"] = {
                 "dir": str(split_dir),
                 "exists": exists,
                 "h5_count": h5_count,
+                "num_empty": num_empty,
+                "meaningful_train_count": max(0, h5_count - num_empty),
             }
             if not exists or h5_count == 0:
                 result["errors"].append(f"Missing or empty {mode}/{split_name} at {split_dir}")
                 mode_valid = False
+            elif num_empty == h5_count:
+                any_all_empty = True
+                result["errors"].append(
+                    f"All {h5_count} trains in {mode}/{split_name} are zero-pulse "
+                    f"(none usable for training/evaluation despite structural validity)"
+                )
+                mode_valid = False
 
     if result["errors"]:
-        # Check if at least one mode is valid
+        # Check if at least one mode is valid (structural). An individual
+        # zero-pulse train is fine, but a split with NO usable train is not.
         scan_train = result["splits"].get("scan/train", {}).get("h5_count", 0)
-        if scan_train > 0:
+        if scan_train > 0 and not any_all_empty:
             result["valid"] = True
         else:
             result["valid"] = False
@@ -370,6 +468,9 @@ def generate_dataset_report(
         "noise_fraction": 0.0,
         "missing_files": [],
         "invalid_files": [],
+        "empty_files": 0,
+        "training_eligible_files": 0,
+        "evaluation_eligible_files": 0,
     }
 
     def sample_stats(files: list[Path], split_name: str) -> tuple[int, int, float]:
@@ -391,6 +492,12 @@ def generate_dataset_report(
             if not v["valid"]:
                 report["invalid_files"].append({"file": str(fp), "errors": v["errors"]})
                 continue
+            if v["empty_scenario"]:
+                report["empty_files"] += 1
+            if v["training_eligible"]:
+                report["training_eligible_files"] += 1
+            if v["evaluation_eligible"]:
+                report["evaluation_eligible_files"] += 1
             pulses += v["num_pulses"]
             emitters += v["num_emitters"]
             duration += v["duration_s"]

@@ -355,8 +355,10 @@ def train_deinterleaver(
     device = torch.device(device_str)
     logger.info("Training on device: %s (seed=%d)", device, seed)
 
-    # Data discovery (CLI > environment > YAML > safe default).
-    data_root = Path(data_dir_override) if data_dir_override else Path(train_cfg.get("data_dir", "data"))
+    # Data discovery (CLI > env TSRD_DATA_ROOT > YAML data_dir > safe default).
+    from ..data.tsrd_root import resolve_tsrd_root
+
+    data_root = resolve_tsrd_root(cli_value=data_dir_override, config=train_cfg)
 
     # Check training mode - in real_tsrd mode, synthetic fallback is FORBIDDEN.
     training_mode = (
@@ -463,7 +465,16 @@ def train_deinterleaver(
         scheduler = CosineAnnealingLR(optimizer, T_max=max(1, epochs))
     triplet_fn = nn.TripletMarginLoss(margin=margin, p=2)
 
-    output_dir = Path(output_dir_override) if output_dir_override else Path(train_cfg.get("output_dir", "checkpoints/deinterleaver"))
+    # Phase 17: canonical layout — never resolve to the ambiguous root
+    # (config output_dir="checkpoints" is replaced by the canonical subdir).
+    from ..utils.checkpoint_paths import DEINTERLEAVER_DIR, resolve_checkpoint_dir
+
+    output_dir = resolve_checkpoint_dir(
+        output_dir_override,
+        train_cfg.get("output_dir"),
+        DEINTERLEAVER_DIR,
+        role="deinterleaver",
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     manifest = build_manifest(data_root, output_path=output_dir / "dataset_manifest.json", mode=train_mode)
@@ -471,7 +482,7 @@ def train_deinterleaver(
     logger.info("Effective dataset root: %s; fingerprint: %s", data_root.resolve(), data_fingerprint)
 
     # Fit stats from training only (prevent leakage, P0-4)
-    from ..preprocessing.normalise import fit_train_statistics, save_normalization_stats
+    from ..preprocessing.normalise import fit_train_statistics, normalization_stats_hash, save_normalization_stats
     logger.info("Computing normalisation stats from training subset...")
     fit_stats = fit_train_statistics(train_files[: min(50, len(train_files))])
     save_normalization_stats(fit_stats, output_dir / "normalization_stats.json")
@@ -568,6 +579,8 @@ def train_deinterleaver(
                         "preproc_version": "v1",
                         "dataset_fingerprint": data_fingerprint,
                         "dataset_manifest": str(output_dir / "dataset_manifest.json"),
+                        "normalization_stats_hash": normalization_stats_hash(fit_stats),
+                        "normalization_stats_path": str(output_dir / "normalization_stats.json"),
                     },
                 )
                 save_state(model, output_dir / "best.pt", meta)
@@ -589,9 +602,27 @@ def train_deinterleaver(
         arch="PDWTransformerEncoder",
         seed=seed,
         metrics={"best_val_v_measure": float(best_v_measure)},
-        extra={"mode": "deinterleaver", "dataset_fingerprint": data_fingerprint},
+        extra={
+            "mode": "deinterleaver",
+            "dataset_fingerprint": data_fingerprint,
+            "normalization_stats_hash": normalization_stats_hash(fit_stats),
+            "normalization_stats_path": str(output_dir / "normalization_stats.json"),
+        },
     )
     save_state(model, final_path, final_meta)
+    # Phase 17: human-readable metadata.json sidecar (contract artifact).
+    from ..utils.checkpoint_meta import write_checkpoint_metadata
+
+    write_checkpoint_metadata(
+        output_dir / "metadata.json",
+        final_meta,
+        artifacts=[
+            "best.pt",
+            "final.pt",
+            "normalization_stats.json",
+            "dataset_manifest.json",
+        ],
+    )
     logger.info("Training complete. Final: %s Best V: %.4f", final_path, best_v_measure)
 
 

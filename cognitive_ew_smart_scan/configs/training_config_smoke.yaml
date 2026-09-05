@@ -1,4 +1,4 @@
-data_dir: D:/TSRD_data
+data_dir: D:/TSRD
 deinterleaver:
   batch_size: 8
   epochs: 50
@@ -32,6 +32,7 @@ scheduler:
   dwell_slots: 5
   replay_buffer_size: 50000
   seq_len: 16
+  burn_in: 8
   target_update_freq: 1000
   thompson_warmup_steps: 5000
   total_timesteps: 1000

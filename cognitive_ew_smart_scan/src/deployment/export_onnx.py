@@ -13,6 +13,126 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+NORM_STATS_FILENAME = "normalization_stats.json"
+
+
+def _load_checkpoint_state(ckpt_path: Path, model, what: str) -> dict:
+    """Load and STRICTLY apply a checkpoint to a model, failing fast.
+
+    Phase 15: an ONNX export must never silently continue with random-initialized
+    weights. Any of the following raises instead of exporting:
+      * checkpoint missing                 -> FileNotFoundError
+      * checkpoint corrupted/unreadable    -> RuntimeError
+      * state dict not a tensor mapping    -> RuntimeError
+      * architecture/hyperparameter mismatch (missing/unexpected keys, size
+        mismatch)                         -> RuntimeError
+
+    Returns:
+        The checkpoint ``metadata`` dict (empty when the checkpoint is a bare
+        state dict without metadata).
+    """
+    import torch
+
+    if not ckpt_path.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+
+    try:
+        payload = torch.load(str(ckpt_path), map_location="cpu")
+    except Exception as exc:
+        raise RuntimeError(f"Checkpoint {ckpt_path} is corrupted or unreadable: {exc}") from exc
+
+    if isinstance(payload, dict) and "state_dict" in payload:
+        metadata = dict(payload.get("metadata") or {})
+        state = payload["state_dict"]
+    else:
+        metadata = {}
+        state = payload
+
+    if not isinstance(state, dict) or not state or not all(
+        isinstance(v, torch.Tensor) for v in state.values()
+    ):
+        raise RuntimeError(
+            f"Checkpoint {ckpt_path} does not contain a state dict of tensors "
+            f"(got {type(state).__name__})."
+        )
+
+    try:
+        model.load_state_dict(state, strict=True)
+    except Exception as exc:
+        raise RuntimeError(
+            f"State dict mismatch for {what} checkpoint {ckpt_path} — the "
+            f"architecture or hyperparameters do not match ({exc})."
+        ) from exc
+    logger.info("Loaded %s state %s (strict)", what, ckpt_path)
+    return metadata
+
+
+def _resolve_normalization_meta(
+    ckpt_meta: dict, ckpt_path: str | Path, stats_candidates: list[Path] | None = None
+) -> tuple[str, str | None]:
+    """Resolve the normalisation provenance (stats hash, stats path) for ONNX.
+
+    Order: (1) hash already stamped into the checkpoint metadata at training
+    time; (2) compute from the ``normalization_stats.json`` persisted beside the
+    checkpoint (override with ``stats_candidates`` for testing); (3) fall back
+    to "unknown" when no stats artifact exists (weights are still strictly
+    loaded — provenance is recorded separately from model weights).
+
+    Returns:
+        Tuple ``(stats_hash, stats_path_or_None)``.
+    """
+    ckpt_meta = ckpt_meta or {}
+    existing = ckpt_meta.get("normalization_stats_hash")
+    if existing:
+        return str(existing), ckpt_meta.get("normalization_stats_path")
+
+    from ..preprocessing.normalise import load_normalization_stats, normalization_stats_hash
+
+    candidates = stats_candidates if stats_candidates is not None else [
+        Path(ckpt_path).parent / NORM_STATS_FILENAME,
+        Path("configs") / NORM_STATS_FILENAME,
+        Path("checkpoints/deinterleaver") / NORM_STATS_FILENAME,
+    ]
+    for cand in candidates:
+        if cand.exists():
+            try:
+                stats = load_normalization_stats(cand)
+            except Exception as exc:
+                logger.warning("Could not read normalization stats %s: %s", cand, exc)
+                continue
+            return normalization_stats_hash(stats), str(cand)
+    return "unknown", None
+
+
+def _attach_onnx_metadata(onnx_path: Path, props: dict[str, str]) -> bool:
+    """Attach metadata_props to an exported ONNX model in place.
+
+    Uses the ``onnx`` package when available; falls back to writing a sidecar
+    ``*.metadata.json`` (same key/value pairs) so provenance survives on hosts
+    without the ``onnx`` package.
+    """
+    try:
+        import onnx  # type: ignore
+
+        model = onnx.load(str(onnx_path))
+        for key, value in props.items():
+            prop = model.metadata_props.add()
+            prop.key = key
+            prop.value = value
+        onnx.save(model, str(onnx_path))
+        logger.info("Attached ONNX metadata_props to %s", onnx_path)
+        return True
+    except Exception as exc:
+        sidecar = onnx_path.with_suffix(onnx_path.suffix + ".metadata.json")
+        try:
+            import json
+
+            sidecar.write_text(json.dumps(props, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+        logger.warning("onnx package unavailable or metadata attach failed (%s); wrote %s", exc, sidecar)
+        return False
+
 
 def export_deinterleaver(model_cfg_path: str, ckpt_path: str, output_path: str, opset: int = 17) -> Path:
     """Export PDWTransformerEncoder to ONNX.
@@ -28,7 +148,8 @@ def export_deinterleaver(model_cfg_path: str, ckpt_path: str, output_path: str, 
 
     Raises:
         FileNotFoundError: If checkpoint missing.
-        RuntimeError: If export fails.
+        RuntimeError: If the checkpoint is corrupted or the state dict does not
+            match the configured architecture (NO random-init export).
     """
     import torch
 
@@ -51,14 +172,7 @@ def export_deinterleaver(model_cfg_path: str, ckpt_path: str, output_path: str, 
         dropout=cfg.get("dropout", 0.1),
         embed_dim=cfg.get("embed_dim", 64),
     ).to(device)
-    try:
-        state = torch.load(str(ckpt_path), map_location="cpu")
-        if isinstance(state, dict) and "state_dict" in state:
-            state = state["state_dict"]
-        model.load_state_dict(state, strict=False)
-        logger.info("Loaded deinterleaver state %s", ckpt_path)
-    except Exception as exc:
-        logger.warning("Failed to load state, exporting random init: %s", exc)
+    ckpt_metadata = _load_checkpoint_state(ckpt_path, model, "deinterleaver")
     model.eval()
 
     # Dummy input: (1, N, 6) with N dynamic
@@ -81,6 +195,18 @@ def export_deinterleaver(model_cfg_path: str, ckpt_path: str, output_path: str, 
         logger.info("Exported deinterleaver ONNX → %s (opset %d)", output_path, opset)
     except Exception as exc:
         raise RuntimeError(f"ONNX export failed for deinterleaver: {exc}") from exc
+
+    # Phase 14: stamp normalisation provenance (train-stats hash) into metadata.
+    norm_hash, norm_path = _resolve_normalization_meta(ckpt_metadata, ckpt_path)
+    _attach_onnx_metadata(
+        output_path,
+        {
+            "normalization_stats_hash": norm_hash,
+            "normalization_stats_path": norm_path or "",
+            "preproc_version": str(ckpt_metadata.get("preproc_version", "v1")),
+            "git_revision": str(ckpt_metadata.get("git_revision", "unknown")),
+        },
+    )
 
     # Verify with onnxruntime if available
     try:
@@ -106,6 +232,11 @@ def export_scheduler(model_cfg_path: str, ckpt_path: str, output_path: str, opse
 
     Returns:
         Path to ONNX file.
+
+    Raises:
+        FileNotFoundError: If checkpoint missing.
+        RuntimeError: If the checkpoint is corrupted or the state dict does not
+            match the configured architecture (NO random-init export).
     """
     import torch
 
@@ -130,14 +261,7 @@ def export_scheduler(model_cfg_path: str, ckpt_path: str, output_path: str, opse
         lstm_hidden=cfg.get("lstm_hidden", 256),
         lstm_layers=cfg.get("lstm_layers", 2),
     ).to(device)
-    try:
-        state = torch.load(str(ckpt_path), map_location="cpu")
-        if isinstance(state, dict) and "state_dict" in state:
-            state = state["state_dict"]
-        model.load_state_dict(state, strict=False)
-        logger.info("Loaded scheduler state %s", ckpt_path)
-    except Exception as exc:
-        logger.warning("Failed to load scheduler state: %s", exc)
+    _ckpt_metadata = _load_checkpoint_state(ckpt_path, model, "scheduler")
     model.eval()
 
     # Dummy: (1, seq_len, obs_dim) with dynamic seq_len
@@ -201,21 +325,35 @@ def main() -> None:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if Path(args.deinterleaver_ckpt).exists():
-        try:
-            export_deinterleaver(args.model_config, args.deinterleaver_ckpt, str(out_dir / "deinterleaver.onnx"), opset=args.opset)
-        except Exception as exc:
-            logger.error("Deinterleaver export failed: %s", exc)
-    else:
-        logger.warning("Deinterleaver ckpt missing: %s", args.deinterleaver_ckpt)
+    # Phase 15 fail-fast: missing/mismatched checkpoints abort the CLI with a
+    # non-zero exit — never a silent skip or a random-init export.
+    if not Path(args.deinterleaver_ckpt).exists():
+        raise FileNotFoundError(f"Deinterleaver checkpoint missing: {args.deinterleaver_ckpt}")
+    export_deinterleaver(
+        args.model_config, args.deinterleaver_ckpt, str(out_dir / "deinterleaver.onnx"), opset=args.opset
+    )
 
-    if Path(args.scheduler_ckpt).exists():
-        try:
-            export_scheduler(args.model_config, args.scheduler_ckpt, str(out_dir / "scheduler.onnx"), opset=args.opset)
-        except Exception as exc:
-            logger.error("Scheduler export failed: %s", exc)
-    else:
-        logger.warning("Scheduler ckpt missing: %s", args.scheduler_ckpt)
+    if not Path(args.scheduler_ckpt).exists():
+        raise FileNotFoundError(f"Scheduler checkpoint missing: {args.scheduler_ckpt}")
+    export_scheduler(
+        args.model_config, args.scheduler_ckpt, str(out_dir / "scheduler.onnx"), opset=args.opset
+    )
+
+    # Phase 17: onnx/ directory summary metadata (canonical contract artifact).
+    from ..utils.checkpoint_meta import current_git_revision, write_checkpoint_metadata
+
+    write_checkpoint_metadata(
+        out_dir / "metadata.json",
+        {
+            "git_revision": current_git_revision(),
+            "preproc_version": "v1",
+            "opset": args.opset,
+            "deinterleaver_ckpt": str(args.deinterleaver_ckpt),
+            "scheduler_ckpt": str(args.scheduler_ckpt),
+        },
+        artifacts=["deinterleaver.onnx", "scheduler.onnx"],
+    )
+    logger.info("Exported ONNX artifacts to %s", out_dir)
 
 
 if __name__ == "__main__":

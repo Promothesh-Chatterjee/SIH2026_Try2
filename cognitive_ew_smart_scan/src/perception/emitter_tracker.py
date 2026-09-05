@@ -583,6 +583,29 @@ class EmitterTracker:
 
         return {tid: self.tracks[tid] for tid in matched_tracks if tid in self.tracks}
 
+    def get_pulse_track_assignment(self, labels: np.ndarray) -> np.ndarray:
+        """Map deinterleaver cluster labels to persistent track ids.
+
+        Returns an array aligned with ``labels``: each element is the ``track_id``
+        of the persistent emitter track that consumed that pulse, or -1 for noise
+        pulses and clusters that were not associated (should not normally occur
+        since matched clusters are tracked). Callers (e.g. the environment) use
+        this to feed downstream modules such as the periodic interceptor with a
+        tracker-derived identity — never a ground-truth emitter id.
+
+        Args:
+            labels: (N,) global cluster labels from the latest deinterleaver run.
+
+        Returns:
+            (N,) int array of persistent ``track_id`` (or ``-1``).
+        """
+        out = np.full(len(labels), -1, dtype=np.int64)
+        for i, lab in enumerate(labels):
+            tid = self._cluster_to_track.get(int(lab))
+            if tid is not None:
+                out[i] = tid
+        return out
+
     # ------------------------------------------------------------------
     # Cluster reports
     # ------------------------------------------------------------------

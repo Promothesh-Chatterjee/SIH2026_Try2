@@ -110,10 +110,13 @@ class DRQNScheduler(nn.Module):
             nn.Linear(128, self.n_actions),
             nn.Sigmoid(),
         )
+        # Per-action expected time-to-interception (µs): one prediction per
+        # candidate time-frequency action. Softplus guarantees time >= 0.
         self.intercept_time_head = nn.Sequential(
             nn.Linear(lstm_hidden, 128),
             nn.ReLU(),
-            nn.Linear(128, 1),  # shared prediction, see forward
+            nn.Linear(128, self.n_actions),
+            nn.Softplus(),
         )
 
         logger.info(
@@ -136,7 +139,7 @@ class DRQNScheduler(nn.Module):
             Tuple:
               q_values (B,T,n_actions),
               aux dict with "intercept_prob" (B,T,n_actions) and
-                    "intercept_time_us" (B,T,1),
+                    "intercept_time_us" (B,T,n_actions),
               (h_n, c_n) hidden.
         """
         if obs.size(-1) != self.obs_dim:
@@ -152,9 +155,9 @@ class DRQNScheduler(nn.Module):
         a = self.advantage_stream(lstm_out)  # (B,T,n_actions)
         q_values = v + a - a.mean(dim=-1, keepdim=True)
 
-        # Aux heads
+        # Aux heads: per-action probabilities and per-action expected intercept time.
         intercept_prob = self.intercept_prob_head(lstm_out)  # (B,T,n_actions)
-        intercept_time_us = self.intercept_time_head(lstm_out).squeeze(-1)  # (B,T)
+        intercept_time_us = self.intercept_time_head(lstm_out)  # (B,T,n_actions)
 
         aux = {
             "intercept_prob": intercept_prob,

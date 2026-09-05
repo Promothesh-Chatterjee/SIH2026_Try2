@@ -6,7 +6,7 @@ progress, handles the gated repo (requires HF_TOKEN), and preserves the original
 repo layout (e.g. scan/train_scan/*.h5, stare/train_stare/*.h5).
 
 Usage:
-    python scripts/download_tsrd.py --output-dir D:/TSRD_data
+    python scripts/download_tsrd.py --output-dir D:/TSRD
 """
 
 from __future__ import annotations
@@ -36,7 +36,12 @@ def _human_size(n: float) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Download TSRD to local dir")
-    parser.add_argument("--output-dir", type=str, default="D:/TSRD_data")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=os.environ.get("TSRD_DATA_ROOT", "D:/TSRD"),
+        help="Canonical dataset root (env TSRD_DATA_ROOT takes precedence; default D:/TSRD)",
+    )
     parser.add_argument("--token", type=str, default=None, help="HF read token (or set HF_TOKEN in .env)")
     parser.add_argument("--max-workers", type=int, default=6, help="parallel download workers")
     args = parser.parse_args()
