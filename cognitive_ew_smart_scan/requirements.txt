@@ -29,3 +29,4 @@ jupyter
 pyyaml>=6.0
 tqdm>=4.66.0
 datasets>=2.19.0
+pytest>=8.0.0
