@@ -1,11 +1,11 @@
 {
-  "cf_median": 2386.83203125,
-  "cf_iqr": 6128.81396484375,
-  "pw_mean": 1.1771553008025768,
-  "pw_std": 1.4048601803439547,
-  "amp_mean": -81.93236167771146,
-  "amp_std": 18.83418490323974,
-  "fitted_sample_size": 40000,
+  "cf_median": 11807.201171875,
+  "cf_iqr": 7576.8419189453125,
+  "pw_mean": 1.5292183779005215,
+  "pw_std": 0.6210351164614384,
+  "amp_mean": 28.571011878884374,
+  "amp_std": 19.129944949262118,
+  "fitted_sample_size": 1248,
   "stats_version": "v1",
-  "stats_hash": "bacee02ac1c29428"
+  "stats_hash": "eb17dda357f6a45c"
 }

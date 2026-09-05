@@ -19,7 +19,13 @@ import numpy as np
 from fastapi import HTTPException
 
 import src.deployment.api as api_mod
-from src.deployment.api import DeinterleaveRequest, PredictBandsRequest, deinterleave_endpoint, predict_bands
+from src.deployment.api import (
+    DeinterleaveRequest,
+    PredictBandsRequest,
+    deinterleave_endpoint,
+    health,
+    predict_bands,
+)
 
 OBS_DIM = 360
 N_BANDS = 36
@@ -86,6 +92,21 @@ class _BaseAPITest(unittest.TestCase):
 
 
 class PredictBandsFailSafeTests(_BaseAPITest):
+    def test_health_exposes_verification_state_without_fabricating_readiness(self):
+        response = health()
+        self.assertEqual(response.status, "ok")  # liveness remains separate from readiness
+        self.assertFalse(response.models_loaded["scheduler"])
+        self.assertFalse(response.models_loaded["deinterleaver"])
+        self.assertFalse(response.dimension_check_passed)
+        self.assertFalse(response.normalization_hash_match)
+        self.assertFalse(response.hidden_state_ready)
+
+    def test_normalization_hash_mismatch_is_not_marked_compatible(self):
+        api_mod.STATE["deinterleaver"] = object()
+        api_mod.STATE["normalization_stats_hash"] = "actual"
+        api_mod._set_normalization_verification("expected")
+        self.assertFalse(api_mod.STATE["normalization_hash_match"])
+
     def test_no_scheduler_returns_503(self):
         with self.assertRaises(HTTPException) as ctx:
             predict_bands(PredictBandsRequest(obs=_obs()))

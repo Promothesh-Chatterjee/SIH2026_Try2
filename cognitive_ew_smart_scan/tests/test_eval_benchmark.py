@@ -89,6 +89,18 @@ class EvaluationBenchmarkTests(unittest.TestCase):
         self.assertTrue((self.output_dir / "aggregate_metrics.json").exists())
         self.assertTrue((self.output_dir / "experiment_metadata.json").exists())
         self.assertTrue((self.output_dir / "dataset_fingerprint.json").exists())
+        manifest = json.loads((self.output_dir / "experiment_manifest.json").read_text(encoding="utf-8"))
+        for key in (
+            "git_revision", "dataset_fingerprint", "dataset_root", "dataset_mode", "split",
+            "seed", "model_configuration", "training_configuration",
+            "normalization_stats_hash", "checkpoint_metadata", "device",
+            "software_versions", "metrics",
+        ):
+            self.assertIn(key, manifest)
+        self.assertEqual(manifest["dataset_mode"], "scan")
+        self.assertEqual(manifest["split"], "test")
+        self.assertEqual(manifest["seed"], 42)
+        self.assertEqual(manifest["checkpoint_metadata"], {"deinterleaver": {}, "scheduler": {}})
 
     def test_experiment_metadata_and_fingerprint(self):
         """Experiment metadata and dataset fingerprint must contain accurate provenance."""

@@ -651,6 +651,22 @@ def train_deinterleaver(
             "dataset_manifest.json",
         ],
     )
+    from ..utils.experiment_manifest import write_experiment_manifest
+
+    write_experiment_manifest(
+        output_dir / "experiment_manifest.json",
+        dataset_fingerprint=data_fingerprint,
+        dataset_root=data_root,
+        dataset_mode=training_mode,
+        split="train",
+        seed=seed,
+        model_configuration=model_cfg,
+        training_configuration=train_cfg,
+        normalization_stats_hash=normalization_stats_hash(fit_stats),
+        checkpoint_metadata=final_meta,
+        device=str(device),
+        metrics={"best_val_v_measure": float(best_v_measure)},
+    )
     logger.info("Training complete. Final: %s Best V: %.4f", final_path, best_v_measure)
 
 

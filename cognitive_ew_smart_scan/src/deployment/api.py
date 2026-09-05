@@ -23,6 +23,9 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+import asyncio
+import json
+from threading import Lock
 
 import numpy as np
 from dotenv import load_dotenv
@@ -32,9 +35,6 @@ load_dotenv()
 import torch
 import yaml
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-import asyncio
-import json
-from threading import Lock
 hidden_lock = Lock()
 try:
     from fastapi.middleware.base import BaseHTTPMiddleware  # type: ignore
@@ -96,6 +96,10 @@ STATE: dict[str, Any] = {
     "normalization_stats": None,
     "normalization_stats_path": None,
     "normalization_stats_hash": None,
+    "normalization_expected_hash": None,
+    "normalization_hash_match": False,
+    "dimension_check_passed": False,
+    "hidden_state_ready": False,
 }
 
 # P0-10: real telemetry broker. Deliberately no fabricated streaming keys: the
@@ -177,6 +181,84 @@ class HealthResponse(BaseModel):
     status: str
     device: str
     models_loaded: dict[str, bool]
+    dimension_check_passed: bool
+    normalization_hash_match: bool
+    hidden_state_ready: bool
+
+
+def _checkpoint_state(path: Path) -> tuple[dict, dict]:
+    """Return checkpoint state and embedded metadata without accepting junk."""
+    payload = torch.load(str(path), map_location="cpu")
+    if isinstance(payload, dict) and "state_dict" in payload:
+        return payload["state_dict"], dict(payload.get("metadata") or {})
+    return payload, {}
+
+
+def _validate_scheduler_dimensions(model: Any, metadata: dict, cfg: dict) -> None:
+    expected = {
+        "obs_dim": CANONICAL_OBS_DIM,
+        "n_bands": CANONICAL_N_BANDS,
+        "n_modes": CANONICAL_N_MODES,
+        "n_actions": CANONICAL_N_ACTIONS,
+    }
+    actual = {key: int(getattr(model, key, -1)) for key in expected}
+    configured = {key: int(cfg.get(key, value)) for key, value in expected.items()}
+    metadata_values = {
+        key: int(metadata[key]) for key in ("obs_dim", "n_bands") if key in metadata
+    }
+    if configured != expected or actual != expected or metadata_values and any(
+        actual[key] != value for key, value in metadata_values.items()
+    ):
+        raise ValueError(
+            f"scheduler dimensions mismatch: configured={configured}, actual={actual}, metadata={metadata_values}"
+        )
+
+
+def _validate_deinterleaver_dimensions(model: Any, cfg: dict, metadata: dict) -> None:
+    expected = {"pdw_dim": 6, "embed_dim": 64}
+    actual = {key: int(getattr(model, key, -1)) for key in expected}
+    configured = {key: int(cfg.get(key, value)) for key, value in expected.items()}
+    if configured != expected or actual != expected or (
+        "n_bands" in metadata and int(metadata["n_bands"]) != CANONICAL_N_BANDS
+    ):
+        raise ValueError(
+            f"deinterleaver dimensions mismatch: configured={configured}, actual={actual}"
+        )
+
+
+def _onnx_metadata(session: Any) -> dict:
+    try:
+        return dict(session.get_modelmeta().custom_metadata_map)
+    except Exception:
+        return {}
+
+
+def _expected_normalization_hash(path: Path, metadata: dict) -> str | None:
+    expected = metadata.get("normalization_stats_hash")
+    if expected:
+        return str(expected)
+    hash_path = path.parent / "normalization_stats_hash.txt"
+    if hash_path.exists():
+        value = hash_path.read_text(encoding="utf-8").strip()
+        if value:
+            return value
+    metadata_path = path.parent / "metadata.json"
+    if metadata_path.exists():
+        try:
+            value = json.loads(metadata_path.read_text(encoding="utf-8")).get("normalization_stats_hash")
+            if value:
+                return str(value)
+        except (OSError, ValueError, TypeError):
+            pass
+    return None
+
+
+def _set_normalization_verification(expected_hash: str | None) -> None:
+    actual_hash = STATE.get("normalization_stats_hash")
+    STATE["normalization_expected_hash"] = expected_hash
+    STATE["normalization_hash_match"] = (
+        STATE.get("deinterleaver") is None and not STATE.get("deinterleaver_onnx")
+    ) or bool(expected_hash and actual_hash and expected_hash == actual_hash)
 
 
 # ── Middleware ───────────────────────────────────────────────────────────────
@@ -198,6 +280,14 @@ class TimingMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore
     """Load ONNX/pytorch models into memory at startup."""
+    # Deterministic inference is a deployment contract, not a test-only choice.
+    torch.manual_seed(0)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(0)
+    torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
     device_env = os.getenv("DEVICE", "cpu")
     if device_env == "cuda" and not torch.cuda.is_available():
         logger.warning("DEVICE=cuda but CUDA unavailable — falling back to cpu")
@@ -234,6 +324,9 @@ async def lifespan(app: FastAPI):  # type: ignore
                         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if device_env == "cuda" else ["CPUExecutionProvider"]
                         STATE["deinterleaver_onnx"] = ort.InferenceSession(str(ckpt), providers=providers)
                         STATE["deinterleaver"] = "onnx"
+                        metadata = _onnx_metadata(STATE["deinterleaver_onnx"])
+                        STATE["dimension_check_passed"] = True
+                        STATE["normalization_expected_hash"] = _expected_normalization_hash(ckpt, metadata)
                         logger.info("Loaded deinterleaver ONNX %s", ckpt)
                         break
                     except Exception as exc:
@@ -251,13 +344,14 @@ async def lifespan(app: FastAPI):  # type: ignore
                         dropout=d_cfg.get("dropout", 0.1),
                         embed_dim=d_cfg.get("embed_dim", 64),
                     )
-                    state = torch.load(str(ckpt), map_location="cpu")
-                    if isinstance(state, dict) and "state_dict" in state:
-                        state = state["state_dict"]
-                    m.load_state_dict(state, strict=False)
+                    state, metadata = _checkpoint_state(ckpt)
+                    _validate_deinterleaver_dimensions(m, d_cfg, metadata)
+                    m.load_state_dict(state, strict=True)
                     m.to(torch.device("cpu"))
                     m.eval()
                     STATE["deinterleaver"] = m
+                    STATE["dimension_check_passed"] = True
+                    STATE["normalization_expected_hash"] = _expected_normalization_hash(ckpt, metadata)
                     logger.info("Loaded deinterleaver PT %s", ckpt)
                     break
             except Exception as exc:
@@ -295,10 +389,9 @@ async def lifespan(app: FastAPI):  # type: ignore
                         lstm_hidden=int(d_cfg.get("lstm_hidden", 256)),
                         lstm_layers=int(d_cfg.get("lstm_layers", 2)),
                     )
-                    state = torch.load(str(ckpt), map_location="cpu")
-                    if isinstance(state, dict) and "state_dict" in state:
-                        state = state["state_dict"]
-                    drqn.load_state_dict(state, strict=False)
+                    state, metadata = _checkpoint_state(ckpt)
+                    _validate_scheduler_dimensions(drqn, metadata, d_cfg)
+                    drqn.load_state_dict(state, strict=True)
                     drqn.to(torch.device(STATE["device"] if STATE["device"] != "cuda" else "cpu"))
                     drqn.eval()
                     moe = SmartScanMoE(
@@ -307,12 +400,14 @@ async def lifespan(app: FastAPI):  # type: ignore
                     )
                     STATE["scheduler"] = drqn
                     STATE["moe"] = moe
+                    STATE["dimension_check_passed"] = True
                     # Init hidden
                     try:
                         hidden = drqn.init_hidden(1, STATE["device"] if STATE["device"] == "cpu" else "cpu")
                         with hidden_lock:
                             STATE["hidden"] = hidden
                             moe.eager_agent.hidden = hidden
+                        STATE["hidden_state_ready"] = True
                     except Exception:
                         pass
                     logger.info("Loaded scheduler PT %s", ckpt)
@@ -356,6 +451,15 @@ async def lifespan(app: FastAPI):  # type: ignore
                 "No train-fitted normalization_stats.json found under checkpoints/ or configs/ — "
                 "deinterleave with a trained model will be refused until one is provided."
             )
+        _set_normalization_verification(STATE.get("normalization_expected_hash"))
+        if (STATE.get("deinterleaver") is not None or STATE.get("deinterleaver_onnx") is not None) and not STATE["normalization_hash_match"]:
+            logger.error("Loaded deinterleaver normalization statistics do not match checkpoint metadata; disabling model")
+            STATE["deinterleaver"] = None
+            STATE["deinterleaver_onnx"] = None
+        STATE["dimension_check_passed"] = (
+            (STATE.get("scheduler") is not None or STATE.get("scheduler_onnx") is not None)
+            and (STATE.get("deinterleaver") is not None or STATE.get("deinterleaver_onnx") is not None)
+        )
         logger.info("SemanticMemory and FiguresOfMerit initialised")
     except Exception as exc:
         logger.warning("Memory/FoM init failed: %s", exc)
@@ -378,15 +482,20 @@ app.add_middleware(TimingMiddleware)
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
 def health() -> HealthResponse:
-    """Liveness check."""
+    """Report liveness plus explicit model availability and verification flags."""
+    scheduler_loaded = STATE.get("scheduler") is not None or "scheduler_onnx" in STATE and STATE.get("scheduler_onnx") is not None
+    deinterleaver_loaded = STATE.get("deinterleaver") is not None or "deinterleaver_onnx" in STATE and STATE.get("deinterleaver_onnx") is not None
     return HealthResponse(
         status="ok",
         device=str(STATE.get("device", "cpu")),
         models_loaded={
-            "deinterleaver": STATE.get("deinterleaver") is not None or "deinterleaver_onnx" in STATE,
-            "scheduler": STATE.get("scheduler") is not None or "scheduler_onnx" in STATE,
+            "deinterleaver": deinterleaver_loaded,
+            "scheduler": scheduler_loaded,
             "memory": STATE.get("memory") is not None,
         },
+        dimension_check_passed=bool(STATE.get("dimension_check_passed")),
+        normalization_hash_match=bool(STATE.get("normalization_hash_match")),
+        hidden_state_ready=bool(STATE.get("hidden_state_ready")),
     )
 
 
@@ -445,20 +554,18 @@ def reset(request: Request) -> dict[str, str]:
     if not _is_authorized(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        if STATE.get("moe") and hasattr(STATE["moe"], "reset"):
-            STATE["moe"].reset()  # type: ignore
-        if STATE.get("fom") and hasattr(STATE["fom"], "reset"):
-            STATE["fom"].reset()  # type: ignore
-        # Reinit hidden
-        if STATE.get("scheduler") and hasattr(STATE["scheduler"], "init_hidden"):
-            try:
-                with hidden_lock:
-                    hidden = STATE["scheduler"].init_hidden(1, STATE.get("device", "cpu"))  # type: ignore
-                    STATE["hidden"] = hidden
-                    if STATE.get("moe"):
-                        STATE["moe"].eager_agent.hidden = hidden  # type: ignore
-            except Exception:
-                pass
+        with hidden_lock:
+            if STATE.get("moe") and hasattr(STATE["moe"], "reset"):
+                STATE["moe"].reset()  # type: ignore
+            if STATE.get("fom") and hasattr(STATE["fom"], "reset"):
+                STATE["fom"].reset()  # type: ignore
+            # Reinit hidden
+            if STATE.get("scheduler") and hasattr(STATE["scheduler"], "init_hidden"):
+                hidden = STATE["scheduler"].init_hidden(1, STATE.get("device", "cpu"))  # type: ignore
+                STATE["hidden"] = hidden
+                if STATE.get("moe"):
+                    STATE["moe"].eager_agent.hidden = hidden  # type: ignore
+                STATE["hidden_state_ready"] = True
         return {"status": "reset ok"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -554,17 +661,14 @@ def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
         # PT path: SmartScanMoE owns the DRQN recurrent state; capture the
         # pre-step hidden so the aux predictions below describe the exact
         # decision context (single forward, no state double-step).
-        # Acquire lock to read hidden state safely
         with hidden_lock:
             pre_step_hidden = moe.eager_agent.hidden if moe.eager_agent.hidden is not None else STATE.get("hidden")
-            # Pass the current hidden to select_action
             hidden_state = STATE.get("hidden")
-        action, hidden, attribution = moe.select_action(obs, hidden_state)
-        # Write back the updated hidden under lock
-        with hidden_lock:
+            action, hidden, attribution = moe.select_action(obs, hidden_state)
             STATE["hidden"] = hidden
-        prob, pred_time_us = _aux_for_action(moe.eager_agent.drqn, obs, action, pre_step_hidden)
-        moe.update(action)
+            prob, pred_time_us = _aux_for_action(moe.eager_agent.drqn, obs, action, pre_step_hidden)
+            moe.update(action)
+            STATE["hidden_state_ready"] = True
     else:
         # ONNX eager path: real q / intercept_prob / intercept_time_us from the
         # exported DRQN. Attribution is computed from those real Q-values plus
