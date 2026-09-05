@@ -1,90 +1,77 @@
 """
-Download the Turing Synthetic Radar Dataset (TSRD) to a local directory.
+DEPRECATED — use ``scripts/download_data.py`` (the one authoritative path).
 
-Uses huggingface_hub.snapshot_download which is resumable, shows per-file
-progress, handles the gated repo (requires HF_TOKEN), and preserves the original
-repo layout (e.g. scan/train_scan/*.h5, stare/train_stare/*.h5).
+Reconciliation note: this legacy script pulled the WHOLE repo via
+``snapshot_download`` with no per-file verification, no manifests and no
+download gate. ``download_data.py`` supersedes it: it fetches only the exact
+``{mode}/{split}`` ``.h5`` subsets, verifies each file (readability, shape,
+labels, SHA-256) and writes machine-readable manifests, with
+``--allow-download`` required before anything is fetched.
 
-Usage:
-    python scripts/download_tsrd.py --output-dir D:/TSRD
+This module is kept as a backward-compatible shim that forwards to
+``download_tsr_dataset``. New usage:
+
+    python scripts/download_data.py --allow-download --output-dir D:/TSRD
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
-import time
-from pathlib import Path
+import sys
 
-from dotenv import load_dotenv
+try:  # imported as a package (tests / repo root on sys.path)
+    from scripts.download_data import download_tsr_dataset
+except ImportError:  # executed directly: python scripts/download_tsrd.py
+    from download_data import download_tsr_dataset
 
-load_dotenv()
-
-logger = logging.getLogger(__name__)
-
-REPO_ID = "alan-turing-institute/turing-synthetic-radar-dataset"
-
-
-def _human_size(n: float) -> str:
-    for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if abs(n) < 1024.0:
-            return f"{n:.2f}{unit}"
-        n /= 1024.0
-    return f"{n:.2f}PB"
+DEPRECATION_MSG = (
+    "\n[WARNING] scripts/download_tsrd.py is DEPRECATED: it was a whole-repo "
+    "snapshot_download with no verification/manifests/gate.\n"
+    "Use the one authoritative path instead:\n"
+    "    python scripts/download_data.py --allow-download --output-dir D:/TSRD\n"
+)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Download TSRD to local dir")
+    print(DEPRECATION_MSG, file=sys.stderr)
+    parser = argparse.ArgumentParser(
+        description="DEPRECATED TSRD downloader — shim for scripts/download_data.py"
+    )
     parser.add_argument(
         "--output-dir",
         type=str,
-        default=os.environ.get("TSRD_DATA_ROOT", "D:/TSRD"),
-        help="Canonical dataset root (env TSRD_DATA_ROOT takes precedence; default D:/TSRD)",
+        default=os.environ.get("TSRD_DATA_ROOT", "data"),
+        help="Canonical dataset root (env TSRD_DATA_ROOT takes precedence; default data)",
     )
-    parser.add_argument("--token", type=str, default=None, help="HF read token (or set HF_TOKEN in .env)")
-    parser.add_argument("--max-workers", type=int, default=6, help="parallel download workers")
+    parser.add_argument("--token", type=str, default=None, help="HF token (or set HF_TOKEN env)")
+    parser.add_argument("--modes", nargs="+", default=["stare", "scan"], help="Modes: stare, scan")
+    parser.add_argument("--splits", nargs="+", default=["train", "validation", "test"], help="Splits: train, validation, test")
+    parser.add_argument(
+        "--allow-download",
+        action="store_true",
+        help="EXPLICIT confirmation to download (matches the authoritative script).",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logger = logging.getLogger(__name__)
+    logger.warning("scripts/download_tsrd.py is deprecated — see stderr for the canonical command.")
 
-    token = args.token or os.getenv("HF_TOKEN")
-    if not token or token == "your_huggingface_token_here":
-        raise RuntimeError(
-            "HF_TOKEN is not set to a real value. "
-            "Accept the gating form at the dataset page and set HF_TOKEN in .env."
+    try:
+        summary = download_tsr_dataset(
+            output_dir=args.output_dir,
+            token=args.token,
+            modes=args.modes,
+            splits=args.splits,
+            allow_download=args.allow_download,
         )
-
-    from huggingface_hub import snapshot_download
-
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    logger.info("Downloading %s -> %s", REPO_ID, output_dir)
-    t0 = time.perf_counter()
-    local_dir = snapshot_download(
-        repo_id=REPO_ID,
-        repo_type="dataset",
-        token=token,
-        local_dir=str(output_dir),
-        # keep the original scan/train_scan/... layout on disk
-        local_dir_use_symlinks=False,
-        # resumable + parallel for speed
-        max_workers=args.max_workers,
-    )
-    elapsed = time.perf_counter() - t0
-
-    # Summary
-    total = 0
-    n_files = 0
-    for p in Path(local_dir).rglob("*"):
-        if p.is_file() and p.suffix == ".h5":
-            n_files += 1
-            total += p.stat().st_size
-    logger.info("Download complete in %.1fs", elapsed)
-    logger.info("Total .h5 files: %d", n_files)
-    logger.info("Total size on disk: %s", _human_size(total))
-    logger.info("Local root: %s", local_dir)
+        print(f"\nDone. Summary: {json.dumps(summary, indent=2)}")
+    except (ValueError, RuntimeError) as exc:
+        logger.error("Acquisition failed: %s", exc)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
