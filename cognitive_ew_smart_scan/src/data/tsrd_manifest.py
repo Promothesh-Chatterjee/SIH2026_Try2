@@ -23,50 +23,20 @@ CANONICAL_FEATURES = ["ToA_us", "CF_MHz", "PW_us", "AoA_deg", "Amplitude_dB"]
 def resolve_split_dirs(data_root: str | Path, mode: str | None = None) -> dict[str, Path]:
     """Resolve train/validation/test directories across TSRD layouts.
 
-    Supports:
-      1. Official TSRD layout: <mode>/train_<mode>, <mode>/val_<mode>, <mode>/test_<mode>
-      2. Conventional layout: <mode>/train, <mode>/val, <mode>/test
+    Supports (candidates defined in :mod:`src.data.tsrd_root`):
+      1. Official/Kaggle layout: <mode>/train_<mode>, <mode>/val_<mode>, <mode>/test_<mode>
+      2. Conventional layout: <mode>/train, <mode>/val|validation, <mode>/test
       3. Archive layout: archive/train, archive/validation, archive/test
       4. Flat / nested root fallbacks
 
     Returns a dict with canonical keys: 'train', 'val', 'test'.
     """
+    from ..data.tsrd_root import split_candidate_dirs
+
     root = Path(data_root)
     m = str(mode) if mode else "scan"
     mode_root = root / m if mode else root
-
-    candidates = {
-        "train": [
-            mode_root / f"train_{m}",
-            mode_root / "train",
-            root / f"train_{m}",
-            root / "train",
-            root / m / f"train_{m}",
-            root / m / "train",
-            root / "archive" / "train",
-        ],
-        "val": [
-            mode_root / f"val_{m}",
-            mode_root / f"validation_{m}",
-            mode_root / "val",
-            mode_root / "validation",
-            root / f"val_{m}",
-            root / "val",
-            root / "validation",
-            root / m / f"val_{m}",
-            root / m / "val",
-            root / "archive" / "validation",
-        ],
-        "test": [
-            mode_root / f"test_{m}",
-            mode_root / "test",
-            root / f"test_{m}",
-            root / "test",
-            root / m / f"test_{m}",
-            root / m / "test",
-            root / "archive" / "test",
-        ],
-    }
+    candidates = split_candidate_dirs(root, m, mode_root=mode_root)
 
     resolved: dict[str, Path] = {}
     for key, paths in candidates.items():

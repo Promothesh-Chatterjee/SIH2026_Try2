@@ -1,5 +1,111 @@
 # Project Memory & Progress Tracker
 
+## CHECKPOINT 2026-09-05 (Phase 3: canonical per-episode TSRD scenario generation) — COMPLETE
+State: **`ScenarioSource.sample()` is the canonical scheduler-training data
+source: one RL episode == exactly ONE eligible `.h5` pulse train. `load_h5_records()`
+now forwards `freq_min_mhz`/`freq_max_mhz`/`time_horizon_us` to
+`records_from_array()` (this was the critical Phase 3 bug — file-load filters
+were silently dropped), ToA normalisation stays per-file, corrupt eligible files
+are reported+skipped with retry (all-corrupt → `RuntimeError`), `build_scenario()`
+fails loudly when files exist but none are eligible (unless explicit synthetic).
+Full suite: 409 passed.**
+
+### Phase 3 fixes
+- `load_h5_records()` → `records_from_array()` forwards all three filter args.
+- ToA normalised after loading a single file (never after concatenation).
+- `ScenarioSource.sample()` draws one random eligible file per call; corrupt
+  load → log + skip + retry (up to 10 attempts); all-fail → `RuntimeError`
+  (no fabricated / empty episodes).
+- `build_scenario()` raises `FileNotFoundError` when files exist but all are
+  empty/unreadable and `allow_synthetic_fallback=False` (mirrors
+  `ScenarioSource` fail-fast contract).
+- Tests: `tests/test_scenario_generator.py` 6 → 17 (one-file-per-episode,
+  file-local labels, empty skip, filter pass-through, per-file ToA normalisation,
+  corrupt skip/retry, all-corrupt raise, build_scenario fail-loud vs explicit
+  synthetic).
+
+### Outstanding gates (unchanged)
+- Preflight: real tree still `NOT READY` — single blocker [17] dataset
+  fingerprint mismatch (checkpoint `27eca1101…` vs disk `27b10ea0…`); requires
+  the deinterleaver retrain (or deliberate provenance restamp).
+- Deinterleaver checkpoint dir holds only manifest + stats (no runnable ckpt).
+
+## CHECKPOINT 2026-09-05 (Phase 2: one authoritative TSRD acquisition) — COMPLETE
+State: **`scripts/download_data.py` is the single TSRD acquisition path;
+`scripts/download_tsrd.py` is a thin shim. It recognises official Kaggle split
+names (`train_scan`/`val_scan`/`test_scan`, stare variants) and conventional
+names, lands files in the canonical `<mode>/<split>/` tree, verifies every file
+(readability, data/labels, `N×5`, label alignment, finite values, ToA order,
+pulses, emitters, SHA-256), writes per-subset + aggregate manifests, never
+fabricates missing subsets, and supports `--dry-run`. Full suite: 398 passed.**
+
+### Phase 2 fixes
+- `_belongs_to` now matches official Kaggle directories (`scan/val_scan/…` →
+  `scan`/`validation`) and `<mode>_<split>` filename fallbacks with token
+  boundaries (no `valport` false positives); no cross-mode or cross-split
+  leakage (train selection never swallows val/test dirs).
+- Files are staged in a scratch cache and moved byte-for-byte into the
+  canonical tree — exact H5 preservation, no whole-repo `snapshot_download`.
+- `_verify_h5` adds finite-value and non-decreasing-ToA checks and treats
+  zero-pulse official empty scenes as valid (duration 0.0), instead of
+  crashing on `toa.min()` of an empty array.
+- Aggregate manifest `totals.files` = verified-file count (was
+  `pulses and files or 0`).
+- `--dry-run` plans without writing; shim forwards `--dry-run`.
+- Tests: `tests/test_download_data.py` 21 → 31.
+
+### Outstanding gates (unchanged)
+- Preflight: real tree still `NOT READY` — single blocker [17] dataset
+  fingerprint mismatch (checkpoint `27eca1101…` vs disk `27b10ea0…`); requires
+  the deinterleaver retrain (or deliberate provenance restamp).
+- Deinterleaver checkpoint dir holds only manifest + stats (no runnable ckpt).
+
+## CHECKPOINT 2026-09-05 (Phase 1: canonical root/layout contract + Phase 0 audit) — COMPLETE
+State: **`src/data/tsrd_root.py` is the single source of truth for dataset
+root resolution (CLI > env `TSRD_DATA_ROOT` > YAML `data_dir` > `data`) and
+the alias-aware split-layout contract (Kaggle/conventional/archive/flat).
+`resolve_split_dirs` delegates to it; candidate order preserved exactly. Full
+suite green: 385 passed.**
+
+### Phase 1 deliverables
+- `split_candidate_dirs` / `resolve_split_dir` in `tsrd_root.py`; `tsrd_manifest.resolve_split_dirs`
+  delegates (byte-identical candidate order incl. the `mode=None` quirk).
+- `tests/test_tsrd_root.py` (22 tests): precedence, pathlib normalization
+  (Win/POSIX), layouts (Kaggle `train_scan`, conventional `train`/`val`/
+  `validation`/`test`, archive, flat, nested), `mode=None` quirk, invalid
+  split raises, real-TSRD no-silent-synthetic guard.
+- Existing real-tree validation (scan/train_scan, 2500 files) unaffected.
+
+### Phase 0 audit — blocker list (consolidated)
+1. **[FIXED]** Machine-specific `sys.path.insert` (`quick_scheduler_smoke.py`,
+   `test_env_validation.py`) → repo-relative via `__file__`.
+2. **[FIXED]** Stale `D:\TSRD_data` doc refs (`Memory.md`, `CHANGELOG.md`) → `D:\TSRD`.
+3. **[FIXED]** `training_config_smoke.yaml` root-level `output_dir` removed
+   (Phase 17 canonical artifact restructure).
+4. **[FIXED]** Duplicated downloaders: `scripts/download_tsrd.py` was legacy
+   whole-repo `snapshot_download` (no verify/manifests/gate). Reduced to a
+   deprecation shim forwarding to the authoritative `scripts/download_data.py`
+   (`--allow-download` gate now required); 2 shim tests added
+   (`tests/test_download_data.py`, 21 total).
+5. **[OPEN]** `src/environment/rf_scan_env.py` builds `Path(data_dir)/mode/subset`
+   directly, bypassing alias resolution (legacy env — only exercised by unit tests).
+6. **[OPEN]** Flaky `test_windowed_deinterleave.py::test_clusters_synthetic`
+   (HDBSCAN nondeterminism; deterministic-embedding/separate-reconciliation
+   redesign pending).
+7. **[BLOCKING:17]** Deinterleaver checkpoint fingerprint `27eca11016df104e…`
+   stale vs disk truth `27b10ea…` → UNVERIFIED; retrain (Phase 5) or mark obsolete.
+   Old checkpoint archived to `checkpoints/deinterleaver_legacy/` + `OBSOLETE.md`.
+
+### Status gates
+- Preflight: still `NOT READY` (single blocker [17]) until retrain lands.
+- Trainers: paused awaiting user-specified model fixes before deinterleaver retrain.
+- Partial artifacts at `checkpoints/deinterleaver/`: only manifest + stats (no runnable ckpt).
+
+NEXT ACTION (resume point): apply user-specified model fixes → retrain
+deinterleaver (real_tsrd) producing 5 canonical artifacts → re-run preflight →
+Phase 6-10 (normalization provenance, eval metrics incl. V/AMI/ARI/purity/
+fragmentation/merging, scheduler gate, 12-item final report).
+
 ## CHECKPOINT 2026-09-05 (Phase 20: Preflight gate — 23-point READY/NOT_READY) — COMPLETE
 State: **scripts/preflight_tsrd.py is the strict 23-check readiness gate:
 `PREFLIGHT: READY` / `PREFLIGHT: NOT READY (<n> blocking issue(s))` with one
@@ -113,7 +219,7 @@ dataset.**
   **361 passed, 1 pre-existing failure** (`test_clusters_synthetic`).
 - Real-data check: `config_1180.h5` (empty) → valid/empty/not-eligible;
   `config_0.h5` (2,071,247 pulses) → train+eval eligible; `validate_dataset`
-  on `D:/TSRD_data` → valid with scan/train num_empty=8, meaningful=2492.
+  on `D:/TSRD` → valid with scan/train num_empty=8, meaningful=2492.
 - Docs: CHANGELOG updated.
 
 NEXT ACTION (resume point): evaluate the full 11-baseline suite on real TSRD
@@ -149,7 +255,7 @@ and verifies everything it writes — nothing is ever fabricated.**
   patch one seam. NOTE: earlier claim that huggingface_hub was missing was WRONG
   — it IS installed (1.29.0). The seam exists for patchability (the imports are
   function-locals, never module attrs), not because the package is absent.
-- Real-TSRD schema (confirmed on `D:\TSRD_data`): `data` is `(N, 5)` float32;
+- Real-TSRD schema (confirmed on `D:\TSRD`): `data` is `(N, 5)` float32;
   `labels` is `(N, 1)` int8 (NOT `(N,)`) — `_verify_h5` flattens; `metadata`
   dataset with attrs incl. `collection_time_s` (recorded); noise label `-1`.
   `_verify_h5` accepts `str` or `Path`. Real-file check-in:
@@ -158,7 +264,7 @@ and verifies everything it writes — nothing is ever fabricated.**
 
 ### Environment facts (corrected)
 - `huggingface_hub` 1.29.0 installed. `onnx`/`onnxscript` NOT installed.
-- **Full official TSRD dataset resides at `D:\TSRD_data`** (acquired with the
+- **Full official TSRD dataset resides at `D:\TSRD`** (acquired with the
   HF token): `stare/{train_stare,val_stare,test_stare}` (2500/250/250) and
   `scan/{train_scan,val_scan,test_scan}` (2500/250/250) + `archive/` (Kaggle
   `test_*.h5`) + HF `.cache`. The downloader is for fresh acquisition into
@@ -171,7 +277,7 @@ and verifies everything it writes — nothing is ever fabricated.**
   `collection_time_s` + 4 corrupt rejections, offline end-to-end via faked
   `_hub_functions`: canonical acquire + manifests, missing subset never
   fabricated, failed download surfaced, skipped path).
-- `_verify_h5` run against REAL TSRD files on `D:\TSRD_data` (both modes) — OK.
+- `_verify_h5` run against REAL TSRD files on `D:\TSRD` (both modes) — OK.
 - CLI works offline (`--help`, skipped run). Real acquisition requires token +
   `--allow-download` (`HF_TOKEN`, use `python scripts/download_data.py
   --allow-download --modes stare scan --splits train validation test`).
@@ -599,7 +705,7 @@ Canonical contract (verified everywhere): `n_bands=36`, `band_features=10`, `obs
 - No stubs: no TODO/NotImplemented; except-pass only in OOM fallbacks with logging
 
 ## HISTORY — CHECKPOINT 2026-09-03 (superseded by 2026-09-04)
-State: codebase wired to real TSRD data on D:\TSRD_data (download VERIFIED: 65GB, 9000 .h5). Working through scientific-alignment review BEFORE training.
+State: codebase wired to real TSRD data on D:\TSRD (download VERIFIED: 65GB, 9000 .h5). Working through scientific-alignment review BEFORE training.
 
 Just-completed this session (all verified running against real scan/train_scan data):
 - `discover_h5_files` now maps the official `<mode>/<mode>_<split>` layout (scan/train_scan) + old plain layout; split aliases train/val/test handled.
