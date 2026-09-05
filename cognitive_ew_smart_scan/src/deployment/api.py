@@ -42,6 +42,11 @@ except ImportError:
 from pydantic import BaseModel, Field
 
 from src.contracts import (
+    CANONICAL_BAND_FEATURES,
+    CANONICAL_N_ACTIONS,
+    CANONICAL_N_BANDS,
+    CANONICAL_N_MODES,
+    CANONICAL_OBS_DIM,
     DEFAULT_DWELL_MULTIPLIERS,
     NORMAL_DWELL,
     REVISIT_AGE_IDX,
@@ -56,9 +61,8 @@ MAX_SESSION_TTL_SECONDS = 3600
 
 # Phase 16: canonical production observation contract. /predict_bands accepts
 # ONLY the 36-band x 10-feature layout (obs_dim=360). Legacy 2*n_bands and any
-# other lengths are rejected.
-CANONICAL_OBS_DIM = 360
-OBS_FEATURES_PER_BAND = 10
+# other lengths are rejected. The values themselves live in src/contracts.py.
+OBS_FEATURES_PER_BAND = CANONICAL_BAND_FEATURES
 
 
 def _is_authorized(request: Request) -> bool:
@@ -206,7 +210,15 @@ async def lifespan(app: FastAPI):  # type: ignore
             STATE["model_cfg"] = yaml.safe_load(f)
     else:
         logger.warning("model_config.yaml not found at %s", cfg_path)
-        STATE["model_cfg"] = {"drqn_scheduler": {"n_bands": 36, "n_modes": 5, "n_actions": 180, "obs_dim": 360}, "smartscan_moe": {}}
+        STATE["model_cfg"] = {
+    "drqn_scheduler": {
+        "n_bands": CANONICAL_N_BANDS,
+        "n_modes": CANONICAL_N_MODES,
+        "n_actions": CANONICAL_N_ACTIONS,
+        "obs_dim": CANONICAL_OBS_DIM,
+    },
+    "smartscan_moe": {},
+}
 
     # Try to load PyTorch models (ONNX preferred if available, else PT)
     # Deinterleaver
@@ -270,11 +282,11 @@ async def lifespan(app: FastAPI):  # type: ignore
 
                     d_cfg = STATE["model_cfg"].get("drqn_scheduler", {})
                     moe_cfg = STATE["model_cfg"].get("smartscan_moe", {})
-                    n_bands_api = int(d_cfg.get("n_bands", 36))
-                    n_modes_api = int(d_cfg.get("n_modes", 5))
-                    n_actions_api = int(d_cfg.get("n_actions", n_bands_api * n_modes_api))
+                    n_bands_api = int(d_cfg.get("n_bands", CANONICAL_N_BANDS))
+                    n_modes_api = int(d_cfg.get("n_modes", CANONICAL_N_MODES))
+                    n_actions_api = int(d_cfg.get("n_actions", n_bands_api * n_modes_api if n_modes_api else CANONICAL_N_ACTIONS))
                     drqn = DRQNScheduler(
-                        obs_dim=int(d_cfg.get("obs_dim", 360)),
+                        obs_dim=int(d_cfg.get("obs_dim", CANONICAL_OBS_DIM)),
                         n_bands=n_bands_api,
                         n_actions=n_actions_api,
                         n_modes=n_modes_api,
@@ -520,8 +532,8 @@ def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
             status_code=503,
             detail=f"Configured obs_dim={configured_dim} is not the canonical {CANONICAL_OBS_DIM} — refusing inference.",
         )
-    n_bands = int(d_cfg.get("n_bands", 36))
-    n_modes = int(d_cfg.get("n_modes", 5))
+    n_bands = int(d_cfg.get("n_bands", CANONICAL_N_BANDS))
+    n_modes = int(d_cfg.get("n_modes", CANONICAL_N_MODES))
 
     obs = np.asarray(req.obs, dtype=np.float32)
     if obs.ndim != 1:

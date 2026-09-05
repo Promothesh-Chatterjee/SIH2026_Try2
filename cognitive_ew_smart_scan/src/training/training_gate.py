@@ -9,17 +9,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..contracts import DWELL_MODES, DEFAULT_DWELL_MULTIPLIERS, n_actions_for
+from ..contracts import (
+    CANONICAL_N_BANDS,
+    CANONICAL_BAND_FEATURES,
+    CANONICAL_OBS_DIM,
+    CANONICAL_RECEIVER,
+    DWELL_MODES,
+    DEFAULT_DWELL_MULTIPLIERS,
+    n_actions_for,
+)
 from ..data.tsrd_manifest import resolve_split_dirs
 from ..utils.checkpoint_meta import FEATURE_ORDER
 
-CANONICAL_OBSERVATION = (36, 10, 360)
-CANONICAL_RECEIVER = {
-    "ibw_mhz": 500.0,
-    "frequency_step_mhz": 500.0,
-    "freq_min_mhz": 0.0,
-    "freq_max_mhz": 18000.0,
-}
 # Reward terms the scheduler must have configured before a strict run.
 REQUIRED_REWARD_KEYS = (
     "w_hit",
@@ -64,10 +65,10 @@ def validate_training_gate(
         errors.append(f"Normalization statistics missing: {stats}")
 
     # --- Canonical observation contract ---
-    n_bands = int(environment_config.get("n_bands", 36))
-    band_features = int(environment_config.get("band_features", 10))
+    n_bands = int(environment_config.get("n_bands", CANONICAL_N_BANDS))
+    band_features = int(environment_config.get("band_features", CANONICAL_BAND_FEATURES))
     obs_dim = int(environment_config.get("obs_dim", n_bands * band_features))
-    if (n_bands, band_features, obs_dim) != CANONICAL_OBSERVATION:
+    if n_bands != CANONICAL_N_BANDS or band_features != CANONICAL_BAND_FEATURES or obs_dim != CANONICAL_OBS_DIM:
         errors.append(
             f"Observation contract invalid: n_bands={n_bands}, "
             f"band_features={band_features}, obs_dim={obs_dim}"

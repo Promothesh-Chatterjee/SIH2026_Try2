@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 
 from src.contracts import (
+    CANONICAL_N_BANDS,
     CANONICAL_N_MODES,
     DEFAULT_DWELL_MULTIPLIERS,
     DWELL_MODES,
@@ -121,7 +122,7 @@ class SmartScanMoE(nn.Module):
         Ensures no band ignored > max_revisit_gap slots.
         """
 
-        def __init__(self, n_bands: int = 36, decay_rate: float = 0.05, max_revisit_gap: int | None = None) -> None:
+        def __init__(self, n_bands: int = CANONICAL_N_BANDS, decay_rate: float = 0.05, max_revisit_gap: int | None = None) -> None:
             """Initialise revisit agent.
 
             Args:
@@ -188,7 +189,7 @@ class SmartScanMoE(nn.Module):
         """
         super().__init__()
         config = config or {}
-        self.n_bands: int = int(config.get("n_bands", getattr(drqn_agent, "n_bands", 36)))
+        self.n_bands: int = int(config.get("n_bands", getattr(drqn_agent, "n_bands", CANONICAL_N_BANDS)))
         self.n_modes: int = int(config.get("n_modes", getattr(drqn_agent, "n_modes", CANONICAL_N_MODES)))
         self.n_actions: int = int(config.get("n_actions", n_actions_for(self.n_bands, self.n_modes)))
         self.eager_weight: float = float(config.get("eager_weight", 0.6))
