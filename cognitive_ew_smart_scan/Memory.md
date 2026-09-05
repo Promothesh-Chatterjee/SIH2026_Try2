@@ -1,5 +1,35 @@
 # Project Memory & Progress Tracker
 
+## CHECKPOINT 2026-09-05 (Phase 3: canonical per-episode TSRD scenario generation) — COMPLETE
+State: **`ScenarioSource.sample()` is the canonical scheduler-training data
+source: one RL episode == exactly ONE eligible `.h5` pulse train. `load_h5_records()`
+now forwards `freq_min_mhz`/`freq_max_mhz`/`time_horizon_us` to
+`records_from_array()` (this was the critical Phase 3 bug — file-load filters
+were silently dropped), ToA normalisation stays per-file, corrupt eligible files
+are reported+skipped with retry (all-corrupt → `RuntimeError`), `build_scenario()`
+fails loudly when files exist but none are eligible (unless explicit synthetic).
+Full suite: 409 passed.**
+
+### Phase 3 fixes
+- `load_h5_records()` → `records_from_array()` forwards all three filter args.
+- ToA normalised after loading a single file (never after concatenation).
+- `ScenarioSource.sample()` draws one random eligible file per call; corrupt
+  load → log + skip + retry (up to 10 attempts); all-fail → `RuntimeError`
+  (no fabricated / empty episodes).
+- `build_scenario()` raises `FileNotFoundError` when files exist but all are
+  empty/unreadable and `allow_synthetic_fallback=False` (mirrors
+  `ScenarioSource` fail-fast contract).
+- Tests: `tests/test_scenario_generator.py` 6 → 17 (one-file-per-episode,
+  file-local labels, empty skip, filter pass-through, per-file ToA normalisation,
+  corrupt skip/retry, all-corrupt raise, build_scenario fail-loud vs explicit
+  synthetic).
+
+### Outstanding gates (unchanged)
+- Preflight: real tree still `NOT READY` — single blocker [17] dataset
+  fingerprint mismatch (checkpoint `27eca1101…` vs disk `27b10ea0…`); requires
+  the deinterleaver retrain (or deliberate provenance restamp).
+- Deinterleaver checkpoint dir holds only manifest + stats (no runnable ckpt).
+
 ## CHECKPOINT 2026-09-05 (Phase 2: one authoritative TSRD acquisition) — COMPLETE
 State: **`scripts/download_data.py` is the single TSRD acquisition path;
 `scripts/download_tsrd.py` is a thin shim. It recognises official Kaggle split

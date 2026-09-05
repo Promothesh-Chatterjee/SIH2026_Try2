@@ -6,6 +6,39 @@ suite command is `python -m pytest tests/` from `cognitive_ew_smart_scan/`.
 
 ## [Unreleased]
 
+### Fixed — Canonical per-episode TSRD scenario generation (Phase 3, 2026-09-05)
+
+`src/environment/scenario_generator.py` now guarantees one RL episode == exactly
+one eligible `.h5` pulse train, with honour filter forwards and fail-loudly
+semantics:
+
+- **FIXED (critical): `load_h5_records()` now forwards `freq_min_mhz`,
+  `freq_max_mhz` and `time_horizon_us` to `records_from_array()`.** Previously
+  the filtering args (e.g. those passed by `evaluate_full.py`) were silently
+  dropped, so out-of-band / beyond-horizon pulses were never actually clipped
+  when loading from a file. Now the spectral clipping + horizon filter really
+  apply on the file-loading path.
+- **ToA normalisation stays per-file**: `load_h5_records()` normalises after
+  loading a *single* file (min ToA → 0, relative spacing preserved), never after
+  concatenation — so per-file time offsets cannot be smeared across episodes.
+- **`ScenarioSource.sample()` is the canonical scheduler-training data source**
+  (already wired into `train_scheduler.py` via `records_provider`) and returns
+  records from *one* randomly chosen eligible file per call — never a
+  concatenation of several files (prevents cross-file emitter-label collisions).
+- **Corrupt eligible files are reported and skipped**: `sample()` wraps each
+  load; a corrupt read is logged, skipped, and the draw is retried with other
+  eligible files. If *all* draws fail, it raises `RuntimeError` rather than
+  fabricating or silently returning an empty episode.
+- **`build_scenario()` fails loudly when `.h5` files exist but none are
+  eligible** (all empty/unreadable) unless synthetic fallback is explicitly
+  enabled — mirroring `ScenarioSource`'s no-silent-fallback contract.
+
+Coverage: `tests/test_scenario_generator.py` 6 → 17 (one file → one episode,
+file-local emitter labels never rebased, empty-file skipping, filter
+pass-through via `load_h5_records`, per-file ToA normalisation, corrupt-file
+skip/retry, all-corrupt raise, and `build_scenario` fail-loud vs explicit
+synthetic). Full suite: 409 passed.
+
 ### Fixed — One authoritative TSRD acquisition path (Phase 2, 2026-09-05)
 
 `scripts/download_data.py` is the single acquisition implementation;
