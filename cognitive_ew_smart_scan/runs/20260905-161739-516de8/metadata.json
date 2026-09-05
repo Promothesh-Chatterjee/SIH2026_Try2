@@ -1,0 +1,119 @@
+{
+  "config": {
+    "data_dir": "D:/TSRD",
+    "deinterleaver": {
+      "batch_size": 8,
+      "epochs": 3,
+      "lr": "3e-4",
+      "max_pulses_per_train": 512,
+      "mode": "scan",
+      "save_every": 5,
+      "scheduler": "cosine",
+      "val_every": 2,
+      "val_mode": "scan",
+      "warmup_steps": 500,
+      "weight_decay": "1e-5"
+    },
+    "deinterleaver_ckpt": "checkpoints/deinterleaver/best.pt",
+    "drqn_scheduler": {
+      "eps_decay": 10000,
+      "eps_end": 0.05,
+      "eps_start": 1.0,
+      "gamma": 0.99,
+      "lr": "1e-4",
+      "lstm_hidden": 256,
+      "lstm_layers": 2,
+      "n_actions": 180,
+      "n_bands": 36,
+      "n_modes": 5,
+      "obs_dim": 360
+    },
+    "dwell_modes": {
+      "base_dwell_time_us": 500.0,
+      "mode_multipliers": [
+        {
+          "multiplier": 0.25,
+          "name": "SHORT_DWELL"
+        },
+        {
+          "multiplier": 1.0,
+          "name": "NORMAL_DWELL"
+        },
+        {
+          "multiplier": 2.5,
+          "name": "LONG_DWELL"
+        },
+        {
+          "multiplier": 1.0,
+          "name": "REVISIT"
+        },
+        {
+          "multiplier": 1.0,
+          "name": "PREEMPTIVE_INTERCEPT"
+        }
+      ]
+    },
+    "environment": {
+      "band_features": 10,
+      "detection_threshold_db": -140.0,
+      "dwell_time_us": 500.0,
+      "freq_max_mhz": 18000.0,
+      "freq_min_mhz": 0.0,
+      "frequency_step_mhz": 500.0,
+      "ibw_mhz": 500.0,
+      "max_pulses": 50000,
+      "max_steps_per_episode": 1000,
+      "n_actions": 180,
+      "n_bands": 36,
+      "n_modes": 5,
+      "obs_dim": 360,
+      "time_horizon_us": 30000000.0
+    },
+    "mode": "scan",
+    "normalization_stats": "checkpoints/deinterleaver/normalization_stats.json",
+    "observation_mode": "scan",
+    "reward": {
+      "w_delay": 0.0,
+      "w_dwell_cost": -0.001,
+      "w_false_alarm": -0.5,
+      "w_hit": 1.0,
+      "w_information_gain": 0.2,
+      "w_miss": -1.0,
+      "w_novel": 2.0,
+      "w_priority": 0.5,
+      "w_redundant_scan": -0.1,
+      "w_timing": 0.001
+    },
+    "scheduler": {
+      "batch_size": 32,
+      "burn_in": 8,
+      "replay_buffer_size": 50000,
+      "seq_len": 16,
+      "target_update_freq": 1000,
+      "thompson_warmup_steps": 5000,
+      "total_timesteps": 500000,
+      "update_freq": 4
+    },
+    "seed": 42,
+    "smartscan_moe": {
+      "decay_rate": 0.05,
+      "eager_weight": 0.6,
+      "k_receivers": 1,
+      "preemptive_weight": 0.0,
+      "revisit_weight": 0.4,
+      "semantic_weight": 1.0
+    },
+    "subset": "train",
+    "training_mode": "real_tsrd",
+    "world_mode": "stare"
+  },
+  "created_at": 1788605259.5852711,
+  "device": "cpu",
+  "host": "DELLg15-C6S8DCG",
+  "mode": "stare",
+  "python": "3.14.7",
+  "run_id": "20260905-161739-516de8",
+  "seed": 42,
+  "split": "train",
+  "torch": "2.13.0+cpu"
+}

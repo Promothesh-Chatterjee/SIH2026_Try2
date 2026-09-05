@@ -1,0 +1,1381 @@
+{
+  "data_root": "D:\\TSRD_data",
+  "mode": "scan",
+  "splits": {
+    "train": {
+      "directory": "D:\\TSRD_data\\scan\\train_scan",
+      "file_count": 50,
+      "total_pulses": 4312927,
+      "files": [
+        {
+          "path": "scan/train_scan/config_0.h5",
+          "filename": "config_0.h5",
+          "size_bytes": 3629191,
+          "num_pulses": 169617,
+          "num_emitters": 72,
+          "duration_s": 28.995,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1.h5",
+          "filename": "config_1.h5",
+          "size_bytes": 2302672,
+          "num_pulses": 119281,
+          "num_emitters": 37,
+          "duration_s": 28.558,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_10.h5",
+          "filename": "config_10.h5",
+          "size_bytes": 1679404,
+          "num_pulses": 82427,
+          "num_emitters": 31,
+          "duration_s": 28.376,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_100.h5",
+          "filename": "config_100.h5",
+          "size_bytes": 1601367,
+          "num_pulses": 58743,
+          "num_emitters": 49,
+          "duration_s": 28.237,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1000.h5",
+          "filename": "config_1000.h5",
+          "size_bytes": 1817489,
+          "num_pulses": 104715,
+          "num_emitters": 15,
+          "duration_s": 29.336,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1001.h5",
+          "filename": "config_1001.h5",
+          "size_bytes": 1749872,
+          "num_pulses": 92731,
+          "num_emitters": 28,
+          "duration_s": 28.898,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1002.h5",
+          "filename": "config_1002.h5",
+          "size_bytes": 2871890,
+          "num_pulses": 127558,
+          "num_emitters": 62,
+          "duration_s": 29.2,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1003.h5",
+          "filename": "config_1003.h5",
+          "size_bytes": 570883,
+          "num_pulses": 23223,
+          "num_emitters": 14,
+          "duration_s": 28.463,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1004.h5",
+          "filename": "config_1004.h5",
+          "size_bytes": 641205,
+          "num_pulses": 21295,
+          "num_emitters": 24,
+          "duration_s": 27.628,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1005.h5",
+          "filename": "config_1005.h5",
+          "size_bytes": 1175521,
+          "num_pulses": 38614,
+          "num_emitters": 30,
+          "duration_s": 27.566,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1006.h5",
+          "filename": "config_1006.h5",
+          "size_bytes": 2717834,
+          "num_pulses": 129926,
+          "num_emitters": 53,
+          "duration_s": 28.394,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1007.h5",
+          "filename": "config_1007.h5",
+          "size_bytes": 1898292,
+          "num_pulses": 77888,
+          "num_emitters": 45,
+          "duration_s": 28.705,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1008.h5",
+          "filename": "config_1008.h5",
+          "size_bytes": 4201950,
+          "num_pulses": 226813,
+          "num_emitters": 51,
+          "duration_s": 28.882,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1009.h5",
+          "filename": "config_1009.h5",
+          "size_bytes": 2718459,
+          "num_pulses": 108261,
+          "num_emitters": 66,
+          "duration_s": 29.159,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_101.h5",
+          "filename": "config_101.h5",
+          "size_bytes": 254315,
+          "num_pulses": 5623,
+          "num_emitters": 8,
+          "duration_s": 26.949,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1010.h5",
+          "filename": "config_1010.h5",
+          "size_bytes": 3332070,
+          "num_pulses": 192508,
+          "num_emitters": 35,
+          "duration_s": 28.045,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1011.h5",
+          "filename": "config_1011.h5",
+          "size_bytes": 2352997,
+          "num_pulses": 129865,
+          "num_emitters": 31,
+          "duration_s": 28.49,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1012.h5",
+          "filename": "config_1012.h5",
+          "size_bytes": 914708,
+          "num_pulses": 53733,
+          "num_emitters": 9,
+          "duration_s": 28.352,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1013.h5",
+          "filename": "config_1013.h5",
+          "size_bytes": 1882714,
+          "num_pulses": 70013,
+          "num_emitters": 57,
+          "duration_s": 28.326,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1014.h5",
+          "filename": "config_1014.h5",
+          "size_bytes": 973222,
+          "num_pulses": 46260,
+          "num_emitters": 17,
+          "duration_s": 28.45,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1015.h5",
+          "filename": "config_1015.h5",
+          "size_bytes": 411422,
+          "num_pulses": 12631,
+          "num_emitters": 12,
+          "duration_s": 28.655,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1016.h5",
+          "filename": "config_1016.h5",
+          "size_bytes": 1638402,
+          "num_pulses": 63199,
+          "num_emitters": 47,
+          "duration_s": 28.621,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1017.h5",
+          "filename": "config_1017.h5",
+          "size_bytes": 3006770,
+          "num_pulses": 140169,
+          "num_emitters": 55,
+          "duration_s": 29.092,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1018.h5",
+          "filename": "config_1018.h5",
+          "size_bytes": 2268515,
+          "num_pulses": 98104,
+          "num_emitters": 51,
+          "duration_s": 29.031,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1019.h5",
+          "filename": "config_1019.h5",
+          "size_bytes": 1799566,
+          "num_pulses": 100286,
+          "num_emitters": 19,
+          "duration_s": 27.769,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_102.h5",
+          "filename": "config_102.h5",
+          "size_bytes": 1352761,
+          "num_pulses": 58529,
+          "num_emitters": 36,
+          "duration_s": 28.514,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1020.h5",
+          "filename": "config_1020.h5",
+          "size_bytes": 801763,
+          "num_pulses": 28175,
+          "num_emitters": 22,
+          "duration_s": 27.984,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1021.h5",
+          "filename": "config_1021.h5",
+          "size_bytes": 1151064,
+          "num_pulses": 39599,
+          "num_emitters": 36,
+          "duration_s": 29.009,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1022.h5",
+          "filename": "config_1022.h5",
+          "size_bytes": 1035908,
+          "num_pulses": 38324,
+          "num_emitters": 32,
+          "duration_s": 27.654,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1023.h5",
+          "filename": "config_1023.h5",
+          "size_bytes": 2037936,
+          "num_pulses": 85281,
+          "num_emitters": 48,
+          "duration_s": 28.574,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1024.h5",
+          "filename": "config_1024.h5",
+          "size_bytes": 23784,
+          "num_pulses": 0,
+          "num_emitters": 0,
+          "duration_s": 0.0,
+          "valid": false
+        },
+        {
+          "path": "scan/train_scan/config_1025.h5",
+          "filename": "config_1025.h5",
+          "size_bytes": 3260690,
+          "num_pulses": 148310,
+          "num_emitters": 67,
+          "duration_s": 29.014,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1026.h5",
+          "filename": "config_1026.h5",
+          "size_bytes": 2830015,
+          "num_pulses": 135971,
+          "num_emitters": 52,
+          "duration_s": 29.044,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1027.h5",
+          "filename": "config_1027.h5",
+          "size_bytes": 180918,
+          "num_pulses": 5395,
+          "num_emitters": 5,
+          "duration_s": 25.899,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1028.h5",
+          "filename": "config_1028.h5",
+          "size_bytes": 2187288,
+          "num_pulses": 86130,
+          "num_emitters": 54,
+          "duration_s": 28.762,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1029.h5",
+          "filename": "config_1029.h5",
+          "size_bytes": 1193398,
+          "num_pulses": 47038,
+          "num_emitters": 33,
+          "duration_s": 28.57,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_103.h5",
+          "filename": "config_103.h5",
+          "size_bytes": 327107,
+          "num_pulses": 7092,
+          "num_emitters": 12,
+          "duration_s": 27.442,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1030.h5",
+          "filename": "config_1030.h5",
+          "size_bytes": 2536686,
+          "num_pulses": 97943,
+          "num_emitters": 67,
+          "duration_s": 29.248,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1031.h5",
+          "filename": "config_1031.h5",
+          "size_bytes": 2765411,
+          "num_pulses": 154744,
+          "num_emitters": 35,
+          "duration_s": 28.298,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1032.h5",
+          "filename": "config_1032.h5",
+          "size_bytes": 3927831,
+          "num_pulses": 199771,
+          "num_emitters": 60,
+          "duration_s": 28.557,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1033.h5",
+          "filename": "config_1033.h5",
+          "size_bytes": 2958945,
+          "num_pulses": 127243,
+          "num_emitters": 72,
+          "duration_s": 29.294,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1034.h5",
+          "filename": "config_1034.h5",
+          "size_bytes": 1899199,
+          "num_pulses": 77627,
+          "num_emitters": 45,
+          "duration_s": 28.895,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1035.h5",
+          "filename": "config_1035.h5",
+          "size_bytes": 294090,
+          "num_pulses": 9245,
+          "num_emitters": 9,
+          "duration_s": 28.443,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1036.h5",
+          "filename": "config_1036.h5",
+          "size_bytes": 2391712,
+          "num_pulses": 110461,
+          "num_emitters": 54,
+          "duration_s": 29.196,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1037.h5",
+          "filename": "config_1037.h5",
+          "size_bytes": 258661,
+          "num_pulses": 7731,
+          "num_emitters": 10,
+          "duration_s": 27.416,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1038.h5",
+          "filename": "config_1038.h5",
+          "size_bytes": 531751,
+          "num_pulses": 26907,
+          "num_emitters": 8,
+          "duration_s": 27.715,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1039.h5",
+          "filename": "config_1039.h5",
+          "size_bytes": 3993599,
+          "num_pulses": 224572,
+          "num_emitters": 46,
+          "duration_s": 29.224,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_104.h5",
+          "filename": "config_104.h5",
+          "size_bytes": 817776,
+          "num_pulses": 37163,
+          "num_emitters": 20,
+          "duration_s": 28.258,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1040.h5",
+          "filename": "config_1040.h5",
+          "size_bytes": 3237978,
+          "num_pulses": 179404,
+          "num_emitters": 38,
+          "duration_s": 28.913,
+          "valid": true
+        },
+        {
+          "path": "scan/train_scan/config_1041.h5",
+          "filename": "config_1041.h5",
+          "size_bytes": 1951059,
+          "num_pulses": 86789,
+          "num_emitters": 41,
+          "duration_s": 27.772,
+          "valid": true
+        }
+      ]
+    },
+    "val": {
+      "directory": "D:\\TSRD_data\\scan\\val_scan",
+      "file_count": 50,
+      "total_pulses": 4205956,
+      "files": [
+        {
+          "path": "scan/val_scan/config_0.h5",
+          "filename": "config_0.h5",
+          "size_bytes": 1408164,
+          "num_pulses": 79340,
+          "num_emitters": 15,
+          "duration_s": 28.221,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_1.h5",
+          "filename": "config_1.h5",
+          "size_bytes": 1346432,
+          "num_pulses": 55209,
+          "num_emitters": 36,
+          "duration_s": 29.135,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_10.h5",
+          "filename": "config_10.h5",
+          "size_bytes": 1060995,
+          "num_pulses": 25943,
+          "num_emitters": 43,
+          "duration_s": 28.694,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_100.h5",
+          "filename": "config_100.h5",
+          "size_bytes": 1453998,
+          "num_pulses": 71331,
+          "num_emitters": 24,
+          "duration_s": 28.574,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_101.h5",
+          "filename": "config_101.h5",
+          "size_bytes": 2173476,
+          "num_pulses": 98402,
+          "num_emitters": 51,
+          "duration_s": 29.001,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_102.h5",
+          "filename": "config_102.h5",
+          "size_bytes": 1990879,
+          "num_pulses": 72992,
+          "num_emitters": 56,
+          "duration_s": 27.994,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_103.h5",
+          "filename": "config_103.h5",
+          "size_bytes": 33400,
+          "num_pulses": 249,
+          "num_emitters": 1,
+          "duration_s": 15.226,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_104.h5",
+          "filename": "config_104.h5",
+          "size_bytes": 3111556,
+          "num_pulses": 142722,
+          "num_emitters": 65,
+          "duration_s": 28.216,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_105.h5",
+          "filename": "config_105.h5",
+          "size_bytes": 2056485,
+          "num_pulses": 115223,
+          "num_emitters": 25,
+          "duration_s": 28.267,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_106.h5",
+          "filename": "config_106.h5",
+          "size_bytes": 1473063,
+          "num_pulses": 73584,
+          "num_emitters": 21,
+          "duration_s": 28.592,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_107.h5",
+          "filename": "config_107.h5",
+          "size_bytes": 2658167,
+          "num_pulses": 134244,
+          "num_emitters": 51,
+          "duration_s": 28.95,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_108.h5",
+          "filename": "config_108.h5",
+          "size_bytes": 113575,
+          "num_pulses": 749,
+          "num_emitters": 4,
+          "duration_s": 25.992,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_109.h5",
+          "filename": "config_109.h5",
+          "size_bytes": 1147898,
+          "num_pulses": 50068,
+          "num_emitters": 21,
+          "duration_s": 28.8,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_11.h5",
+          "filename": "config_11.h5",
+          "size_bytes": 2081594,
+          "num_pulses": 103574,
+          "num_emitters": 35,
+          "duration_s": 28.306,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_110.h5",
+          "filename": "config_110.h5",
+          "size_bytes": 2567390,
+          "num_pulses": 124112,
+          "num_emitters": 46,
+          "duration_s": 29.06,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_111.h5",
+          "filename": "config_111.h5",
+          "size_bytes": 48580,
+          "num_pulses": 519,
+          "num_emitters": 2,
+          "duration_s": 17.405,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_112.h5",
+          "filename": "config_112.h5",
+          "size_bytes": 3860972,
+          "num_pulses": 190157,
+          "num_emitters": 72,
+          "duration_s": 28.939,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_113.h5",
+          "filename": "config_113.h5",
+          "size_bytes": 450952,
+          "num_pulses": 22335,
+          "num_emitters": 6,
+          "duration_s": 25.939,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_114.h5",
+          "filename": "config_114.h5",
+          "size_bytes": 4206896,
+          "num_pulses": 216761,
+          "num_emitters": 66,
+          "duration_s": 30.142,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_115.h5",
+          "filename": "config_115.h5",
+          "size_bytes": 931608,
+          "num_pulses": 33809,
+          "num_emitters": 24,
+          "duration_s": 28.885,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_116.h5",
+          "filename": "config_116.h5",
+          "size_bytes": 3774611,
+          "num_pulses": 206862,
+          "num_emitters": 47,
+          "duration_s": 29.058,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_117.h5",
+          "filename": "config_117.h5",
+          "size_bytes": 1102014,
+          "num_pulses": 56527,
+          "num_emitters": 19,
+          "duration_s": 26.221,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_118.h5",
+          "filename": "config_118.h5",
+          "size_bytes": 1321197,
+          "num_pulses": 64960,
+          "num_emitters": 22,
+          "duration_s": 28.784,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_119.h5",
+          "filename": "config_119.h5",
+          "size_bytes": 2802986,
+          "num_pulses": 139461,
+          "num_emitters": 52,
+          "duration_s": 28.946,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_12.h5",
+          "filename": "config_12.h5",
+          "size_bytes": 87843,
+          "num_pulses": 1031,
+          "num_emitters": 4,
+          "duration_s": 25.444,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_120.h5",
+          "filename": "config_120.h5",
+          "size_bytes": 503186,
+          "num_pulses": 23170,
+          "num_emitters": 9,
+          "duration_s": 28.049,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_121.h5",
+          "filename": "config_121.h5",
+          "size_bytes": 1979464,
+          "num_pulses": 67845,
+          "num_emitters": 62,
+          "duration_s": 28.917,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_122.h5",
+          "filename": "config_122.h5",
+          "size_bytes": 1841604,
+          "num_pulses": 81381,
+          "num_emitters": 41,
+          "duration_s": 29.098,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_123.h5",
+          "filename": "config_123.h5",
+          "size_bytes": 2494617,
+          "num_pulses": 105507,
+          "num_emitters": 64,
+          "duration_s": 28.809,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_124.h5",
+          "filename": "config_124.h5",
+          "size_bytes": 41208,
+          "num_pulses": 92,
+          "num_emitters": 2,
+          "duration_s": 28.09,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_125.h5",
+          "filename": "config_125.h5",
+          "size_bytes": 106336,
+          "num_pulses": 2055,
+          "num_emitters": 4,
+          "duration_s": 26.383,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_126.h5",
+          "filename": "config_126.h5",
+          "size_bytes": 3039707,
+          "num_pulses": 167963,
+          "num_emitters": 41,
+          "duration_s": 28.848,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_127.h5",
+          "filename": "config_127.h5",
+          "size_bytes": 2634905,
+          "num_pulses": 128256,
+          "num_emitters": 50,
+          "duration_s": 28.845,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_128.h5",
+          "filename": "config_128.h5",
+          "size_bytes": 2574303,
+          "num_pulses": 115347,
+          "num_emitters": 50,
+          "duration_s": 28.619,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_129.h5",
+          "filename": "config_129.h5",
+          "size_bytes": 1973475,
+          "num_pulses": 103054,
+          "num_emitters": 27,
+          "duration_s": 28.549,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_13.h5",
+          "filename": "config_13.h5",
+          "size_bytes": 3039576,
+          "num_pulses": 149474,
+          "num_emitters": 55,
+          "duration_s": 29.099,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_130.h5",
+          "filename": "config_130.h5",
+          "size_bytes": 3630754,
+          "num_pulses": 166169,
+          "num_emitters": 68,
+          "duration_s": 29.076,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_131.h5",
+          "filename": "config_131.h5",
+          "size_bytes": 725408,
+          "num_pulses": 36513,
+          "num_emitters": 8,
+          "duration_s": 28.688,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_132.h5",
+          "filename": "config_132.h5",
+          "size_bytes": 1171017,
+          "num_pulses": 53869,
+          "num_emitters": 25,
+          "duration_s": 28.256,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_133.h5",
+          "filename": "config_133.h5",
+          "size_bytes": 1076047,
+          "num_pulses": 46272,
+          "num_emitters": 24,
+          "duration_s": 29.049,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_134.h5",
+          "filename": "config_134.h5",
+          "size_bytes": 216462,
+          "num_pulses": 8160,
+          "num_emitters": 5,
+          "duration_s": 25.544,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_135.h5",
+          "filename": "config_135.h5",
+          "size_bytes": 413820,
+          "num_pulses": 18720,
+          "num_emitters": 8,
+          "duration_s": 27.361,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_136.h5",
+          "filename": "config_136.h5",
+          "size_bytes": 2617656,
+          "num_pulses": 112647,
+          "num_emitters": 65,
+          "duration_s": 29.105,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_137.h5",
+          "filename": "config_137.h5",
+          "size_bytes": 1273428,
+          "num_pulses": 63907,
+          "num_emitters": 22,
+          "duration_s": 28.528,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_138.h5",
+          "filename": "config_138.h5",
+          "size_bytes": 2812575,
+          "num_pulses": 116603,
+          "num_emitters": 74,
+          "duration_s": 29.269,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_139.h5",
+          "filename": "config_139.h5",
+          "size_bytes": 2185723,
+          "num_pulses": 120981,
+          "num_emitters": 24,
+          "duration_s": 29.004,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_14.h5",
+          "filename": "config_14.h5",
+          "size_bytes": 2895048,
+          "num_pulses": 140529,
+          "num_emitters": 47,
+          "duration_s": 28.919,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_140.h5",
+          "filename": "config_140.h5",
+          "size_bytes": 2186595,
+          "num_pulses": 126671,
+          "num_emitters": 26,
+          "duration_s": 28.896,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_141.h5",
+          "filename": "config_141.h5",
+          "size_bytes": 986956,
+          "num_pulses": 46833,
+          "num_emitters": 20,
+          "duration_s": 28.027,
+          "valid": true
+        },
+        {
+          "path": "scan/val_scan/config_142.h5",
+          "filename": "config_142.h5",
+          "size_bytes": 2534285,
+          "num_pulses": 123774,
+          "num_emitters": 47,
+          "duration_s": 29.281,
+          "valid": true
+        }
+      ]
+    },
+    "test": {
+      "directory": "D:\\TSRD_data\\scan\\test_scan",
+      "file_count": 50,
+      "total_pulses": 5836255,
+      "files": [
+        {
+          "path": "scan/test_scan/config_0.h5",
+          "filename": "config_0.h5",
+          "size_bytes": 52965,
+          "num_pulses": 788,
+          "num_emitters": 1,
+          "duration_s": 17.393,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_1.h5",
+          "filename": "config_1.h5",
+          "size_bytes": 1191548,
+          "num_pulses": 50013,
+          "num_emitters": 30,
+          "duration_s": 28.966,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_10.h5",
+          "filename": "config_10.h5",
+          "size_bytes": 1582516,
+          "num_pulses": 70364,
+          "num_emitters": 36,
+          "duration_s": 28.195,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_100.h5",
+          "filename": "config_100.h5",
+          "size_bytes": 2936503,
+          "num_pulses": 134297,
+          "num_emitters": 57,
+          "duration_s": 28.49,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_101.h5",
+          "filename": "config_101.h5",
+          "size_bytes": 2519758,
+          "num_pulses": 88937,
+          "num_emitters": 73,
+          "duration_s": 28.686,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_102.h5",
+          "filename": "config_102.h5",
+          "size_bytes": 2633590,
+          "num_pulses": 124770,
+          "num_emitters": 51,
+          "duration_s": 28.272,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_103.h5",
+          "filename": "config_103.h5",
+          "size_bytes": 4848559,
+          "num_pulses": 274147,
+          "num_emitters": 54,
+          "duration_s": 28.95,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_104.h5",
+          "filename": "config_104.h5",
+          "size_bytes": 2670109,
+          "num_pulses": 99884,
+          "num_emitters": 75,
+          "duration_s": 29.103,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_105.h5",
+          "filename": "config_105.h5",
+          "size_bytes": 3592614,
+          "num_pulses": 158116,
+          "num_emitters": 73,
+          "duration_s": 28.839,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_106.h5",
+          "filename": "config_106.h5",
+          "size_bytes": 4789922,
+          "num_pulses": 264849,
+          "num_emitters": 70,
+          "duration_s": 28.91,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_107.h5",
+          "filename": "config_107.h5",
+          "size_bytes": 2937673,
+          "num_pulses": 142990,
+          "num_emitters": 53,
+          "duration_s": 28.43,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_108.h5",
+          "filename": "config_108.h5",
+          "size_bytes": 1651746,
+          "num_pulses": 50744,
+          "num_emitters": 55,
+          "duration_s": 28.649,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_109.h5",
+          "filename": "config_109.h5",
+          "size_bytes": 2364017,
+          "num_pulses": 110260,
+          "num_emitters": 49,
+          "duration_s": 28.993,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_11.h5",
+          "filename": "config_11.h5",
+          "size_bytes": 2171094,
+          "num_pulses": 92401,
+          "num_emitters": 50,
+          "duration_s": 29.005,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_110.h5",
+          "filename": "config_110.h5",
+          "size_bytes": 957620,
+          "num_pulses": 28032,
+          "num_emitters": 38,
+          "duration_s": 28.647,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_111.h5",
+          "filename": "config_111.h5",
+          "size_bytes": 4422992,
+          "num_pulses": 214817,
+          "num_emitters": 86,
+          "duration_s": 28.671,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_112.h5",
+          "filename": "config_112.h5",
+          "size_bytes": 1406109,
+          "num_pulses": 64241,
+          "num_emitters": 25,
+          "duration_s": 27.031,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_113.h5",
+          "filename": "config_113.h5",
+          "size_bytes": 1195539,
+          "num_pulses": 59982,
+          "num_emitters": 22,
+          "duration_s": 28.587,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_114.h5",
+          "filename": "config_114.h5",
+          "size_bytes": 3531435,
+          "num_pulses": 164075,
+          "num_emitters": 69,
+          "duration_s": 28.982,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_115.h5",
+          "filename": "config_115.h5",
+          "size_bytes": 406833,
+          "num_pulses": 7823,
+          "num_emitters": 17,
+          "duration_s": 25.597,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_116.h5",
+          "filename": "config_116.h5",
+          "size_bytes": 4823570,
+          "num_pulses": 239797,
+          "num_emitters": 90,
+          "duration_s": 28.949,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_117.h5",
+          "filename": "config_117.h5",
+          "size_bytes": 667651,
+          "num_pulses": 26160,
+          "num_emitters": 19,
+          "duration_s": 28.849,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_118.h5",
+          "filename": "config_118.h5",
+          "size_bytes": 1520490,
+          "num_pulses": 80537,
+          "num_emitters": 22,
+          "duration_s": 28.362,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_119.h5",
+          "filename": "config_119.h5",
+          "size_bytes": 2353131,
+          "num_pulses": 115194,
+          "num_emitters": 42,
+          "duration_s": 28.784,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_12.h5",
+          "filename": "config_12.h5",
+          "size_bytes": 3676381,
+          "num_pulses": 176723,
+          "num_emitters": 67,
+          "duration_s": 28.723,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_120.h5",
+          "filename": "config_120.h5",
+          "size_bytes": 2198333,
+          "num_pulses": 101992,
+          "num_emitters": 45,
+          "duration_s": 27.786,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_121.h5",
+          "filename": "config_121.h5",
+          "size_bytes": 3946235,
+          "num_pulses": 180460,
+          "num_emitters": 85,
+          "duration_s": 28.911,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_122.h5",
+          "filename": "config_122.h5",
+          "size_bytes": 1221713,
+          "num_pulses": 51828,
+          "num_emitters": 28,
+          "duration_s": 28.94,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_123.h5",
+          "filename": "config_123.h5",
+          "size_bytes": 3143248,
+          "num_pulses": 141694,
+          "num_emitters": 68,
+          "duration_s": 28.397,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_124.h5",
+          "filename": "config_124.h5",
+          "size_bytes": 1366834,
+          "num_pulses": 60090,
+          "num_emitters": 28,
+          "duration_s": 28.897,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_125.h5",
+          "filename": "config_125.h5",
+          "size_bytes": 5193221,
+          "num_pulses": 291132,
+          "num_emitters": 62,
+          "duration_s": 29.195,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_126.h5",
+          "filename": "config_126.h5",
+          "size_bytes": 5967276,
+          "num_pulses": 346602,
+          "num_emitters": 66,
+          "duration_s": 29.142,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_127.h5",
+          "filename": "config_127.h5",
+          "size_bytes": 1682357,
+          "num_pulses": 64663,
+          "num_emitters": 49,
+          "duration_s": 28.785,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_128.h5",
+          "filename": "config_128.h5",
+          "size_bytes": 815830,
+          "num_pulses": 27209,
+          "num_emitters": 25,
+          "duration_s": 28.978,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_129.h5",
+          "filename": "config_129.h5",
+          "size_bytes": 2285632,
+          "num_pulses": 79888,
+          "num_emitters": 70,
+          "duration_s": 28.876,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_13.h5",
+          "filename": "config_13.h5",
+          "size_bytes": 2503319,
+          "num_pulses": 111521,
+          "num_emitters": 59,
+          "duration_s": 29.09,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_130.h5",
+          "filename": "config_130.h5",
+          "size_bytes": 4581556,
+          "num_pulses": 234273,
+          "num_emitters": 69,
+          "duration_s": 29.198,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_131.h5",
+          "filename": "config_131.h5",
+          "size_bytes": 47746,
+          "num_pulses": 483,
+          "num_emitters": 2,
+          "duration_s": 12.697,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_132.h5",
+          "filename": "config_132.h5",
+          "size_bytes": 1456973,
+          "num_pulses": 63863,
+          "num_emitters": 31,
+          "duration_s": 28.65,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_133.h5",
+          "filename": "config_133.h5",
+          "size_bytes": 3445543,
+          "num_pulses": 172369,
+          "num_emitters": 62,
+          "duration_s": 28.987,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_134.h5",
+          "filename": "config_134.h5",
+          "size_bytes": 1889020,
+          "num_pulses": 84593,
+          "num_emitters": 43,
+          "duration_s": 28.671,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_135.h5",
+          "filename": "config_135.h5",
+          "size_bytes": 2573075,
+          "num_pulses": 137109,
+          "num_emitters": 38,
+          "duration_s": 28.299,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_136.h5",
+          "filename": "config_136.h5",
+          "size_bytes": 3201565,
+          "num_pulses": 155239,
+          "num_emitters": 54,
+          "duration_s": 28.573,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_137.h5",
+          "filename": "config_137.h5",
+          "size_bytes": 1803181,
+          "num_pulses": 78251,
+          "num_emitters": 39,
+          "duration_s": 28.923,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_138.h5",
+          "filename": "config_138.h5",
+          "size_bytes": 2968070,
+          "num_pulses": 117049,
+          "num_emitters": 72,
+          "duration_s": 28.866,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_139.h5",
+          "filename": "config_139.h5",
+          "size_bytes": 641121,
+          "num_pulses": 14545,
+          "num_emitters": 24,
+          "duration_s": 28.399,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_14.h5",
+          "filename": "config_14.h5",
+          "size_bytes": 1619513,
+          "num_pulses": 52576,
+          "num_emitters": 49,
+          "duration_s": 28.846,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_140.h5",
+          "filename": "config_140.h5",
+          "size_bytes": 1968507,
+          "num_pulses": 70278,
+          "num_emitters": 62,
+          "duration_s": 28.932,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_141.h5",
+          "filename": "config_141.h5",
+          "size_bytes": 1524647,
+          "num_pulses": 65958,
+          "num_emitters": 29,
+          "duration_s": 28.837,
+          "valid": true
+        },
+        {
+          "path": "scan/test_scan/config_142.h5",
+          "filename": "config_142.h5",
+          "size_bytes": 5547959,
+          "num_pulses": 292649,
+          "num_emitters": 85,
+          "duration_s": 28.847,
+          "valid": true
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_files": 150,
+    "total_pulses": 14355138
+  }
+}

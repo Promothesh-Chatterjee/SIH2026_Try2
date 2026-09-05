@@ -323,16 +323,40 @@ class FiguresOfMerit:
         self.fn: int = 0
         self.tn: int = 0
 
+        # Phase 9 operational COVERAGE counters (kept SEPARATE from the
+        # decision-level Pd/Pfa contract — never mixed into tp/fp/fn/tn):
+        self.spectrum_active_opportunities: int = 0
+        self.unselected_active_opportunities: int = 0
+        self.selected_active_opportunities: int = 0
+
         self.intercept_time_errors: list[float] = []
         self.rewards: list[float] = []
         self._roc_points: list[tuple[float, float]] = []
+
+        # Phase 10 true information-gain / entropy accumulators.
+        self.information_gains: list[float] = []
+        self.entropy_before_list: list[float] = []
+        self.entropy_after_list: list[float] = []
 
         # Reward component accumulators (SIH eval contract: log terms separately).
         self.reward_hit_term: float = 0.0
         self.reward_novel_term: float = 0.0
         self.reward_timing_penalty: float = 0.0
         self.reward_miss_penalty: float = 0.0
+        self.reward_priority_term: float = 0.0
+        self.reward_info_gain_term: float = 0.0
+        self.reward_false_alarm_penalty: float = 0.0
+        self.reward_dwell_cost: float = 0.0
+        self.reward_redundant_penalty: float = 0.0
+        self.reward_delay_penalty: float = 0.0
         self._reward_count: int = 0
+
+        # Auxiliary prediction metrics (time-frequency contract): interception
+        # probability calibration (Brier) and dwell-relative intercept time error.
+        self.intercept_prob_targets: list[float] = []
+        self.intercept_prob_preds: list[float] = []
+        self.intercept_time_targets_us: list[float] = []
+        self.intercept_time_preds_us: list[float] = []
 
         # Revisit and Emitter Tracking
         self.last_visit_per_band: dict[int, int] = {}
@@ -345,8 +369,9 @@ class FiguresOfMerit:
 
         Args:
             components: Dict with keys hit_term, novel_term, timing_penalty,
-                miss_penalty (as returned by receiver_reward_components). Missing
-                keys default to 0.0.
+                miss_penalty, priority_term, info_gain_term, false_alarm_penalty,
+                dwell_cost, redundant_penalty, delay_penalty (as returned by
+                receiver_reward_components). Missing keys default to 0.0.
         """
         if not components:
             return
@@ -355,6 +380,46 @@ class FiguresOfMerit:
         self.reward_novel_term += float(components.get("novel_term", 0.0))
         self.reward_timing_penalty += float(components.get("timing_penalty", 0.0))
         self.reward_miss_penalty += float(components.get("miss_penalty", 0.0))
+        self.reward_priority_term += float(components.get("priority_term", 0.0))
+        self.reward_info_gain_term += float(components.get("info_gain_term", 0.0))
+        self.reward_false_alarm_penalty += float(components.get("false_alarm_penalty", 0.0))
+        self.reward_dwell_cost += float(components.get("dwell_cost", 0.0))
+        self.reward_redundant_penalty += float(components.get("redundant_penalty", 0.0))
+        self.reward_delay_penalty += float(components.get("delay_penalty", 0.0))
+        # Phase 10 true entropy reduction (scheduler-observable belief, not GT).
+        ig = components.get("information_gain")
+        if ig is not None and ig == ig:
+            self.information_gains.append(float(ig))
+        for key, store in (("entropy_before", self.entropy_before_list), ("entropy_after", self.entropy_after_list)):
+            val = components.get(key)
+            if val is not None and val == val:
+                store.append(float(val))
+
+    def record_intercept_predictions(
+        self,
+        prob_target: float,
+        prob_pred: float,
+        intercept_time_us: float,
+        intercept_time_pred_us: float | None = None,
+    ) -> None:
+        """Accumulate auxiliary prediction metrics.
+
+        Args:
+            prob_target: Ground-truth interception indicator (1.0/0.0) for the
+                taken action.
+            prob_pred: Model prediction of interception probability for the action.
+            intercept_time_us: Measured dwell-relative time-to-interception (µs);
+                NaN when no interception occurred.
+            intercept_time_pred_us: Model prediction of intercept time; if None,
+                the target (with-the-fact) value is used so time error stays NaN-safe.
+        """
+        self.intercept_prob_targets.append(1.0 if prob_target else 0.0)
+        self.intercept_prob_preds.append(float(prob_pred))
+        it = float(intercept_time_us)
+        if it == it:  # skip NaN (no interception) for time error
+            self.intercept_time_targets_us.append(it)
+            pred = float(intercept_time_pred_us) if intercept_time_pred_us is not None else it
+            self.intercept_time_preds_us.append(pred if pred == pred else it)
 
     def record_emitters(self, active_now: set[int], intercepted_now: set[int]) -> None:
         """Track unique emitter discovery progress."""
@@ -402,6 +467,17 @@ class FiguresOfMerit:
         else:
             gt_vec = np.asarray(ground_truth_active).astype(np.int8)
             is_active = bool(gt_vec[b]) if 0 <= b < len(gt_vec) else False
+
+        # Phase 9 operational coverage: count spectrum-active bands per dwell.
+        # These are SEPARATE from the decision-level confusion counters below and
+        # never feed Pd/Pfa.
+        n_spectrum_active = int(gt_vec.sum())
+        self.spectrum_active_opportunities += n_spectrum_active
+        if is_active:
+            self.selected_active_opportunities += 1
+            self.unselected_active_opportunities += max(0, n_spectrum_active - 1)
+        else:
+            self.unselected_active_opportunities += n_spectrum_active
 
         # ------------------------------------------------------------------
         # Decision-level Confusion-Opportunity contract (P0-7, SIH "7.
@@ -476,6 +552,30 @@ class FiguresOfMerit:
         """Mean reward per step."""
         return float(np.mean(self.rewards)) if self.rewards else 0.0
 
+    @property
+    def band_selection_coverage(self) -> float:
+        """Fraction of spectrum-active-band dwells that the scheduler selected.
+
+        Operational coverage metric (Phase 9), kept strictly separate from the
+        decision-level Pd/Pfa. = selected_active / spectrum_active.
+        """
+        if self.spectrum_active_opportunities <= 0:
+            return 0.0
+        return float(self.selected_active_opportunities / self.spectrum_active_opportunities)
+
+    @property
+    def avg_information_gain(self) -> float:
+        """Mean true information gain (bits) per observed dwell (Phase 10)."""
+        return float(np.mean(self.information_gains)) if self.information_gains else 0.0
+
+    @property
+    def avg_entropy_before(self) -> float:
+        return float(np.mean(self.entropy_before_list)) if self.entropy_before_list else 0.0
+
+    @property
+    def avg_entropy_after(self) -> float:
+        return float(np.mean(self.entropy_after_list)) if self.entropy_after_list else 0.0
+
     def _avg_component(self, total: float) -> float:
         """Mean of an accumulated reward component over component-logged steps."""
         if self._reward_count <= 0:
@@ -500,6 +600,22 @@ class FiguresOfMerit:
             "p99": float(np.percentile(arr, 99)),
         }
 
+    @property
+    def brier_score(self) -> float:
+        """Mean squared error of interception-probability predictions (0..1)."""
+        if not self.intercept_prob_preds:
+            return 0.0
+        preds = np.asarray(self.intercept_prob_preds)
+        targs = np.asarray(self.intercept_prob_targets)
+        return float(np.mean((preds - targs) ** 2))
+
+    @property
+    def avg_intercept_time_pred_error_us(self) -> float:
+        """Mean absolute error (µs) of dwell-relative intercept-time predictions."""
+        if not self.intercept_time_preds_us:
+            return 0.0
+        return float(np.mean(np.abs(np.asarray(self.intercept_time_preds_us) - np.asarray(self.intercept_time_targets_us))))
+
     def summary(self) -> dict[str, float]:
         """Return all scientific figures of merit."""
         rev = self.revisit_latency_percentiles()
@@ -518,6 +634,14 @@ class FiguresOfMerit:
             "avg_reward_novel_term": self._avg_component(self.reward_novel_term),
             "avg_reward_timing_penalty": self._avg_component(self.reward_timing_penalty),
             "avg_reward_miss_penalty": self._avg_component(self.reward_miss_penalty),
+            "avg_reward_priority_term": self._avg_component(self.reward_priority_term),
+            "avg_reward_info_gain_term": self._avg_component(self.reward_info_gain_term),
+            "avg_reward_false_alarm_penalty": self._avg_component(self.reward_false_alarm_penalty),
+            "avg_reward_dwell_cost": self._avg_component(self.reward_dwell_cost),
+            "avg_reward_redundant_penalty": self._avg_component(self.reward_redundant_penalty),
+            "avg_reward_delay_penalty": self._avg_component(self.reward_delay_penalty),
+            "brier_score_intercept_prob": float(self.brier_score),
+            "avg_intercept_time_pred_error_us": float(self.avg_intercept_time_pred_error_us),
             "discovery_rate": float(self.unique_emitter_discovery_rate),
             "revisit_p50": float(rev["p50"]),
             "revisit_p90": float(rev["p90"]),
@@ -531,6 +655,15 @@ class FiguresOfMerit:
             "fp": float(self.fp),
             "fn": float(self.fn),
             "tn": float(self.tn),
+            # Phase 9 operational coverage (separate from Pd/Pfa):
+            "spectrum_active_opportunities": float(self.spectrum_active_opportunities),
+            "unselected_active_opportunities": float(self.unselected_active_opportunities),
+            "selected_active_opportunities": float(self.selected_active_opportunities),
+            "band_selection_coverage": float(self.band_selection_coverage),
+            # Phase 10 true information gain:
+            "avg_information_gain": float(self.avg_information_gain),
+            "avg_entropy_before": float(self.avg_entropy_before),
+            "avg_entropy_after": float(self.avg_entropy_after),
         }
 
     def plot_roc_curve(self, save_path: str | Path = "roc_curve.pdf") -> Path:

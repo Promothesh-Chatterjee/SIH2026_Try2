@@ -181,13 +181,14 @@ class ReceiverTimingTests(unittest.TestCase):
         self.env.reset()
 
     def test_dwell_advances_receiver_clock(self):
-        """Test that dwell advances receiver clock by dwell_time_us."""
+        """Test that dwell advances receiver clock by base dwell_time_us."""
         initial_time = self.env.receiver.current_time_us
         dwell_start = self.env.receiver.current_time_us
         dwell_end = dwell_start + self.env.receiver.dwell_time_us
 
-        # Manually step the environment
-        self.env.step(0)
+        # Manually step the environment with the NORMAL dwell mode (index 1)
+        # so the per-action dwell equals the canonical base dwell (500µs).
+        self.env.step(1)  # band 0, NORMAL_DWELL
 
         # Receiver clock should have advanced by dwell_time
         self.assertAlmostEqual(self.env.receiver.current_time_us, dwell_end, places=1)

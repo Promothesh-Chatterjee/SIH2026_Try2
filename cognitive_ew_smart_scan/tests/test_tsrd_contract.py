@@ -1,3 +1,4 @@
+import os
 import unittest
 from pathlib import Path
 from src.data.tsrd_manifest import resolve_split_dirs, TSRDValidator, build_manifest
@@ -5,12 +6,12 @@ from src.data.tsrd_manifest import resolve_split_dirs, TSRDValidator, build_mani
 
 class TSRDContractTests(unittest.TestCase):
     def setUp(self):
-        self.data_root = Path("D:/TSRD_data")
+        self.data_root = Path(os.environ.get("TSRD_DATA_ROOT", "D:/TSRD"))
         self.skip_real = not self.data_root.exists()
 
     def test_split_dirs_resolution(self):
         if self.skip_real:
-            self.skipTest("D:/TSRD_data not found")
+            self.skipTest("TSRD data not found")
         splits = resolve_split_dirs(self.data_root, mode="scan")
         self.assertTrue(splits["train"].exists(), f"Train dir not found: {splits['train']}")
         self.assertTrue(splits["val"].exists(), f"Val dir not found: {splits['val']}")
@@ -21,7 +22,7 @@ class TSRDContractTests(unittest.TestCase):
 
     def test_validate_real_tsrd_file(self):
         if self.skip_real:
-            self.skipTest("D:/TSRD_data not found")
+            self.skipTest("TSRD data not found")
         splits = resolve_split_dirs(self.data_root, mode="scan")
         first_h5 = next(splits["train"].glob("*.h5"))
         validator = TSRDValidator()
@@ -34,7 +35,7 @@ class TSRDContractTests(unittest.TestCase):
 
     def test_build_manifest_subset(self):
         if self.skip_real:
-            self.skipTest("D:/TSRD_data not found")
+            self.skipTest("TSRD data not found")
         manifest = build_manifest(self.data_root, mode="scan", max_files=5)
         self.assertEqual(manifest["splits"]["train"]["file_count"], 5)
         self.assertGreater(manifest["summary"]["total_pulses"], 0)

@@ -23,7 +23,7 @@ class EnvRealInterceptTimeTests(unittest.TestCase):
     def test_hit_reports_real_intercept_time_error(self):
         env = _env_with_pulse(active_band_toa=100.0, band=0)
         env.reset()
-        obs, reward, term, trunc, info = env.step(0)  # dwell [0,500], pulse at 100us
+        obs, reward, term, trunc, info = env.step(0)  # band 0, SHORT dwell [0,125]; pulse at 100us
         self.assertTrue(info["hit"])
         err = info["intercept_time_error_us"]
         self.assertTrue(np.isfinite(err))
@@ -34,7 +34,7 @@ class EnvRealInterceptTimeTests(unittest.TestCase):
     def test_miss_reports_nan_intercept_time_error(self):
         env = _env_with_pulse(active_band_toa=100.0, band=0)
         env.reset()
-        obs, reward, term, trunc, info = env.step(5)  # tune empty band 5
+        obs, reward, term, trunc, info = env.step(5 * env.n_modes)  # tune empty band 5 (SHORT)
         self.assertFalse(info["hit"])
         self.assertTrue(np.isnan(info["intercept_time_error_us"]))
 
@@ -92,7 +92,7 @@ class DecisionLevelContractTests(unittest.TestCase):
 class RewardComponentTests(unittest.TestCase):
     def _obs(self, n_hits=1):
         dets = [SimpleNamespace(time_us=100.0, detected=True) for _ in range(n_hits)]
-        return SimpleNamespace(detections=dets, dwell_interval_us=[0.0, 500.0])
+        return SimpleNamespace(detections=dets, dwell_interval_us=[0.0, 500.0], dwell_time_us=500.0)
 
     def test_components_break_down_hit_novel_timing(self):
         comps = receiver_reward_components(
@@ -101,6 +101,8 @@ class RewardComponentTests(unittest.TestCase):
             novel_emitter=True,
             had_any_opportunity=True,
             w_hit=1.0, w_novel=2.0, w_miss=-1.0, w_timing=0.001,
+            w_priority=0.0, w_information_gain=0.0, w_false_alarm=0.0,
+            w_dwell_cost=0.0, w_redundant_scan=0.0, w_delay=0.0,
         )
         self.assertEqual(comps["hit_term"], 1.0)
         self.assertEqual(comps["novel_term"], 2.0)
@@ -110,7 +112,7 @@ class RewardComponentTests(unittest.TestCase):
 
     def test_miss_component_separate(self):
         comps = receiver_reward_components(
-            SimpleNamespace(detections=[], dwell_interval_us=[0.0, 500.0]),
+            SimpleNamespace(detections=[], dwell_interval_us=[0.0, 500.0], dwell_time_us=500.0),
             ground_truth_active=True, novel_emitter=False, had_any_opportunity=True,
             w_miss=-1.0,
         )

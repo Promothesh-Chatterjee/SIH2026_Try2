@@ -1,0 +1,83 @@
+{
+  "config": {
+    "data_dir": "D:/TSRD_data",
+    "deinterleaver": {
+      "batch_size": 8,
+      "epochs": 50,
+      "lr": "3e-4",
+      "max_pulses_per_train": 2048,
+      "mode": "scan",
+      "save_every": 5,
+      "scheduler": "cosine",
+      "val_every": 2,
+      "val_mode": "scan",
+      "warmup_steps": 500,
+      "weight_decay": "1e-5"
+    },
+    "deinterleaver_ckpt": "checkpoints/deinterleaver/best.pt",
+    "drqn_scheduler": {
+      "eps_decay": 10000,
+      "eps_end": 0.05,
+      "eps_start": 1.0,
+      "gamma": 0.99,
+      "lr": "1e-4",
+      "lstm_hidden": 256,
+      "lstm_layers": 2,
+      "n_bands": 36,
+      "obs_dim": 360
+    },
+    "environment": {
+      "band_features": 10,
+      "detection_threshold_db": -140.0,
+      "dwell_time_us": 500.0,
+      "freq_max_mhz": 18000.0,
+      "freq_min_mhz": 0.0,
+      "frequency_step_mhz": 500.0,
+      "ibw_mhz": 500.0,
+      "max_pulses": 50000,
+      "max_steps_per_episode": 1000,
+      "n_bands": 36,
+      "obs_dim": 360,
+      "time_horizon_us": 30000000.0
+    },
+    "mode": "scan",
+    "normalization_stats": "checkpoints/deinterleaver/normalization_stats.json",
+    "observation_mode": "scan",
+    "output_dir": "checkpoints",
+    "reward": {
+      "w_hit": 1.0,
+      "w_miss": -1.0,
+      "w_novel": 2.0,
+      "w_timing": 0.001
+    },
+    "scheduler": {
+      "batch_size": 32,
+      "dwell_slots": 5,
+      "replay_buffer_size": 50000,
+      "seq_len": 16,
+      "target_update_freq": 1000,
+      "thompson_warmup_steps": 5000,
+      "total_timesteps": 500000,
+      "update_freq": 4
+    },
+    "seed": 42,
+    "smartscan_moe": {
+      "decay_rate": 0.05,
+      "eager_weight": 0.6,
+      "k_receivers": 1,
+      "revisit_weight": 0.4
+    },
+    "subset": "train",
+    "training_mode": "real_tsrd",
+    "world_mode": "stare"
+  },
+  "created_at": 1788537501.8716598,
+  "device": "cpu",
+  "host": "DELLg15-C6S8DCG",
+  "mode": "stare",
+  "python": "3.14.7",
+  "run_id": "20260904-212821-d15d42",
+  "seed": 42,
+  "split": "train",
+  "torch": "2.13.0+cpu"
+}

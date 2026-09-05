@@ -466,29 +466,69 @@ def embed_pdws_windowed(
     }
 
 
-def _union(mappings: list[tuple[int, int]]) -> list[list[int]]:
-    """Union-Find components over nodes (encoded as (window, cluster) pairs)."""
-    parent: dict[tuple[int, int], tuple[int, int]] = {}
+def reconcile_cluster_nodes(
+    window_labels: list[np.ndarray],
+    merge_pairs: list[tuple[tuple[int, int], tuple[int, int]]],
+) -> tuple[dict[tuple[int, int], int], int]:
+    """Assign every valid local cluster node a unique global cluster ID.
 
-    def find(x):
-        parent.setdefault(x, x)
+    Every ``(window_index, local_cluster_id)`` node with a non-noise local label
+    first receives a globally unique *provisional* ID, then union-find runs over
+    ALL valid nodes — never just the nodes that participate in a merge. Each
+    connected component therefore gets its own unique global ID, and unmerged
+    (isolated) clusters keep IDs distinct from each other. The raw local
+    HDBSCAN integer is never used as a global label, so two unrelated local
+    cluster ``0`` nodes in different windows can never collide.
+
+    Args:
+        window_labels: Per-window local label arrays (-1 = HDBSCAN noise).
+        merge_pairs: Pairs ``((a, ca), (b, cb))`` of nodes to union (e.g. from
+            overlapping-window agreement).
+
+    Returns:
+        Tuple of:
+          node_to_global: dict ``{(window, local): global_id}`` for every valid
+              node; global IDs are deterministic (assigned in window order).
+          n_global_clusters: Number of connected components.
+    """
+    # 1. Provisional unique ID for EVERY valid local cluster node.
+    node_to_provisional: dict[tuple[int, int], int] = {}
+    for wi, local in enumerate(window_labels):
+        for lc in np.unique(local):
+            lc = int(lc)
+            if lc >= 0:
+                node_to_provisional[(wi, lc)] = len(node_to_provisional)
+
+    # 2. Union-find over the full node set (each node is its own component).
+    parent = list(range(len(node_to_provisional)))
+
+    def find(x: int) -> int:
         while parent[x] != x:
             parent[x] = parent[parent[x]]
             x = parent[x]
         return x
 
-    def union(a, b):
+    def union(a: int, b: int) -> None:
         ra, rb = find(a), find(b)
         if ra != rb:
             parent[rb] = ra
 
-    for a, b in mappings:
-        union(a, b)
-    comps: dict[tuple[int, int], list[int]] = {}
-    for node in parent.keys():
-        root = find(node)
-        comps.setdefault(root, []).append(node)
-    return list(comps.values())
+    for a_node, b_node in merge_pairs:
+        pa = node_to_provisional.get(a_node)
+        pb = node_to_provisional.get(b_node)
+        if pa is not None and pb is not None:
+            union(pa, pb)
+
+    # 3. Deterministic per-component global IDs (first-encountered node allocates).
+    root_to_global: dict[int, int] = {}
+    node_to_global: dict[tuple[int, int], int] = {}
+    for node, pid in node_to_provisional.items():
+        root = find(pid)
+        if root not in root_to_global:
+            root_to_global[root] = len(root_to_global)
+        node_to_global[node] = root_to_global[root]
+
+    return node_to_global, len(root_to_global)
 
 
 def windowed_cluster_deinterleave(
@@ -506,8 +546,11 @@ def windowed_cluster_deinterleave(
 
     Embeds the whole train in overlapping windows (never full-sequence
     attention), clusters each window independently, then joins clusters across
-    adjacent overlapping windows by co-occurrence on shared pulses. Labels are
-    returned in original pulse order and are permutation-invariant.
+    adjacent overlapping windows by co-occurrence on shared pulses. Every valid
+    local cluster node receives a unique global provisional ID (isolated,
+    never-merged clusters stay distinct across windows and never collide on raw
+    local label integers). Labels are returned in original pulse order and are
+    permutation-invariant.
 
     Args:
         model: Trained PDWTransformerEncoder.
@@ -523,7 +566,7 @@ def windowed_cluster_deinterleave(
 
     Returns:
         Dict with:
-            "labels": (N,) int global cluster labels aligned to original order.,-1)
+            "labels": (N,) int global cluster labels aligned to original order (-1 = noise)
             "n_clusters": int,
             "noise_count": int,
             "n_windows": int,
@@ -588,22 +631,20 @@ def windowed_cluster_deinterleave(
             if frac >= reconcile_overlap_frac:
                 merges.append(((a, int(ca)), (a + 1, int(cb_best))))
 
-    components = _union(merges)
-    node_to_global: dict[tuple[int, int], int] = {}
-    for gi, comp in enumerate(components):
-        for node in comp:
-            node_to_global[node] = gi
+    # Union-find over EVERY valid cluster node (isolated clusters included), so
+    # each node maps to a unique global ID and no node ever falls back to its raw
+    # local HDBSCAN integer (which would collide across windows).
+    node_to_global, _n_global = reconcile_cluster_nodes(window_labels, merges)
 
     global_labels = np.full(n, -1, dtype=np.int32)
     for wi, (s, e) in enumerate(spans):
         local = window_labels[wi]
-        node_base = (wi, 0)
         for offset in range(e - s):
             gidx = s + offset
             lc = int(local[offset])
             if lc == -1:
                 continue
-            global_labels[gidx] = node_to_global.get((wi, lc), lc)
+            global_labels[gidx] = node_to_global[(wi, lc)]
 
     # Noise not clustered; count distinct global cluster ids excluding -1.
     unique = set(int(x) for x in global_labels.tolist())

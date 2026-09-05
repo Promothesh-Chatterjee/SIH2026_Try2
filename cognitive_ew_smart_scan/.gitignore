@@ -16,8 +16,8 @@ venv/
 checkpoints/
 **/checkpoints/
 
-# Dataset / data (large, machine-specific)
-data/
+# Dataset / data (large, machine-specific; anchored so src/data/ is tracked)
+/data/
 *.h5
 
 # Config secrets

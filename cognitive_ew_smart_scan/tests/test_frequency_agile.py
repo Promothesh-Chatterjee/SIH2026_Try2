@@ -47,17 +47,19 @@ class TestFrequencyAgileEmitters(unittest.TestCase):
         """Test that agile emitter tracks persist across band hops."""
         tracker = EmitterTracker(n_bands=36, max_misses_before_drop=5)
         
-        # Simulate frequency-hopping emitter that hops between bands 5, 6, 7
-        # First dwell in band 5
+        # Simulate frequency-hopping emitter observed hopping WITHIN the first
+        # dwell, establishing agility evidence immediately.
         detections1 = [
             DetectionObservation(
-                time_us=1000.0, frequency_mhz=5250.0, pulse_width_us=1.0,
-                amplitude_db=-80.0, aoa_deg=30.0, detected=True
-            ) for _ in range(5)
+                time_us=1000.0 + i * 1000.0,
+                frequency_mhz=5250.0 if i % 2 == 0 else 5750.0,
+                pulse_width_us=1.0, amplitude_db=-80.0,
+                aoa_deg=30.0, detected=True
+            ) for i in range(5)
         ]
         labels1 = np.array([0] * 5)
-        toa1 = np.array([1000.0 + i * 1000.0 for i in range(5)])
-        freq1 = np.array([5250.0] * 5)
+        toa1 = np.array([d.time_us for d in detections1])
+        freq1 = np.array([d.frequency_mhz for d in detections1])
         aoa1 = np.array([30.0] * 5)
         pw1 = np.array([1.0] * 5)
         amp1 = np.array([-80.0] * 5)
@@ -72,13 +74,14 @@ class TestFrequencyAgileEmitters(unittest.TestCase):
         # Second dwell in adjacent band 6 (frequency hop)
         detections2 = [
             DetectionObservation(
-                time_us=3000.0, frequency_mhz=5750.0, pulse_width_us=1.0,
-                amplitude_db=-80.0, aoa_deg=30.0, detected=True
-            ) for _ in range(5)
+                time_us=3000.0 + i * 1000.0, frequency_mhz=5750.0,
+                pulse_width_us=1.0, amplitude_db=-80.0,
+                aoa_deg=30.0, detected=True
+            ) for i in range(5)
         ]
         labels2 = np.array([0] * 5)
-        toa2 = np.array([3000.0 + i * 1000.0 for i in range(5)])
-        freq2 = np.array([5750.0] * 5)
+        toa2 = np.array([d.time_us for d in detections2])
+        freq2 = np.array([d.frequency_mhz for d in detections2])
         aoa2 = np.array([30.0] * 5)
         pw2 = np.array([1.0] * 5)
         amp2 = np.array([-80.0] * 5)
@@ -102,13 +105,14 @@ class TestFrequencyAgileEmitters(unittest.TestCase):
         """Test tracking multiple agile emitters simultaneously."""
         tracker = EmitterTracker(n_bands=36, max_misses_before_drop=5)
         
-        # Emitter 1: hops between bands 5 and 6
+        # Emitter 1: hops between bands 5 and 6 (agility visible in-dwell)
         for hop in range(3):
             band = 5 + (hop % 2)
             detections = [
                 DetectionObservation(
                     time_us=1000.0 + hop * 5000.0 + i * 1000.0,
-                    frequency_mhz=5250.0 if band == 5 else 5750.0,
+                    frequency_mhz=(5250.0 if band == 5 else 5750.0)
+                                  if i % 2 == 0 else (5750.0 if band == 5 else 5250.0),
                     pulse_width_us=1.0, amplitude_db=-80.0,
                     aoa_deg=30.0, detected=True
                 ) for i in range(5)
@@ -126,13 +130,14 @@ class TestFrequencyAgileEmitters(unittest.TestCase):
                 current_time=1000.0 + hop * 5000.0, band=band
             )
         
-        # Emitter 2: hops between bands 8 and 9
+        # Emitter 2: hops between bands 8 and 9 (agility visible in-dwell)
         for hop in range(3):
             band = 8 + (hop % 2)
             detections = [
                 DetectionObservation(
                     time_us=2000.0 + hop * 5000.0 + i * 1000.0,
-                    frequency_mhz=8250.0 if band == 8 else 8750.0,
+                    frequency_mhz=(8250.0 if band == 8 else 8750.0)
+                                  if i % 2 == 0 else (8750.0 if band == 8 else 8250.0),
                     pulse_width_us=1.0, amplitude_db=-85.0,
                     aoa_deg=45.0, detected=True
                 ) for i in range(5)
@@ -167,7 +172,8 @@ class TestFrequencyAgileEmitters(unittest.TestCase):
             detections = [
                 DetectionObservation(
                     time_us=1000.0 + hop * 5000.0 + i * 1000.0,
-                    frequency_mhz=5250.0 if band == 5 else 5750.0,
+                    frequency_mhz=(5250.0 if band == 5 else 5750.0)
+                                  if i % 2 == 0 else (5750.0 if band == 5 else 5250.0),
                     pulse_width_us=1.0, amplitude_db=-80.0,
                     aoa_deg=30.0, detected=True
                 ) for i in range(5)

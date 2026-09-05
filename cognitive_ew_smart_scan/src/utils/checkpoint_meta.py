@@ -12,23 +12,15 @@ from __future__ import annotations
 import datetime
 import os
 import subprocess
+from pathlib import Path
 from typing import Any
 
 import torch
 
-# Canonical 10-per-band feature order (single source of truth).
-FEATURE_ORDER = [
-    "occupancy",
-    "det_rate",
-    "miss_rate",
-    "uncertainty",
-    "revisit_age",
-    "emitter_count",
-    "deint_confidence",
-    "pri_stability",
-    "agility",
-    "priority",
-]
+from ..contracts import FEATURE_ORDER as _FEATURE_ORDER
+
+# Backward-compatible list export for checkpoint metadata callers.
+FEATURE_ORDER = list(_FEATURE_ORDER)
 PREPROC_VERSION = "v1"  # bump whenever normalise.py feature layout changes
 
 
@@ -98,3 +90,28 @@ def save_state(model: torch.nn.Module, path: os.PathLike | str, metadata: dict[s
         metadata: Provenance metadata blob.
     """
     torch.save({"state_dict": model.state_dict(), "metadata": metadata}, path)
+
+
+def write_checkpoint_metadata(
+    path: os.PathLike | str, metadata: dict[str, Any], artifacts: list[str] | None = None
+) -> dict[str, Any]:
+    """Write a human-readable ``metadata.json`` sidecar for a checkpoint set.
+
+    Args:
+        path: Output ``metadata.json`` path.
+        metadata: Provenance metadata blob (e.g. from ``build_train_metadata``).
+        artifacts: File names (or relative paths) of the artifacts this
+            metadata describes.
+
+    Returns:
+        The payload written (metadata + artifact names).
+    """
+    import json
+
+    payload = dict(metadata)
+    payload["artifacts"] = [str(a) for a in (artifacts or [])]
+    parent = Path(path).parent
+    parent.mkdir(parents=True, exist_ok=True)
+    with open(Path(path), "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, sort_keys=True)
+    return payload

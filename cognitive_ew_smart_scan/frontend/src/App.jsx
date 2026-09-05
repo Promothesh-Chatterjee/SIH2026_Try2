@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useTelemetry } from './components/useTelemetry.js'
+import { useApiStatus } from './components/useApiStatus.js'
 import LiveGate from './components/LiveGate.jsx'
 import MetricBar from './components/MetricBar.jsx'
 import MoEAttribution from './components/MoEAttribution.jsx'
@@ -10,6 +11,7 @@ import PPIScope from './components/PPIScope.jsx'
 import SpectrumWaterfall from './components/SpectrumWaterfall.jsx'
 import PDWScatter from './components/PDWScatter.jsx'
 import PDWFeed from './components/PDWFeed.jsx'
+import ProvenanceStrip from './components/ProvenanceStrip.jsx'
 
 function MetricPanel({ metrics }) {
   const pd = metrics.pd
@@ -61,6 +63,7 @@ function RunStatus({ live, wsStatus, source, liveMessage }) {
 
 export default function App() {
   const { live, source, liveMessage, metrics, bandPriorities, pdws, emitters, wsStatus, history } = useTelemetry()
+  const apiStatus = useApiStatus()
   const [tab, setTab] = useState('live')
 
   const currentBand = metrics.current_band !== undefined && metrics.current_band !== null ? metrics.current_band : null
@@ -87,7 +90,18 @@ export default function App() {
       <h1 style={{ fontSize: '18px', margin: '0 0 4px 0' }}>COGNITIVE EW — SMART SCAN</h1>
       <div style={{ fontSize: '12px', color: '#5f9', marginBottom: '12px' }}>Data-driven Telemetry · P0-9/P0-10</div>
 
+      <ProvenanceStrip
+        live={live}
+        modelAvailable={apiStatus.state === 'READY'}
+        wsStatus={wsStatus}
+        source={source}
+      />
+
       <RunStatus live={live} wsStatus={wsStatus} source={source} liveMessage={liveMessage} />
+
+      <div style={{ marginBottom: '14px', fontSize: '12px', color: apiStatus.state === 'READY' ? '#0f0' : '#f88' }}>
+        MODEL: {apiStatus.message}
+      </div>
 
       <div style={{ marginBottom: '14px' }}>{['live', 'attribution', 'band-analytics', 'history', 'scatter', 'pdw-feed'].map(([key]) => {
         const labels = {
