@@ -1,0 +1,34 @@
+{
+  "arch": "PDWTransformerEncoder",
+  "artifacts": [
+    "best.pt",
+    "final.pt",
+    "normalization_stats.json",
+    "dataset_manifest.json"
+  ],
+  "dataset_fingerprint": "27eca11016df104e4fceec5544ca2153a47b400558cebe4db76f6efab42bf321",
+  "feature_order_per_band": [
+    "occupancy",
+    "det_rate",
+    "miss_rate",
+    "uncertainty",
+    "revisit_age",
+    "emitter_count",
+    "deint_confidence",
+    "pri_stability",
+    "agility",
+    "priority"
+  ],
+  "git_revision": "5832202",
+  "metrics": {
+    "best_val_v_measure": 0.08569486183291143
+  },
+  "mode": "deinterleaver",
+  "n_bands": 36,
+  "normalization_stats_hash": "bacee02ac1c29428",
+  "normalization_stats_path": "checkpoints\\deinterleaver\\normalization_stats.json",
+  "preproc_version": "v1",
+  "seed": 42,
+  "split": "train",
+  "timestamp": "2026-09-05T11:49:25.471189+00:00"
+}
