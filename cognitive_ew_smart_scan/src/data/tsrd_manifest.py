@@ -239,12 +239,23 @@ def dataset_fingerprint(files: list[Path], root: str | Path, mode: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def build_manifest(data_root: str | Path, output_path: str | Path | None = None, mode: str = "scan", max_files: int | None = None) -> dict:
+def build_manifest(data_root: str | Path, output_path: str | Path | None = None, mode: str = "scan", max_files: int | None = None, split_files: dict[str, list[Path]] | None = None) -> dict:
     """Build a comprehensive manifest describing split files, pulse counts, and validation status.
 
     Per-split eligibility statistics are reported (structurally valid / empty /
     training-eligible / evaluation-eligible counts) so a few zero-pulse trains
     are visible but never treated as dataset-level corruption.
+
+    Args:
+        data_root: Dataset root directory.
+        output_path: Optional JSON path to write the manifest to.
+        mode: Split mode (``scan`` or ``stare``).
+        max_files: Optional cap on the number of files recorded per split.
+        split_files: Optional explicit per-split file lists ``{split_name:
+            [Path, ...]}``. When provided for a split, those exact files are
+            recorded (after sorting) instead of globbing the split directory,
+            so the manifest surface matches the files actually consumed by a
+            training run.
     """
     root = Path(data_root)
     validator = TSRDValidator()
@@ -266,9 +277,13 @@ def build_manifest(data_root: str | Path, output_path: str | Path | None = None,
     }
 
     for split_name, split_dir in split_dirs.items():
-        split_files = sorted(split_dir.glob("*.h5")) if split_dir.exists() else []
-        if max_files and len(split_files) > max_files:
-            split_files = split_files[:max_files]
+        if split_files is not None and split_name not in split_files:
+            continue
+        if split_files and split_name in split_files and split_files[split_name] is not None:
+            split_files_expanded = sorted(split_files[split_name])
+        else:
+            split_files_expanded = sorted(split_dir.glob("*.h5")) if split_dir.exists() else []
+        split_files_expanded = split_files_expanded[:max_files] if max_files and len(split_files_expanded) > max_files else split_files_expanded
 
         records = []
         split_pulses = 0
@@ -278,8 +293,8 @@ def build_manifest(data_root: str | Path, output_path: str | Path | None = None,
             "training_eligible": 0,
             "evaluation_eligible": 0,
         }
-        all_files.extend(split_files)
-        for fp in split_files:
+        all_files.extend(split_files_expanded)
+        for fp in split_files_expanded:
             v = validator.validate_file(fp)
             if v["structurally_valid"]:
                 split_stats["structurally_valid_files"] += 1

@@ -477,7 +477,12 @@ def train_deinterleaver(
     )
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    manifest = build_manifest(data_root, output_path=output_dir / "dataset_manifest.json", mode=train_mode)
+    manifest = build_manifest(
+        data_root,
+        output_path=output_dir / "dataset_manifest.json",
+        mode=train_mode,
+        split_files={"train": train_files, "val": val_files},
+    )
     data_fingerprint = dataset_fingerprint(train_files + val_files, data_root, train_mode)
     logger.info("Effective dataset root: %s; fingerprint: %s", data_root.resolve(), data_fingerprint)
 
