@@ -36,12 +36,13 @@ dwell_modes:
     - name: REVISIT
       multiplier: 1.0
     - name: PREEMPTIVE_INTERCEPT
-      multiplier: 0.5
+      multiplier: 1.0
 
 smartscan_moe:
   eager_weight: 0.6
   revisit_weight: 0.4
   preemptive_weight: 0.0  # fraction of selections driven by periodic-intercept urgency
+  semantic_weight: 1.0    # mode semantic intent: REVISIT/REEMPTIVE/LONG linked to their drivers
   k_receivers: 1
   decay_rate: 0.05
 

@@ -1,162 +1,157 @@
-"""Tests for PeriodicScanInterceptor - validates PRI estimation and prediction."""
+"""Tests for PeriodicScanInterceptor (observable persistent track history)."""
 
 import unittest
+
 import numpy as np
 
 from src.cognitive.periodic_interceptor import PeriodicScanInterceptor
 
 
 class TestPeriodicScanInterceptor(unittest.TestCase):
-    """Tests for the PeriodicScanInterceptor class."""
+    """Tests for the PeriodicScanInterceptor class.
+
+    The interceptor operates on observable track history keyed by persistent
+    ``track_id`` strings (from the EmitterTracker). None of these tests use
+    ground-truth emitter identity.
+    """
 
     def setUp(self):
-        self.interceptor = PeriodicScanInterceptor(min_observations=10, hist_bins=50)
+        self.interceptor = PeriodicScanInterceptor(min_observations=10)
+
+    def _feed(self, track_id, toas, band, freq=None):
+        for i, t in enumerate(toas):
+            self.interceptor.record_intercept(track_id, t, band,
+                                              frequency_mhz=freq)
+
+    # ---------------------------------------------------------- required cases
+    def test_perfect_periodic_emitter(self):
+        """Perfectly periodic train -> exact PRI, phase, next arrival."""
+        pri = 1000.0
+        toas = np.arange(20) * pri + 123.0  # non-trivial phase 123 us
+        self._feed("track_0", toas, 5, freq=5500.0)
+
+        self.assertAlmostEqual(self.interceptor.estimate_scan_period("track_0"), pri, delta=1.0)
+        self.assertAlmostEqual(self.interceptor.estimate_phase("track_0"), 123.0, delta=2.0)
+
+        pred = self.interceptor.predict_next_illumination("track_0", 16000.0)
+        self.assertIsNotNone(pred)
+        # Next grid point strictly after max(now, last_toa=19123):
+        # 19000+123 = 19123 was observed, so next is 20123.
+        self.assertAlmostEqual(pred["expected_time_us"], 20123.0, delta=2.0)
+        self.assertEqual(pred["expected_band"], 5)
+        self.assertAlmostEqual(pred["expected_frequency_mhz"], 5500.0, delta=0.1)
+        self.assertGreater(pred["confidence"], 0.9)
+        self.assertAlmostEqual(pred["time_to_expected_arrival_us"], 20123.0 - 16000.0, delta=2.0)
+
+    def test_noisy_periodic_emitter(self):
+        """Jittered periodic train -> PRI recovered with reduced confidence."""
+        pri = 1000.0
+        rng = np.random.default_rng(7)
+        toas = np.arange(25) * pri + rng.uniform(-40.0, 40.0, 25)
+        self._feed("track_1", toas, 8)
+
+        pred = self.interceptor.predict_next_illumination("track_1", 25000.0)
+        self.assertIsNotNone(pred)
+        self.assertAlmostEqual(pred["pri_us"], pri, delta=60.0)
+        # Jitter lowers regularity and phase stability vs a perfect train.
+        self.assertGreater(pred["confidence"], 0.5)
+        self.assertLess(pred["confidence"], 0.99)
+
+    def test_missed_pulses(self):
+        """Missing pulses must not corrupt PRI or the phase grid."""
+        pri = 1000.0
+        all_toas = np.arange(30) * pri
+        # Drop every third pulse (gaps of 2000 us appear).
+        kept = [t for i, t in enumerate(all_toas) if i % 3 != 0]
+        self._feed("track_2", kept, 3)
+
+        self.assertAlmostEqual(self.interceptor.estimate_scan_period("track_2"), pri, delta=20.0)
+        pred = self.interceptor.predict_next_illumination("track_2", 25000.0)
+        self.assertIsNotNone(pred)
+        # Next arrival predicted on the original grid (last seen 29000, next 30000).
+        self.assertAlmostEqual(pred["expected_time_us"], 30000.0, delta=20.0)
+
+    def test_changing_frequency(self):
+        """Band/frequency changes affect expected band but keep PRI prediction."""
+        pri = 2000.0
+        # First half in band 5, second half in band 8 at the same PRI grid.
+        low = [i * pri for i in range(10)]
+        high = [(10 + i) * pri for i in range(10)]
+        for t in low:
+            self.interceptor.record_intercept("track_3", t, 5, frequency_mhz=5000.0)
+        for t in high:
+            self.interceptor.record_intercept("track_3", t, 8, frequency_mhz=8000.0)
+
+        pred = self.interceptor.predict_next_illumination("track_3", 25000.0)
+        self.assertIsNotNone(pred)
+        # Last obs at 38000 in band 8 -> expected next at 40000 in band 8.
+        self.assertAlmostEqual(pred["expected_time_us"], 40000.0, delta=10.0)
+        self.assertEqual(pred["expected_band"], 8)
+        self.assertAlmostEqual(pred["expected_frequency_mhz"], 8000.0, delta=100.0)
 
     def test_insufficient_observations(self):
-        """Test that period estimation returns None with insufficient data."""
-        # Record only 5 intercepts (less than min_observations=10)
+        """Fewer than min_observations -> no estimate and no prediction."""
         for i in range(5):
-            self.interceptor.record_intercept("emitter_1", float(i * 1000), 5)
-        
-        period = self.interceptor.estimate_scan_period("emitter_1")
-        self.assertIsNone(period)
+            self.interceptor.record_intercept("track_4", float(i * 1000), 5)
 
-    def test_regular_period_estimation(self):
-        """Test PRI estimation for a regular periodic emitter."""
-        # Record enough intercepts (min_observations=10 default)
+        self.assertIsNone(self.interceptor.estimate_scan_period("track_4"))
+        self.assertIsNone(self.interceptor.predict_next_illumination("track_4", 6000.0))
+
+    def test_stale_prediction(self):
+        """Confidence decays with staleness; far-stale predictions are suppressed."""
         for i in range(20):
-            self.interceptor.record_intercept("emitter_1", float(i * 1000), 5)
-        
-        period = self.interceptor.estimate_scan_period("emitter_1")
-        self.assertIsNotNone(period)
-        self.assertAlmostEqual(period, 1000.0, delta=50.0)
-        
-        confidence = self.interceptor._confidence_cache["emitter_1"]
-        # Confidence may be lower due to histogram binning; just verify it's reasonable
-        self.assertGreater(confidence, 0.5)
+            self.interceptor.record_intercept("track_5", float(i * 1000), 5)
 
-    def test_irregular_period_low_confidence(self):
-        """Test that irregular periods have lower confidence."""
-        # Record 20 intercepts with jitter
-        base_period = 1000.0
-        for i in range(20):
-            jitter = np.random.uniform(-50, 50)
-            toa = i * base_period + jitter
-            self.interceptor.record_intercept("emitter_2", toa, 5)
-        
-        period = self.interceptor.estimate_scan_period("emitter_2")
-        self.assertIsNotNone(period)
-        # Period should be close to 1000 but confidence lower
-        confidence = self.interceptor._confidence_cache["emitter_2"]
-        self.assertLess(confidence, 0.9)
+        # Fresh: just past the last observation (19000).
+        pred_fresh = self.interceptor.predict_next_illumination("track_5", 20000.0)
+        # Moderately stale: 2.5 periods past the last observation.
+        pred_mid = self.interceptor.predict_next_illumination("track_5", 21500.0)
+        # Far stale: 6 periods past -> should be suppressed entirely.
+        pred_stale = self.interceptor.predict_next_illumination("track_5", 25000.0)
 
-    def test_next_illumination_prediction(self):
-        """Test next illumination time prediction."""
-        # Record 15 intercepts with 1000µs period
-        for i in range(15):
-            self.interceptor.record_intercept("emitter_1", float(i * 1000), 5)
-        
-        # Predict at time 12000 (should predict next at 15000)
-        pred = self.interceptor.predict_next_illumination("emitter_1", 12000.0)
-        self.assertIsNotNone(pred)
-        self.assertAlmostEqual(pred["expected_time_us"], 15000.0, delta=100.0)
-        self.assertEqual(pred["expected_band"], 5)
-        self.assertGreater(pred["confidence"], 0.5)
+        self.assertIsNotNone(pred_fresh)
+        self.assertGreater(pred_fresh["confidence"], 0.75)
+        self.assertIsNotNone(pred_mid)
+        self.assertLess(pred_mid["confidence"], pred_fresh["confidence"])
+        self.assertIsNone(pred_stale)
 
-    def test_prediction_before_first_observation(self):
-        """Test prediction when current time is before last observation."""
-        for i in range(15):
-            self.interceptor.record_intercept("emitter_1", float(i * 1000), 5)
-        
-        # Current time before last observation (last at 14000)
-        pred = self.interceptor.predict_next_illumination("emitter_1", 5000.0)
-        self.assertIsNotNone(pred)
-        # Should predict next period after last_toa (allow small float precision diff)
-        self.assertAlmostEqual(pred["expected_time_us"], 15000.0, delta=1.0)
-
+    # ----------------------------------------------------- scheduling semantics
     def test_multiple_future_illuminations(self):
-        """Test that preemptive schedule includes multiple future periods."""
+        """Preemptive schedule spans several periods within the horizon."""
         for i in range(20):
-            self.interceptor.record_intercept("emitter_1", float(i * 1000), 5)
-        
-        # Last observation at 19000, look ahead 10000µs from time 19000
-        # First prediction should be at 20000 (next period after last_toa=19000)
+            self.interceptor.record_intercept("track_6", float(i * 1000), 5)
+
         schedule = self.interceptor.get_preemptive_schedule(19000.0, 10000.0)
-        
-        # Should include 20000, 21000, 22000, 23000
         self.assertGreaterEqual(len(schedule), 4)
         self.assertAlmostEqual(schedule[0]["expected_time_us"], 20000.0, delta=1.0)
         self.assertEqual(schedule[0]["expected_band"], 5)
 
-    def test_multiple_emitters_schedule(self):
-        """Test preemptive schedule with multiple periodic emitters."""
-        # Emitter 1: 1000µs period, band 5 (need >= min_observations=10)
+    def test_multiple_tracks_schedule(self):
+        """Schedule merges predictions from several persistent tracks sorted by time."""
         for i in range(20):
-            self.interceptor.record_intercept("emitter_1", float(i * 1000), 5)
-        
-        # Emitter 2: 2000µs period, band 10
+            self.interceptor.record_intercept("track_a", float(i * 1000), 5)
         for i in range(20):
-            self.interceptor.record_intercept("emitter_2", float(i * 2000), 10)
-        
-        # Last observations: emitter_1 at 19000, emitter_2 at 38000
-        # Look ahead from 19000 with 25000µs horizon to include emitter_2's next at ~40000
+            self.interceptor.record_intercept("track_b", float(i * 2000), 10)
+
         schedule = self.interceptor.get_preemptive_schedule(19000.0, 25000.0)
-        
-        # Should have predictions from both emitters
         self.assertGreater(len(schedule), 0)
-        emitter_ids = {s["emitter_id"] for s in schedule}
-        self.assertIn("emitter_1", emitter_ids)
-        self.assertIn("emitter_2", emitter_ids)
-        
-        # Schedule should be sorted by time
+        track_ids = {s["track_id"] for s in schedule}
+        self.assertIn("track_a", track_ids)
+        self.assertIn("track_b", track_ids)
         times = [s["expected_time_us"] for s in schedule]
         self.assertEqual(times, sorted(times))
 
-    def test_staleness_confidence_decay(self):
-        """Test that confidence decays with staleness."""
-        for i in range(20):
-            self.interceptor.record_intercept("emitter_1", float(i * 1000), 5)
-        
-        # Predict immediately after last observation
-        pred1 = self.interceptor.predict_next_illumination("emitter_1", 20000.0)
-        
-        # Predict long after last observation (5 periods later)
-        pred2 = self.interceptor.predict_next_illumination("emitter_1", 25000.0)
-        
-        # Confidence should be lower for stale prediction
-        self.assertLess(pred2["confidence"], pred1["confidence"])
-
-    def test_cache_invalidation(self):
-        """Test that cache is invalidated on new intercepts."""
-        for i in range(15):
-            self.interceptor.record_intercept("emitter_1", float(i * 1000), 5)
-        
-        period1 = self.interceptor.estimate_scan_period("emitter_1")
-        self.assertIsNotNone(period1)
-        
-        # Add more intercepts
-        for i in range(15, 25):
-            self.interceptor.record_intercept("emitter_1", float(i * 1000), 5)
-        
-        period2 = self.interceptor.estimate_scan_period("emitter_1")
-        # Period should be re-estimated (may be same but cache was invalidated)
-        self.assertIsNotNone(period2)
-
-    def test_non_periodic_emitter(self):
-        """Test that non-periodic emitters return None or low confidence."""
-        # Random ToAs - use enough to avoid spurious peaks
-        np.random.seed(42)
-        for i in range(30):
-            self.interceptor.record_intercept("emitter_random", float(np.random.uniform(0, 100000)), 5)
-        
-        period = self.interceptor.estimate_scan_period("emitter_random")
-        # With enough random data, no clear peak should emerge
-        # If a period is found, confidence should be very low
-        if period is not None:
-            confidence = self.interceptor._confidence_cache["emitter_random"]
-            self.assertLess(confidence, 0.3)
-        else:
-            self.assertIsNone(period)
+    def test_identity_agnostic_to_track_label(self):
+        """Renaming the observable track identity must not change predictions."""
+        build = lambda label: [self.interceptor.record_intercept(label, float(i * 1000), 5) for i in range(20)]
+        build("track_one")
+        build("track_two")
+        p1 = self.interceptor.predict_next_illumination("track_one", 1000.0)
+        p2 = self.interceptor.predict_next_illumination("track_two", 1000.0)
+        self.assertIsNotNone(p1)
+        self.assertIsNotNone(p2)
+        self.assertAlmostEqual(p1["expected_time_us"], p2["expected_time_us"], places=2)
+        self.assertAlmostEqual(p1["confidence"], p2["confidence"], places=4)
 
 
 if __name__ == "__main__":

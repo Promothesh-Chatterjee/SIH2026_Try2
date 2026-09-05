@@ -47,13 +47,31 @@ DWELL_MODES: tuple[str, ...] = (
 )
 
 # Multipliers applied to the base receiver dwell time (base_dwell_time_us * multiplier).
-# These are the amplification/compression factors of each dwell strategy.
-DEFAULT_DWELL_MULTIPLIERS: tuple[float, ...] = (0.25, 1.0, 2.5, 1.0, 0.5)
+# These are the amplification/compression factors of each dwell strategy. REVISIT and
+# PREEMPTIVE_INTERCEPT keep a neutral 1.0 multiplier: their distinct semantics come from
+# behaviour (revisit sensitivity boost / intercept-window alignment), not dwell length.
+DEFAULT_DWELL_MULTIPLIERS: tuple[float, ...] = (0.25, 1.0, 2.5, 1.0, 1.0)
 
 # Named indices for readability.
 SHORT_DWELL, NORMAL_DWELL, LONG_DWELL, REVISIT, PREEMPTIVE_INTERCEPT = range(len(DWELL_MODES))
 
 DWELL_MODE_INDEX: dict[str, int] = {name: i for i, name in enumerate(DWELL_MODES)}
+
+# Per-mode semantic intent, aligned with DWELL_MODES. The reason key is what the
+# action-selection layer reports as the *driver* of a chosen mode (req: distinguish
+# why a mode was selected).
+DWELL_MODE_SEMANTICS: tuple[str, ...] = (
+    "recce",                 # SHORT_DWELL        - fast reconnaissance
+    "surveillance",          # NORMAL_DWELL       - neutral surveillance
+    "deep_observation",      # LONG_DWELL         - deeper observation of an uncertain band
+    "revisit",               # REVISIT            - prioritize a previously observed / overdue band
+    "periodic_intercept",    # PREEMPTIVE_INTERCEPT - prioritize an imminent predicted intercept
+)
+
+# Canonical 10-feature band block indices (see FEATURE_ORDER above).
+REVISIT_AGE_IDX = 4
+UNCERTAINTY_IDX = 3
+OCCUPANCY_IDX = 0
 
 CANONICAL_N_MODES = len(DWELL_MODES)
 CANONICAL_N_ACTIONS = CANONICAL_N_BANDS * CANONICAL_N_MODES

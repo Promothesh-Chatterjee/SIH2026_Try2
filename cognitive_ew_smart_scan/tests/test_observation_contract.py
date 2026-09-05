@@ -45,7 +45,7 @@ class ObservationContractTests(unittest.TestCase):
         q_vals, aux, hidden = drqn(valid_input)
         self.assertEqual(q_vals.shape, (1, 1, 180))
         self.assertEqual(aux["intercept_prob"].shape, (1, 1, 180))
-        self.assertEqual(aux["intercept_time_us"].shape, (1, 1))
+        self.assertEqual(aux["intercept_time_us"].shape, (1, 1, 180))
 
         invalid_input = torch.zeros(1, 1, 180)
         with self.assertRaises(ValueError):

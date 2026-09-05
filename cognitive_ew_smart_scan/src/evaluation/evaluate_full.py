@@ -24,6 +24,7 @@ from ..models.baseline_schedulers import (
     HighestUncertaintyScheduler,
     RoundRobinScheduler,
 )
+from ..models.baseline_suite import FixedPeriodicScan, RevisitHeuristic, SequentialSweep
 from ..models.random_scheduler import RandomScheduler
 
 logger = logging.getLogger(__name__)
@@ -33,8 +34,9 @@ def _build_baseline(baseline: str, n_bands: int, n_modes: int | None = None, see
     """Construct a comparison scheduler for the given baseline name.
 
     Args:
-        baseline: One of "random", "round_robin", "highest_occupancy",
-            "highest_uncertainty"; returns None for "none".
+        baseline: One of "sequential_sweep", "round_robin", "random",
+            "fixed_periodic_scan", "highest_occupancy", "highest_uncertainty",
+            "revisit_heuristic"; returns None for "none".
         n_bands: Number of discrete bands.
             n_modes: Number of dwell modes (action = band*n_modes + mode). When
                 omitted, preserve the legacy band-only helper behavior.
@@ -53,6 +55,12 @@ def _build_baseline(baseline: str, n_bands: int, n_modes: int | None = None, see
         return RandomScheduler(n_bands=n_bands, n_modes=baseline_modes, seed=seed)
     if name == "round_robin":
         return RoundRobinScheduler(n_bands=n_bands, n_modes=baseline_modes)
+    if name == "sequential_sweep":
+        return SequentialSweep(n_bands=n_bands, n_modes=baseline_modes)
+    if name == "fixed_periodic_scan":
+        return FixedPeriodicScan(n_bands=n_bands, n_modes=baseline_modes)
+    if name == "revisit_heuristic":
+        return RevisitHeuristic(n_bands=n_bands, n_modes=baseline_modes)
     if name == "highest_occupancy":
         return HighestOccupancyScheduler(n_bands=n_bands, n_modes=baseline_modes)
     if name == "highest_uncertainty":
@@ -60,6 +68,22 @@ def _build_baseline(baseline: str, n_bands: int, n_modes: int | None = None, see
     if name == "none":
         return None
     raise ValueError(f"Unknown baseline '{baseline}'")
+
+
+def _raw_pulse_count(path: str | Path) -> int:
+    """Pulse count from the H5 header only (never loads the data).
+
+    Returns ``-1`` for unreadable/unstructured files (never an empty-scenario
+    claim). Zero is a genuine official-TSRD empty scene.
+    """
+    try:
+        import h5py
+        with h5py.File(str(path), "r") as handle:
+            if "data" not in handle:
+                return -1
+            return int(handle["data"].shape[0])
+    except Exception:
+        return -1
 
 
 def run_full_evaluation(
@@ -289,8 +313,14 @@ def run_full_evaluation(
     telemetry = TelemetryPublisher(run=run)
     logger.info("Evaluation run %s at %s", run.run_id, run.dir)
 
+    # Explicit empty/unusable scenario accounting (Phase 19): zero-pulse scenes
+    # are reported and skipped, never scored or allowed to pollute aggregates.
+    n_empty_scenarios = 0
+    n_skipped_scheduler = 0
+
     for idx, fpath in enumerate(files):
         per_file: dict = {"file": str(fpath), "mode": mode}
+        raw_rows = _raw_pulse_count(fpath)
         # --- Deinterleaving (leakage-safe + windowed inference) ---
         v_measure = ami = ari = homogeneity = completeness = float("nan")
         pairwise_mcc = pairwise_f1 = float("nan")
@@ -365,6 +395,7 @@ def run_full_evaluation(
         )
 
         # --- Scheduler (run one episode per file via CognitiveRFScanEnv) ---
+        scheduled = False
         try:
             # Build a cognitive env fed by this single test file's pulses.
             freq_min = float(env_cfg.get("freq_min_mhz", 0.0))
@@ -376,73 +407,108 @@ def run_full_evaluation(
                 freq_max_mhz=freq_max,
                 max_pulses=record_limit,
             )
-            env = CognitiveRFScanEnv({**env_config, **env_cfg}, records=records, seed=42)
-            obs, _ = env.reset()
-            # Achieved controller episode (learned MoE, or random fallback).
-            done = False
-            steps = 0
-            hidden = None
-            if scheduler is not None and hasattr(scheduler, "reset"):
-                try:
-                    scheduler.reset()
-                    if hasattr(scheduler, "eager_agent") and hasattr(scheduler.eager_agent, "hidden"):
-                        drqn_inner = scheduler.eager_agent.drqn if hasattr(scheduler.eager_agent, "drqn") else None
-                        if drqn_inner is not None:
-                            hidden = drqn_inner.init_hidden(1, device)
-                            scheduler.eager_agent.hidden = hidden
-                except Exception:
-                    pass
-            while not done and steps < 5000:
-                if scheduler is not None:
-                    try:
-                        bands, hidden, _ = scheduler.select_bands(obs, hidden)  # type: ignore
-                        action = int(bands[0])
-                    except Exception:
-                        action = int(env.action_space.sample())
-                else:
-                    action = int(env.action_space.sample())
-                obs, reward, terminated, truncated, info = env.step(action)
-                if scheduler is not None and hasattr(scheduler, "update"):
-                    try:
-                        scheduler.update(action)  # type: ignore
-                    except Exception:
-                        pass
-                done = bool(terminated or truncated)
-                steps += 1
-                global_fom.update(
-                    int(info["band_chosen"]) if "band_chosen" in info else action,
-                    info["ground_truth_active"],
-                    info["hit"],
-                    float(info.get("intercept_time_error_us", float("nan"))),
-                    float(reward),
+            if raw_rows == 0 or not records:
+                # Explicit empty-scenario handling: never evaluate a zero-pulse
+                # scene, and never let it corrupt the aggregate metrics.
+                per_file["empty_scenario"] = raw_rows == 0
+                per_file["skipped_reason"] = (
+                    "empty_scenario_zero_pulses" if raw_rows == 0
+                    else "no_records_after_filter_clipped_out_of_band"
                 )
-            fom = env.get_fom()
-            per_file.update({f"sched_{k}": v for k, v in fom.items()})
-            telemetry.update(step=idx, file=str(fpath), type="eval_file", pd=float(fom.get("Pd", 0.0)), pfa=float(fom.get("Pfa", 0.0)), avg_reward=float(fom.get("avg_reward", 0.0)))
-
-            # Comparison baseline episode (same file, same env seed if requested).
-            if baseline_controller is not None:
-                benv = CognitiveRFScanEnv({**env_config, **env_cfg}, records=records, seed=42)
-                bobs, _ = benv.reset()
+                per_file.update(
+                    {
+                        "sched_Pd": float("nan"), "sched_Pfa": float("nan"),
+                        "sched_avg_reward": float("nan"),
+                    }
+                )
+                if raw_rows == 0:
+                    n_empty_scenarios += 1
+                    logger.warning("Skipping empty scenario (0 pulses): %s", fpath)
+                else:
+                    n_skipped_scheduler += 1
+                    logger.warning(
+                        "Skipping unusable scenario (%d raw pulses, 0 after filter): %s",
+                        raw_rows, fpath,
+                    )
+            else:
+                scheduled = True
+                env = CognitiveRFScanEnv({**env_config, **env_cfg}, records=records, seed=42)
+                obs, _ = env.reset()
+            if scheduled:
+                # Achieved controller episode (learned MoE, or random fallback).
                 done = False
                 steps = 0
-                while not done and steps < 5000:
+                hidden = None
+                if scheduler is not None and hasattr(scheduler, "reset"):
                     try:
-                        action = int(baseline_controller.step(bobs))
+                        scheduler.reset()
+                        if hasattr(scheduler, "eager_agent") and hasattr(scheduler.eager_agent, "hidden"):
+                            drqn_inner = scheduler.eager_agent.drqn if hasattr(scheduler.eager_agent, "drqn") else None
+                            if drqn_inner is not None:
+                                hidden = drqn_inner.init_hidden(1, device)
+                                scheduler.eager_agent.hidden = hidden
                     except Exception:
-                        action = int(benv.action_space.sample())
-                    bobs, reward, terminated, truncated, info = benv.step(action)
+                        pass
+                while not done and steps < 5000:
+                    if scheduler is not None:
+                        try:
+                            if hasattr(scheduler, "set_periodic_urgency_vector"):
+                                scheduler.set_periodic_urgency_vector(np.asarray(getattr(env, "belief", np.zeros(36)).periodic_urgency, dtype=np.float32).reshape(-1) if hasattr(getattr(env, "belief", None), "periodic_urgency") else np.zeros(36, dtype=np.float32))
+                            if hasattr(scheduler, "select_action"):
+                                action, hidden, attr = scheduler.select_action(obs, hidden)  # type: ignore
+                                mode_ctx = {"action_score": float(attr.get("action_score", 1.0)), "reason": str(attr.get("reason", "mode_preset"))}
+                                obs, reward, terminated, truncated, info = env.step(action, mode_context=mode_ctx)
+                            else:
+                                bands, hidden, _ = scheduler.select_bands(obs, hidden)  # type: ignore
+                                action = int(bands[0])
+                                obs, reward, terminated, truncated, info = env.step(action)
+                        except Exception:
+                            action = int(env.action_space.sample())
+                            obs, reward, terminated, truncated, info = env.step(action)
+                    else:
+                        action = int(env.action_space.sample())
+                        obs, reward, terminated, truncated, info = env.step(action)
+                    if scheduler is not None and hasattr(scheduler, "update"):
+                        try:
+                            scheduler.update(action)  # type: ignore
+                        except Exception:
+                            pass
                     done = bool(terminated or truncated)
                     steps += 1
-                    baseline_fom.update(
+                    global_fom.update(
                         int(info["band_chosen"]) if "band_chosen" in info else action,
                         info["ground_truth_active"],
                         info["hit"],
                         float(info.get("intercept_time_error_us", float("nan"))),
                         float(reward),
                     )
-                bfom = benv.get_fom()
-                per_file.update({f"bl_sched_{k}": v for k, v in bfom.items()})
+                fom = env.get_fom()
+                per_file.update({f"sched_{k}": v for k, v in fom.items()})
+                telemetry.update(step=idx, file=str(fpath), type="eval_file", pd=float(fom.get("Pd", 0.0)), pfa=float(fom.get("Pfa", 0.0)), avg_reward=float(fom.get("avg_reward", 0.0)))
+
+                # Comparison baseline episode (same file, same env seed if requested).
+                if baseline_controller is not None:
+                    benv = CognitiveRFScanEnv({**env_config, **env_cfg}, records=records, seed=42)
+                    bobs, _ = benv.reset()
+                    done = False
+                    steps = 0
+                    while not done and steps < 5000:
+                        try:
+                            action = int(baseline_controller.step(bobs))
+                        except Exception:
+                            action = int(benv.action_space.sample())
+                        bobs, reward, terminated, truncated, info = benv.step(action)
+                        done = bool(terminated or truncated)
+                        steps += 1
+                        baseline_fom.update(
+                            int(info["band_chosen"]) if "band_chosen" in info else action,
+                            info["ground_truth_active"],
+                            info["hit"],
+                            float(info.get("intercept_time_error_us", float("nan"))),
+                            float(reward),
+                        )
+                    bfom = benv.get_fom()
+                    per_file.update({f"bl_sched_{k}": v for k, v in bfom.items()})
         except Exception as exc:
             logger.warning("Scheduler eval failed for %s: %s", fpath, exc)
             per_file.update({"sched_Pd": float("nan"), "sched_Pfa": float("nan")})
@@ -483,6 +549,9 @@ def run_full_evaluation(
     else:
         agg["baseline_name"] = "none"
     agg["n_files"] = len(files)
+    agg["n_empty_scenarios"] = n_empty_scenarios
+    agg["n_skipped_scheduler"] = n_skipped_scheduler
+    agg["n_scheduler_files"] = max(0, len(files) - n_empty_scenarios - n_skipped_scheduler)
     agg["mode"] = mode
     telemetry.update(step=len(files), type="done", n_files=len(files), **{f"sched_{k}": float(v) for k, v in global_fom.summary().items()})
 
@@ -565,6 +634,9 @@ def run_full_evaluation(
         for k in ["bl_sched_avg_intercept_rate", "bl_sched_avg_intercept_time_error_us", "bl_sched_avg_reward"]:
             if k in agg:
                 print(f" {k:<28} {agg[k]:<12.4f}")
+    if n_empty_scenarios or n_skipped_scheduler:
+        print(f" Empty/unusable scenarios skipped: {n_empty_scenarios} empty, {n_skipped_scheduler} unusable "
+              f"(evaluated {agg['n_scheduler_files']}/{len(files)})")
     print("=" * 72)
     print(f"Results: {results_csv}")
     print(f"Output dir: {output_dir}")
@@ -587,7 +659,8 @@ def main() -> None:
     parser.add_argument(
         "--baseline",
         type=str,
-        choices=["none", "random", "round_robin", "highest_occupancy", "highest_uncertainty"],
+        choices=["none", "random", "round_robin", "sequential_sweep", "fixed_periodic_scan",
+                 "highest_occupancy", "highest_uncertainty", "revisit_heuristic"],
         default="none",
         help="Comparison scheduler to run alongside the learned controller (none disables).",
     )

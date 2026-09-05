@@ -14,6 +14,27 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+_LOG2 = np.log(2.0)
+
+
+def bernoulli_entropy(p: float) -> float:
+    """Shannon entropy (bits) of a Bernoulli belief probability ``p``.
+
+    H(p) = -p·log2(p) - (1-p)·log2(1-p), with H(0) = H(1) = 0. This is the
+    entropy of the belief that the selected band is active, given occupancy
+    probability ``p`` (Phase 10: information gain = H_before - H_after).
+
+    Args:
+        p: Belief probability that the band is active, in [0, 1].
+
+    Returns:
+        Entropy in bits, >= 0.
+    """
+    p = float(np.clip(p, 0.0, 1.0))
+    if not (0.0 < p < 1.0):
+        return 0.0
+    return float(-(p * np.log(p) + (1.0 - p) * np.log(1.0 - p)) / _LOG2)
+
 
 def compute_reward(
     hit: bool,
@@ -134,6 +155,9 @@ def receiver_reward_components(
     intercepted_emitters: set[int] | None = None,
     novel_ids: set[int] | None = None,
     priority_weight_reference: float = 0.5,
+    information_gain: float | None = None,
+    entropy_before: float | None = None,
+    entropy_after: float | None = None,
 ) -> dict[str, float]:
     """Per-component reward breakdown (SIH eval contract: log terms separately).
 
@@ -144,20 +168,31 @@ def receiver_reward_components(
       +timing_penalty   -w_timing*Δt   fast interception is better (reduced dwell lag)
       +priority_term     w_priority*prio  reward for dwelling high-priority bands (observable
                                           priority reference, never GT)
-      +info_gain_term    w_information_gain*ΔH  reward for reducing belief uncertainty
+      +info_gain_term    w_information_gain*ΔH  true belief-entropy reduction on the
+                                          selected band (IG = H_before - H_after, Phase 10)
       -false_alarm_pen   w_false_alarm*P(fa)   penalise tuning an empty band
       -dwell_cost       -w_dwell_cost*dwell    scan-efficiency cost
       -redundant_pen    -w_redundant_scan      penalty for re-walking a just-intercepted band
       -delay_pen        -w_delay*dwell_lag     penalty for late preemptive intercept on a
                                                high-urgency band (overdue periodic emitter)
 
-    ``ground_truth_active``, ``novel_emitter``, ``had_any_opportunity`` are
-    evaluation-only signals used to shape the miss / false-alarm terms. They are
-    NOT part of the scheduler observation vector. ``priority_weight_reference``
-    and ``belief`` are derived from scheduler-observable fields only.
+    Opportunity semantics (Phase 9): ONLY the selected dwell is a decision-level
+    opportunity. ``ground_truth_active`` / ``had_any_opportunity`` here carry the
+    **selected-band activity** (not "any band active anywhere"). Thus:
+      * selected band active + no detection -> miss_penalty (decision-level FN)
+      * selected band inactive + no detection -> false_alarm_pen (tuned an empty band),
+        regardless of activity elsewhere (unselected active bands are coverage
+        opportunities, NOT decision-level misses and must never emit a miss penalty).
+
+    ``novel_emitter`` / ``novel_ids`` derive from ground-truth emitter IDs and are
+    evaluation-only. ``priority_weight_reference`` and ``belief`` are derived from
+    scheduler-observable fields only. ``information_gain`` / ``entropy_before`` /
+    ``entropy_after`` are computed by the environment around the belief update and
+    are scheduler-observable (occupancy belief).
 
     Returns:
-        Dict with reward (total) and one key per component term.
+        Dict with reward (total), one key per component term, plus
+        entropy_before, entropy_after, information_gain for logging.
     """
     detections = getattr(observation, "detections", [])
     n_hits = len(detections)
@@ -197,22 +232,21 @@ def receiver_reward_components(
             if urgent > 0.3:
                 delay_pen = -abs(w_delay) * urgent
     else:
+        # Phase 9: the opportunity signal is about the SELECTED band only.
+        #   selected active + undetected  -> FN/miss
+        #   selected inactive             -> empty dwell (correct reject / false alarm)
         if had_any_opportunity:
             miss_penalty = w_miss
         elif ground_truth_active is False and float(observation.dwell_time_us) > 0:
-            # Tuned an empty band (no interceptable opportunity anywhere).
             false_alarm_pen = w_false_alarm
 
     # Dwell cost (scan efficiency): penalise long dwell occupancy.
     dwell_cost = w_dwell_cost * max(0.0, float(observation.dwell_time_us))
 
-    # Information gain: reward reducing belief uncertainty on the chosen band.
-    if band is not None and belief is not None:
-        try:
-            prev_unc = 1.0 - abs(2.0 * float(belief.occupancy_prob[band]) - 1.0)
-            info_gain_term = w_information_gain * (1.0 - prev_unc)
-        except Exception:
-            info_gain_term = 0.0
+    # True information gain (Phase 10): IG = H_before - H_after over the selected
+    # band's occupancy belief. Only meaningful when the env supplies it.
+    ig = float(information_gain) if information_gain is not None and information_gain == information_gain else 0.0
+    info_gain_term = w_information_gain * ig
 
     total = (
         hit_term + novel_term + timing_penalty + priority_term + info_gain_term
@@ -230,4 +264,7 @@ def receiver_reward_components(
         "dwell_cost": float(dwell_cost),
         "redundant_penalty": float(redundant_pen),
         "delay_penalty": float(delay_pen),
+        "entropy_before": float(entropy_before) if entropy_before is not None else 0.0,
+        "entropy_after": float(entropy_after) if entropy_after is not None else 0.0,
+        "information_gain": ig,
     }

@@ -25,6 +25,21 @@ class EvaluateBaselineWiringTests(unittest.TestCase):
         self.assertGreaterEqual(action, 0)
         self.assertLess(action, 36)
 
+    def test_build_sequential_sweep(self):
+        sched = _build_baseline("sequential_sweep", n_bands=36, n_modes=5)
+        self.assertEqual(sched.step(None) % 5, 1)  # NORMAL_DWELL mode index 1
+        self.assertLess(sched.step(None), 180)
+
+    def test_build_fixed_periodic_scan(self):
+        sched = _build_baseline("fixed_periodic_scan", n_bands=36, n_modes=5)
+        a0 = sched.step(None)
+        self.assertTrue(0 <= a0 < 180)
+
+    def test_build_revisit_heuristic(self):
+        sched = _build_baseline("revisit_heuristic", n_bands=36, n_modes=5)
+        bands = {sched.step(None) // 5 for _ in range(40)}
+        self.assertEqual(len(bands), 36)  # every band visited once per cycle
+
     def test_unknown_baseline_raises(self):
         with self.assertRaises(ValueError):
             _build_baseline("bogus", n_bands=36)

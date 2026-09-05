@@ -2,13 +2,19 @@
 FastAPI REST microservice for Cognitive EW SmartScan.
 
 Endpoints:
-  POST /predict_bands  — SmartScanMoE top-K bands + attribution
-  POST /deinterleave   — PDW batch deinterleaving
+  POST /predict_bands  — single best time-frequency action + real aux/attribution
+  POST /deinterleave   — PDW batch deinterleaving (trained model required)
   POST /update_memory  — write emitter profile
   GET  /memory/emitters — list emitters
   GET  /health          — liveness
   GET  /metrics         — FoM stats
   POST /reset           — reset LSTM hidden + episodic memory
+
+Fail-safe contract (Phase 16):
+  * no random-scheduler / raw-baseline fallbacks — missing trained models
+    return HTTP 503;
+  * /predict_bands accepts ONLY the canonical 36-band x 10-feature obs_dim=360;
+  * responses expose real model outputs only (no fabricated attribution/metrics).
 """
 
 import logging
@@ -35,12 +41,24 @@ except ImportError:
 
 from pydantic import BaseModel, Field
 
-from src.contracts import band_of_action
+from src.contracts import (
+    DEFAULT_DWELL_MULTIPLIERS,
+    NORMAL_DWELL,
+    REVISIT_AGE_IDX,
+    band_of_action,
+    mode_of_action,
+)
 from src.telemetry.publisher import TelemetryPublisher
 from src.telemetry.discovery import latest_telemetry_snapshot, latest_telemetry_history, find_latest_run
 
 MAX_PDWS_PER_REQUEST = 10000
 MAX_SESSION_TTL_SECONDS = 3600
+
+# Phase 16: canonical production observation contract. /predict_bands accepts
+# ONLY the 36-band x 10-feature layout (obs_dim=360). Legacy 2*n_bands and any
+# other lengths are rejected.
+CANONICAL_OBS_DIM = 360
+OBS_FEATURES_PER_BAND = 10
 
 
 def _is_authorized(request: Request) -> bool:
@@ -69,6 +87,9 @@ STATE: dict[str, Any] = {
     "memory": None,
     "fom": None,
     "hidden": None,
+    "normalization_stats": None,
+    "normalization_stats_path": None,
+    "normalization_stats_hash": None,
 }
 
 # P0-10: real telemetry broker. Deliberately no fabricated streaming keys: the
@@ -84,16 +105,31 @@ TELEMETRY_ROOT = os.getenv("TELEMETRY_ROOT", "runs")
 class PredictBandsRequest(BaseModel):
     """Request for band prediction."""
 
-    obs: list[float] = Field(..., description="Observation vector matching obs_dim (e.g. 360)", min_length=2)
-    k: int | None = Field(None, description="Top-K override (default from config)")
+    obs: list[float] = Field(..., description=f"Observation vector of exactly obs_dim={CANONICAL_OBS_DIM} (36 bands x 10 features)", min_length=2)
 
 
 class PredictBandsResponse(BaseModel):
-    """Response with top-K bands and attribution."""
+    """Single best time-frequency selection with real model outputs.
 
-    bands: list[int] = Field(..., description="Top-K band indices sorted by fused score")
-    fused_scores: list[float] | None = Field(None, description="Fused scores for returned bands")
-    attribution: dict[str, float] = Field(..., description="eager_pct and revisit_pct")
+    Every field is a real value produced by a trained scheduler:
+      * selected_action        flat action index (band*n_modes + mode)
+      * selected_band / selected_mode   decoded time-frequency cell
+      * dwell_time_us          base dwell * the mode's config multiplier
+      * intercept_probability  DRQN aux head (sigmoid) for the selected action
+      * predicted_intercept_time_us  DRQN aux head (softplus) in microseconds
+      * attribution            real decomposition computed from real model
+                               Q-values and real observation features (never
+                               fabricated placeholders)
+      * latency_ms             wall-clock inference latency
+    """
+
+    selected_action: int = Field(..., description="Selected flat time-frequency action index")
+    selected_band: int = Field(..., description="Selected band index")
+    selected_mode: int = Field(..., description="Selected dwell-mode index")
+    dwell_time_us: float = Field(..., description="Dwell time for the selected mode (base * multiplier)")
+    intercept_probability: float = Field(..., description="DRQN aux prediction: probability of intercept for the selected action")
+    predicted_intercept_time_us: float = Field(..., description="DRQN aux prediction: expected time-to-intercept (µs)")
+    attribution: dict[str, Any] = Field(..., description="Real attribution: eager_pct / revisit_pct and mode semantics when available")
     latency_ms: float = Field(..., description="Inference latency in ms")
 
 
@@ -272,9 +308,38 @@ async def lifespan(app: FastAPI):  # type: ignore
     try:
         from ..cognitive.memory import SemanticMemory
         from ..evaluation.metrics import FiguresOfMerit
+        from ..preprocessing.normalise import load_normalization_stats, normalization_stats_hash
 
         STATE["memory"] = SemanticMemory()
         STATE["fom"] = FiguresOfMerit()
+
+        # Phase 14: only TRAIN-fitted normalization statistics may be used once a
+        # trained deinterleaver is serving. Locate the persisted stats JSON next
+        # to the model checkpoints (canonical locations first).
+        norm_candidates = [
+            Path("checkpoints/deinterleaver/normalization_stats.json"),
+            Path("configs/normalization_stats.json"),
+            Path("checkpoints/onnx/normalization_stats.json"),
+            Path("checkpoints/normalization_stats.json"),
+        ]
+        stats_path = next((c for c in norm_candidates if c.exists()), None)
+        if stats_path is not None:
+            try:
+                STATE["normalization_stats"] = load_normalization_stats(stats_path)
+                STATE["normalization_stats_path"] = str(stats_path)
+                STATE["normalization_stats_hash"] = normalization_stats_hash(STATE["normalization_stats"])
+                logger.info(
+                    "Loaded train normalization stats %s (hash %s)",
+                    stats_path,
+                    STATE["normalization_stats_hash"],
+                )
+            except Exception as exc:
+                logger.warning("Failed to load normalization stats %s: %s", stats_path, exc)
+        else:
+            logger.warning(
+                "No train-fitted normalization_stats.json found under checkpoints/ or configs/ — "
+                "deinterleave with a trained model will be refused until one is provided."
+            )
         logger.info("SemanticMemory and FiguresOfMerit initialised")
     except Exception as exc:
         logger.warning("Memory/FoM init failed: %s", exc)
@@ -382,71 +447,179 @@ def reset(request: Request) -> dict[str, str]:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+def _dwell_time_us_for_mode(mode: int) -> float:
+    """Real dwell time for a dwell-mode index from the loaded config.
+
+    Uses ``configs/model_config.yaml`` dwell_modes (base dwell x mode
+    multiplier); falls back to the canonical contract multipliers.
+    """
+    mcfg = STATE.get("model_cfg", {}).get("dwell_modes", {})
+    base = float(mcfg.get("base_dwell_time_us", 500.0))
+    mults = mcfg.get("mode_multipliers", [])
+    try:
+        if 0 <= int(mode) < len(mults) and isinstance(mults[int(mode)], dict):
+            return base * float(mults[int(mode)].get("multiplier", 1.0))
+    except (TypeError, ValueError):
+        pass
+    if 0 <= int(mode) < len(DEFAULT_DWELL_MULTIPLIERS):
+        return base * float(DEFAULT_DWELL_MULTIPLIERS[int(mode)])
+    return base * float(DEFAULT_DWELL_MULTIPLIERS[NORMAL_DWELL])
+
+
+def _aux_for_action(drqn, obs_1d: np.ndarray, action: int, hidden) -> tuple[float, float]:
+    """Real DRQN aux outputs (intercept prob, intercept time) for one action.
+
+    Runs the DRQN on the SAME observation with the SAME recurrent hidden the
+    selection step used, so the auxiliary predictions describe the same
+    decision context as the chosen action. Both values come from trained
+    heads — nothing fabricated.
+    """
+    obs_t = torch.from_numpy(np.asarray(obs_1d, dtype=np.float32)).reshape(1, 1, -1)
+    with torch.inference_mode():
+        _q, aux, _ = drqn(obs_t, hidden)
+    prob = float(aux["intercept_prob"][0, -1, int(action)].item())
+    time_us = float(aux["intercept_time_us"][0, -1, int(action)].item())
+    return prob, time_us
+
+
+def _minmax_norm(vals: np.ndarray) -> np.ndarray:
+    v_min, v_max = float(np.min(vals)), float(np.max(vals))
+    if v_max - v_min < 1e-8:
+        return np.zeros_like(vals, dtype=np.float32)
+    return ((vals - v_min) / (v_max - v_min + 1e-8)).astype(np.float32)
+
+
 @app.post("/predict_bands", response_model=PredictBandsResponse, tags=["scheduler"])
 def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
-    """Run SmartScanMoE to return top-K bands + attribution.
+    """Select the single best time-frequency action from a trained scheduler.
 
-    Handles CUDA/CPU via DEVICE env.
+    Phase 16 fail-safe contract:
+      * expects EXACTLY obs_dim=360 (36 bands x 10 features) — the legacy
+        2*n_bands observation layout is no longer accepted;
+      * requires a trained scheduler (MoE/PT DRQN or the ONNX scheduler);
+        otherwise HTTP 503 — there is NO random-scheduler fallback;
+      * returns real model outputs only (Q-driven selection, DRQN aux
+        predictions, config dwell-time, computed attribution), never
+        fabricated attribution or metrics.
     """
     start = time.perf_counter()
+
+    # ---- Fail-safe gates ----------------------------------------------------
+    moe = STATE.get("moe")
+    onnx_sess = STATE.get("scheduler_onnx")
+    if moe is None and onnx_sess is None:
+        raise HTTPException(
+            status_code=503,
+            detail="No trained scheduler is loaded — /predict_bands requires a trained scheduler.",
+        )
+
     d_cfg = STATE.get("model_cfg", {}).get("drqn_scheduler", {})
-    n_bands = d_cfg.get("n_bands", 36)
-    expected_dim = d_cfg.get("obs_dim", n_bands * 10)
+    configured_dim = int(d_cfg.get("obs_dim", CANONICAL_OBS_DIM))
+    if configured_dim != CANONICAL_OBS_DIM:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Configured obs_dim={configured_dim} is not the canonical {CANONICAL_OBS_DIM} — refusing inference.",
+        )
+    n_bands = int(d_cfg.get("n_bands", 36))
+    n_modes = int(d_cfg.get("n_modes", 5))
+
     obs = np.asarray(req.obs, dtype=np.float32)
     if obs.ndim != 1:
         raise HTTPException(status_code=400, detail=f"obs must be a flat vector, got ndim={obs.ndim}")
-    # Accept obs_dim (10-feature) or legacy 2-feature layout for back-compat.
-    if obs.size != expected_dim and obs.size != 2 * n_bands and obs.size != n_bands * 10:
-        raise HTTPException(status_code=400, detail=f"obs length must be obs_dim={expected_dim}, got {obs.size}")
-    # Try MoE first, then ONNX, then random fallback
-    moe = STATE.get("moe")
-    if moe is not None:
-        try:
-            k = req.k or moe.k_receivers  # type: ignore
-            # Temporarily override k if requested
-            orig_k = moe.k_receivers  # type: ignore
-            if req.k is not None:
-                moe.k_receivers = int(req.k)  # type: ignore
-            actions, hidden, attribution = moe.select_bands(obs, STATE.get("hidden"))  # type: ignore
-            STATE["hidden"] = hidden
-            # Decode flat time-frequency actions to unique bands for the API
-            # response, and tick the revisit/preemptive agent with the flat action.
-            n_modes = int(STATE["model_cfg"].get("drqn_scheduler", {}).get("n_modes", 5))
-            bands = []
-            for a in actions:
-                b = band_of_action(int(a), n_modes)
-                if b not in bands:
-                    bands.append(b)
-                moe.update(int(a))  # type: ignore
-            if req.k is not None:
-                moe.k_receivers = orig_k  # type: ignore
-            latency = (time.perf_counter() - start) * 1000.0
-            # Fused scores are not directly exposed; return attribution
-            return PredictBandsResponse(bands=bands, fused_scores=None, attribution=attribution, latency_ms=latency)
-        except Exception as exc:
-            logger.warning("MoE predict failed: %s", exc)
-    # ONNX scheduler fallback
-    if "scheduler_onnx" in STATE:
-        try:
-            import onnxruntime as ort  # type: ignore  # noqa: F401
+    if obs.size != CANONICAL_OBS_DIM:
+        raise HTTPException(
+            status_code=400,
+            detail=f"obs must be exactly obs_dim={CANONICAL_OBS_DIM} (36 bands x 10 features), got {obs.size}",
+        )
 
-            sess = STATE["scheduler_onnx"]
-            # ONNX expects (1,1,obs_dim) or (1, seq, obs_dim)
-            inp = obs.reshape(1, 1, -1).astype(np.float32)
-            q = sess.run(None, {"obs": inp})[0]  # (1,1,n_bands)
-            q_last = q[0, -1] if q.ndim == 3 else q[0]
-            k = req.k or n_bands
-            k = min(int(k), n_bands)
-            bands = np.argsort(q_last)[-k:][::-1].tolist()
-            latency = (time.perf_counter() - start) * 1000.0
-            return PredictBandsResponse(bands=bands, fused_scores=None, attribution={"eager_pct": 0.6, "revisit_pct": 0.4}, latency_ms=latency)
-        except Exception as exc:
-            logger.warning("ONNX predict failed: %s", exc)
-    # Random baseline
-    k = req.k or 1
-    bands = np.random.choice(n_bands, size=min(int(k), n_bands), replace=False).tolist()
+    # ---- Selection ----------------------------------------------------------
+    if moe is not None:
+        # PT path: SmartScanMoE owns the DRQN recurrent state; capture the
+        # pre-step hidden so the aux predictions below describe the exact
+        # decision context (single forward, no state double-step).
+        pre_step_hidden = moe.eager_agent.hidden if moe.eager_agent.hidden is not None else STATE.get("hidden")
+        action, hidden, attribution = moe.select_action(obs, STATE.get("hidden"))
+        STATE["hidden"] = hidden
+        prob, pred_time_us = _aux_for_action(moe.eager_agent.drqn, obs, action, pre_step_hidden)
+        moe.update(action)
+    else:
+        # ONNX eager path: real q / intercept_prob / intercept_time_us from the
+        # exported DRQN. Attribution is computed from those real Q-values plus
+        # the real revisit-age feature inside obs (index 4 of each 10-feature
+        # band block) — matching the MoE fusion semantics without fabricating.
+        inp = obs.reshape(1, 1, -1).astype(np.float32)
+        q, q_prob, q_time = onnx_sess.run(None, {"obs": inp})
+        q_last = q[0, -1] if q.ndim == 3 else q[0]
+        prob_last = q_prob[0, -1] if q_prob.ndim == 3 else q_prob[0]
+        time_last = q_time[0, -1] if q_time.ndim == 3 else q_time[0]
+
+        moe_cfg = STATE.get("model_cfg", {}).get("smartscan_moe", {})
+        eager_w = float(moe_cfg.get("eager_weight", 0.6))
+        revisit_w = float(moe_cfg.get("revisit_weight", 0.4))
+        q_norm = _minmax_norm(np.asarray(q_last, dtype=np.float32))
+        rev_band = np.clip(obs[REVISIT_AGE_IDX::OBS_FEATURES_PER_BAND][:n_bands], 0.0, 1.0)
+        rev_action = np.repeat(rev_band.astype(np.float32), n_modes)
+        fused = eager_w * q_norm + revisit_w * rev_action
+        action = int(np.argmax(fused))
+        eager_contrib = eager_w * q_norm[action]
+        revisit_contrib = revisit_w * rev_action[action]
+        total = eager_contrib + revisit_contrib + 1e-8
+        attribution = {
+            "eager_pct": float(eager_contrib / total),
+            "revisit_pct": float(revisit_contrib / total),
+            "selected_band": band_of_action(action, n_modes),
+            "selected_mode": int(mode_of_action(action, n_modes)),
+        }
+        prob = float(prob_last[action])
+        pred_time_us = float(time_last[action])
+
+    band = band_of_action(action, n_modes)
+    mode = mode_of_action(action, n_modes)
     latency = (time.perf_counter() - start) * 1000.0
-    return PredictBandsResponse(bands=bands, fused_scores=None, attribution={"eager_pct": 0.0, "revisit_pct": 0.0}, latency_ms=latency)
+    return PredictBandsResponse(
+        selected_action=int(action),
+        selected_band=band,
+        selected_mode=mode,
+        dwell_time_us=_dwell_time_us_for_mode(mode),
+        intercept_probability=prob,
+        predicted_intercept_time_us=pred_time_us,
+        attribution=attribution,
+        latency_ms=latency,
+    )
+
+
+def _normalise_for_inference(pdws_arr: np.ndarray) -> np.ndarray:
+    """Normalise PDWs for inference using ONLY persisted train statistics.
+
+    Phase 14 leakage guard:
+      * If a trained deinterleaver (PT or ONNX) is loaded, per-request fitting is
+        FORBIDDEN — the persisted train-fitted stats are required and reused. If
+        they are unavailable this raises HTTPException(503) rather than silently
+        leaking test-data statistics into the model input space.
+      * If NO trained model is loaded (raw HDBSCAN baseline only), fitting from
+        the request is acceptable and preserved.
+    """
+    from ..preprocessing.normalise import normalise_pdws
+
+    # Real STATE shapes: PT model -> STATE["deinterleaver"] is an nn.Module;
+    # ONNX model -> STATE["deinterleaver"] == "onnx" and STATE["deinterleaver_onnx"]
+    # holds the InferenceSession.
+    onnx_sess = STATE.get("deinterleaver_onnx")
+    mode = STATE.get("deinterleaver")
+    has_model = bool(onnx_sess) or mode == "onnx" or (mode is not None and not isinstance(mode, str))
+    if has_model:
+        stats = STATE.get("normalization_stats")
+        if not stats:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "A trained deinterleaver is loaded but "
+                    "checkpoints/deinterleaver/normalization_stats.json was not "
+                    "found. Inference must use the train-fitted statistics."
+                ),
+            )
+        return normalise_pdws(pdws_arr, stats)[0]
+    return normalise_pdws(pdws_arr, None)[0]
 
 
 @app.post("/deinterleave", response_model=DeinterleaveResponse, tags=["deinterleaving"])
@@ -460,18 +633,32 @@ def deinterleave_endpoint(req: DeinterleaveRequest, request: Request) -> Deinter
     pdws_arr = np.array(req.pdws, dtype=np.float32)
     if pdws_arr.ndim != 2 or pdws_arr.shape[1] != 5:
         raise HTTPException(status_code=400, detail=f"Each PDW must be [ToA,CF,PW,AoA,Amp] length 5, got shape {pdws_arr.shape}")
-    # Normalise
-    try:
-        from ..preprocessing.normalise import normalise_pdws
 
-        pdws_norm, _ = normalise_pdws(pdws_arr, None)
+    # Phase 16 fail-safe: a TRAINED deinterleaver is required. There is no
+    # raw-HDBSCAN fallback — no trained model, no deinterleave (HTTP 503).
+    deint_onnx = STATE.get("deinterleaver_onnx")
+    deint = STATE.get("deinterleaver")
+    has_trained_deint = bool(deint_onnx) or deint == "onnx" or (
+        deint is not None and not isinstance(deint, str)
+    )
+    if not has_trained_deint:
+        raise HTTPException(
+            status_code=503,
+            detail="No trained deinterleaver is loaded — /deinterleave requires a trained deinterleaver.",
+        )
+
+    # Normalise (Phase 14: persisted train stats when a trained model serves).
+    try:
+        pdws_norm = _normalise_for_inference(pdws_arr)
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Normalisation failed: {exc}") from exc
 
     # Try ONNX first
-    if "deinterleaver_onnx" in STATE:
+    if deint_onnx is not None:
         try:
-            sess = STATE["deinterleaver_onnx"]
+            sess = deint_onnx
             # ONNX expects (1, N, 6)
             inp = pdws_norm.reshape(1, -1, 6).astype(np.float32)
             emb = sess.run(None, {"pdws": inp})[0]  # (1,N,64)
@@ -491,7 +678,6 @@ def deinterleave_endpoint(req: DeinterleaveRequest, request: Request) -> Deinter
             logger.warning("ONNX deinterleave failed: %s", exc)
 
     # PyTorch path
-    deint = STATE.get("deinterleaver")
     if deint is not None and not isinstance(deint, str):
         try:
             from ..models.deinterleaver import deinterleave
@@ -504,18 +690,12 @@ def deinterleave_endpoint(req: DeinterleaveRequest, request: Request) -> Deinter
         except Exception as exc:
             logger.warning("PT deinterleave failed: %s", exc)
 
-    # Fallback: HDBSCAN on normalised PDWs directly (baseline)
-    try:
-        import hdbscan  # type: ignore
-
-        clusterer = hdbscan.HDBSCAN(min_cluster_size=req.min_cluster_size, min_samples=5, metric="euclidean", cluster_selection_method="eom")
-        labels = clusterer.fit_predict(pdws_norm).astype(int).tolist()
-        n_clusters = len(set(labels) - {-1})
-    except Exception:
-        labels = [-1] * len(pdws_arr)
-        n_clusters = 0
-    latency = (time.perf_counter() - start) * 1000.0
-    return DeinterleaveResponse(labels=labels, n_clusters=n_clusters, latency_ms=latency)
+    # A trained deinterleaver exists but BOTH paths failed — surface it, never
+    # fall back to an untrained baseline.
+    raise HTTPException(
+        status_code=503,
+        detail="Deinterleaving failed on the loaded model — no raw baseline fallback is performed.",
+    )
 
 
 @app.post("/update_memory", tags=["memory"])

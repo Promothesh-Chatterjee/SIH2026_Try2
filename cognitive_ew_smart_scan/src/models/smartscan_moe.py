@@ -17,7 +17,23 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from src.contracts import CANONICAL_N_MODES, DEFAULT_DWELL_MULTIPLIERS, band_of_action, n_actions_for
+from src.contracts import (
+    CANONICAL_N_MODES,
+    DEFAULT_DWELL_MULTIPLIERS,
+    DWELL_MODES,
+    DWELL_MODE_SEMANTICS,
+    OCCUPANCY_IDX,
+    REVISIT_AGE_IDX,
+    UNCERTAINTY_IDX,
+    SHORT_DWELL,
+    NORMAL_DWELL,
+    LONG_DWELL,
+    REVISIT,
+    PREEMPTIVE_INTERCEPT,
+    band_of_action,
+    mode_of_action,
+    n_actions_for,
+)
 from .drqn_scheduler import DRQNScheduler
 
 logger = logging.getLogger(__name__)
@@ -178,6 +194,7 @@ class SmartScanMoE(nn.Module):
         self.eager_weight: float = float(config.get("eager_weight", 0.6))
         self.revisit_weight: float = float(config.get("revisit_weight", 0.4))
         self.preemptive_weight: float = float(config.get("preemptive_weight", 0.0))
+        self.semantic_weight: float = float(config.get("semantic_weight", 1.0))
         self.k_receivers: int = int(config.get("k_receivers", 1))
         self.decay_rate: float = float(config.get("decay_rate", 0.05))
         self.max_revisit_gap: int = int(config.get("max_revisit_gap", 200))
@@ -213,16 +230,123 @@ class SmartScanMoE(nn.Module):
         if band is not None and 0 <= int(band) < self.n_bands:
             self._preemptive_urgency[int(band)] = float(np.clip(urgency, 0.0, 1.0))
 
+    def set_periodic_urgency_vector(self, urgency: np.ndarray | list | tuple) -> None:
+        """Set the full per-band periodic-/preemptive-urgency vector.
+
+        Args:
+            urgency: Real-valued array-like of length n_bands, clipped to [0, 1].
+        """
+        vec = np.asarray(urgency, dtype=np.float32).reshape(-1)
+        if vec.size != self.n_bands:
+            raise ValueError(f"periodic urgency vector size {vec.size} != n_bands {self.n_bands}")
+        self._preemptive_urgency[:] = np.clip(vec, 0.0, 1.0)
+
+    def _mode_semantic_scores(self, obs_1d: np.ndarray) -> np.ndarray:
+        """Per-(band, mode) semantic intent scores from one observation vector.
+
+        Each dwell mode encodes a distinct *reason* to act (not just dwell length):
+
+          - SHORT_DWELL        recce: quick look that loses to any urgent pressure
+          - NORMAL_DWELL       surveillance: neutral default
+          - LONG_DWELL         deep observation of band(s) with high uncertainty
+          - REVISIT            driven by revisit age (urges overdue bands)
+          - PREEMPTIVE_INTERCEPT  driven by periodic-imminent-arrival urgency
+
+        Returns:
+            (n_bands, n_modes) float32 scores in [0, 1].
+        """
+        scores = np.zeros((self.n_bands, self.n_modes), dtype=np.float32)
+        if obs_1d is None or obs_1d.size == 0:
+            scores[:, NORMAL_DWELL] = 0.45
+            return scores
+        fpb = max(1, int(obs_1d.size) // self.n_bands)
+        occ = np.clip(obs_1d[OCCUPANCY_IDX::fpb][: self.n_bands], 0.0, 1.0)
+        unc = np.clip(obs_1d[UNCERTAINTY_IDX::fpb][: self.n_bands], 0.0, 1.0)
+        rev = np.clip(obs_1d[REVISIT_AGE_IDX::fpb][: self.n_bands], 0.0, 1.0)
+        per = np.clip(self._preemptive_urgency[: self.n_bands], 0.0, 1.0)
+        peak = np.maximum(rev, per)
+        scores[:, SHORT_DWELL] = 0.30 * (1.0 - peak)
+        scores[:, NORMAL_DWELL] = 0.45
+        scores[:, LONG_DWELL] = 0.25 + 0.35 * unc
+        scores[:, REVISIT] = 0.20 + 0.60 * rev
+        scores[:, PREEMPTIVE_INTERCEPT] = 0.20 + 0.60 * per
+        return scores
+
+    def _compute_fused(
+        self, obs: np.ndarray | torch.Tensor, eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, tuple[torch.Tensor, torch.Tensor] | None, np.ndarray]:
+        """Compute fused per-action scores for numpy or torch observations.
+
+        Returns:
+            Tuple (fused (n_actions,), eager_norm (n_actions,), revisit_norm (n_bands,),
+            hidden, obs_1d (obs_dim,) float32).
+        """
+        if isinstance(obs, np.ndarray):
+            obs_1d = np.asarray(obs).reshape(-1).astype(np.float32)
+            obs_t = torch.from_numpy(obs_1d)
+            if obs_t.dim() == 1:
+                obs_t = obs_t.unsqueeze(0).unsqueeze(0)
+            elif obs_t.dim() == 2:
+                obs_t = obs_t.unsqueeze(1)
+            q_raw, hidden = self.eager_agent.get_q(obs_t.squeeze(0) if obs_t.shape[0] == 1 else obs_t)
+            eager_norm = self.eager_agent.normalised_scores(q_raw)
+        elif isinstance(obs, torch.Tensor):
+            obs_1d = obs[0, -1].detach().cpu().numpy().reshape(-1)
+            q, _aux, hidden = self.drqn(obs, eager_hidden)
+            self.eager_agent.hidden = hidden
+            q_last = q[0, -1].detach().cpu().numpy() if q.dim() == 3 else q.detach().cpu().numpy()
+            if q_last.ndim > 1:
+                q_last = q_last[0]
+            eager_norm = self.eager_agent.normalised_scores(q_last)
+        else:
+            raise TypeError(f"Unsupported obs type {type(obs)}")
+
+        revisit_norm = self.revisit_agent.scores()
+        semantic = self._mode_semantic_scores(obs_1d)
+        fused = self._fused_action_scores(eager_norm, revisit_norm, semantic)
+        return fused, eager_norm, revisit_norm, hidden if "hidden" in locals() else eager_hidden, obs_1d
+
     def _fused_action_scores(
-        self, eager_norm: np.ndarray, revisit_norm_per_band: np.ndarray
+        self, eager_norm: np.ndarray, revisit_norm_per_band: np.ndarray,
+        semantic_scores: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Combine eager, revisit and preemptive terms into per-action fused scores."""
+        """Combine eager, revisit, preemptive and mode-semantic terms into per-action fused scores."""
         revisit_action = np.repeat(revisit_norm_per_band, self.n_modes).astype(np.float32)
         fused = self.eager_weight * eager_norm + self.revisit_weight * revisit_action
         # Periodic preemptive pressure: parent band urgency broadcast across its modes.
         preempt_action = np.repeat(self._preemptive_urgency, self.n_modes).astype(np.float32)
         fused = fused + self.preemptive_weight * preempt_action
+        if semantic_scores is not None:
+            fused = fused + self.semantic_weight * np.asarray(semantic_scores, dtype=np.float32).reshape(-1)
         return fused
+
+    def _attribution_for(self, action: int, obs_1d: np.ndarray) -> dict[str, float | int | str]:
+        """Explainability record: WHY the chosen time-frequency action was selected.
+
+        The mode's semantic reason (see DWELL_MODE_SEMANTICS) plus the numeric
+        urgency drivers let the action-selection layer distinguish e.g. a REVISIT
+        (driven by revisit age) from a PREEMPTIVE_INTERCEPT (driven by a predicted
+        periodic arrival).
+        """
+        band = band_of_action(int(action), self.n_modes)
+        mode = mode_of_action(int(action), self.n_modes)
+        fpb = max(1, int(obs_1d.size) // self.n_bands) if obs_1d is not None and obs_1d.size else 10
+        if obs_1d is not None and obs_1d.size > 0:
+            rev = float(np.clip(obs_1d[REVISIT_AGE_IDX::fpb][band], 0.0, 1.0))
+            unc = float(np.clip(obs_1d[UNCERTAINTY_IDX::fpb][band], 0.0, 1.0))
+        else:
+            rev = 0.0
+            unc = 0.0
+        per = float(np.clip(self._preemptive_urgency[band], 0.0, 1.0))
+        return {
+            "selected_band": band,
+            "selected_mode": int(mode),
+            "mode_name": DWELL_MODES[int(mode)],
+            "reason": DWELL_MODE_SEMANTICS[int(mode)],
+            "revisit_urgency": rev,
+            "periodic_urgency": per,
+            "uncertainty_urgency": unc,
+        }
 
     def select_action(
         self, obs: np.ndarray | torch.Tensor, eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None
@@ -234,10 +358,22 @@ class SmartScanMoE(nn.Module):
             eager_hidden: Optional LSTM hidden state.
 
         Returns:
-            Tuple (action int, hidden, attribution dict).
+            Tuple (action int, hidden, attribution dict with mode semantics).
         """
-        top_k, hidden, attribution = self.select_bands(obs, eager_hidden, k=1, return_full=False)
-        return int(top_k[0]), hidden, attribution
+        fused, eager_norm, revisit_norm, hidden, obs_1d = self._compute_fused(obs, eager_hidden)
+        action = int(np.argmax(fused))
+        attribution = self._attribution_for(action, obs_1d)
+        # Legacy keys preserved for API consumers.
+        eager_contrib = float(self.eager_weight * eager_norm[action])
+        revisit_contrib = float(self.revisit_weight * revisit_norm[band_of_action(action, self.n_modes)])
+        total = eager_contrib + revisit_contrib + 1e-8
+        attribution["eager_pct"] = float(eager_contrib / total)
+        attribution["revisit_pct"] = float(revisit_contrib / total)
+        # Fused action score underlying the selection (action_score log field).
+        attribution["action_score"] = float(fused[action])
+        attribution["action"] = action
+        logger.debug("MoE selected action=%d %s", action, attribution)
+        return action, hidden, attribution
 
     def select_bands(
         self, obs: np.ndarray | torch.Tensor, eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None,
@@ -256,33 +392,20 @@ class SmartScanMoE(nn.Module):
             Tuple (selected_indices List[int] len K, hidden, attribution_dict
             {eager_pct, revisit_pct}).
         """
-        # Handle numpy obs path (most common for env)
-        if isinstance(obs, np.ndarray):
-            obs_t = torch.from_numpy(obs.astype(np.float32))
-            if obs_t.dim() == 1:
-                obs_t = obs_t.unsqueeze(0).unsqueeze(0)
-            elif obs_t.dim() == 2:
-                obs_t = obs_t.unsqueeze(1)
-            q_raw, hidden = self.eager_agent.get_q(obs_t.squeeze(0) if obs_t.shape[0] == 1 else obs_t)
-            eager_norm = self.eager_agent.normalised_scores(q_raw)
-            revisit_norm = self.revisit_agent.scores()
-        else:
-            if isinstance(obs, torch.Tensor):
-                q, _aux, hidden = self.drqn(obs, eager_hidden)
-                self.eager_agent.hidden = hidden
-                q_last = q[0, -1].detach().cpu().numpy() if q.dim() == 3 else q.detach().cpu().numpy()
-                if q_last.ndim > 1:
-                    q_last = q_last[0]
-                eager_norm = self.eager_agent.normalised_scores(q_last)
-                revisit_norm = self.revisit_agent.scores()
-            else:
-                raise TypeError(f"Unsupported obs type {type(obs)}")
+        fused, eager_norm, revisit_norm, hidden, obs_1d = self._compute_fused(obs, eager_hidden)
 
-        fused = self._fused_action_scores(eager_norm, revisit_norm)
         # Top-K actions
         k_eff = self.k_receivers if k is None else int(k)
         k_eff = min(k_eff, self.n_actions)
         top_k = np.argsort(fused)[-k_eff:][::-1].tolist()
+
+        # Attribution for explainability (computed over the top actions before decoding)
+        eager_contrib = float(np.sum(self.eager_weight * eager_norm[top_k]))
+        revisit_contrib = float(np.sum(
+            self.revisit_weight * revisit_norm[[band_of_action(a, self.n_modes) for a in top_k]]
+        ))
+        total = eager_contrib + revisit_contrib + 1e-8
+        attribution = {"eager_pct": float(eager_contrib / total), "revisit_pct": float(revisit_contrib / total)}
 
         if not return_full:
             # Decode to unique band indices (per action), dedup preserving order.
@@ -293,14 +416,8 @@ class SmartScanMoE(nn.Module):
                     bands.append(b)
             top_k = bands
 
-        # Attribution for explainability
-        eager_contrib = float(np.sum(self.eager_weight * eager_norm[top_k[:]]))
-        revisit_contrib = float(np.sum(self.revisit_weight * revisit_norm[[band_of_action(a, self.n_modes) for a in top_k[:]]]))
-        total = eager_contrib + revisit_contrib + 1e-8
-        attribution = {"eager_pct": float(eager_contrib / total), "revisit_pct": float(revisit_contrib / total)}
-
         logger.debug("MoE fused top=%s attribution=%s", top_k, attribution)
-        return top_k, hidden if "hidden" in locals() else eager_hidden, attribution
+        return top_k, hidden, attribution
 
     def update(self, selected_action: int) -> None:
         """Update revisit agent after a time-frequency action.
@@ -350,5 +467,30 @@ class SmartScanMoE(nn.Module):
         eager_contrib = self.eager_weight * q_norm
         revisit_contrib = self.revisit_weight * urgency_action
         fused = eager_contrib + revisit_contrib
+
+        # Mode-semantic intent (Phase 5): per-(band, mode) reason scores so each
+        # dwell mode is linked to its observable driver (revisit age, uncertainty,
+        # periodic-imminent-arrival urgency) rather than being only a dwell length.
+        n = self.n_bands
+        if features_per_band > UNCERTAINTY_IDX:
+            unc = obs[:, :, UNCERTAINTY_IDX :: features_per_band]
+            rev = obs[:, :, REVISIT_AGE_IDX :: features_per_band]
+            per = (
+                torch.from_numpy(np.asarray(self._preemptive_urgency, dtype=np.float32))
+                .to(obs.device)
+                .view(1, 1, n)
+                .expand(obs.shape[0], obs.shape[1], n)
+            )
+            peak = torch.maximum(rev, per)
+            sem_per_band = torch.stack([
+                0.30 * (1.0 - peak),                     # SHORT_DWELL (recce)
+                torch.full_like(peak, 0.45),             # NORMAL_DWELL (surveillance)
+                0.25 + 0.35 * unc,                       # LONG_DWELL (deep observation)
+                0.20 + 0.60 * rev,                       # REVISIT
+                0.20 + 0.60 * per,                       # PREEMPTIVE_INTERCEPT
+            ], dim=-1)                                    # (B,T,n,5)
+            sem_action = sem_per_band.reshape(obs.shape[0], obs.shape[1], n * self.n_modes)
+            fused = fused + self.semantic_weight * sem_action
+
         attribution = {"eager_contribution": eager_contrib.detach(), "revisit_contribution": revisit_contrib.detach(), "raw_q_values": q_values.detach()}
         return fused, next_hidden, attribution

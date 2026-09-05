@@ -323,9 +323,20 @@ class FiguresOfMerit:
         self.fn: int = 0
         self.tn: int = 0
 
+        # Phase 9 operational COVERAGE counters (kept SEPARATE from the
+        # decision-level Pd/Pfa contract — never mixed into tp/fp/fn/tn):
+        self.spectrum_active_opportunities: int = 0
+        self.unselected_active_opportunities: int = 0
+        self.selected_active_opportunities: int = 0
+
         self.intercept_time_errors: list[float] = []
         self.rewards: list[float] = []
         self._roc_points: list[tuple[float, float]] = []
+
+        # Phase 10 true information-gain / entropy accumulators.
+        self.information_gains: list[float] = []
+        self.entropy_before_list: list[float] = []
+        self.entropy_after_list: list[float] = []
 
         # Reward component accumulators (SIH eval contract: log terms separately).
         self.reward_hit_term: float = 0.0
@@ -375,6 +386,14 @@ class FiguresOfMerit:
         self.reward_dwell_cost += float(components.get("dwell_cost", 0.0))
         self.reward_redundant_penalty += float(components.get("redundant_penalty", 0.0))
         self.reward_delay_penalty += float(components.get("delay_penalty", 0.0))
+        # Phase 10 true entropy reduction (scheduler-observable belief, not GT).
+        ig = components.get("information_gain")
+        if ig is not None and ig == ig:
+            self.information_gains.append(float(ig))
+        for key, store in (("entropy_before", self.entropy_before_list), ("entropy_after", self.entropy_after_list)):
+            val = components.get(key)
+            if val is not None and val == val:
+                store.append(float(val))
 
     def record_intercept_predictions(
         self,
@@ -449,6 +468,17 @@ class FiguresOfMerit:
             gt_vec = np.asarray(ground_truth_active).astype(np.int8)
             is_active = bool(gt_vec[b]) if 0 <= b < len(gt_vec) else False
 
+        # Phase 9 operational coverage: count spectrum-active bands per dwell.
+        # These are SEPARATE from the decision-level confusion counters below and
+        # never feed Pd/Pfa.
+        n_spectrum_active = int(gt_vec.sum())
+        self.spectrum_active_opportunities += n_spectrum_active
+        if is_active:
+            self.selected_active_opportunities += 1
+            self.unselected_active_opportunities += max(0, n_spectrum_active - 1)
+        else:
+            self.unselected_active_opportunities += n_spectrum_active
+
         # ------------------------------------------------------------------
         # Decision-level Confusion-Opportunity contract (P0-7, SIH "7.
         # Evaluation contract"):
@@ -521,6 +551,30 @@ class FiguresOfMerit:
     def avg_reward(self) -> float:
         """Mean reward per step."""
         return float(np.mean(self.rewards)) if self.rewards else 0.0
+
+    @property
+    def band_selection_coverage(self) -> float:
+        """Fraction of spectrum-active-band dwells that the scheduler selected.
+
+        Operational coverage metric (Phase 9), kept strictly separate from the
+        decision-level Pd/Pfa. = selected_active / spectrum_active.
+        """
+        if self.spectrum_active_opportunities <= 0:
+            return 0.0
+        return float(self.selected_active_opportunities / self.spectrum_active_opportunities)
+
+    @property
+    def avg_information_gain(self) -> float:
+        """Mean true information gain (bits) per observed dwell (Phase 10)."""
+        return float(np.mean(self.information_gains)) if self.information_gains else 0.0
+
+    @property
+    def avg_entropy_before(self) -> float:
+        return float(np.mean(self.entropy_before_list)) if self.entropy_before_list else 0.0
+
+    @property
+    def avg_entropy_after(self) -> float:
+        return float(np.mean(self.entropy_after_list)) if self.entropy_after_list else 0.0
 
     def _avg_component(self, total: float) -> float:
         """Mean of an accumulated reward component over component-logged steps."""
@@ -601,6 +655,15 @@ class FiguresOfMerit:
             "fp": float(self.fp),
             "fn": float(self.fn),
             "tn": float(self.tn),
+            # Phase 9 operational coverage (separate from Pd/Pfa):
+            "spectrum_active_opportunities": float(self.spectrum_active_opportunities),
+            "unselected_active_opportunities": float(self.unselected_active_opportunities),
+            "selected_active_opportunities": float(self.selected_active_opportunities),
+            "band_selection_coverage": float(self.band_selection_coverage),
+            # Phase 10 true information gain:
+            "avg_information_gain": float(self.avg_information_gain),
+            "avg_entropy_before": float(self.avg_entropy_before),
+            "avg_entropy_after": float(self.avg_entropy_after),
         }
 
     def plot_roc_curve(self, save_path: str | Path = "roc_curve.pdf") -> Path:

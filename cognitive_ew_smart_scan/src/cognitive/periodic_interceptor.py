@@ -1,196 +1,244 @@
 """
 Periodic Scan Interceptor.
 
-Estimates PRI/ scan period via inter-arrival histogram + find_peaks,
-predicts next illumination, and produces pre-emptive park schedule.
+Operates entirely on *observable track history*: periodic emitters are keyed by
+the persistent ``track_id`` produced by the EmitterTracker — never by the
+ground-truth ``emitter_id`` attributed to a detection.
+
+For each tracked emitter it records (track_id, observed ToA, band, optionally
+measured frequency), then estimates:
+
+- PRI (dominant inter-arrival, robust to missed pulses and cross-dwell gaps),
+- phase (placement of the emission train on the PRI grid),
+- the next expected arrival after the receiver time,
+- a confidence (regularity x phase stability x staleness),
+- the expected band (and, when available, expected frequency).
+
+`predict_next_illumination` / `get_preemptive_schedule` return
+``expected_time_us``, ``expected_band``, ``confidence`` and
+``time_to_expected_arrival_us`` so a scheduler can pre-emptively dwell.
 """
 
 import logging
 from collections import defaultdict
+from typing import Optional
 
 import numpy as np
-from scipy.signal import find_peaks  # type: ignore
 
 logger = logging.getLogger(__name__)
 
 
 class PeriodicScanInterceptor:
-    """Heuristic periodic emitter tracker.
+    """Heuristic periodic emitter tracker driven by observable track history.
 
-    Records ToA per emitter, estimates dominant PRI via histogram peak finding,
-    predicts next illumination time/band with confidence based on regularity.
+    Identity is provided by the caller (the persistent ``track_id`` from the
+    emitter tracker). This class has no notion of ground-truth emitters.
 
     Attributes:
-        history: Dict emitter_id -> list of (toa_us, band_idx).
+        history: dict track_id -> list of (toa_us, band_idx, frequency_mhz|None).
     """
 
-    def __init__(self, min_observations: int = 20, hist_bins: int = 100) -> None:
+    def __init__(self, min_observations: int = 20, max_history: int = 500,
+                 pri_confidence_threshold: float = 0.3) -> None:
         """Initialise interceptor.
 
         Args:
             min_observations: Minimum intercepts before period estimation.
-            hist_bins: Histogram bins for inter-arrival distribution.
+            max_history: Per-track history length cap.
+            pri_confidence_threshold: Below this regularity the estimate is
+                considered unreliable and predictions are suppressed.
         """
-        self.min_observations = min_observations
-        self.hist_bins = hist_bins
-        self.history: dict[str, list[tuple[float, int]]] = defaultdict(list)
-        self._period_cache: dict[str, float | None] = {}
-        self._confidence_cache: dict[str, float] = {}
+        self.min_observations = max(3, int(min_observations))
+        self.max_history = max(int(max_history), 10)
+        self.pri_confidence_threshold = float(pri_confidence_threshold)
 
-    def record_intercept(self, emitter_id: str, toa_us: float, band_idx: int) -> None:
-        """Append intercept to history and invalidate cache.
+        self.history: dict[str, list[tuple[float, int, Optional[float]]]] = defaultdict(list)
+        self._estimate_cache: dict[str, Optional[dict]] = {}
+
+    # ------------------------------------------------------------------ record
+    def record_intercept(self, track_id: str, toa_us: float, band_idx: int,
+                         frequency_mhz: Optional[float] = None) -> None:
+        """Append an observable intercept to the tracked emitter's history.
 
         Args:
-            emitter_id: Emitter identifier (file-local string).
-            toa_us: Time of arrival (µs).
-            band_idx: Band where intercepted.
+            track_id: Persistent identity from the emitter tracker.
+            toa_us: Observed time of arrival (µs).
+            band_idx: Band index where intercepted.
+            frequency_mhz: Optional measured centre frequency (MHz).
         """
-        self.history[emitter_id].append((float(toa_us), int(band_idx)))
-        # Keep only last 500 to bound memory
-        if len(self.history[emitter_id]) > 500:
-            self.history[emitter_id] = self.history[emitter_id][-500:]
-        self._period_cache.pop(emitter_id, None)
-        self._confidence_cache.pop(emitter_id, None)
-        logger.debug("Record %s toa=%.0f band=%d total=%d", emitter_id, toa_us, band_idx, len(self.history[emitter_id]))
+        self.history[track_id].append((float(toa_us), int(band_idx),
+                                       float(frequency_mhz) if frequency_mhz is not None else None))
+        if len(self.history[track_id]) > self.max_history:
+            self.history[track_id] = self.history[track_id][-self.max_history:]
+        self._estimate_cache.pop(track_id, None)
+        logger.debug("Record track=%s toa=%.0f band=%d total=%d",
+                     track_id, toa_us, band_idx, len(self.history[track_id]))
 
-    def estimate_scan_period(self, emitter_id: str) -> float | None:
-        """Estimate dominant PRI via inter-arrival histogram + find_peaks.
+    # ------------------------------------------------------------------ state
+    def _point_estimate(self, track_id: str) -> Optional[dict]:
+        """Estimate (pri, phase, band, frequency, regularity) from history.
 
-        Requires >= min_observations. Confidence = peak prominence / sum.
-
-        Args:
-            emitter_id: Emitter to estimate.
-
-        Returns:
-            Period in µs or None if insufficient data / no peak found.
+        PRI is the mean of inter-arrivals consistent with the dominant (median)
+        gap, so occasional missed pulses (integer multiples of PRI) and silent
+        cross-dwell gaps do not corrupt the estimate. Phase is the circular mean
+        of ``toa % pri``, giving the position of the emission train on the grid.
         """
-        if emitter_id in self._period_cache:
-            return self._period_cache[emitter_id]
+        if track_id in self._estimate_cache:
+            return self._estimate_cache[track_id]
 
-        obs = self.history.get(emitter_id, [])
-        if len(obs) < self.min_observations:
-            self._period_cache[emitter_id] = None
+        obs = self.history.get(track_id, [])
+        result: Optional[dict] = None
+        if len(obs) >= self.min_observations:
+            toas = np.sort(np.array([t for t, _, _ in obs], dtype=np.float64))
+            gaps = np.diff(toas)
+            gaps = gaps[gaps > 1e-6]
+            if gaps.size >= 2:
+                median_gap = float(np.median(gaps))
+                if median_gap > 0.0:
+                    consistent = gaps[(gaps >= 0.5 * median_gap)
+                                      & (gaps <= 1.5 * median_gap)]
+                    if len(consistent) >= 2:
+                        pri = float(np.mean(consistent))
+                        cv = float(np.std(consistent)) / max(pri, 1e-9)
+                        regularity = float(np.clip(1.0 / (1.0 + cv), 0.0, 1.0))
+                        fraction = len(consistent) / len(gaps)
+
+                        # Phase: circular mean of (toa mod pri).
+                        rem = toas % pri
+                        angle = (2.0 * np.pi * rem) / pri
+                        sin_m = float(np.mean(np.sin(angle)))
+                        cos_m = float(np.mean(np.cos(angle)))
+                        result_len = float(np.hypot(sin_m, cos_m))
+                        phase = (np.arctan2(sin_m, cos_m) * pri) / (2.0 * np.pi)
+                        phase = float(phase % pri)
+
+                        # Expected band: most frequent recent band (tie -> latest).
+                        bands = [b for _, b, _ in obs]
+                        if bands:
+                            from collections import Counter
+                            counts = Counter(bands)
+                            max_count = max(counts.values())
+                            candidates = [b for b, c in counts.items() if c == max_count]
+                            latest_band = bands[-1]
+                            expected_band = latest_band if latest_band in candidates else candidates[0]
+                        else:
+                            expected_band = 0
+
+                        # Expected frequency: mean of the measured frequencies at
+                        # the expected band (the most recent operating channel).
+                        band_freqs = np.array(
+                            [f for _, b, f in obs
+                             if f is not None and b == expected_band], dtype=np.float64,
+                        )
+                        expected_freq = float(np.mean(band_freqs)) if band_freqs.size else None
+
+                        result = {
+                            "pri_us": pri,
+                            "phase_us": phase,
+                            "phase_resultant": result_len,
+                            "regularity": float(np.clip(fraction * regularity, 0.0, 1.0)),
+                            "expected_band": int(expected_band),
+                            "expected_frequency_mhz": expected_freq,
+                            "last_toa": float(toas[-1]),
+                            "n": len(obs),
+                        }
+
+        self._estimate_cache[track_id] = result
+        return result
+
+    # ------------------------------------------------------------ predictions
+    def estimate_scan_period(self, track_id: str) -> Optional[float]:
+        """Return the estimated PRI (µs) or None if not estimable."""
+        est = self._point_estimate(track_id)
+        return est["pri_us"] if est else None
+
+    def estimate_phase(self, track_id: str) -> Optional[float]:
+        """Return the estimated phase (µs offset on the PRI grid) or None."""
+        est = self._point_estimate(track_id)
+        return est["phase_us"] if est else None
+
+    def predict_next_illumination(self, track_id: str, current_time_us: float) -> Optional[dict]:
+        """Predict the next illumination after the receiver time.
+
+        Returns a dict with ``expected_time_us``, ``expected_band``, ``confidence``
+        and ``time_to_expected_arrival_us`` (plus ``expected_frequency_mhz`` and
+        ``pri_us`` when available), or None when the estimate is not usable.
+
+        Confidence = regularity (PRI stability) blended with phase stability and
+        a staleness decay: predictions computed long after the last observation
+        are increasingly unreliable.
+        """
+        est = self._point_estimate(track_id)
+        if est is None:
             return None
 
-        toas = np.array([t for t, _ in obs], dtype=np.float64)
-        toas = np.sort(toas)
-        inter_arrivals = np.diff(toas)
-        # Filter outliers (e.g., missed scans) — keep 5th-95th percentile
-        lo, hi = np.percentile(inter_arrivals, [5, 95])
-        filtered = inter_arrivals[(inter_arrivals >= lo) & (inter_arrivals <= hi)]
-        if len(filtered) < 5:
-            filtered = inter_arrivals
-
-        # Histogram
-        hist, bin_edges = np.histogram(filtered, bins=self.hist_bins)
-        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
-
-        # Smooth slightly with moving average to reduce noise
-        if len(hist) > 5:
-            kernel = np.ones(3) / 3.0
-            hist_smooth = np.convolve(hist, kernel, mode="same")
-        else:
-            hist_smooth = hist
-
-        # Find dominant peak
-        peaks, props = find_peaks(hist_smooth, prominence=float(np.max(hist_smooth) * 0.1), distance=max(1, self.hist_bins // 20))
-        if len(peaks) == 0:
-            # Fallback: global max
-            peak_idx = int(np.argmax(hist_smooth))
-            period = float(bin_centers[peak_idx])
-            prominence = float(hist_smooth[peak_idx])
-        else:
-            # Pick peak with highest prominence (or highest count if prominence tie)
-            if "prominences" in props:
-                best = int(peaks[np.argmax(props["prominences"])])
-            else:
-                best = int(peaks[np.argmax(hist_smooth[peaks])])
-            period = float(bin_centers[best])
-            prominence = float(hist_smooth[best])
-
-        # Confidence: prominence / total mass + regularity (std/mean)
-        total = float(np.sum(hist_smooth)) + 1e-8
-        base_conf = prominence / total
-        mean_ia = float(np.mean(filtered))
-        std_ia = float(np.std(filtered))
-        regularity = 1.0 - min(1.0, std_ia / (mean_ia + 1e-8))  # 1 = perfectly regular
-        confidence = 0.5 * base_conf + 0.5 * regularity
-        confidence = float(np.clip(confidence, 0.0, 1.0))
-
-        self._period_cache[emitter_id] = period
-        self._confidence_cache[emitter_id] = confidence
-        logger.info("Emitter %s period=%.1fus conf=%.2f (n=%d)", emitter_id, period, confidence, len(obs))
-        return period
-
-    def predict_next_illumination(self, emitter_id: str, current_time_us: float) -> dict | None:
-        """Predict next illumination time, band, and confidence.
-
-        Args:
-            emitter_id: Emitter to predict.
-            current_time_us: Current receiver time (µs).
-
-        Returns:
-            Dict {expected_time_us, expected_band, confidence} or None if not estimable.
-        """
-        period = self.estimate_scan_period(emitter_id)
-        if period is None or period <= 0:
+        pri = est["pri_us"]
+        phase = est["phase_us"]
+        last_toa = est["last_toa"]
+        if pri <= 0.0:
             return None
-        confidence = self._confidence_cache.get(emitter_id, 0.0)
-        obs = self.history.get(emitter_id, [])
-        if not obs:
+
+        # Next grid point strictly after max(current_time, last_toa).
+        ref = max(float(current_time_us), last_toa)
+        k = int(np.floor((ref - phase) / pri))
+        expected_time = phase + (k + 1) * pri
+        if expected_time <= last_toa + 1e-6:
+            expected_time = phase + (k + 2) * pri
+
+        periods_since_last = max(0.0, (ref - last_toa) / pri)
+        staleness_factor = float(np.clip(1.0 - 0.15 * periods_since_last, 0.0, 1.0))
+
+        # 60% PRI regularity, 40% phase stability, then staleness decay.
+        base = 0.6 * float(est["regularity"]) + 0.4 * float(est["phase_resultant"])
+        confidence = float(np.clip(base * staleness_factor, 0.0, 1.0))
+        if confidence < self.pri_confidence_threshold:
             return None
-        last_toa = max(t for t, _ in obs)
-        # Next multiple of period after current_time
-        delta = current_time_us - last_toa
-        if delta < 0:
-            n_periods = 1
-        else:
-            n_periods = int(np.ceil(delta / period)) if period > 0 else 1
-            n_periods = max(1, n_periods)
-        expected_time = float(last_toa + n_periods * period)
-        # Most frequent band for this emitter
-        bands = [b for _, b in obs]
-        expected_band = int(max(set(bands), key=bands.count)) if bands else 0
-        # Confidence decays if we are far from last observation (staleness)
-        staleness = min(1.0, (current_time_us - last_toa) / (5 * period + 1e-8))
-        adj_conf = float(confidence * (1.0 - 0.3 * staleness))
-        result = {"expected_time_us": expected_time, "expected_band": expected_band, "confidence": float(np.clip(adj_conf, 0.0, 1.0))}
-        logger.debug("Predict %s -> %s", emitter_id, result)
+
+        result = {
+            "expected_time_us": float(expected_time),
+            "expected_band": int(est["expected_band"]),
+            "confidence": confidence,
+            "time_to_expected_arrival_us": float(expected_time - float(current_time_us)),
+        }
+        if est["expected_frequency_mhz"] is not None:
+            result["expected_frequency_mhz"] = float(est["expected_frequency_mhz"])
+        result["pri_us"] = float(pri)
         return result
 
     def get_preemptive_schedule(self, current_time_us: float, horizon_us: float) -> list[dict]:
-        """Return list of (time, band) for all periodic emitters within horizon, sorted.
+        """Return future illuminations for all periodic tracks within the horizon.
 
         Args:
             current_time_us: Now (µs).
             horizon_us: Lookahead window (µs).
 
         Returns:
-            List of dicts {emitter_id, expected_time_us, expected_band, confidence} sorted by time.
+            List of dicts {track_id, expected_time_us, expected_band, confidence}
+            sorted by time, with up to 5 repeat periods per track.
         """
         schedule: list[dict] = []
-        horizon_end = current_time_us + horizon_us
-        for emitter_id in list(self.history.keys()):
-            pred = self.predict_next_illumination(emitter_id, current_time_us)
+        horizon_end = float(current_time_us) + float(horizon_us)
+        for track_id in list(self.history.keys()):
+            pred = self.predict_next_illumination(track_id, current_time_us)
             if pred is None:
                 continue
-            # Include only if within horizon; if periodic, also include subsequent periods
             t = pred["expected_time_us"]
-            period = self._period_cache.get(emitter_id)
-            # Emit one or multiple future illuminations within horizon
-            while t <= horizon_end:
-                schedule.append({
-                    "emitter_id": emitter_id,
+            pri = pred.get("pri_us")
+            repeats = 0
+            while t <= horizon_end and repeats < 5:
+                entry = {
+                    "track_id": track_id,
                     "expected_time_us": float(t),
                     "expected_band": int(pred["expected_band"]),
                     "confidence": float(pred["confidence"]),
-                })
-                if period is None or period <= 0:
+                }
+                if pred.get("expected_frequency_mhz") is not None:
+                    entry["expected_frequency_mhz"] = float(pred["expected_frequency_mhz"])
+                schedule.append(entry)
+                repeats += 1
+                if not pri or pri <= 0.0:
                     break
-                t += float(period)
-                # At most 5 repeats to avoid explosion
-                if len([s for s in schedule if s["emitter_id"] == emitter_id]) >= 5:
-                    break
+                t = pred["expected_time_us"] + repeats * pri
         schedule.sort(key=lambda x: x["expected_time_us"])
         logger.info("Preemptive schedule horizon=%.0f → %d entries", horizon_us, len(schedule))
         return schedule
