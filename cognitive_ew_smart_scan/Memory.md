@@ -1,5 +1,35 @@
 # Project Memory & Progress Tracker
 
+## CHECKPOINT 2026-09-05 (Phase 2: one authoritative TSRD acquisition) — COMPLETE
+State: **`scripts/download_data.py` is the single TSRD acquisition path;
+`scripts/download_tsrd.py` is a thin shim. It recognises official Kaggle split
+names (`train_scan`/`val_scan`/`test_scan`, stare variants) and conventional
+names, lands files in the canonical `<mode>/<split>/` tree, verifies every file
+(readability, data/labels, `N×5`, label alignment, finite values, ToA order,
+pulses, emitters, SHA-256), writes per-subset + aggregate manifests, never
+fabricates missing subsets, and supports `--dry-run`. Full suite: 398 passed.**
+
+### Phase 2 fixes
+- `_belongs_to` now matches official Kaggle directories (`scan/val_scan/…` →
+  `scan`/`validation`) and `<mode>_<split>` filename fallbacks with token
+  boundaries (no `valport` false positives); no cross-mode or cross-split
+  leakage (train selection never swallows val/test dirs).
+- Files are staged in a scratch cache and moved byte-for-byte into the
+  canonical tree — exact H5 preservation, no whole-repo `snapshot_download`.
+- `_verify_h5` adds finite-value and non-decreasing-ToA checks and treats
+  zero-pulse official empty scenes as valid (duration 0.0), instead of
+  crashing on `toa.min()` of an empty array.
+- Aggregate manifest `totals.files` = verified-file count (was
+  `pulses and files or 0`).
+- `--dry-run` plans without writing; shim forwards `--dry-run`.
+- Tests: `tests/test_download_data.py` 21 → 31.
+
+### Outstanding gates (unchanged)
+- Preflight: real tree still `NOT READY` — single blocker [17] dataset
+  fingerprint mismatch (checkpoint `27eca1101…` vs disk `27b10ea0…`); requires
+  the deinterleaver retrain (or deliberate provenance restamp).
+- Deinterleaver checkpoint dir holds only manifest + stats (no runnable ckpt).
+
 ## CHECKPOINT 2026-09-05 (Phase 1: canonical root/layout contract + Phase 0 audit) — COMPLETE
 State: **`src/data/tsrd_root.py` is the single source of truth for dataset
 root resolution (CLI > env `TSRD_DATA_ROOT` > YAML `data_dir` > `data`) and

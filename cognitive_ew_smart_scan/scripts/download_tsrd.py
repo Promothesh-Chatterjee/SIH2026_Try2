@@ -54,6 +54,11 @@ def main() -> None:
         action="store_true",
         help="EXPLICIT confirmation to download (matches the authoritative script).",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Plan the exact file set without downloading (matches the authoritative script).",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -67,6 +72,7 @@ def main() -> None:
             modes=args.modes,
             splits=args.splits,
             allow_download=args.allow_download,
+            dry_run=args.dry_run,
         )
         print(f"\nDone. Summary: {json.dumps(summary, indent=2)}")
     except (ValueError, RuntimeError) as exc:

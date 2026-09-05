@@ -6,6 +6,38 @@ suite command is `python -m pytest tests/` from `cognitive_ew_smart_scan/`.
 
 ## [Unreleased]
 
+### Fixed — One authoritative TSRD acquisition path (Phase 2, 2026-09-05)
+
+`scripts/download_data.py` is the single acquisition implementation;
+`scripts/download_tsrd.py` is a thin deprecation shim forwarding to it (no
+duplicated download logic). The downloader now:
+
+- **Recognises the official Kaggle split directory names** (`train_scan`,
+  `val_scan`, `test_scan`, `train_stare`, …) AND the conventional
+  `<mode>/{train,validation,test}` names when matching repo files, and lands
+  everything in the canonical `<output>/<mode>/<split>/` tree (supporting
+  exactly the six subsets `scan|stare × train|validation|test`).
+- **Never pulls the whole repo**: only the exact `.h5` files matched to the
+  requested subsets are fetched (per-file `hf_hub_download`, never
+  `snapshot_download`), staged in a scratch cache, and moved byte-for-byte
+  (no re-encode/rewrite) into place.
+- **Verifies every file**: H5 readability, `data`+`labels` presence, `N×5`
+  shape, label/pulse alignment, finite values, non-decreasing ToA, pulse
+  count, emitter count, duration, and SHA-256. Zero-pulse official empty
+  scenes are structurally valid and recorded, not rejected.
+- **Writes per-subset and aggregate manifests**; missing subsets are recorded
+  as `missing` — never fabricated.
+- **`--dry-run`** lists and plans the exact file set, downloading nothing and
+  writing nothing.
+- **Fix**: aggregate manifest file count now reflects the true verified-file
+  count (previously it was `pulses and files or 0`, returning 0 when the pulse
+  total was 0).
+
+Coverage: `tests/test_download_data.py` grew 21 → 31 (Kaggle name matching,
+non-finite/ToA-ordering rejection, zero-pulse validity, dry-run, canonical
+landing, aggregate file-count, shim `--dry-run` passthrough). Full suite:
+398 passed.
+
 ### Fixed — Preflight gate covers all 23 readiness checks (Phase 20, 2026-09-05)
 
 `scripts/preflight_tsrd.py` now returns `READY` or `NOT READY` against a
