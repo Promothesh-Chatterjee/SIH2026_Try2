@@ -360,6 +360,17 @@ def train_deinterleaver(
 
     data_root = resolve_tsrd_root(cli_value=data_dir_override, config=train_cfg)
 
+    # Determine source of data_root resolution for diagnostics
+    if data_dir_override is not None:
+        data_root_source = "CLI"
+    elif os.getenv("TSRD_DATA_ROOT"):
+        data_root_source = "ENV"
+    elif train_cfg.get("data_dir"):
+        data_root_source = "YAML"
+    else:
+        data_root_source = "DEFAULT"
+    print(f"Resolved data_root = {data_root} (source: {data_root_source})")
+
     # Check training mode - in real_tsrd mode, synthetic fallback is FORBIDDEN.
     training_mode = (
         training_mode_override
@@ -370,6 +381,10 @@ def train_deinterleaver(
         raise ValueError(f"Unsupported training_mode={training_mode!r}; expected real_tsrd or synthetic")
     allow_synthetic_fallback = training_mode != "real_tsrd"
     validation = validate_dataset(data_root) if training_mode == "real_tsrd" else {"valid": True, "errors": []}
+
+
+
+
     
     if training_mode == "real_tsrd":
         logger.info("Training mode: REAL TSRD - synthetic fallback DISABLED")

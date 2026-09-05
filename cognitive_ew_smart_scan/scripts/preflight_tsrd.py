@@ -45,6 +45,7 @@ import sys
 from pathlib import Path
 
 import yaml
+import os
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -407,7 +408,28 @@ def main() -> int:
     from src.data.tsrd_root import resolve_tsrd_root
 
     data_root = resolve_tsrd_root(cli_value=args.dataset_root, config=train_cfg)
-    checkpoints_dir = Path(args.checkpoints_dir).resolve()
+    # Determine source for diagnostics
+    if args.dataset_root is not None:
+        data_root_source = "CLI"
+    elif os.getenv("TSRD_DATA_ROOT"):
+        data_root_source = "ENV"
+    elif train_cfg.get("data_dir"):
+        data_root_source = "YAML"
+    else:
+        data_root_source = "DEFAULT"
+    print(f"Resolved data_root = {data_root} (source: {data_root_source})")
+
+    if args.checkpoints_dir is not None:
+        checkpoints_dir = Path(args.checkpoints_dir).resolve()
+        ckpt_source = "CLI"
+    elif os.getenv("CHECKPOINTS_DIR"):
+        checkpoints_dir = Path(os.getenv("CHECKPOINTS_DIR")).resolve()
+        ckpt_source = "ENV"
+    else:
+        checkpoints_dir = ROOT / "checkpoints"
+        ckpt_source = "DEFAULT"
+    print(f"Resolved checkpoints_dir = {checkpoints_dir} (source: {ckpt_source})")
+
     statspath_cfg = Path(train_cfg.get("normalization_stats", ""))
 
     # Checks 1-6: all six splits exist with .h5 files.

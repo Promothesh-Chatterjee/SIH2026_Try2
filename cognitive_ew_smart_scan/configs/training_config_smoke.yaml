@@ -1,4 +1,4 @@
-data_dir: D:/TSRD
+data_dir: "data"
 deinterleaver:
   batch_size: 8
   epochs: 50

@@ -34,6 +34,8 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 import asyncio
 import json
+from threading import Lock
+hidden_lock = Lock()
 try:
     from fastapi.middleware.base import BaseHTTPMiddleware  # type: ignore
 except ImportError:
@@ -307,8 +309,10 @@ async def lifespan(app: FastAPI):  # type: ignore
                     STATE["moe"] = moe
                     # Init hidden
                     try:
-                        STATE["hidden"] = drqn.init_hidden(1, STATE["device"] if STATE["device"] == "cpu" else "cpu")
-                        moe.eager_agent.hidden = STATE["hidden"]
+                        hidden = drqn.init_hidden(1, STATE["device"] if STATE["device"] == "cpu" else "cpu")
+                        with hidden_lock:
+                            STATE["hidden"] = hidden
+                            moe.eager_agent.hidden = hidden
                     except Exception:
                         pass
                     logger.info("Loaded scheduler PT %s", ckpt)
@@ -448,10 +452,11 @@ def reset(request: Request) -> dict[str, str]:
         # Reinit hidden
         if STATE.get("scheduler") and hasattr(STATE["scheduler"], "init_hidden"):
             try:
-                hidden = STATE["scheduler"].init_hidden(1, STATE.get("device", "cpu"))  # type: ignore
-                STATE["hidden"] = hidden
-                if STATE.get("moe"):
-                    STATE["moe"].eager_agent.hidden = hidden  # type: ignore
+                with hidden_lock:
+                    hidden = STATE["scheduler"].init_hidden(1, STATE.get("device", "cpu"))  # type: ignore
+                    STATE["hidden"] = hidden
+                    if STATE.get("moe"):
+                        STATE["moe"].eager_agent.hidden = hidden  # type: ignore
             except Exception:
                 pass
         return {"status": "reset ok"}
@@ -544,14 +549,20 @@ def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
             detail=f"obs must be exactly obs_dim={CANONICAL_OBS_DIM} (36 bands x 10 features), got {obs.size}",
         )
 
-    # ---- Selection ----------------------------------------------------------
+# ---- Selection ----------------------------------------------------------
     if moe is not None:
         # PT path: SmartScanMoE owns the DRQN recurrent state; capture the
         # pre-step hidden so the aux predictions below describe the exact
         # decision context (single forward, no state double-step).
-        pre_step_hidden = moe.eager_agent.hidden if moe.eager_agent.hidden is not None else STATE.get("hidden")
-        action, hidden, attribution = moe.select_action(obs, STATE.get("hidden"))
-        STATE["hidden"] = hidden
+        # Acquire lock to read hidden state safely
+        with hidden_lock:
+            pre_step_hidden = moe.eager_agent.hidden if moe.eager_agent.hidden is not None else STATE.get("hidden")
+            # Pass the current hidden to select_action
+            hidden_state = STATE.get("hidden")
+        action, hidden, attribution = moe.select_action(obs, hidden_state)
+        # Write back the updated hidden under lock
+        with hidden_lock:
+            STATE["hidden"] = hidden
         prob, pred_time_us = _aux_for_action(moe.eager_agent.drqn, obs, action, pre_step_hidden)
         moe.update(action)
     else:
@@ -769,9 +780,7 @@ def list_emitters() -> list[dict[str, Any]]:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-from fastapi import WebSocket, WebSocketDisconnect
-import asyncio
-import json
+
 
 _ws_clients: list[WebSocket] = []
 

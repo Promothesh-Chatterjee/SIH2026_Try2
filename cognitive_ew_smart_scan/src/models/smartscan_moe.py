@@ -17,7 +17,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from src.contracts import (
+from ..contracts import (
     CANONICAL_N_BANDS,
     CANONICAL_N_MODES,
     DEFAULT_DWELL_MULTIPLIERS,
