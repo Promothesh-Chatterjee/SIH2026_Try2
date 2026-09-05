@@ -73,11 +73,14 @@ class SmartScanMoE(nn.Module):
             except Exception:
                 self.hidden = None
 
-        def get_q(self, obs: torch.Tensor) -> tuple[np.ndarray, tuple[torch.Tensor, torch.Tensor] | None]:
+        def get_q(
+            self, obs: torch.Tensor, hidden: tuple[torch.Tensor, torch.Tensor] | None = None
+        ) -> tuple[np.ndarray, tuple[torch.Tensor, torch.Tensor] | None]:
             """Run DRQN forward, return Q-values and next hidden.
 
             Args:
                 obs: (B,T,obs_dim) or (obs_dim,) tensor.
+                hidden: Optional (h, c) LSTM hidden tuple override.
 
             Returns:
                 Tuple (q_values_np (n_actions,), hidden).
@@ -94,8 +97,9 @@ class SmartScanMoE(nn.Module):
                 self.drqn.to(self.device)
             except Exception:
                 pass
+            hx = hidden if hidden is not None else self.hidden
             with torch.inference_mode():
-                q, _aux, h = self.drqn(obs_b, self.hidden)
+                q, _aux, h = self.drqn(obs_b, hx)
                 self.hidden = h
                 # Last timestep, first batch
                 q_last = q[0, -1].detach().cpu().numpy()
@@ -155,8 +159,9 @@ class SmartScanMoE(nn.Module):
             # Min-max to [0,1] for fusion
             r_min, r_max = float(np.min(raw)), float(np.max(raw))
             if r_max - r_min < 1e-8:
-                return np.zeros_like(raw, dtype=np.float32)
-            norm = (raw - r_min) / (r_max - r_min + 1e-8)
+                norm = np.zeros_like(raw, dtype=np.float32)
+            else:
+                norm = (raw - r_min) / (r_max - r_min + 1e-8)
             # Enforce max gap: if any band exceeds gap, boost to 1
             overdue = (self.current_t - self.last_visit_time) > self.max_revisit_gap
             norm[overdue] = 1.0
@@ -195,7 +200,7 @@ class SmartScanMoE(nn.Module):
         self.eager_weight: float = float(config.get("eager_weight", 0.6))
         self.revisit_weight: float = float(config.get("revisit_weight", 0.4))
         self.preemptive_weight: float = float(config.get("preemptive_weight", 0.0))
-        self.semantic_weight: float = float(config.get("semantic_weight", 1.0))
+        self.semantic_weight: float = float(config.get("semantic_weight", 0.1))
         self.k_receivers: int = int(config.get("k_receivers", 1))
         self.decay_rate: float = float(config.get("decay_rate", 0.05))
         self.max_revisit_gap: int = int(config.get("max_revisit_gap", 200))
@@ -289,7 +294,7 @@ class SmartScanMoE(nn.Module):
                 obs_t = obs_t.unsqueeze(0).unsqueeze(0)
             elif obs_t.dim() == 2:
                 obs_t = obs_t.unsqueeze(1)
-            q_raw, hidden = self.eager_agent.get_q(obs_t.squeeze(0) if obs_t.shape[0] == 1 else obs_t)
+            q_raw, hidden = self.eager_agent.get_q(obs_t.squeeze(0) if obs_t.shape[0] == 1 else obs_t, hidden=eager_hidden)
             eager_norm = self.eager_agent.normalised_scores(q_raw)
         elif isinstance(obs, torch.Tensor):
             obs_1d = obs[0, -1].detach().cpu().numpy().reshape(-1)
@@ -464,10 +469,20 @@ class SmartScanMoE(nn.Module):
             time_since = obs[:, :, :n]
         urgency = 1.0 - torch.exp(-self.decay_rate * time_since * 100.0)
         # Broadcast revisit urgency across modes: (B,T,n) -> (B,T,n*m).
-        urgency_action = urgency.repeat(1, 1, self.n_modes)
+        urgency_action = urgency.repeat_interleave(self.n_modes, dim=-1)
         eager_contrib = self.eager_weight * q_norm
         revisit_contrib = self.revisit_weight * urgency_action
         fused = eager_contrib + revisit_contrib
+
+        # Periodic preemptive pressure broadcast across modes
+        preempt_per_band = (
+            torch.from_numpy(np.asarray(self._preemptive_urgency, dtype=np.float32))
+            .to(obs.device)
+            .view(1, 1, n)
+            .expand(obs.shape[0], obs.shape[1], n)
+        )
+        preempt_action = preempt_per_band.repeat_interleave(self.n_modes, dim=-1)
+        fused = fused + self.preemptive_weight * preempt_action
 
         # Mode-semantic intent (Phase 5): per-(band, mode) reason scores so each
         # dwell mode is linked to its observable driver (revisit age, uncertainty,
