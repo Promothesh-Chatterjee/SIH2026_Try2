@@ -10,6 +10,12 @@ requested ``{mode}/{split}`` subsets are downloaded (never a whole-repo
 
     <output-dir>/<mode>/<split>/*.h5
 
+Both the conventional split directory names (``scan/train``,
+``scan/validation`` …) and the official Kaggle names (``train_scan``,
+``val_scan``, ``test_scan``, ``train_stare`` …) are recognised when matching
+repo files, so a Kaggle-layout repo is downloaded into the canonical
+``<mode>/<split>/`` tree.
+
 Every downloaded file is then verified and fingerprinted (never fabricated):
 
     1.  H5 readability
@@ -17,14 +23,17 @@ Every downloaded file is then verified and fingerprinted (never fabricated):
     3.  ``labels`` dataset exists
     4.  ``data`` shape is N x 5
     5.  ``labels`` length equals N
-    6.  pulse count (N)
-    7.  emitter count (unique non-noise labels)
-    8.  duration (ToA max - ToA min, microseconds)
-    9.  SHA-256
-    10. manifest.json written (per-subset + aggregate)
+    6.  all values finite
+    7.  ToA non-decreasing (per-file ordering)
+    8.  pulse count (N)
+    9.  emitter count (unique non-noise labels)
+    10. duration (ToA max - ToA min, microseconds)
+    11. SHA-256
+    12. manifest.json written (per-subset + aggregate)
 
 Downloading ANYTHING requires ``--allow-download`` — without it the script
-returns ``{"status": "skipped"}``. If a requested subset has no matching repo
+returns ``{"status": "skipped"}``. ``--dry-run`` lists and plans the exact file
+set without writing a single byte. If a requested subset has no matching repo
 files, it is recorded as ``missing`` in the manifest; no synthetic data is ever
 created.
 """
@@ -36,7 +45,10 @@ import hashlib
 import json
 import logging
 import os
+import re
+import shutil
 import sys
+import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -55,6 +67,14 @@ VALID_MODES = ("stare", "scan")
 # Canonical split names; `val` is accepted and normalised to `validation`.
 VALID_SPLITS = ("train", "validation", "test")
 SPLIT_ALIASES = {"val": "validation", "valid": "validation"}
+# Official Kaggle dir tokens per canonical split (e.g. `train_scan`, `val_scan`).
+# A split matches both its canonical token and any alias token, prefixed to the
+# mode (`<token>_<mode>`) or postfixed (`<mode>_<token>`).
+_SPLIT_TOKENS: dict[str, tuple[str, ...]] = {
+    "train": ("train",),
+    "validation": ("validation", "val", "valid"),
+    "test": ("test",),
+}
 
 EXPECTED_COLS = 5  # [ToA, CF, PW, AoA, Amp] per pulse
 NOISE_LABEL = -1
@@ -115,7 +135,7 @@ def _sha256(path: Path) -> str:
 
 
 def _verify_h5(path: Path) -> FileRecord:
-    """Run verification steps 1–9 on one H5 file.
+    """Run verification steps 1–11 on one H5 file.
 
     Steps:
         1  openability,
@@ -123,15 +143,20 @@ def _verify_h5(path: Path) -> FileRecord:
         3  ``labels`` dataset,
         4  shape N x 5,
         5  label length == N,
-        6  pulse count,
-        7  emitter count,
-        8  duration (ToA range, microseconds),
-        9  SHA-256 (computed here via ``_sha256``).
+        6  all values finite,
+        7  ToA non-decreasing,
+        8  pulse count,
+        9  emitter count,
+        10 duration (ToA range, microseconds),
+        11 SHA-256 (computed here via ``_sha256``).
+
+    Zero-pulse trains (``data (0,5)`` ``labels (0,1)``) are structurally VALID
+    official TSRD scenes — they are recorded, not rejected.
 
     Raises:
         ValueError: On any verification failure (readability, missing/wrong
-            datasets, shape/length mismatch). The failure is surfaced — never
-            silently papered over.
+            datasets, shape/length mismatch, non-finite values, unordered ToA).
+            The failure is surfaced — never silently papered over.
     """
     path = Path(path)
     if not path.is_file():
@@ -159,23 +184,33 @@ def _verify_h5(path: Path) -> FileRecord:
         raise ValueError(
             f"{path.name}: labels shape {labels.shape} does not match pulse count {data.shape[0]}"
         )
+    if not np.all(np.isfinite(data)):  # step 6
+        raise ValueError(f"{path.name}: data contains non-finite (NaN/Inf) values")
 
-    pulse_count = int(data.shape[0])  # step 6
+    pulse_count = int(data.shape[0])  # step 8
+    if pulse_count > 0:
+        toa_col = np.asarray(data[:, 0], dtype=np.float64)
+        if np.any(np.diff(toa_col) < 0):  # step 7: ToA non-decreasing
+            raise ValueError(f"{path.name}: ToA column is not non-decreasing")
+        toa_min = float(toa_col.min())  # step 10 (ToA in microseconds)
+        toa_max = float(toa_col.max())
+        duration_us = toa_max - toa_min
+    else:  # zero-pulse official scene: durations default to 0.0
+        toa_min = toa_max = 0.0
+        duration_us = 0.0
+
     label_vals = [int(x) for x in labels.reshape(-1).tolist()]
     distinct = set(label_vals)
     emitter_count_incl_noise = len(distinct)
-    emitter_count = len({v for v in distinct if v != NOISE_LABEL})  # step 7 (non-noise)
-    toa_col = np.asarray(data[:, 0], dtype=np.float64)
-    toa_min = float(toa_col.min())  # step 8 (ToA in microseconds)
-    toa_max = float(toa_col.max())
+    emitter_count = len({v for v in distinct if v != NOISE_LABEL})  # step 9 (non-noise)
     return FileRecord(
         name=path.name,
-        sha256=_sha256(path),  # step 9
+        sha256=_sha256(path),  # step 11
         size_bytes=path.stat().st_size,
         pulse_count=pulse_count,
         emitter_count=emitter_count,
         emitter_count_incl_noise=emitter_count_incl_noise,
-        duration_us=toa_max - toa_min,
+        duration_us=duration_us,
         toa_min_us=toa_min,
         toa_max_us=toa_max,
         shape=[int(data.shape[0]), int(data.shape[1])],
@@ -187,14 +222,45 @@ def _belongs_to(file_rel: str, mode: str, split: str) -> bool:
     """Does this repo file belong to the ``mode/split`` subset?
 
     Authoritative rule — a file belongs if its repo-relative path contains the
-    exact ``mode/split`` directory, with a filename fallback for flat repos
-    whose names encode ``<mode>_<split>``.
+    exact ``mode/<split>`` directory, OR any official/alias form of it, and a
+    filename fallback for flat repos whose names encode ``<mode>_<split>``.
+
+    Directory forms accepted for a split (tokens prefixed to the mode, matching
+    the official Kaggle layout):
+
+      train        -> ``train``, ``train_scan``, ``scan_train``
+      validation   -> ``validation``, ``val``, ``valid``,
+                      ``validation_scan``, ``val_scan``, ``valid_scan`` … (and
+                      ``scan_valid*`` postfixed variants)
+      test         -> ``test``, ``test_scan``, ``scan_test``
+
+    Examples: ``stare/train/a.h5``, ``scan/val_scan/b.h5``,
+    ``stare/train_stare/c.h5`` and ``data_stare_train_001.h5`` all belong to
+    their respective ``mode/split`` subsets.
     """
     rel = file_rel.replace("\\", "/")
-    if f"/{mode}/{split}/" in f"/{rel}" or rel.startswith(f"{mode}/{split}/"):
-        return True
-    name = rel.rsplit("/", 1)[-1].lower()
-    return mode in name and split in name
+    tokens = _SPLIT_TOKENS[split]
+    # Canonical + alias directory names, in both `<token>_<mode>` (Kaggle:
+    # `train_scan`) and `<mode>_<token>` orders, plus the bare token.
+    dir_names = {token for token in tokens}
+    for token in tokens:
+        dir_names.add(f"{token}_{mode}")
+        dir_names.add(f"{mode}_{token}")
+
+    parts = rel.split("/")
+    for i, part in enumerate(parts[:-1]):
+        if part == mode and parts[i + 1] in dir_names:
+            return True
+    # Flat-repo fallback: filename encodes `<mode>_<split>` / `<mode>_<alias>`.
+    name = parts[-1].lower()
+    _token = (
+        r"(?:^|[^a-z0-9])"
+        r"{token}"
+        r"(?:$|[^a-z0-9])"
+    )
+    has_mode = re.search(_token.format(token=re.escape(mode)), name)
+    has_split = any(re.search(_token.format(token=re.escape(t)), name) for t in tokens)
+    return bool(has_mode and has_split)
 
 
 def _write_manifest(path: Path, payload: dict[str, Any]) -> None:
@@ -225,21 +291,26 @@ def download_tsr_dataset(
     modes: list[str] | None = None,
     splits: list[str] | None = None,
     allow_download: bool = False,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Download the requested TSRD subsets (one authoritative path).
 
     Args:
         output_dir: Root output directory; files land at
-            ``<output_dir>/<mode>/<split>/*.h5``.
+            ``<output_dir>/<mode>/<split>/*.h5`` (canonical tree, even when the
+            upstream repo uses official Kaggle names such as ``val_scan``).
         token: HF token (defaults to ``HF_TOKEN`` env).
         modes: Subset of ``("stare", "scan")``.
         splits: Subset of ``("train", "validation", "test")``.
         allow_download: Explicit confirmation to actually download.
+        dry_run: List and plan the exact file set, download nothing, write no
+            manifests and create no directories.
 
     Returns:
         Summary dict. Without ``allow_download`` it is ``status=skipped``.
-        Missing subsets are recorded (never fabricated): ``status=missing``
-        entries in the manifest and ``missing`` in the summary.
+        With ``dry_run`` it is ``status=dry_run``. Missing subsets are recorded
+        (never fabricated): ``status=missing`` entries in the manifest and
+        ``missing`` in the summary.
 
     Raises:
         RuntimeError: If ``huggingface_hub`` is unavailable or the repo cannot
@@ -248,11 +319,11 @@ def download_tsr_dataset(
     modes = _normalise_modes(modes)
     splits = _normalise_splits(splits)
 
-    if not allow_download:
+    if not allow_download and not dry_run:
         logger.warning(
             "TSRD download is disabled by default so the entire dataset is never "
             "pulled accidentally. Re-run with --allow-download to explicitly "
-            "confirm the acquisition."
+            "confirm the acquisition (or --dry-run to plan it)."
         )
         return {
             "status": "skipped",
@@ -292,6 +363,20 @@ def download_tsr_dataset(
     if total_planned == 0:
         logger.warning("No matching .h5 files in the repo for the requested subsets.")
 
+    if dry_run:
+        return {
+            "status": "dry_run",
+            "repo": TSRD_REPO,
+            "downloaded_files": 0,
+            "verified_files": 0,
+            "would_download_files": total_planned,
+            "output_dir": str(output_dir),
+            "modes": modes,
+            "splits": splits,
+            "subsets": {f"{mode}/{split}": {"planned_files": len(m)} for mode, split, m in plan},
+            "warning": "dry-run: only files matching the requested bounded subsets are matched; nothing was fetched.",
+        }
+
     # ---- Download (scoped, per-file; never snapshot_download) ----------------
     summary: dict[str, Any] = {
         "status": "ok",
@@ -324,15 +409,22 @@ def download_tsr_dataset(
             logger.warning("No repo files for %s — subset marked missing (not fabricated).", subset_key)
         for repo_file in matched:
             try:
+                # Stage into a scratch cache so the canonical tree never receives
+                # stray intermediate paths, then move the EXACT downloaded bytes
+                # into <output>/<mode>/<split>/ (no re-encode, no rewrite).
+                cache = Path(tempfile.mkdtemp(prefix="tsrd_acquire_"))
                 local = hf_hub_download(
                     repo_id=TSRD_REPO,
                     filename=repo_file,
-                    local_dir=str(output_dir),
+                    local_dir=str(cache),
                     token=token if token and token != "your_huggingface_token_here" else None,
                 )
                 local_path = Path(local)
+                canonical = target / local_path.name
+                shutil.move(str(local_path), str(canonical))
+                shutil.rmtree(cache, ignore_errors=True)
                 summary["downloaded_files"] += 1
-                record = _verify_h5(local_path)  # steps 1-9
+                record = _verify_h5(canonical)  # steps 1-11
                 subset["files"].append(asdict(record))
                 summary["verified_files"] += 1
                 verified_total_pulses += record.pulse_count
@@ -343,8 +435,8 @@ def download_tsr_dataset(
                 subset["totals"]["emitters"] += record.emitter_count
                 subset["totals"]["duration_us"] += record.duration_us
                 logger.info(
-                    "OK %s: %s pulses, %d emitters, %.3f s duration",
-                    repo_file, record.pulse_count, record.emitter_count, record.duration_us / 1e6,
+                    "OK %s -> %s: %s pulses, %d emitters, %.3f s duration",
+                    repo_file, canonical.name, record.pulse_count, record.emitter_count, record.duration_us / 1e6,
                 )
             except Exception as exc:
                 subset["failed_files"].append({"name": repo_file, "reason": str(exc)})
@@ -357,8 +449,10 @@ def download_tsr_dataset(
         summary["subsets"][subset_key] = subset_summary
 
     # ---- Step 10: aggregate manifest -----------------------------------------
+    # file count is the actual verified-file counter — never derived from the
+    # (possibly zero) pulse total.
     summary["totals"] = {
-        "files": verified_total_pulses and summary["verified_files"] or 0,
+        "files": summary["verified_files"],
         "pulses": verified_total_pulses,
         "emitters": verified_total_emitters,  # sum of per-file non-noise uniques
         "duration_us": verified_total_duration_us,
@@ -395,6 +489,11 @@ def main() -> None:
         action="store_true",
         help="EXPLICIT confirmation to download. Without it nothing is downloaded.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="List and plan the exact file set, download nothing and write no manifests.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -405,6 +504,7 @@ def main() -> None:
             modes=args.modes,
             splits=args.splits,
             allow_download=args.allow_download,
+            dry_run=args.dry_run,
         )
         print(f"\nDone. Summary: {json.dumps(summary, indent=2)}")
     except (ValueError, RuntimeError) as exc:

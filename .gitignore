@@ -21,8 +21,8 @@ runs/
 **/runs/
 results/
 
-# Dataset / large archives
-data/
+# Dataset / large archives (anchored to repo root so src/data/ is never ignored)
+/data/
 *.h5
 *.hdf5
 

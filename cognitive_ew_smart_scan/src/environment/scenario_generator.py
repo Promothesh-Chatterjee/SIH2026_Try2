@@ -88,12 +88,15 @@ def load_h5_records(
 
     Args:
         path: Path to .h5 file containing "data" (n,5) and "labels" (n,).
-        freq_min_mhz / freq_max_mhz: Spectral clipping range.
-        time_horizon_us: Optional toa upper bound.
+        freq_min_mhz / freq_max_mhz: Spectral clipping range (forwarded to
+            :func:`records_from_array` so out-of-band pulses are actually dropped).
+        time_horizon_us: Optional toa upper bound (also forwarded).
         max_pulses: Cap on pulses loaded (keeps episodes bounded).
 
     Returns:
-        List of PulseRecord.
+        List of PulseRecord. ToA is normalised so the earliest surviving pulse
+        sits at t=0 — normalisation happens per single file, never across files.
+        Zero-pulse trains return an empty list.
     """
     import h5py
 
@@ -101,7 +104,14 @@ def load_h5_records(
     with h5py.File(str(path), "r") as handle:
         data = handle["data"][:max_pulses]
         labels = handle["labels"][:max_pulses] if "labels" in handle else None
-    records = records_from_array(data, labels, source_id=f"tsrd:{path.stem}")
+    records = records_from_array(
+        data,
+        labels,
+        source_id=f"tsrd:{path.stem}",
+        freq_min_mhz=freq_min_mhz,
+        freq_max_mhz=freq_max_mhz,
+        time_horizon_us=time_horizon_us,
+    )
     if not records:
         return records
     # Normalise ToA so the scenario starts at t=0. TSRD ToA are absolute relative
@@ -277,6 +287,25 @@ def build_scenario(
                 "Scenario[tsrd]: skipping %d empty scenario(s) and %d unreadable file(s) in %s/%s",
                 len(empty), len(unreadable), mode, subset,
             )
+        if not eligible:
+            # Files exist but NONE are usable: fail loudly in real-TSRD mode,
+            # and never silently telescope to an empty episode.
+            if not allow_synthetic_fallback:
+                raise FileNotFoundError(
+                    f"Directory {data_root}/{mode}/{subset} contains {len(files)} .h5 "
+                    f"file(s) but none are eligible for episodes "
+                    f"({len(empty)} empty, {len(unreadable)} unreadable) and "
+                    f"allow_synthetic_fallback=False"
+                )
+            records = synthetic_records(
+                freq_min_mhz=freq_min_mhz, freq_max_mhz=freq_max_mhz, seed=seed
+            )
+            logger.warning(
+                "Scenario[synthetic]: no eligible %s/%s .h5 files (%d empty, %d "
+                "unreadable); using synthetic per allow_synthetic_fallback",
+                mode, subset, len(empty), len(unreadable),
+            )
+            return records, "synthetic", []
         records: list[PulseRecord] = []
         for f in eligible:
             try:
@@ -476,10 +505,12 @@ class ScenarioSource:
     def sample(self) -> list[PulseRecord]:
         """Return records for one episode (a single random ELIGIBLE file, or synthetic).
 
-        Empty (zero-pulse) scenarios are never returned — they are skipped.
-        If an eligible file loads to zero records after clipping filters, we
-        retry with other eligible files; exhausting all retries raises rather
-        than silently producing an empty episode.
+        One call == one episode == exactly ONE eligible .h5 pulse train (never a
+        concatenation of several files). Empty (zero-pulse) scenarios are never
+        returned — they are skipped. If an eligible file is corrupt or loads to
+        zero records after clipping filters, it is reported and skipped and we
+        retry other eligible files; exhausting all retries raises rather than
+        silently producing an empty episode.
         """
         if not self.eligible_files:
             if not self.allow_synthetic_fallback:
@@ -494,20 +525,32 @@ class ScenarioSource:
                 freq_max_mhz=self.freq_max_mhz,
                 seed=int(self._rng.integers(0, 2**31)),
             )
-        candidates = self.eligible_files
-        for _ in range(min(5, max(1, len(candidates)))):
+        candidates = list(self.eligible_files)
+        attempts = min(10, max(1, len(candidates)))
+        for _ in range(attempts):
             fpath = Path(self._rng.choice(candidates))
-            records = load_h5_records(
-                fpath,
-                freq_min_mhz=self.freq_min_mhz,
-                freq_max_mhz=self.freq_max_mhz,
-                time_horizon_us=self.time_horizon_us,
-                max_pulses=self.max_pulses,
-            )
+            try:
+                records = load_h5_records(
+                    fpath,
+                    freq_min_mhz=self.freq_min_mhz,
+                    freq_max_mhz=self.freq_max_mhz,
+                    time_horizon_us=self.time_horizon_us,
+                    max_pulses=self.max_pulses,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "ScenarioSource: corrupt/unreadable eligible file %s (%s) — "
+                    "reported and skipped for this episode",
+                    fpath, exc,
+                )
+                continue
             if records:
                 return records
-            logger.warning("ScenarioSource: file %s yielded 0 records after filters — retrying", fpath)
+            logger.warning(
+                "ScenarioSource: file %s yielded 0 records after filters — retrying",
+                fpath,
+            )
         raise RuntimeError(
-            "All sampled TSRD files yielded empty episodes after filtering; "
-            "refusing to fabricate an episode."
+            "All sampled TSRD files yielded empty episodes (unusable or corrupt "
+            "after filtering); refusing to fabricate an episode."
         )

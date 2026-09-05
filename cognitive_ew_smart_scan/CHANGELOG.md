@@ -6,6 +6,71 @@ suite command is `python -m pytest tests/` from `cognitive_ew_smart_scan/`.
 
 ## [Unreleased]
 
+### Fixed — Canonical per-episode TSRD scenario generation (Phase 3, 2026-09-05)
+
+`src/environment/scenario_generator.py` now guarantees one RL episode == exactly
+one eligible `.h5` pulse train, with honour filter forwards and fail-loudly
+semantics:
+
+- **FIXED (critical): `load_h5_records()` now forwards `freq_min_mhz`,
+  `freq_max_mhz` and `time_horizon_us` to `records_from_array()`.** Previously
+  the filtering args (e.g. those passed by `evaluate_full.py`) were silently
+  dropped, so out-of-band / beyond-horizon pulses were never actually clipped
+  when loading from a file. Now the spectral clipping + horizon filter really
+  apply on the file-loading path.
+- **ToA normalisation stays per-file**: `load_h5_records()` normalises after
+  loading a *single* file (min ToA → 0, relative spacing preserved), never after
+  concatenation — so per-file time offsets cannot be smeared across episodes.
+- **`ScenarioSource.sample()` is the canonical scheduler-training data source**
+  (already wired into `train_scheduler.py` via `records_provider`) and returns
+  records from *one* randomly chosen eligible file per call — never a
+  concatenation of several files (prevents cross-file emitter-label collisions).
+- **Corrupt eligible files are reported and skipped**: `sample()` wraps each
+  load; a corrupt read is logged, skipped, and the draw is retried with other
+  eligible files. If *all* draws fail, it raises `RuntimeError` rather than
+  fabricating or silently returning an empty episode.
+- **`build_scenario()` fails loudly when `.h5` files exist but none are
+  eligible** (all empty/unreadable) unless synthetic fallback is explicitly
+  enabled — mirroring `ScenarioSource`'s no-silent-fallback contract.
+
+Coverage: `tests/test_scenario_generator.py` 6 → 17 (one file → one episode,
+file-local emitter labels never rebased, empty-file skipping, filter
+pass-through via `load_h5_records`, per-file ToA normalisation, corrupt-file
+skip/retry, all-corrupt raise, and `build_scenario` fail-loud vs explicit
+synthetic). Full suite: 409 passed.
+
+### Fixed — One authoritative TSRD acquisition path (Phase 2, 2026-09-05)
+
+`scripts/download_data.py` is the single acquisition implementation;
+`scripts/download_tsrd.py` is a thin deprecation shim forwarding to it (no
+duplicated download logic). The downloader now:
+
+- **Recognises the official Kaggle split directory names** (`train_scan`,
+  `val_scan`, `test_scan`, `train_stare`, …) AND the conventional
+  `<mode>/{train,validation,test}` names when matching repo files, and lands
+  everything in the canonical `<output>/<mode>/<split>/` tree (supporting
+  exactly the six subsets `scan|stare × train|validation|test`).
+- **Never pulls the whole repo**: only the exact `.h5` files matched to the
+  requested subsets are fetched (per-file `hf_hub_download`, never
+  `snapshot_download`), staged in a scratch cache, and moved byte-for-byte
+  (no re-encode/rewrite) into place.
+- **Verifies every file**: H5 readability, `data`+`labels` presence, `N×5`
+  shape, label/pulse alignment, finite values, non-decreasing ToA, pulse
+  count, emitter count, duration, and SHA-256. Zero-pulse official empty
+  scenes are structurally valid and recorded, not rejected.
+- **Writes per-subset and aggregate manifests**; missing subsets are recorded
+  as `missing` — never fabricated.
+- **`--dry-run`** lists and plans the exact file set, downloading nothing and
+  writing nothing.
+- **Fix**: aggregate manifest file count now reflects the true verified-file
+  count (previously it was `pulses and files or 0`, returning 0 when the pulse
+  total was 0).
+
+Coverage: `tests/test_download_data.py` grew 21 → 31 (Kaggle name matching,
+non-finite/ToA-ordering rejection, zero-pulse validity, dry-run, canonical
+landing, aggregate file-count, shim `--dry-run` passthrough). Full suite:
+398 passed.
+
 ### Fixed — Preflight gate covers all 23 readiness checks (Phase 20, 2026-09-05)
 
 `scripts/preflight_tsrd.py` now returns `READY` or `NOT READY` against a
@@ -38,9 +103,47 @@ suite command is `python -m pytest tests/` from `cognitive_ew_smart_scan/`.
   baseline contract (`test_baseline_suite.py` + `test_evaluate_baseline.py`).
   `--skip-behavioral-tests` escapes the pytest gates.
 
+### Added — Canonical TSRD root + split-layout contract (Phase 1, 2026-09-05)
+
+`src/data/tsrd_root.py` is the single source of truth for dataset location and
+layout:
+
+- **Root precedence**: CLI override > env `TSRD_DATA_ROOT` > training YAML
+  `data_dir` > safe relative default `data`. Paths normalized via
+  `pathlib.Path`; no hard-coded developer path remains in the resolver.
+- **Alias-aware split layout**: `resolve_split_dirs` (in `tsrd_manifest.py`)
+  now delegates to `split_candidate_dirs` / `resolve_split_dir`. Candidate
+  order is byte-identical to the legacy list (OK for the `mode=None` quirk),
+  covering Kaggle aliases (`train_scan`/`val_scan`/`test_scan`), conventional
+  (`train`/`val`/`validation`/`test`), archive, flat and nested-root layouts.
+- **Tests** (`tests/test_tsrd_root.py`, 22): resolver precedence, pathlib
+  normalization, per-layout alias resolution for `scan`/`stare`, `mode=None`
+  quirk, invalid-split guard, and the real-TSRD no-synthetic-substitution
+  guard (fallback only when explicitly allowed, never silent).
+
+### Fixed — Phase 0 audit blockers (2026-09-05)
+
+- Machine-specific `sys.path.insert` removed from `quick_scheduler_smoke.py`
+  and `test_env_validation.py` (now repo-relative via `__file__`).
+- Stale `D:\TSRD_data` references updated to the canonical `D:\TSRD` in
+  `Memory.md` and `CHANGELOG.md`.
+- Root-level `output_dir: checkpoints` removed from
+  `configs/training_config_smoke.yaml` (legacy of Phase 17 canonical
+  artifact restructure).
+- **Remaining Phase 0 blocker**: `rf_scan_env.py` builds `Path(data_dir)/mode/subset`
+  directly, bypassing alias resolution (legacy env, only used by unit tests).
+
+### Fixed — Downloader reconciliation (Phase B, 2026-09-05)
+
+`scripts/download_tsrd.py` reduced from a whole-repo `snapshot_download`
+(with no per-file verification, no manifests, no download gate) to a
+deprecation shim that forwards to the one authoritative path
+`scripts/download_data.py`, now requiring `--allow-download`. Two shim
+guard tests added (`tests/test_download_data.py`, now 21).
+
 Verified: current tree → `NOT READY` with exactly ONE blocker — the recorded
 deinterleaver dataset fingerprint (`27e…`) cannot be reproduced from any
-current stare/scan split combination on `D:\TSRD_data` (disk truth for scan
+current stare/scan split combination on `D:\TSRD` (disk truth for scan
 train+val = `27b…`, rebuilt full-scan manifest = `b0…`), while the
 normalization fingerprint still matches. This is genuine provenance drift
 from a prior data state → retrain (or refresh provenance) required; the gate
@@ -111,7 +214,7 @@ now reported instead of one lump "valid" flag:
   `partial` in the summary); a failed download lands in `failed_files` with the
   reason — there is no silent fallback, no synthetic row counts.
 - **Real-TSRD schema alignment**: verified against the full dataset already on
-  `D:\TSRD_data` (official Kaggle layout `stare/` + `scan/` with `train_*` /
+  `D:\TSRD` (official Kaggle layout `stare/` + `scan/` with `train_*` /
   `val_*` / `test_*`): real `labels` are `(N, 1)` → accepted via flatten (same
   as `TSRDValidator`); `metadata.attrs["collection_time_s"]` is recorded; the
   `label length == N` check now accepts both `(N,)` and `(N, 1)`;
@@ -119,7 +222,7 @@ now reported instead of one lump "valid" flag:
   (e.g. `stare/train_stare/config_0.h5`: 2,071,247 pulses, 71 emitters, 30 s
   collection; `scan/val_scan/config_0.h5`: 79,340 pulses, 15 emitters).
   The downloader acquires fresh subsets into the canonical
-  `<output-dir>/<mode>/<split>` layout; the resident `D:\TSRD_data` copy is
+  `<output-dir>/<mode>/<split>` layout; the resident `D:\TSRD` copy is
   consumed via `src/data/tsrd_manifest.py::resolve_split_dirs`.
 - **Tests** (`tests/test_download_data.py`, 19): mode/split normalisation and
   aliases, subset membership, per-file SHA-256, `_verify_h5` happy path plus the
