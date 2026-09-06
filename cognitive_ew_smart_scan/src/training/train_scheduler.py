@@ -178,6 +178,9 @@ def train_scheduler(
     train_cfg_path: str,
     data_dir_override: str | None = None,
     output_dir_override: str | None = None,
+    reset_semantic_memory: bool = False,
+    staged_gates: list[int] | None = None,
+    stop_at_step: int | None = None,
 ) -> None:
     """Full DRQN training with Thompson warmup, BPTT, target network, and MoE eval.
 
@@ -187,6 +190,9 @@ def train_scheduler(
         data_dir_override: CLI override for dataset root (CLI > YAML > default).
         output_dir_override: CLI override for checkpoint output dir
             (CLI > YAML > default).
+        reset_semantic_memory: If True, resets SQLite database before training.
+        staged_gates: Step numbers at which to execute quantitative gate evaluation.
+        stop_at_step: Step number at which to cleanly stop training.
     """
     with open(model_cfg_path) as f:
         full_cfg = yaml.safe_load(f)
@@ -207,6 +213,15 @@ def train_scheduler(
     reward_cfg = full_cfg.get("reward", {})
     env_cfg = train_cfg.get("environment", {})
     sched_cfg = train_cfg.get("scheduler", {})
+
+    if reset_semantic_memory:
+        db_path = Path("data/semantic_memory.db")
+        if db_path.exists():
+            try:
+                db_path.unlink()
+                logger.info("Reset semantic memory database at %s", db_path)
+            except Exception as exc:
+                logger.warning("Failed to unlink semantic memory database: %s", exc)
 
     n_bands = int(drqn_cfg.get("n_bands", 36))
     n_modes = int(drqn_cfg.get("n_modes", env_cfg.get("n_modes", 5)))
@@ -403,6 +418,7 @@ def train_scheduler(
             "device": str(device),
             "dataset_root": str(data_dir),
             "dataset_fingerprint": data_fingerprint,
+            "semantic_memory_reset": reset_semantic_memory,
             "telemetry_schema_version": TELEMETRY_SCHEMA_VERSION,
         },
     )
@@ -427,6 +443,20 @@ def train_scheduler(
         json.dumps(coerce(val_set.manifest()), indent=2), encoding="utf-8"
     )
     logger.info("Run %s at %s", run.run_id, run.dir)
+
+    from .staged_gate_evaluator import StagedGateEvaluator
+
+    gate_evaluator = StagedGateEvaluator(
+        output_dir=output_dir,
+        gates=staged_gates,
+        val_files=val_set.files_used,
+        env_config=env_config,
+        model_config=full_cfg,
+        train_config=train_cfg,
+        seed=seed,
+        device=device,
+        semantic_memory_reset=reset_semantic_memory,
+    )
 
     global_step = 0
     episode = 0
@@ -475,16 +505,18 @@ def train_scheduler(
                     moe.set_periodic_urgency_vector(np.asarray(env.belief.periodic_urgency, dtype=np.float32))
                 except Exception:
                     pass
+            eps = eps_end + (eps_start - eps_end) * float(np.exp(-global_step / eps_decay))
             if global_step < ts_warmup:
                 use_ts = True
                 action = ts_sampler.select_action()
                 moe_attr = None
+                act_source = "thompson"
             else:
-                eps = eps_end + (eps_start - eps_end) * float(np.exp(-global_step / eps_decay))
                 use_ts = False
                 if random.random() < eps:
                     action = int(env.action_space.sample())
                     moe_attr = None
+                    act_source = "random"
                 else:
                     online_drqn.eval()
                     with torch.inference_mode():
@@ -492,6 +524,7 @@ def train_scheduler(
                         action, hidden_out, moe_attr = moe.select_action(obs_np, hidden)
                         hidden = hidden_out if hidden_out is not None else hidden
                     online_drqn.train()
+                    act_source = "greedy"
 
             # ---- Step env ----
             mode_ctx = {
@@ -532,7 +565,7 @@ def train_scheduler(
             global_step += 1
 
             # ---- Learning update ----
-            if not use_ts and global_step % update_freq == 0 and buffer.can_sample(batch_size):
+            if global_step % update_freq == 0 and buffer.can_sample(batch_size):
                 try:
                     batch = buffer.sample(batch_size)
                     upd_stats: dict = {}
@@ -551,6 +584,17 @@ def train_scheduler(
                         ep_learn["max_target_q"] = max(ep_learn["max_target_q"], float(upd_stats["max_target_q"]))
                         ep_learn["target_online_gap"] += float(upd_stats["target_online_gap"])
                         ep_learn["gradient_norm"] += float(upd_stats["gradient_norm"])
+                        gate_evaluator.record_step_diagnostics(
+                            td_loss=float(upd_stats["td_loss"]),
+                            q_mean=float(upd_stats["mean_q"]),
+                            q_std=float(upd_stats["q_std"]),
+                            q_min=float(upd_stats["min_q"]),
+                            q_max=float(upd_stats["max_q"]),
+                            grad_norm=float(upd_stats["gradient_norm"]),
+                            action_source=act_source,
+                            obs_finite=bool(np.all(np.isfinite(next_obs))),
+                            reward_finite=bool(np.isfinite(reward)),
+                        )
                     if use_wandb and global_step % 100 == 0:
                         try:
                             import wandb
@@ -570,6 +614,20 @@ def train_scheduler(
             # ---- Target update ----
             if global_step % target_update_freq == 0:
                 target_drqn.load_state_dict(online_drqn.state_dict())
+
+            # ---- Staged Promotion Gate Evaluation ----
+            gate_evaluator.check_and_run(
+                global_step=global_step,
+                episode=episode,
+                online_drqn=online_drqn,
+                optimizer=optimizer,
+                buffer=buffer,
+                eps=eps,
+                moe=moe,
+            )
+
+            if stop_at_step is not None and global_step >= stop_at_step:
+                break
 
         episode += 1
         fom = env.get_fom()
@@ -862,6 +920,10 @@ def train_scheduler(
             save_state(online_drqn, output_dir / "best.pt", meta)
             logger.info("  New best reward %.2f — saved best.pt", ep_reward)
 
+        if stop_at_step is not None and global_step >= stop_at_step:
+            logger.info("Reached stop_at_step=%d — concluding training run", stop_at_step)
+            break
+
     final_path = output_dir / "final.pt"
     from ..utils.checkpoint_meta import build_train_metadata, save_state, write_checkpoint_metadata
 
@@ -924,7 +986,19 @@ if __name__ == "__main__":
     parser.add_argument("--data-dir", type=str, default=None, help="Override dataset root (CLI > YAML).")
     parser.add_argument("--output-dir", type=str, default=None, help="Override checkpoint output dir (CLI > YAML).")
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--reset-semantic-memory", action="store_true", help="Reset semantic memory DB before training.")
+    parser.add_argument("--staged-gates", type=str, default="1000,5000,25000,100000,300000,500000", help="Comma-separated step gates.")
+    parser.add_argument("--stop-at-step", type=int, default=None, help="Stop after reaching this step.")
     args = parser.parse_args()
     if args.device:
         os.environ["DEVICE"] = args.device
-    train_scheduler(args.model_config, args.config, data_dir_override=args.data_dir, output_dir_override=args.output_dir)
+    gates_list = [int(g.strip()) for g in args.staged_gates.split(",") if g.strip()]
+    train_scheduler(
+        args.model_config,
+        args.config,
+        data_dir_override=args.data_dir,
+        output_dir_override=args.output_dir,
+        reset_semantic_memory=args.reset_semantic_memory,
+        staged_gates=gates_list,
+        stop_at_step=args.stop_at_step,
+    )
