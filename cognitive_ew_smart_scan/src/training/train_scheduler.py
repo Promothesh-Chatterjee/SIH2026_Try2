@@ -435,6 +435,9 @@ def train_scheduler(
 
     while global_step < total_steps:
         obs, _ = env.reset()
+        obs_arr = np.asarray(obs)
+        assert np.all(np.isfinite(obs_arr)), f"Non-finite obs at ep start: {obs_arr[~np.isfinite(obs_arr)]}"
+        assert np.all(obs_arr >= 0), f"Negative obs at ep start: band indices {np.where(obs_arr < 0)}"
         try:
             hidden = online_drqn.init_hidden(1, device)
         except Exception:
@@ -570,12 +573,13 @@ def train_scheduler(
 
         episode += 1
         fom = env.get_fom()
-        logger.info("Ep %d | step %d/%d | rew %.2f hits %d Pd %.3f Pfa %.3f eps %.3f", episode, global_step, total_steps, ep_reward, ep_hits, fom["Pd"], fom["Pfa"], eps)
+        intercept_rate = ep_hits / max(1, getattr(env, "current_step", ep_steps))
+        logger.info("Ep %d | step %d/%d | rew %.2f hits %d intercept_rate %.3f eps %.3f", episode, global_step, total_steps, ep_reward, ep_hits, intercept_rate, eps)
         if use_wandb:
             try:
                 import wandb
 
-                wandb.log({"episode/reward": ep_reward, "episode/hits": ep_hits, "episode/Pd": fom["Pd"], "episode/Pfa": fom["Pfa"], "episode": episode, "step": global_step})
+                wandb.log({"episode/reward": ep_reward, "episode/hits": ep_hits, "episode/intercept_rate": intercept_rate, "episode": episode, "step": global_step})
             except Exception:
                 pass
 
@@ -617,6 +621,22 @@ def train_scheduler(
         for canon, avg_key in _avg_to_total.items():
             avg_v = fom.get(avg_key)
             reward_components[canon] = (float(avg_v) * ep_steps) if avg_v is not None else None
+
+        reward_breakdown: dict = {}
+        for canon, val in reward_components.items():
+            if val is not None:
+                reward_breakdown[canon] = {
+                    "points": float(round(val, 2)),
+                    "pct": float(round((abs(val) / max(1e-6, abs(ep_reward))) * 100, 2)),
+                }
+        reconstructed_sum = float(sum(v for v in reward_components.values() if v is not None))
+        logger.info(
+            "Ep %d reward breakdown: %s (sum=%.2f, ep_reward=%.2f)",
+            episode,
+            {k: f"{v['points']:+.1f}pts ({v['pct']:.1f}%)" for k, v in reward_breakdown.items() if abs(v['points']) > 0.01},
+            reconstructed_sum,
+            ep_reward,
+        )
 
         # --- RC-2 action / mode / band statistics ---
         n_steps_ep = float(ep_steps) if ep_steps else None
@@ -699,6 +719,10 @@ def train_scheduler(
             band_priorities=band_priorities,
             epsilon=float(eps),
         )
+        record["avg_intercept_rate"] = float(ep_hits / max(1, getattr(env, "current_step", ep_steps)))
+        record["band_selection_entropy"] = float(fom.get("band_selection_coverage", 0.0) or 0.0)
+        record["reward_breakdown"] = reward_breakdown
+        record["reconstructed_reward_sum"] = reconstructed_sum
         telemetry.update(**record)
 
         # Periodic MoE evaluation on fixed val scenarios every 5000 steps

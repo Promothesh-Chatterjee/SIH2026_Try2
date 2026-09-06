@@ -19,7 +19,7 @@ drqn_scheduler:
   lr: 1e-4
   eps_start: 1.0
   eps_end: 0.05
-  eps_decay: 10000
+  eps_decay: 87837
 
 # Canonical time-frequency action encoding.
 # action = band * n_modes + mode_index  (band in [0, n_bands), mode_index in [0, n_modes))
@@ -40,8 +40,8 @@ dwell_modes:
 
 smartscan_moe:
   eager_weight: 0.6
-  revisit_weight: 0.4
-  preemptive_weight: 0.0  # fraction of selections driven by periodic-intercept urgency
+  revisit_weight: 0.3
+  preemptive_weight: 0.1  # fraction of selections driven by periodic-intercept urgency
   semantic_weight: 1.0    # mode semantic intent: REVISIT/REEMPTIVE/LONG linked to their drivers
   k_receivers: 1
   decay_rate: 0.05
@@ -49,11 +49,11 @@ smartscan_moe:
 reward:
   w_hit: 1.0    # per-intercept reward
   w_novel: 2.0  # novel-emitter bonus
-  w_miss: -1.0  # miss penalty (<=0)
+  w_miss: -0.3  # miss penalty (<=0)
   w_timing: 0.001  # per-µs timing penalty on hits
   w_priority: 0.5       # bonus scaled by priority of intercepted emitters
   w_information_gain: 0.2  # belief-entropy/novelty gain bonus
   w_false_alarm: -0.5   # penalty for tuning an empty band
   w_dwell_cost: -0.001  # per-µs cost of occupying the receiver (scan efficiency)
   w_redundant_scan: -0.1  # penalty for re-scanning a just-intercepted band
-  w_delay: 0.0          # penalty for late preemptive intercept of overdue periodic emitters
+  w_delay: -0.5         # penalty for late preemptive intercept of overdue periodic emitters

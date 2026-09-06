@@ -166,8 +166,8 @@ class EnvOpportunityInfoGainTests(unittest.TestCase):
         self.assertEqual(env.fom.fn, 0)
         self.assertEqual(env.fom.tn, 1)
         self.assertEqual(env.fom.pd, 0.0)
-        # No miss penalty from unselected activity.
-        self.assertEqual(env.fom.reward_miss_penalty, 0.0)
+        # Miss penalty fires when scheduler tuned empty band while active bands existed elsewhere.
+        self.assertEqual(env.fom.reward_miss_penalty, env.w_miss)
 
     def test_miss_on_selected_active_band_only(self):
         # Pulse in band 3 below detection threshold: active but undetected -> FN.
@@ -181,7 +181,8 @@ class EnvOpportunityInfoGainTests(unittest.TestCase):
         self.assertEqual(info["spectrum_active_opportunities"], 1)
         self.assertEqual(info["unselected_active_opportunities"], 0)
         self.assertEqual(env.fom.fn, 1)
-        self.assertEqual(env.fom.reward_miss_penalty, -1.0)
+        # Receiver failed to detect on selected band -> not punished as scheduler miss.
+        self.assertEqual(env.fom.reward_miss_penalty, 0.0)
 
     def test_true_information_gain_on_hit(self):
         env = _env_with_pulses([_band_mid_mhz(3)])
