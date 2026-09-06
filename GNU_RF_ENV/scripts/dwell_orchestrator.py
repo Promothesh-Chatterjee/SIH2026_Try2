@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from frequency_context import FrequencyContext
 from iq_bridge import IQReceiverBridge
+from per_tune_generator import EmitterConfig
 
 try:
     # Resolve the master repository receiver via a checkout-relative path.
@@ -45,7 +46,7 @@ try:
 except ImportError:
     from SieveReceiver import SieveReceiver  # type: ignore[no-redef]
 
-__all__ = ["DwellConfig", "DwellResult", "DwellOrchestrator"]
+__all__ = ["DwellConfig", "DwellResult", "DwellOrchestrator", "EmitterConfig"]
 
 
 # ---------------------------------------------------------------------------
@@ -216,4 +217,103 @@ class DwellOrchestrator:
             pdws=list(pdws_for_dwell),
             pulses=accepted_pulses,
             detections=detections,
+        )
+
+    # ----------------------------------------------------------------
+    # Generated dwell (Phase 3P)
+    # ----------------------------------------------------------------
+
+    def run_generated_dwell(
+        self,
+        center_frequency_mhz: float,
+        emitters: "Sequence[EmitterConfig]",
+        duration_us: float,
+        *,
+        sample_rate: float = 2e6,
+        noise_amplitude: float = 0.02,
+        noise_seed: int = 42,
+        detector_threshold_db: float = 15.0,
+    ) -> DwellResult:
+        """Generate IQ for a synthetic dwell and process it through the receiver.
+
+        Configures a PerTuneGenerator with the given center frequency and
+        emitters, generates deterministic IQ, detects PDWs using PDWDetector,
+        offsets timestamps to the receiver's global timeline, and delegates
+        to run_dwell() for the standard bridge/receiver path.
+
+        Parameters
+        ----------
+        center_frequency_mhz : float
+            Receiver center frequency for this dwell.
+        emitters : sequence of EmitterConfig
+            Emitter configurations for this dwell.  The test harness
+            explicitly configures emitter RF to construct the synthetic
+            environment.  The resulting observable path contains only
+            PDW fields (toa_us, frequency_local_khz, pulse_width_us,
+            amplitude, source) — no emitter_id, true RF, or scenario
+            metadata leaks into the receiver.
+        duration_us : float
+            Duration of the dwell in microseconds.
+        sample_rate : float
+            IQ sample rate in S/s.  Default 2e6.
+        noise_amplitude : float
+            Gaussian noise amplitude.  Default 0.02.
+        noise_seed : int
+            Deterministic noise seed.  Default 42.
+        detector_threshold_db : float
+            PDW detection threshold in dB above noise.  Default 15.0.
+
+        Returns
+        -------
+        DwellResult
+            Standard dwell result with detections from the real SieveReceiver.
+        """
+        from per_tune_generator import EmitterConfig, PerTuneGenerator
+        from iq_to_pdw import PDWDetector
+
+        # --- 1. Capture dwell start time before run_dwell() would compute it ---
+        start_time_us = self._last_end_time_us
+
+        # --- 2. Filter emitters by the tune's IBW window ---
+        #    Emitters outside the receiver's instantaneous bandwidth are
+        #    physically invisible and must not generate IQ (they would alias
+        #    to phantom in-band detections violating physical reality).
+        ibw = self._receiver.ibw_mhz
+        half_ibw = ibw / 2.0
+        visible_emitters = [
+            e for e in emitters
+            if abs(e.rf_frequency_mhz - center_frequency_mhz) <= half_ibw
+        ]
+
+        # --- 3. Configure and run the per-tune generator ---
+        gen = PerTuneGenerator()
+        gen.configure(
+            center_frequency_mhz=center_frequency_mhz,
+            sample_rate=sample_rate,
+            noise_amplitude=noise_amplitude,
+            noise_seed=noise_seed,
+        )
+        for emitter in visible_emitters:
+            gen.add_emitter(emitter)
+        iq = gen.generate_iq(duration_us=duration_us, include_noise=True)
+
+        # --- 3. Detect PDWs from the generated IQ ---
+        detector = PDWDetector(
+            sample_rate=sample_rate,
+            threshold_db_above_noise=detector_threshold_db,
+        )
+        pdws = detector.detect_iq(iq, sample_offset=0)
+
+        # --- 4. Offset PDW timestamps to receiver's global timeline ---
+        #    The generator produces 0-based toa_us; the receiver's global
+        #    clock is at start_time_us.  Each PDW's toa_us must be >= the
+        #    receiver's current time for process_pulse() to evaluate it.
+        for pdw in pdws:
+            pdw["toa_us"] = round(float(pdw["toa_us"]) + start_time_us, 3)
+
+        # --- 5. Delegate to the existing run_dwell (tune -> context -> bridge -> receiver) ---
+        return self.run_dwell(
+            center_frequency_mhz=center_frequency_mhz,
+            pdws_for_dwell=pdws,
+            dwell_time_us=duration_us,
         )
