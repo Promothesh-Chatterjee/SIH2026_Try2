@@ -121,7 +121,7 @@ class ThompsonSamplingExplorer:
                 its band before updating).
             reward: Scalar reward (>0 → success, ≤0 → failure).
         """
-        if band >= self.n_modes and band < self.n_bands * self.n_modes:
+        if 0 <= band < self.n_bands * self.n_modes:
             # Decode flat time-frequency action -> band arm.
             band = band // self.n_modes
         if not (0 <= band < self.n_bands):
