@@ -795,7 +795,7 @@ def train_scheduler(
                     "val_action_entropy": None,
                     "val_band_entropy": mean_step(agg["band_entropy"]),
                     "val_mode_entropy": mean_step(agg["mode_entropy"]),
-                    "val_band_selection_counts": [int(c) for c in (agg["band_counts"] or [])],
+                    "val_band_selection_counts": [int(c) for c in (agg["band_counts"] if agg["band_counts"] is not None else [])],
                     "val_mode_selection_counts": {DWELL_MODES[i]: int(agg["mode_counts"][i]) for i in range(n_modes)}
                                                   if agg["mode_counts"] is not None else None,
                 }
