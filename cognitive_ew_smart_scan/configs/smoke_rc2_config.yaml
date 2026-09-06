@@ -1,0 +1,49 @@
+# RC2.13 smoke config — tiny run to exercise the full v2 telemetry pipeline on
+# the real TSRD STARE world WITHOUT overwriting any Run-01 artifacts.
+#   - 5 episodes (5000 steps) so the 5000-step fixed-val evaluation triggers.
+#   - thompson_warmup_steps: 0 so DRQN/MoE actions + learning updates occur.
+#   - Run with --output-dir checkpoints/scheduler_rc2_smoke to isolate writes.
+data_dir: "D:/TSRD"
+seed: 42
+subset: "train"
+mode: "scan"
+world_mode: "stare"
+observation_mode: "scan"
+training_mode: "real_tsrd"
+deinterleaver_ckpt: "checkpoints/deinterleaver/best.pt"
+normalization_stats: "checkpoints/deinterleaver/normalization_stats.json"
+
+scheduler:
+  total_timesteps: 5000
+  replay_buffer_size: 50000
+  batch_size: 32
+  seq_len: 16
+  burn_in: 8
+  update_freq: 4
+  target_update_freq: 1000
+  thompson_warmup_steps: 0
+
+environment:
+  n_bands: 36
+  band_features: 10
+  obs_dim: 360
+  n_modes: 5
+  n_actions: 180
+  freq_min_mhz: 0.0
+  freq_max_mhz: 18000.0
+  ibw_mhz: 500.0
+  dwell_time_us: 500.0
+  detection_threshold_db: -140.0
+  frequency_step_mhz: 500.0
+  time_horizon_us: 30000000.0
+  max_pulses: 50000
+  max_steps_per_episode: 1000
+
+validation:
+  subset: "val"
+  n_files: 2
+  seed: 42
+  allow_synthetic_fallback: false
+
+telemetry:
+  schema_version: "2.0"
