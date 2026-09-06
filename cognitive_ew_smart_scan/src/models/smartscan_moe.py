@@ -281,11 +281,18 @@ class SmartScanMoE(nn.Module):
     def _compute_fused(
         self, obs: np.ndarray | torch.Tensor, eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, tuple[torch.Tensor, torch.Tensor] | None, np.ndarray]:
+        """5-tuple compatibility wrapper (kept for existing unit tests)."""
+        fused, eager_norm, revisit_norm, hidden, obs_1d, _raw_q = self._compute_fused_full(obs, eager_hidden)
+        return fused, eager_norm, revisit_norm, hidden, obs_1d
+
+    def _compute_fused_full(
+        self, obs: np.ndarray | torch.Tensor, eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, tuple[torch.Tensor, torch.Tensor] | None, np.ndarray, np.ndarray]:
         """Compute fused per-action scores for numpy or torch observations.
 
         Returns:
             Tuple (fused (n_actions,), eager_norm (n_actions,), revisit_norm (n_bands,),
-            hidden, obs_1d (obs_dim,) float32).
+            hidden, obs_1d (obs_dim,) float32, raw_q (n_actions,) float32).
         """
         if isinstance(obs, np.ndarray):
             obs_1d = np.asarray(obs).reshape(-1).astype(np.float32)
@@ -296,6 +303,7 @@ class SmartScanMoE(nn.Module):
                 obs_t = obs_t.unsqueeze(1)
             q_raw, hidden = self.eager_agent.get_q(obs_t.squeeze(0) if obs_t.shape[0] == 1 else obs_t, hidden=eager_hidden)
             eager_norm = self.eager_agent.normalised_scores(q_raw)
+            raw_q = np.asarray(q_raw, dtype=np.float32).reshape(-1)
         elif isinstance(obs, torch.Tensor):
             obs_1d = obs[0, -1].detach().cpu().numpy().reshape(-1)
             q, _aux, hidden = self.drqn(obs, eager_hidden)
@@ -304,13 +312,49 @@ class SmartScanMoE(nn.Module):
             if q_last.ndim > 1:
                 q_last = q_last[0]
             eager_norm = self.eager_agent.normalised_scores(q_last)
+            raw_q = np.asarray(q_last, dtype=np.float32).reshape(-1)
         else:
             raise TypeError(f"Unsupported obs type {type(obs)}")
 
         revisit_norm = self.revisit_agent.scores()
         semantic = self._mode_semantic_scores(obs_1d)
         fused = self._fused_action_scores(eager_norm, revisit_norm, semantic)
-        return fused, eager_norm, revisit_norm, hidden if "hidden" in locals() else eager_hidden, obs_1d
+        return fused, eager_norm, revisit_norm, hidden if "hidden" in locals() else eager_hidden, obs_1d, raw_q
+
+    def _score_attribution(
+        self, action: int, q_values: np.ndarray, eager_norm: np.ndarray,
+        revisit_norm_per_band: np.ndarray, obs_1d: np.ndarray,
+    ) -> dict[str, float | int]:
+        """Per-decision numeric attribution of the fused score.
+
+        The configured-weight * component terms sum to ``fused_score`` and the
+        raw DRQN Q at the action is ``q_score``. ``drqn_rank`` is the 1-based
+        rank of the selected action when sorting by raw Q descending (1 = the
+        DRQN argmax); ``moe_rank`` is 1 because the fused score picked it.
+        """
+        revisit_action = np.repeat(revisit_norm_per_band, self.n_modes).astype(np.float32)
+        preempt_action = np.repeat(self._preemptive_urgency, self.n_modes).astype(np.float32)
+        semantic = self._mode_semantic_scores(obs_1d).reshape(-1).astype(np.float32)
+        q_argmax_action = int(np.argmax(q_values))
+        order = np.argsort(q_values)[::-1]
+        drqn_rank = int(np.where(order == action)[0][0]) + 1 if action in order else None
+        return {
+            "q_score": float(q_values[action]),
+            "eager_score": float(self.eager_weight * eager_norm[action]),
+            "revisit_score": float(self.revisit_weight * revisit_action[action]),
+            "semantic_score": float(self.semantic_weight * semantic[action]),
+            "preemptive_score": float(self.preemptive_weight * preempt_action[action]),
+            "fused_score": float(self.eager_weight * eager_norm[action]
+                                + self.revisit_weight * revisit_action[action]
+                                + self.preemptive_weight * preempt_action[action]
+                                + self.semantic_weight * semantic[action]),
+            "q_argmax_action": q_argmax_action,
+            "q_argmax_band": band_of_action(q_argmax_action, self.n_modes),
+            "q_argmax_mode": int(mode_of_action(q_argmax_action, self.n_modes)),
+            "drqn_rank": drqn_rank,
+            "moe_rank": 1,
+            "same_argmax": bool(action == q_argmax_action),
+        }
 
     def _fused_action_scores(
         self, eager_norm: np.ndarray, revisit_norm_per_band: np.ndarray,
@@ -366,7 +410,7 @@ class SmartScanMoE(nn.Module):
         Returns:
             Tuple (action int, hidden, attribution dict with mode semantics).
         """
-        fused, eager_norm, revisit_norm, hidden, obs_1d = self._compute_fused(obs, eager_hidden)
+        fused, eager_norm, revisit_norm, hidden, obs_1d, q_values = self._compute_fused_full(obs, eager_hidden)
         action = int(np.argmax(fused))
         attribution = self._attribution_for(action, obs_1d)
         # Legacy keys preserved for API consumers.
@@ -378,6 +422,9 @@ class SmartScanMoE(nn.Module):
         # Fused action score underlying the selection (action_score log field).
         attribution["action_score"] = float(fused[action])
         attribution["action"] = action
+        # RC-2 numeric attribution: scores at the selected action, raw-Q argmax
+        # and ranks so telemetry can detect MoE collapse (q_argmax != fused argmax).
+        attribution.update(self._score_attribution(action, q_values, eager_norm, revisit_norm, obs_1d))
         logger.debug("MoE selected action=%d %s", action, attribution)
         return action, hidden, attribution
 
@@ -398,7 +445,7 @@ class SmartScanMoE(nn.Module):
             Tuple (selected_indices List[int] len K, hidden, attribution_dict
             {eager_pct, revisit_pct}).
         """
-        fused, eager_norm, revisit_norm, hidden, obs_1d = self._compute_fused(obs, eager_hidden)
+        fused, eager_norm, revisit_norm, hidden, obs_1d, q_values = self._compute_fused_full(obs, eager_hidden)
 
         # Top-K actions
         k_eff = self.k_receivers if k is None else int(k)
@@ -412,6 +459,13 @@ class SmartScanMoE(nn.Module):
         ))
         total = eager_contrib + revisit_contrib + 1e-8
         attribution = {"eager_pct": float(eager_contrib / total), "revisit_pct": float(revisit_contrib / total)}
+
+        # RC-2: raw-Q argmax vs fused top-k — did the MoE keep the DRQN pick?
+        q_argmax_action = int(np.argmax(q_values))
+        attribution["q_argmax_action"] = q_argmax_action
+        attribution["q_argmax_band"] = band_of_action(q_argmax_action, self.n_modes)
+        attribution["q_argmax_mode"] = int(mode_of_action(q_argmax_action, self.n_modes))
+        attribution["same_argmax_fraction"] = float(1.0 if q_argmax_action in top_k else 0.0)
 
         if not return_full:
             # Decode to unique band indices (per action), dedup preserving order.

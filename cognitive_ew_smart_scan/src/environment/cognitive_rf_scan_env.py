@@ -125,6 +125,8 @@ class BeliefState:
         self.detection_rate[band] = float(self._hits[band] / max(1, self._visits[band]))
         target = 1.0 if hit else 0.0
         self.occupancy_prob[band] = self.occupancy_prob[band] * (1.0 - ema_alpha) + float(target) * ema_alpha
+        if not np.isfinite(self.occupancy_prob[band]) or self.occupancy_prob[band] < 0:
+            self.occupancy_prob[band] = 0.5  # recover from corruption
 
         # Update physical observable features from detected pulses (zero truth leakage)
         if detections and len(detections) > 0:
@@ -500,6 +502,8 @@ class CognitiveRFScanEnv(gym.Env):
         # Phase 9: only the selected dwell is a decision-level opportunity. Active
         # bands elsewhere are coverage opportunities, never decision-level misses.
         selected_band_active = bool(int(active_bands_vec[band])) if 0 <= band < len(active_bands_vec) else bool(ground_truth_active)
+        n_active_bands = int(active_bands_vec.sum())
+        logger.debug("Dwell band=%d active_bands=%d selected_active=%s", band, n_active_bands, selected_band_active)
 
         # 4. Collect causal observations
         observation = self.receiver.get_observation()
@@ -614,7 +618,7 @@ class CognitiveRFScanEnv(gym.Env):
             observation=observation,
             ground_truth_active=selected_band_active,
             novel_emitter=bool(newly),
-            had_any_opportunity=selected_band_active,
+            had_any_opportunity=bool(int(active_bands_vec.sum()) > 0 and not selected_band_active),
             w_hit=self.w_hit,
             w_novel=self.w_novel,
             w_miss=self.w_miss,
@@ -767,30 +771,33 @@ class CognitiveRFScanEnv(gym.Env):
         """Convert band index to receiver center frequency (MHz).
 
         Center is placed so the band's midpoint is centred within the IBW, clipped
-        to the receiver's legal center range.
+        to the receiver's legal center range [freq_min + ibw/2, freq_max - ibw/2].
         """
         band = int(band)
         if self.n_bands <= 1:
             return self.freq_min + self.ibw_mhz / 2.0
-        band_width = (self.freq_max - self.freq_min) / self.n_bands
-        band_mid = (self.freq_max - self.freq_min) * (band + 0.5) / self.n_bands + self.freq_min
-        legal_min = self.ibw_mhz / 2.0
-        legal_max = (self.freq_max - self.freq_min) - self.ibw_mhz / 2.0
+        band_width = (self.freq_max - self.freq_min) / float(self.n_bands)
+        band_mid = self.freq_min + band_width * (band + 0.5)
+        legal_min = self.freq_min + self.ibw_mhz / 2.0
+        legal_max = self.freq_max - self.ibw_mhz / 2.0
+        if legal_max < legal_min:
+            legal_max = legal_min
         center = min(max(band_mid, legal_min), legal_max)
         return float(center)
 
     def _band_index(self, center_frequency_mhz: float) -> int:
-        """Map a frequency to its band index.
+        """Map a frequency (MHz) to its band index.
 
-        Uses floor(frac * n_bands) with clamping to ensure correct mapping.
+        Uses floor((freq - freq_min) / band_width) with clamping to [0, n_bands - 1].
         """
-        if self.freq_max <= self.freq_min:
+        if self.freq_max <= self.freq_min or self.n_bands <= 0:
             return 0
-        frac = (float(center_frequency_mhz) - self.freq_min) / (self.freq_max - self.freq_min)
-        frac = min(1.0, max(0.0, frac))
-        # Use n_bands (not n_bands-1) so that freq_max maps to band n_bands-1
-        idx = int(frac * self.n_bands)
-        return min(idx, self.n_bands - 1)
+        band_width = (self.freq_max - self.freq_min) / float(self.n_bands)
+        if band_width <= 0:
+            return 0
+        frac = (float(center_frequency_mhz) - self.freq_min) / band_width
+        idx = int(np.floor(frac))
+        return int(np.clip(idx, 0, self.n_bands - 1))
 
     def _ground_truth_for_dwell(self, lower_us: float, upper_us: float) -> tuple[bool, bool, np.ndarray, set[int]]:
         """Evaluate ground-truth activity in [lower_us, upper_us) and any novel emitters.
@@ -803,7 +810,6 @@ class CognitiveRFScanEnv(gym.Env):
         active_bands = np.zeros(self.n_bands, dtype=np.int8)
         active_emitters: set[int] = set()
         lo, hi = float(lower_us), float(upper_us)
-        band_width = (self.freq_max - self.freq_min) / max(1, self.n_bands)
 
         for rec in self.records:
             toa = float(rec.toa_us)
@@ -814,7 +820,7 @@ class CognitiveRFScanEnv(gym.Env):
                 active_emitters.add(eid)
                 if eid not in self.intercepted_emitters:
                     novel = True
-                b = int(np.clip((float(rec.frequency_mhz) - self.freq_min) / max(band_width, 1e-6), 0, self.n_bands - 1))
+                b = self._band_index(float(rec.frequency_mhz))
                 active_bands[b] = 1
 
         return any_active, novel, active_bands, active_emitters
