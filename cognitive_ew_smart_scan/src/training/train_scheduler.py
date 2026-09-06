@@ -9,6 +9,7 @@ Fixed 2026-09-02:
 """
 
 import copy
+import json
 import logging
 import os
 import random
@@ -20,6 +21,7 @@ import torch.nn as nn
 import torch.optim as optim
 import yaml
 
+from ..contracts import DWELL_MODES
 from ..environment.cognitive_rf_scan_env import CognitiveRFScanEnv
 from ..environment.scenario_generator import ScenarioSource
 from ..data.tsrd_manifest import dataset_fingerprint
@@ -29,9 +31,11 @@ from ..models.smartscan_moe import SmartScanMoE
 from ..preprocessing.normalise import load_normalization_stats, normalization_stats_hash
 from ..telemetry.publisher import TelemetryPublisher
 from ..telemetry.run_manager import RunManager
+from ..telemetry.schema import TELEMETRY_SCHEMA_VERSION, coerce, make_episode_record, make_val_record, reward_reconstruction, shannon_entropy
 from ..training.replay_buffer import SequenceReplayBuffer
 from ..training.thompson_sampling import ThompsonSamplingExplorer
 from ..training.training_gate import require_training_gate
+from ..training.val_set import FixedValidationSet
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +57,18 @@ def _observable_priorities(obs: np.ndarray, features_per_band: int = 10) -> np.n
     return obs_arr[::features_per_band]
 
 
+# Maps MoE-per-decision attribution keys -> episode telemetry aggregate names.
+_SCORE_KEYS = {
+    "q_score": "mean_q_score",
+    "eager_score": "mean_eager_score",
+    "revisit_score": "mean_revisit_score",
+    "semantic_score": "mean_semantic_score",
+    "preemptive_score": "mean_preemptive_score",
+    "fused_score": "mean_fused_score",
+    "drqn_rank": "drqn_rank",
+}
+
+
 def _do_drqn_update(
     online_drqn: DRQNScheduler,
     target_drqn: DRQNScheduler,
@@ -62,8 +78,14 @@ def _do_drqn_update(
     gamma: float,
     device: torch.device,
     aux_coef: float = 0.1,
+    stats: dict | None = None,
 ) -> float:
     """One Double-DQN BPTT update on a sampled batch. Returns loss value.
+
+    When ``stats`` (a dict) is provided it is filled with RC-2 learning
+    telemetry: TD losses, Q statistics (online vs target network), the gradient
+    norm after clipping and the number of graded transitions. The return value
+    stays a scalar float so existing callers/tests are unaffected.
 
     Phase 7/8 target-and-mask semantics:
       * ``hit_probs`` are binary (1.0 = the action intercepted).
@@ -125,8 +147,29 @@ def _do_drqn_update(
 
     optimizer.zero_grad()
     loss.backward()
-    torch.nn.utils.clip_grad_norm_(online_drqn.parameters(), 1.0)
+    grad_norm = torch.nn.utils.clip_grad_norm_(online_drqn.parameters(), 1.0)
     optimizer.step()
+    if stats is not None:
+        loss_mask_t = loss_mask
+        qm = q_all[loss_mask_t].detach()
+        td_err = (targets[loss_mask_t] - q_chosen[loss_mask_t]).detach().abs()
+        # Double-DQN target values: target-network Q at online-argmax next actions.
+        best_next = next_q[loss_mask_t]
+        target_table = next_q_target[loss_mask_t]
+        stats["td_loss"] = float(loss.item())
+        stats["q_loss"] = float(q_loss.item())
+        stats["mean_td_error"] = float(td_err.mean().item())
+        stats["max_td_error"] = float(td_err.max().item())
+        stats["mean_q"] = float(qm.mean().item())
+        stats["max_q"] = float(qm.max().item())
+        stats["min_q"] = float(qm.min().item())
+        stats["q_std"] = float(qm.std().item())
+        stats["mean_online_q"] = float(qm.mean().item())
+        stats["mean_target_q"] = float(best_next.mean().item())
+        stats["max_target_q"] = float(target_table.max().item())
+        stats["target_online_gap"] = float(best_next.mean().item() - qm.mean().item())
+        stats["gradient_norm"] = float(grad_norm.item()) if torch.is_tensor(grad_norm) else float(grad_norm)
+        stats["n_graded_steps"] = int(loss_mask_t.sum().item())
     return float(loss.item())
 
 
@@ -360,10 +403,29 @@ def train_scheduler(
             "device": str(device),
             "dataset_root": str(data_dir),
             "dataset_fingerprint": data_fingerprint,
+            "telemetry_schema_version": TELEMETRY_SCHEMA_VERSION,
         },
     )
     run.write_git_revision()
     telemetry = TelemetryPublisher(run=run)
+
+    # RC-2.9: fixed, documented validation scenario set (reproducible numbers).
+    val_cfg = train_cfg.get("validation", {})
+    val_set = FixedValidationSet(
+        data_root=data_dir,
+        subset=str(val_cfg.get("subset", "val")),
+        mode="stare",
+        n_files=int(val_cfg.get("n_files", 2)),
+        seed=int(val_cfg.get("seed", 42)),
+        freq_min_mhz=float(env_config.get("freq_min_mhz", 0.0)),
+        freq_max_mhz=float(env_config.get("freq_max_mhz", 18000.0)),
+        time_horizon_us=float(env_config.get("time_horizon_us", 0.0)) or None,
+        max_pulses=int(env_config.get("max_pulses", 50000)),
+        allow_synthetic_fallback=bool(val_cfg.get("allow_synthetic_fallback", False)),
+    )
+    (run.dir / "validation_set.json").write_text(
+        json.dumps(coerce(val_set.manifest()), indent=2), encoding="utf-8"
+    )
     logger.info("Run %s at %s", run.run_id, run.dir)
 
     global_step = 0
@@ -384,6 +446,21 @@ def train_scheduler(
         done = False
         ep_reward = 0.0
         ep_hits = 0
+        ep_steps = 0
+        # --- RC-2 per-episode telemetry accumulators ---
+        ep_band_counts = np.zeros(n_bands, dtype=np.float64)
+        ep_mode_counts = np.zeros(n_modes, dtype=np.float64)
+        ep_action_counts = np.zeros(n_actions, dtype=np.float64)
+        ep_ns = {"same_argmax": 0, "attributed": 0, "scores": {
+            "mean_q_score": 0.0, "mean_eager_score": 0.0, "mean_revisit_score": 0.0,
+            "mean_semantic_score": 0.0, "mean_preemptive_score": 0.0, "mean_fused_score": 0.0,
+            "drqn_rank": 0.0,
+        }}
+        ep_q_argmax_band_counts = np.zeros(n_bands, dtype=np.float64)
+        ep_learn = {"n_updates": 0, "td_loss": 0.0, "mean_td_error": 0.0, "max_td_error": -1e9,
+                    "mean_q": 0.0, "max_q": -1e9, "min_q": 1e9, "q_std": 0.0,
+                    "mean_online_q": 0.0, "mean_target_q": 0.0, "max_target_q": -1e9,
+                    "target_online_gap": 0.0, "gradient_norm": 0.0}
 
         while not done and global_step < total_steps:
             # ---- Action selection ----
@@ -398,26 +475,42 @@ def train_scheduler(
             if global_step < ts_warmup:
                 use_ts = True
                 action = ts_sampler.select_action()
+                moe_attr = None
             else:
                 eps = eps_end + (eps_start - eps_end) * float(np.exp(-global_step / eps_decay))
                 use_ts = False
                 if random.random() < eps:
                     action = int(env.action_space.sample())
+                    moe_attr = None
                 else:
                     online_drqn.eval()
                     with torch.inference_mode():
                         obs_np = np.asarray(obs, dtype=np.float32)
-                        action, hidden_out, attr = moe.select_action(obs_np, hidden)
+                        action, hidden_out, moe_attr = moe.select_action(obs_np, hidden)
                         hidden = hidden_out if hidden_out is not None else hidden
                     online_drqn.train()
 
             # ---- Step env ----
             mode_ctx = {
-                "action_score": float(attr.get("action_score", 1.0)),
-                "reason": str(attr.get("reason", "mode_preset")),
-            } if "attr" in locals() and attr else None
+                "action_score": float(moe_attr.get("action_score", 1.0)),
+                "reason": str(moe_attr.get("reason", "mode_preset")),
+            } if moe_attr else None
             next_obs, reward, terminated, truncated, info = env.step(action, mode_context=mode_ctx)
             done = bool(terminated or truncated)
+
+            ep_steps += 1
+            ep_band_counts[int(action // n_modes)] += 1
+            ep_mode_counts[int(action % n_modes)] += 1
+            ep_action_counts[int(action)] += 1
+            if moe_attr is not None:
+                ep_ns["attributed"] += 1
+                ep_ns["same_argmax"] += int(bool(moe_attr.get("same_argmax", False)))
+                q_arg_band = moe_attr.get("q_argmax_band")
+                if q_arg_band is not None and 0 <= int(q_arg_band) < n_bands:
+                    ep_q_argmax_band_counts[int(q_arg_band)] += 1
+                for moe_key, tel_key in _SCORE_KEYS.items():
+                    val = moe_attr.get(moe_key)
+                    ep_ns["scores"][tel_key] += float(val) if val is not None and float(val) == float(val) else 0.0
 
             ts_sampler.update(action, bool(info["hit"]))
             buffer.add(
@@ -439,7 +532,22 @@ def train_scheduler(
             if not use_ts and global_step % update_freq == 0 and buffer.can_sample(batch_size):
                 try:
                     batch = buffer.sample(batch_size)
-                    loss_val = _do_drqn_update(online_drqn, target_drqn, optimizer, loss_fn, batch, gamma, device)
+                    upd_stats: dict = {}
+                    loss_val = _do_drqn_update(online_drqn, target_drqn, optimizer, loss_fn, batch, gamma, device, stats=upd_stats)
+                    if upd_stats:
+                        ep_learn["n_updates"] += 1
+                        ep_learn["td_loss"] += float(upd_stats["td_loss"])
+                        ep_learn["mean_td_error"] += float(upd_stats["mean_td_error"])
+                        ep_learn["max_td_error"] = max(ep_learn["max_td_error"], float(upd_stats["max_td_error"]))
+                        ep_learn["mean_q"] += float(upd_stats["mean_q"])
+                        ep_learn["max_q"] = max(ep_learn["max_q"], float(upd_stats["max_q"]))
+                        ep_learn["min_q"] = min(ep_learn["min_q"], float(upd_stats["min_q"]))
+                        ep_learn["q_std"] += float(upd_stats["q_std"])
+                        ep_learn["mean_online_q"] += float(upd_stats["mean_online_q"])
+                        ep_learn["mean_target_q"] += float(upd_stats["mean_target_q"])
+                        ep_learn["max_target_q"] = max(ep_learn["max_target_q"], float(upd_stats["max_target_q"]))
+                        ep_learn["target_online_gap"] += float(upd_stats["target_online_gap"])
+                        ep_learn["gradient_norm"] += float(upd_stats["gradient_norm"])
                     if use_wandb and global_step % 100 == 0:
                         try:
                             import wandb
@@ -471,46 +579,148 @@ def train_scheduler(
             except Exception:
                 pass
 
-        # P0-9: publish real episode telemetry (band priorities = observable occupancy).
+        # P0-9 / RC-2: publish real episode telemetry (band priorities = observable occupancy).
         band_priorities = [float(v) for v in _observable_priorities(obs)]
-        telemetry.update(
+
+        # --- RC-2 core metrics from FiguresOfMerit summary ---
+        avg_intercept = fom.get("avg_intercept_time_error_us")
+        core = {
+            "pd": fom.get("Pd"),
+            "pfa": fom.get("Pfa"),
+            "intercept_rate": fom.get("avg_intercept_rate"),
+            "avg_reward": fom.get("avg_reward"),
+            "episode_reward": float(ep_reward),
+            "ep_hits": int(ep_hits),
+            "ep_steps": int(ep_steps),
+            "coverage": fom.get("band_selection_coverage"),
+            "discovery_rate": fom.get("discovery_rate"),
+            "avg_intercept_time": avg_intercept,
+            "avg_intercept_time_error": avg_intercept,
+            "pct_correct": fom.get("pct_correct_predictions"),
+            "selected_active": fom.get("selected_active_opportunities"),
+            "spectrum_active": fom.get("spectrum_active_opportunities"),
+        }
+        # --- RC-2 reward decomposition totals (avg/step * steps) ---
+        _avg_to_total = {
+            "reward_novel": "avg_reward_novel_term",
+            "reward_hit": "avg_reward_hit_term",
+            "reward_miss": "avg_reward_miss_penalty",
+            "reward_dwell_cost": "avg_reward_dwell_cost",
+            "reward_false_alarm": "avg_reward_false_alarm_penalty",
+            "reward_timing": "avg_reward_timing_penalty",
+            "reward_priority": "avg_reward_priority_term",
+            "reward_info_gain": "avg_reward_info_gain_term",
+            "reward_redundant": "avg_reward_redundant_penalty",
+            "reward_delay": "avg_reward_delay_penalty",
+        }
+        reward_components: dict = {}
+        for canon, avg_key in _avg_to_total.items():
+            avg_v = fom.get(avg_key)
+            reward_components[canon] = (float(avg_v) * ep_steps) if avg_v is not None else None
+
+        # --- RC-2 action / mode / band statistics ---
+        n_steps_ep = float(ep_steps) if ep_steps else None
+        mode_freq = [float(c / n_steps_ep) for c in ep_mode_counts] if n_steps_ep else None
+        band_freq = [float(c / n_steps_ep) for c in ep_band_counts] if n_steps_ep else None
+        actions = {
+            "unique_actions": int(np.count_nonzero(ep_action_counts)),
+            "unique_bands": int(np.count_nonzero(ep_band_counts)),
+            "unique_modes": int(np.count_nonzero(ep_mode_counts)),
+            "band_selection_counts": [int(c) for c in ep_band_counts],
+            "band_selection_frequencies": band_freq,
+            "mode_selection_counts": {DWELL_MODES[i]: int(ep_mode_counts[i]) for i in range(n_modes)},
+            "mode_selection_frequencies": ({DWELL_MODES[i]: float(ep_mode_counts[i] / n_steps_ep) for i in range(n_modes)}
+                                           if n_steps_ep else None),
+            "action_entropy": shannon_entropy(ep_action_counts),
+            "band_entropy": shannon_entropy(ep_band_counts),
+            "mode_entropy": shannon_entropy(ep_mode_counts),
+        }
+
+        # --- RC-2 learning statistics (averaged over the episode's updates) ---
+        n_upd = ep_learn["n_updates"]
+        if n_upd > 0:
+            learning = {
+                "td_loss": ep_learn["td_loss"] / n_upd,
+                "mean_td_error": ep_learn["mean_td_error"] / n_upd,
+                "max_td_error": ep_learn["max_td_error"],
+                "mean_q": ep_learn["mean_q"] / n_upd,
+                "max_q": ep_learn["max_q"],
+                "min_q": ep_learn["min_q"],
+                "q_std": ep_learn["q_std"] / n_upd,
+                "mean_online_q": ep_learn["mean_online_q"] / n_upd,
+                "mean_target_q": ep_learn["mean_target_q"] / n_upd,
+                "max_target_q": ep_learn["max_target_q"],
+                "target_online_gap": ep_learn["target_online_gap"] / n_upd,
+                "gradient_norm": ep_learn["gradient_norm"] / n_upd,
+                "n_updates": n_upd,
+                "learning_rate": float(optimizer.param_groups[0].get("lr", 0.0)),
+                "replay_size": int(len(buffer)),
+                "epsilon": float(eps),
+            }
+        else:
+            learning = {"n_updates": 0, "learning_rate": float(optimizer.param_groups[0].get("lr", 0.0)),
+                        "replay_size": int(len(buffer)), "epsilon": float(eps)}
+
+        # --- RC-2 MoE attribution aggregates (over greedy MoE decisions only) ---
+        n_attr = ep_ns["attributed"]
+        if n_attr > 0:
+            sq = ep_ns["scores"]
+            modal_q_arg = int(np.argmax(ep_q_argmax_band_counts))
+            modal_band = int(np.argmax(ep_band_counts)) if ep_steps else None
+            moe_agg = {
+                "moe_eager_weight": float(moe.eager_weight),
+                "moe_revisit_weight": float(moe.revisit_weight),
+                "moe_semantic_weight": float(moe.semantic_weight),
+                "moe_preemptive_weight": float(moe.preemptive_weight),
+                "mean_q_score": sq["mean_q_score"] / n_attr,
+                "mean_eager_score": sq["mean_eager_score"] / n_attr,
+                "mean_revisit_score": sq["mean_revisit_score"] / n_attr,
+                "mean_semantic_score": sq["mean_semantic_score"] / n_attr,
+                "mean_preemptive_score": sq["mean_preemptive_score"] / n_attr,
+                "mean_fused_score": sq["mean_fused_score"] / n_attr,
+                "same_argmax_fraction": float(ep_ns["same_argmax"] / n_attr),
+                "mean_drqn_rank": sq["drqn_rank"] / n_attr,
+                "moe_rank": 1,
+                "selected_band": modal_band,
+                "q_argmax_band": modal_q_arg,
+                "moe_argmax_band": modal_band,
+            }
+        else:
+            moe_agg = {}
+
+        record = make_episode_record(
             step=global_step,
             episode=episode,
-            type="episode",
-            pd=float(fom["Pd"]),
-            pfa=float(fom["Pfa"]),
-            avg_reward=float(fom["avg_reward"]),
-            ep_reward=float(ep_reward),
-            ep_hits=int(ep_hits),
-            epsilon=float(eps),
+            core=core,
+            reward_components=reward_components,
+            actions=actions,
+            learning=learning,
+            moe=moe_agg,
             band_priorities=band_priorities,
+            epsilon=float(eps),
         )
+        telemetry.update(**record)
 
-        # Periodic MoE evaluation on val scenarios every 5000 steps
-        if episode > 0 and global_step % 5000 == 0:
+        # Periodic MoE evaluation on fixed val scenarios every 5000 steps
+        if episode > 0 and global_step % 5000 == 0 and val_set.files_used:
             try:
-                val_source = ScenarioSource(
-                    data_root=data_dir,
-                    mode="stare",
-                    subset="val",
-                    freq_min_mhz=float(env_config.get("freq_min_mhz", 0.0)),
-                    freq_max_mhz=float(env_config.get("freq_max_mhz", 18000.0)),
-                    time_horizon_us=float(env_config.get("time_horizon_us", 0.0)) or None,
-                    max_pulses=int(env_config.get("max_pulses", 50000)),
-                    seed=seed,
-                    source_type="world",
-                    allow_synthetic_fallback=False,
-                )
                 val_env = CognitiveRFScanEnv(
-                    env_config, 
-                    records=None, 
-                    seed=seed, 
-                    records_provider=val_source.sample,
+                    env_config,
+                    records=None,
+                    seed=seed,
+                    records_provider=val_set.sample,
                     deinterleaver_model=deinterleaver_model,
                     deinterleaver_config={"fit_stats": fit_stats} if fit_stats else {},
                 )
-                val_rewards = []
-                for _ in range(min(10, 2)):  # keep quick; expand to 10 when data present
+                scenario_details = []
+                agg = {
+                    "rewards": [], "hits": [], "steps": [],
+                    "band_counts": None, "mode_counts": None,
+                    "action_entropy": [], "band_entropy": [], "mode_entropy": [],
+                    "components": {},
+                }
+                for _ in range(len(val_set.files_used)):
+                    scenario_id = val_set.current_scenario_id()
                     obs_v, _ = val_env.reset()
                     try:
                         hidden_v = online_drqn.init_hidden(1, device)
@@ -521,17 +731,88 @@ def train_scheduler(
                         moe.eager_agent.hidden = hidden_v
                     done_v = False
                     r_sum = 0.0
+                    h_sum = 0
+                    s_sum = 0
+                    band_c = np.zeros(n_bands, dtype=np.float64)
+                    mode_c = np.zeros(n_modes, dtype=np.float64)
                     while not done_v:
-                        bands_v, hidden_v, _ = moe.select_bands(obs_v, hidden_v)
-                        a_v = int(bands_v[0])
+                        with torch.inference_mode():
+                            a_v, hidden_v, _ = moe.select_action(obs_v, hidden_v)
                         obs_v, rew_v, term_v, trunc_v, _ = val_env.step(a_v)
                         r_sum += float(rew_v)
+                        band_c[int(a_v // n_modes)] += 1
+                        mode_c[int(a_v % n_modes)] += 1
                         moe.update(a_v)
+                        s_sum += 1
                         done_v = bool(term_v or trunc_v)
-                    val_rewards.append(r_sum)
-                avg_val = float(np.mean(val_rewards)) if val_rewards else 0.0
-                logger.info("  Val MoE avg_reward %.2f", avg_val)
-                telemetry.update(step=global_step, episode=episode, type="val", val_reward=float(avg_val))
+                    fs = val_env.get_fom()
+                    h_sum = int(fs.get("n_hits", 0))
+                    fs = val_env.get_fom()
+                    scenario_details.append({
+                        "scenario_id": scenario_id,
+                        "reward": float(r_sum),
+                        "hits": h_sum,
+                        "steps": s_sum,
+                        "pd": fs.get("Pd"),
+                        "coverage": fs.get("band_selection_coverage"),
+                        "band_entropy": shannon_entropy(band_c),
+                        "mode_entropy": shannon_entropy(mode_c),
+                    })
+                    agg["rewards"].append(float(r_sum))
+                    agg["hits"].append(h_sum)
+                    agg["steps"].append(s_sum)
+                    agg["band_entropy"].append(float("nan") if shannon_entropy(band_c) is None else shannon_entropy(band_c))
+                    agg["mode_entropy"].append(float("nan") if shannon_entropy(mode_c) is None else shannon_entropy(mode_c))
+                    if agg["band_counts"] is None:
+                        agg["band_counts"] = band_c.copy()
+                        agg["mode_counts"] = mode_c.copy()
+                    else:
+                        agg["band_counts"] += band_c
+                        agg["mode_counts"] += mode_c
+                    for canon, avg_key in _avg_to_total.items():
+                        avg_v = fs.get(avg_key)
+                        total_v = (float(avg_v) * s_sum) if avg_v is not None else None
+                        agg["components"].setdefault(canon, []).append(total_v)
+
+                n_val = len(agg["rewards"])
+                val_components: dict = {}
+                for canon in _avg_to_total:
+                    vals = [v for v in agg["components"].get(canon, []) if v is not None]
+                    val_components[canon] = (float(np.mean(vals)) if vals else None)
+
+                def mean_step(arr):
+                    finite = [v for v in arr if v is not None and float(v) == float(v)]
+                    return float(np.mean(finite)) if finite else None
+                core_val = {
+                    "val_reward": float(np.mean(agg["rewards"])),
+                    "val_hits": int(np.sum(agg["hits"])),
+                    "val_steps": int(np.sum(agg["steps"])),
+                    "val_n_scenarios": n_val,
+                    "val_pd": mean_step([d.get("pd") for d in scenario_details]),
+                    "val_coverage": mean_step([d.get("coverage") for d in scenario_details]),
+                }
+                entropy_val = {
+                    "val_action_entropy": None,
+                    "val_band_entropy": mean_step(agg["band_entropy"]),
+                    "val_mode_entropy": mean_step(agg["mode_entropy"]),
+                    "val_band_selection_counts": [int(c) for c in (agg["band_counts"] or [])],
+                    "val_mode_selection_counts": {DWELL_MODES[i]: int(agg["mode_counts"][i]) for i in range(n_modes)}
+                                                  if agg["mode_counts"] is not None else None,
+                }
+                val_record = make_val_record(
+                    step=global_step,
+                    episode=episode,
+                    core_val=core_val,
+                    reward_components=val_components,
+                    entropy=entropy_val,
+                    validation_set_id=val_set.validation_set_id,
+                    validation_files=[str(p) for p, _, _ in val_set.files_used],
+                )
+                val_record["scenario_details"] = coerce(scenario_details)
+                telemetry.update(**val_record)
+                avg_val = core_val["val_reward"]
+                logger.info("  Val MoE avg_reward %.2f (scenarios=%s)", avg_val,
+                            [d["scenario_id"] for d in scenario_details])
                 if use_wandb:
                     try:
                         import wandb
@@ -540,7 +821,7 @@ def train_scheduler(
                     except Exception:
                         pass
             except Exception as exc:
-                logger.debug("Val MoE eval skipped: %s", exc)
+                logger.warning("Val MoE eval skipped at step %d: %s", global_step, exc)
 
         if ep_reward > best_reward:
             best_reward = ep_reward
@@ -598,7 +879,8 @@ def train_scheduler(
         )
     })
     logger.info("Scheduler training complete. Final: %s Best: %.2f", final_path, best_reward)
-    telemetry.update(step=global_step, episode=episode, type="done", best_reward=float(best_reward))
+    telemetry.update(step=global_step, episode=episode, type="done",
+                     best_reward=float(best_reward), telemetry_schema_version=TELEMETRY_SCHEMA_VERSION)
     if use_wandb:
         try:
             import wandb

@@ -50,3 +50,14 @@ environment:
   time_horizon_us: 30000000.0  # cap scenario ToA; ~30 s spans TSRD scan files
   max_pulses: 50000
   max_steps_per_episode: 1000
+
+# RC-2.9: fixed, reproducible validation scenario set.
+validation:
+  subset: "val"
+  n_files: 2
+  seed: 42
+  allow_synthetic_fallback: false
+
+# RC-2.10: explicit telemetry schema version (all records carry this field).
+telemetry:
+  schema_version: "2.0"
