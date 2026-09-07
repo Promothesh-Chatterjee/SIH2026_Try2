@@ -1,4 +1,4 @@
-data_dir: "data"
+data_dir: "D:/TSRD"
 # Phase 17: the root-level `output_dir` is intentionally REMOVED — writing both
 # models into `checkpoints` would create ambiguous root-level best.pt/final.pt.
 # Trainers ALWAYS resolve to their canonical subdirectory
@@ -51,10 +51,10 @@ environment:
   max_pulses: 50000
   max_steps_per_episode: 1000
 
-# RC-2.9: fixed, reproducible validation scenario set.
+# RC-2.9: fixed, reproducible validation scenario set (10 unseen scenarios for generalization gating).
 validation:
   subset: "val"
-  n_files: 2
+  n_files: 10
   seed: 42
   allow_synthetic_fallback: false
 

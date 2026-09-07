@@ -57,3 +57,5 @@ reward:
   w_dwell_cost: -0.001  # per-µs cost of occupying the receiver (scan efficiency)
   w_redundant_scan: -0.1  # penalty for re-scanning a just-intercepted band
   w_delay: -0.5         # penalty for late preemptive intercept of overdue periodic emitters
+  w_staleness: 0.6      # intrinsic staleness/coverage bonus for exploring unvisited bands
+  staleness_norm: 50.0  # normalization age horizon for revisit age
