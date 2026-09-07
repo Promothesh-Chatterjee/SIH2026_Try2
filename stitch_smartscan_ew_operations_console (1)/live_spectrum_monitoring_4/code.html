@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en" style="width: 1280px; min-height: 100%; overflow-y: auto; position: relative;"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SMARTSCAN EW - Live Wideband Spectrum Monitoring</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface-container-lowest": "#0c0e12",
+            "surface-dim": "#111317",
+            "surface": "#111317",
+            "surface-container-low": "#16191f",
+            "surface-container": "#1e222a",
+            "surface-container-high": "#282c37",
+            "surface-container-highest": "#333846",
+            "outline": "#7e8494",
+            "outline-variant": "#242730",
+            "on-surface": "#e2e4ec",
+            "on-surface-variant": "#9ca3af",
+            "background": "#0c0e12",
+            "primary": "#00e5ff",
+            "primary-dim": "#00daf3",
+            "primary-container": "#004753",
+            "on-primary-container": "#9cf0ff",
+            "secondary": "#4cd6fb",
+            "secondary-container": "#00b2d6",
+            "tertiary": "#10b981",
+            "tertiary-fixed-dim": "#34d399",
+            "tertiary-container": "#064e3b",
+            "warning": "#f59e0b",
+            "error": "#ef4444",
+            "error-container": "#7f1d1d"
+          },
+          fontFamily: {
+            "sans": ["Inter", "sans-serif"],
+            "mono": ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    };
+  </script>
+<style>
+    @layer base {
+      html, body { margin: 0; padding: 0; }
+      body { overscroll-behavior: none; }
+    }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: #0c0e12; }
+    ::-webkit-scrollbar-thumb { background: #242730; border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: #00e5ff; }
+  </style>
+</head>
+<body class="bg-background font-sans text-xs text-on-surface antialiased min-h-screen overflow-y-auto">
+<!-- ======================= LEFT NAVIGATION SIDEBAR ======================= -->
+<aside class="fixed left-0 top-0 h-screen w-64 bg-surface-container-lowest border-r border-outline-variant z-50 flex flex-col justify-between select-none">
+<div class="flex flex-col">
+<!-- Logo & Tactical Identity -->
+<div class="p-3 border-b border-outline-variant bg-surface-container-low/60 flex items-center gap-2.5">
+<div class="w-8 h-8 rounded bg-primary/10 border border-primary/40 flex items-center justify-center text-primary flex-shrink-0">
+<span class="material-symbols-outlined text-[20px]">radar</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-mono text-[13px] font-bold tracking-wider text-primary truncate leading-none">SMARTSCAN EW</span>
+<span class="font-mono text-[9px] text-outline tracking-tight truncate mt-1">Intelligent Spectrum Surveillance &amp; Interception</span>
+</div>
+</div>
+<!-- Tactical Sys Control Context -->
+<div class="px-2.5 py-2 border-b border-outline-variant/60 flex flex-col gap-1.5 bg-surface-container-lowest">
+<div class="flex items-center justify-between px-1">
+<span class="font-mono text-[9px] text-outline tracking-wider uppercase">SYS CONTROL</span>
+<div class="flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-ping"></span>
+<span class="font-mono text-[9px] text-tertiary font-bold tracking-wider uppercase">SYS: ARMED // ONLINE</span>
+</div>
+</div>
+<div class="bg-surface-container-low/80 border border-outline-variant rounded px-2 py-1 flex flex-col gap-0.5">
+<label class="font-mono text-[8.5px] text-outline uppercase tracking-wider">Scenario Vector</label>
+<div class="relative flex items-center">
+<select class="w-full bg-surface-container-highest/60 text-primary font-mono text-[10px] py-0.5 px-1 rounded appearance-none cursor-pointer outline-none border-none">
+<option>TACTICAL SCENARIO ALPHA (Dense Multi-Emitter)</option>
+<option>CONTESTED COMMs (Agile Hop)</option>
+<option>RECCE PATROL 04 (Deep Intercept)</option>
+</select>
+<span class="material-symbols-outlined absolute right-0.5 pointer-events-none text-outline text-[13px]">arrow_drop_down</span>
+</div>
+</div>
+<div class="bg-surface-container-low/80 border border-outline-variant rounded px-2 py-1 flex flex-col gap-0.5">
+<label class="font-mono text-[8.5px] text-outline uppercase tracking-wider">Target Corpus</label>
+<div class="relative flex items-center">
+<select class="w-full bg-surface-container-highest/60 text-on-surface font-mono text-[10px] py-0.5 px-1 rounded appearance-none cursor-pointer outline-none border-none">
+<option>p3ac_50k (Schema 3Y.1)</option>
+<option>p3ac_eval_10k (Unseen Radar)</option>
+</select>
+<span class="material-symbols-outlined absolute right-0.5 pointer-events-none text-outline text-[13px]">arrow_drop_down</span>
+</div>
+</div>
+</div>
+<!-- Navigation Tree (All 12 required sections) -->
+<nav class="flex flex-col gap-0.5 p-2 overflow-y-auto max-h-[calc(100vh-375px)]">
+<a class="flex items-center justify-between px-2.5 py-1.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-all" href="#">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">grid_view</span>
+<span class="text-[11.5px] font-semibold tracking-wide uppercase">Overview</span>
+</div>
+<span class="font-mono text-[8.5px] text-outline bg-surface-container-highest/80 px-1 py-0.5 rounded">SUM</span>
+</a>
+<a class="flex items-center justify-between px-2.5 py-1.5 rounded bg-primary/10 border border-primary/30 text-primary font-semibold transition-all" href="#">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">show_chart</span>
+<span class="text-[11.5px] font-bold tracking-wide uppercase">Live Spectrum</span>
+</div>
+<span class="font-mono text-[8.5px] text-primary bg-primary/20 px-1 py-0.5 rounded font-bold">18GHz</span>
+</a>
+<a class="flex items-center justify-between px-2.5 py-1.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-all" href="#">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">neurology</span>
+<span class="text-[11.5px] font-semibold tracking-wide uppercase">Smart Scan</span>
+</div>
+<span class="font-mono text-[8.5px] text-tertiary bg-surface-container-highest/80 px-1 py-0.5 rounded">DRQN</span>
+</a>
+<a class="flex items-center justify-between px-2.5 py-1.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-all" href="#">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">satellite_alt</span>
+<span class="text-[11.5px] font-semibold tracking-wide uppercase">Receiver</span>
+</div>
+<span class="font-mono text-[8.5px] text-outline bg-surface-container-highest/80 px-1 py-0.5 rounded">PDW</span>
+</a>
+<a class="flex items-center justify-between px-2.5 py-1.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-all" href="#">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">radar</span>
+<span class="text-[11.5px] font-semibold tracking-wide uppercase">Emitters</span>
+</div>
+<span class="font-mono text-[8.5px] text-outline bg-surface-container-highest/80 px-1 py-0.5 rounded">TRUTH</span>
+</a>
+<a class="flex items-center justify-between px-2.5 py-1.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-all" href="#">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">view_comfy</span>
+<span class="text-[11.5px] font-semibold tracking-wide uppercase">Interception</span>
+</div>
+<span class="font-mono text-[8.5px] text-outline bg-surface-container-highest/80 px-1 py-0.5 rounded">TxF</span>
+</a>
+<a class="flex items-center justify-between px-2.5 py-1.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-all" href="#">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">model_training</span>
+<span class="text-[11.5px] font-semibold tracking-wide uppercase">Training</span>
+</div>
+<span class="font-mono text-[8.5px] text-outline bg-surface-container-highest/80 px-1 py-0.5 rounded">RL</span>
+</a>
+<a class="flex items-center justify-between px-2.5 py-1.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-all" href="#">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">dataset</span>
+<span class="text-[11.5px] font-semibold tracking-wide uppercase">Dataset &amp; Explorer</span>
+</div>
+<span class="font-mono text-[8.5px] text-outline bg-surface-container-highest/80 px-1 py-0.5 rounded">50k</span>
+</a>
+<a class="flex items-center justify-between px-2.5 py-1.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-all" href="#">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">science</span>
+<span class="text-[11.5px] font-semibold tracking-wide uppercase">Experiments</span>
+</div>
+<span class="font-mono text-[8.5px] text-outline bg-surface-container-highest/80 px-1 py-0.5 rounded">RUN</span>
+</a>
+<a class="flex items-center justify-between px-2.5 py-1.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-all" href="#">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">assessment</span>
+<span class="text-[11.5px] font-semibold tracking-wide uppercase">Performance</span>
+</div>
+<span class="font-mono text-[8.5px] text-outline bg-surface-container-highest/80 px-1 py-0.5 rounded">EVAL</span>
+</a>
+<a class="flex items-center justify-between px-2.5 py-1.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-all" href="#">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">history</span>
+<span class="text-[11.5px] font-semibold tracking-wide uppercase">Replay</span>
+</div>
+<span class="font-mono text-[8.5px] text-outline bg-surface-container-highest/80 px-1 py-0.5 rounded">LOG</span>
+</a>
+<a class="flex items-center justify-between px-2.5 py-1.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-all" href="#">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">tune</span>
+<span class="text-[11.5px] font-semibold tracking-wide uppercase">System / Config</span>
+</div>
+<span class="font-mono text-[8.5px] text-outline bg-surface-container-highest/80 px-1 py-0.5 rounded">CFG</span>
+</a>
+</nav>
+</div>
+<!-- Bottom Status & Hardware Health Matrix -->
+<div class="p-2.5 bg-surface-container-lowest border-t border-outline-variant flex flex-col gap-1.5">
+<div class="flex items-center justify-between">
+<span class="font-mono text-[9px] text-outline uppercase tracking-wider">Subsystem Health</span>
+<span class="font-mono text-[8.5px] text-tertiary font-semibold">ALL NOMINAL</span>
+</div>
+<!-- 6 Hardware Nodes Status -->
+<div class="grid grid-cols-2 gap-1 bg-surface-container-low/70 border border-outline-variant/60 p-1.5 rounded font-mono text-[8px]">
+<div class="flex items-center justify-between"><span class="text-outline">RF Env</span><span class="text-tertiary">ONLINE</span></div>
+<div class="flex items-center justify-between"><span class="text-outline">Receiver</span><span class="text-tertiary">ONLINE</span></div>
+<div class="flex items-center justify-between"><span class="text-outline">PDW FIFO</span><span class="text-tertiary">ONLINE</span></div>
+<div class="flex items-center justify-between"><span class="text-outline">Pipeline</span><span class="text-tertiary">ONLINE</span></div>
+<div class="flex items-center justify-between"><span class="text-outline">Scheduler</span><span class="text-primary">READY</span></div>
+<div class="flex items-center justify-between"><span class="text-outline">Dataset</span><span class="text-tertiary">VALID</span></div>
+</div>
+<!-- Frequency Range & DSP Version -->
+<div class="flex items-center justify-between bg-surface-container-low/80 px-2 py-1 rounded border border-outline-variant/40 font-mono text-[9.5px]">
+<span class="text-primary font-medium">0.00 MHz</span>
+<span class="text-outline text-[10px]">→</span>
+<span class="text-primary font-medium">18,000 MHz</span>
+<span class="text-[8px] text-outline bg-surface-container-highest px-1 rounded">36 BANDS</span>
+</div>
+<div class="flex items-center justify-between text-outline font-mono text-[8.5px] px-0.5">
+<span>DSP ENGINE VER 4.9.2</span>
+<span class="text-tertiary font-bold">ONLINE</span>
+</div>
+</div>
+</aside>
+<!-- ======================= MAIN CONTENT VIEWPORT ======================= -->
+<div class="pl-64 flex flex-col min-h-screen">
+<!-- TOP UNIFIED TELEMETRY HEADER & MISSION SWITCHER -->
+<header class="fixed top-0 left-64 right-0 h-12 bg-surface-container-lowest/95 backdrop-blur border-b border-outline-variant z-40 px-4 flex items-center justify-between">
+<!-- Left: Telemetry Data Strip -->
+<div class="flex items-center gap-2 font-mono text-[11px]">
+<!-- UTC Clock -->
+<div class="flex items-center gap-1.5 bg-surface-container-low border border-outline-variant px-2 py-1 rounded text-primary font-medium">
+<span class="material-symbols-outlined text-[13px] text-outline">schedule</span>
+<span>UTC 14:32:08.412 Z</span>
+</div>
+<!-- Status Indicator -->
+<div class="flex items-center gap-1.5 bg-surface-container-low border border-outline-variant px-2 py-1 rounded text-tertiary">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
+<span class="text-[9.5px] font-bold tracking-wider uppercase">STATUS: ACTIVE RUNNING</span>
+</div>
+<!-- RF Stream Rate -->
+<div class="bg-surface-container-low border border-outline-variant px-2 py-1 rounded text-on-surface-variant text-[10px]">
+          RF STREAM: <span class="text-secondary font-bold">50.0k DW/S</span>
+</div>
+<!-- Receiver Locked IBW -->
+<div class="bg-surface-container-low border border-outline-variant px-2 py-1 rounded text-on-surface-variant text-[10px]">
+          RX: <span class="text-primary font-bold">1 GHz IBW LOCKED</span>
+</div>
+<!-- AI Scheduler Info -->
+<div class="bg-surface-container-low border border-outline-variant px-2 py-1 rounded text-on-surface-variant text-[10px]">
+          SCHEDULER: <span class="text-tertiary font-bold">DRQN+MoE ACTIVE</span>
+</div>
+</div>
+<!-- Right: Mission Mode Switcher -->
+<div class="flex items-center bg-surface-container-low border border-outline-variant rounded p-0.5">
+<button class="flex items-center gap-1.5 bg-primary/20 text-primary border border-primary/40 font-mono text-[10px] font-bold px-2.5 py-1 rounded shadow-sm" type="button">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+<span>LIVE / OPERATION</span>
+</button>
+<button class="text-outline hover:text-on-surface font-mono text-[10px] px-2.5 py-1 rounded transition-colors" type="button">
+          TRAINING
+        </button>
+<button class="text-outline hover:text-on-surface font-mono text-[10px] px-2.5 py-1 rounded transition-colors" type="button">
+          REPLAY / ANALYSIS
+        </button>
+</div>
+</header>
+<!-- CONTENT WRAPPER -->
+<main class="w-full pt-14 px-4 pb-16 flex flex-col gap-3">
+<!-- TOOLBAR: BREADCRUMB, SIM CONTROLS, DWELL / STRATEGY STRIP -->
+<section class="bg-surface-container-lowest border border-outline-variant p-3 rounded flex flex-col xl:flex-row xl:items-center justify-between gap-3 shadow-sm">
+<div class="flex flex-col gap-0.5">
+<div class="flex items-center gap-2">
+<span class="inline-block w-2 h-2 rounded-full bg-primary animate-ping"></span>
+<span class="font-mono text-[9px] text-primary font-bold uppercase tracking-wider">SURVEILLANCE APERTURE ACTIVE</span>
+<span class="text-outline font-mono text-[10px]">|</span>
+<span class="font-mono text-[10px] text-on-surface-variant">CORPUS: <strong class="text-on-surface">p3ac_50k</strong> [ALPHA TACTICAL DENSE]</span>
+</div>
+<h1 class="text-[17px] font-bold text-on-surface tracking-tight flex items-center gap-2">
+<span>0–18 GHz Live Wideband Spectrum &amp; Instantaneous Receiver Aperture</span>
+<span class="text-[10.5px] font-mono font-normal text-outline px-1.5 py-0.5 bg-surface-container-low rounded border border-outline-variant">IBW: 1.0 GHz vs 18.0 GHz Total</span>
+</h1>
+</div>
+<!-- Interactive Control Panel Strip -->
+<div class="flex flex-wrap items-center gap-2 font-mono text-[10px]">
+<!-- Play / Pause Stream -->
+<button class="flex items-center gap-1.5 bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/80 px-2.5 py-1.5 rounded text-on-surface transition-colors cursor-pointer" id="sim-toggle-btn" type="button">
+<span class="material-symbols-outlined text-[15px] text-tertiary" id="play-icon">pause</span>
+<span class="font-bold tracking-wider" id="play-label">LIVE PULSE STREAM</span>
+</button>
+<!-- Sim Rate Buttons -->
+<div class="flex items-center bg-surface-container-low border border-outline-variant px-1.5 py-0.5 rounded">
+<span class="text-outline text-[9px] mr-1 uppercase">RATE:</span>
+<button class="speed-btn px-1.5 py-0.5 text-outline hover:text-on-surface" data-speed="1" type="button">1x</button>
+<button class="speed-btn px-1.5 py-0.5 text-outline hover:text-on-surface" data-speed="2" type="button">2x</button>
+<button class="speed-btn px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-bold rounded" data-speed="5" type="button">5x</button>
+<button class="speed-btn px-1.5 py-0.5 text-outline hover:text-on-surface" data-speed="RT" type="button">REAL-TIME</button>
+</div>
+<!-- Time Window -->
+<div class="flex items-center bg-surface-container-low border border-outline-variant px-1.5 py-0.5 rounded">
+<span class="text-outline text-[9px] mr-1 uppercase">WINDOW:</span>
+<button class="window-btn px-1.5 py-0.5 text-outline hover:text-on-surface" type="button">100ms</button>
+<button class="window-btn px-1.5 py-0.5 bg-surface-container-highest text-primary font-bold rounded" type="button">500ms</button>
+<button class="window-btn px-1.5 py-0.5 text-outline hover:text-on-surface" type="button">1s</button>
+<button class="window-btn px-1.5 py-0.5 text-outline hover:text-on-surface" type="button">5s</button>
+</div>
+<!-- Noise Floor Real-time Gauge -->
+<div class="flex items-center gap-1.5 bg-surface-container-low border border-outline-variant px-2 py-1 rounded">
+<span class="text-outline text-[9px] uppercase">NOISE FLOOR:</span>
+<span class="text-tertiary font-bold">-95.4 dBm</span>
+</div>
+<!-- Strategy Switcher -->
+<div class="flex items-center bg-surface-container-highest/70 border border-outline-variant p-0.5 rounded">
+<button class="px-2 py-0.5 rounded text-outline hover:text-on-surface transition-colors" id="strat-open" type="button">CYCLIC SWEEP</button>
+<button class="px-2 py-0.5 rounded bg-primary text-surface-container-lowest font-bold shadow-sm" id="strat-smart" type="button">SMARTSCAN (DRQN+MoE)</button>
+</div>
+</div>
+</section>
+<!-- OPERATIONAL DOCTRINE: APERTURE CONSTRAINT HERO BANNER & STRATEGY COMPARISON -->
+<section class="bg-surface-container-low border border-outline-variant rounded p-3 flex flex-col gap-2.5 shadow">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-1 border-b border-outline-variant/60 pb-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">tune</span>
+<span class="font-mono text-[12px] font-bold uppercase tracking-wider text-primary">RECEIVER APERTURE CONSTRAINT: 18.0 GHz TOTAL SPECTRUM vs. 1.0 GHz INSTANTANEOUS IBW</span>
+</div>
+<div class="flex items-center gap-4 font-mono text-[10.5px] text-outline">
+<span>COVERAGE RATIO: <strong class="text-primary font-bold">5.55%</strong> PER DWELL</span>
+<span>RETUNE DELAY (PLL): <strong class="text-tertiary font-bold">12.0 µs</strong></span>
+<span>TOTAL CHANNELS: <strong class="text-on-surface font-bold">36 × 500 MHz</strong></span>
+</div>
+</div>
+<!-- Comparative Strategy 2-Card Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+<!-- Strategy 1: Cyclic Sweep -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded p-2.5 flex flex-col gap-1.5 relative">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-outline"></span>
+<span class="font-mono text-[11px] font-bold text-outline uppercase">Open-Loop Cyclic Sweep [Conventional]</span>
+</div>
+<span class="font-mono text-[9px] bg-error-container/40 border border-error/40 text-error px-1.5 py-0.5 rounded font-bold">MISS RISK: 68.2%</span>
+</div>
+<p class="text-[11px] text-on-surface-variant leading-relaxed">
+              Standard stepped raster progression across thirty-six 500 MHz segments. High pulse-interception latency (average revisit time 2.16 ms), blind to rapid frequency agility, short duty-cycle radars, and stealth tactical emitters outside the immediate instantaneous channel.
+            </p>
+<div class="flex items-center justify-between pt-1 border-t border-outline-variant/40 font-mono text-[9.5px] text-outline">
+<span>SCAN CYCLE: 2.16 ms</span>
+<span>AGILE INTERCEPT: <strong class="text-error font-semibold">31.8%</strong></span>
+<span>SCHEDULING: STATIC FIFO</span>
+</div>
+</div>
+<!-- Strategy 2: SmartScan AI -->
+<div class="bg-surface-container-lowest border border-primary/40 bg-gradient-to-r from-surface-container-lowest to-primary/5 rounded p-2.5 flex flex-col gap-1.5 relative">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-mono text-[11px] font-bold text-primary uppercase">SmartScan AI Scheduler [Active Reinforcement]</span>
+</div>
+<span class="font-mono text-[9px] bg-primary/20 border border-primary/50 text-primary px-1.5 py-0.5 rounded font-bold">INTERCEPT RATE: 94.7%</span>
+</div>
+<p class="text-[11px] text-on-surface leading-relaxed">
+              State-driven Deep Recurrent Q-Network (DRQN) coupled with Mixture-of-Experts (MoE) classifier. Continuous latent tracking predicts Pulse Repetition Interval (PRI) arrival epochs, automatically steering the 1.0 GHz IBW window to interdict high-lethality agile radars and dynamic wideband noise.
+            </p>
+<div class="flex items-center justify-between pt-1 border-t border-primary/30 font-mono text-[9.5px] text-on-surface-variant">
+<span>ALGORITHM: <strong class="text-primary font-semibold">DRQN + MoE</strong></span>
+<span>REVISIT INTERVAL: <strong class="text-tertiary font-semibold">ADAPTIVE (45–180 µs)</strong></span>
+<span>EFFICIENCY GAIN: <strong class="text-tertiary font-semibold">+62.9% OVER CYCLIC</strong></span>
+</div>
+</div>
+</div>
+</section>
+<!-- 36-BAND LOGICAL CHANNEL MATRIX & ACTIVE RECEIVER TUNING HIGHLIGHT -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded p-3 flex flex-col gap-2 shadow-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="font-mono text-[11.5px] font-bold uppercase tracking-wider text-on-surface">36-BAND LOGICAL CHANNEL MATRIX (500 MHz SLICES)</span>
+<span class="font-mono text-[9.5px] text-outline">B01 (0.00 GHz) → B36 (18.00 GHz)</span>
+</div>
+<div class="flex items-center gap-3 font-mono text-[10px]">
+<span class="text-primary uppercase font-bold bg-primary/10 border border-primary/30 px-2 py-0.5 rounded">
+              LOCKED APERTURE: B17–B18 (8.00 – 9.00 GHz)
+            </span>
+<span class="text-tertiary font-bold bg-tertiary/10 border border-tertiary/30 px-1.5 py-0.5 rounded">DWELL: 120 µs</span>
+</div>
+</div>
+<!-- 36 Segment Grid Bar -->
+<div class="w-full h-8 bg-surface-container-low border border-outline-variant rounded overflow-hidden flex items-center">
+<div class="w-full h-full grid grid-cols-36 text-center select-none divide-x divide-outline-variant/40" style="grid-template-columns: repeat(36, minmax(0, 1fr));">
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer" title="B01: 0.0-0.5 GHz">01</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer" title="B02: 0.5-1.0 GHz">02</div>
+<!-- B03 Jammer active -->
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] font-bold text-error bg-error/20 border-b-2 border-error cursor-pointer" title="B03: 1.0-1.5 GHz [JAM-03 Active]">03</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">04</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">05</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] font-semibold text-tertiary bg-tertiary/10 cursor-pointer" title="B06: 2.5-3.0 GHz [RADAR-P01]">06</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">07</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">08</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">09</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] font-semibold text-secondary bg-secondary/20 cursor-pointer" title="B10: 4.5-5.0 GHz">10</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">11</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] font-semibold text-secondary bg-secondary/20 cursor-pointer" title="B12: 5.5-6.0 GHz [AGILE-02]">12</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">13</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">14</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">15</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">16</div>
+<!-- B17 & B18 LOCKED APERTURE -->
+<div class="h-full flex items-center justify-center font-mono text-[9px] font-bold text-surface-container-lowest bg-primary border-t-2 border-primary animate-pulse z-10" title="B17: 8.0-8.5 GHz [1.0 GHz IBW LOCKED]">17</div>
+<div class="h-full flex items-center justify-center font-mono text-[9px] font-bold text-surface-container-lowest bg-primary border-t-2 border-primary animate-pulse z-10" title="B18: 8.5-9.0 GHz [1.0 GHz IBW LOCKED]">18</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">19</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">20</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">21</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] font-semibold text-tertiary bg-tertiary/10 cursor-pointer" title="B22: 10.5-11.0 GHz">22</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] font-semibold text-tertiary bg-tertiary/20 cursor-pointer" title="B23: 11.0-11.5 GHz [RADAR-P12]">23</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">24</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">25</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">26</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">27</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">28</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] font-semibold text-outline-variant bg-surface-container-high cursor-pointer" title="B29: 14.0-14.5 GHz">29</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] font-semibold text-secondary bg-secondary/15 cursor-pointer" title="B30: 14.5-15.0 GHz [SEC-COMMS]">30</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">31</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">32</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">33</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">34</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">35</div>
+<div class="h-full flex items-center justify-center font-mono text-[8.5px] text-outline hover:bg-surface-container-high cursor-pointer">36</div>
+</div>
+</div>
+</section>
+<!-- MAIN RF FAST FOURIER TRANSFORM (FFT) SPECTRUM (0 to 18,000 MHz) -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded p-3 flex flex-col gap-2 relative shadow-lg">
+<!-- Top Scope Banner -->
+<div class="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+<div class="flex items-center gap-2">
+<span class="font-mono text-[12px] font-bold uppercase tracking-wider text-primary">REAL-TIME FAST FOURIER TRANSFORM (FFT) SPECTRUM</span>
+<span class="bg-surface-container-high border border-outline-variant text-primary font-mono text-[9px] px-1.5 py-0.5 rounded">RBW: 100 kHz</span>
+<span class="bg-surface-container-high border border-outline-variant text-tertiary font-mono text-[9px] px-1.5 py-0.5 rounded">POW SPAN: -100 to -20 dBm</span>
+</div>
+<div class="flex items-center gap-3 font-mono text-[9.5px] text-outline">
+<span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-primary/40 border border-primary"></span> INSTANTANEOUS IBW (1.0 GHz)</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-tertiary"></span> SEARCH RADAR</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-secondary"></span> TRACK AGILE</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-error"></span> HOSTILE JAMMING</span>
+</div>
+</div>
+<!-- Scope Graticule Display Canvas -->
+<div class="relative w-full h-80 bg-surface-container-lowest rounded border border-outline-variant/80 overflow-hidden flex flex-col justify-between p-1">
+<!-- Horizontal Decibel Power Level Grid Lines -->
+<div class="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-25 px-2 py-2">
+<div class="flex justify-between font-mono text-[8.5px] text-outline"><span>-20 dBm</span><div class="w-full mx-2 border-b border-outline/30 self-center"></div></div>
+<div class="flex justify-between font-mono text-[8.5px] text-outline"><span>-35 dBm</span><div class="w-full mx-2 border-b border-outline/30 self-center"></div></div>
+<div class="flex justify-between font-mono text-[8.5px] text-outline"><span>-50 dBm</span><div class="w-full mx-2 border-b border-outline/30 self-center"></div></div>
+<div class="flex justify-between font-mono text-[8.5px] text-outline"><span>-65 dBm</span><div class="w-full mx-2 border-b border-outline/30 self-center"></div></div>
+<div class="flex justify-between font-mono text-[8.5px] text-outline"><span>-80 dBm</span><div class="w-full mx-2 border-b border-outline/30 self-center"></div></div>
+<div class="flex justify-between font-mono text-[8.5px] text-outline"><span>-95.4 dBm (NOISE FLOOR)</span><div class="w-full mx-2 border-b border-outline/30 self-center"></div></div>
+</div>
+<!-- HIGHLIGHTED 1.0 GHz IBW WINDOW OVERLAY (8.0 to 9.0 GHz -> 44.4% to 50.0% of width) -->
+<div class="absolute top-0 bottom-6 left-[44.4%] w-[5.6%] bg-primary/10 border-x border-primary/40 pointer-events-none flex flex-col items-center justify-start pt-1 z-10">
+<div class="bg-primary text-surface-container-lowest px-1 py-0.5 rounded font-mono text-[7.5px] font-bold uppercase tracking-wider whitespace-nowrap shadow">
+              1.0 GHz IBW LOCKED
+            </div>
+<div class="text-[8.5px] font-mono text-primary font-semibold mt-1 bg-surface-container-lowest/90 px-1 rounded border border-primary/30">
+              8.0–9.0 GHz
+            </div>
+</div>
+<!-- SPECTRUM SVG RF TRACE WITH PEAKS & DYNAMICS -->
+<svg class="w-full h-full overflow-visible z-10" preserveaspectratio="none" viewbox="0 0 1800 300">
+<defs>
+<lineargradient id="spectrumGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#00e5ff" stop-opacity="0.35"></stop>
+<stop offset="50%" stop-color="#00daf3" stop-opacity="0.12"></stop>
+<stop offset="100%" stop-color="#0c0e12" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<!-- RF Sweep Spectrum Curve -->
+<path d="
+              M 0,285
+              L 40,284 L 80,286 L 110,282
+              L 130,80 L 145,45 L 160,82 L 180,284
+              L 230,285 L 285,283 L 305,115 L 315,100 L 330,285
+              L 420,286 L 470,283 L 520,285
+              L 560,95 L 575,68 L 590,95 L 610,285
+              L 700,284 L 750,286
+              L 810,284 L 830,35 L 845,20 L 860,40 L 885,285
+              L 940,286 L 1000,284 L 1040,285
+              L 1105,100 L 1120,78 L 1135,105 L 1160,285
+              L 1260,284 L 1320,286 L 1370,285
+              L 1435,145 L 1455,130 L 1475,150 L 1500,285
+              L 1580,284 L 1660,285 L 1740,284 L 1800,285
+              L 1800,300 L 0,300 Z
+            " fill="url(#spectrumGradient)" stroke="#00e5ff" stroke-linejoin="round" stroke-width="1.6"></path>
+<!-- Noise Floor Jitter Floor Baseline (-95.4 dBm) -->
+<path d="M 0,285 Q 45,283 90,286 T 180,284 T 270,286 T 360,283 T 450,287 T 540,284 T 630,286 T 720,283 T 810,287 T 900,284 T 990,286 T 1080,283 T 1170,286 T 1260,284 T 1350,287 T 1440,284 T 1530,286 T 1620,283 T 1710,286 T 1800,285" fill="none" stroke="#242730" stroke-dasharray="3,3" stroke-width="1"></path>
+</svg>
+<!-- CALIBRATED TARGET CALLOUT RETICLES -->
+<!-- Peak 1: JAM-03 [WB NOISE] at 1,450 MHz (~8.1%) -->
+<div class="absolute top-[32px] left-[8.1%] -translate-x-1/2 flex flex-col items-center pointer-events-none z-20">
+<span class="bg-error text-surface-container-lowest font-mono text-[8px] font-bold px-1.5 py-0.5 rounded shadow uppercase tracking-wider">JAM-03 [WB NOISE]</span>
+<span class="text-error font-mono text-[8.5px] font-medium bg-surface-container-lowest/90 px-1 rounded mt-0.5">1,450 MHz // -28 dBm</span>
+<div class="w-px h-6 bg-error"></div>
+</div>
+<!-- Peak 2: RADAR-P01 [S-BAND] at 3,150 MHz (~17.5%) -->
+<div class="absolute top-[75px] left-[17.5%] -translate-x-1/2 flex flex-col items-center pointer-events-none z-20">
+<span class="bg-surface-container-high border border-tertiary/40 text-tertiary font-mono text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">RADAR-P01 [S-BAND]</span>
+<span class="text-tertiary font-mono text-[8.5px] font-medium bg-surface-container-lowest/90 px-1 rounded mt-0.5">3,150 MHz // -42 dBm</span>
+<div class="w-px h-6 bg-tertiary"></div>
+</div>
+<!-- Peak 3: AGILE-02 [HOPPER] at 5,750 MHz (~32.0%) -->
+<div class="absolute top-[52px] left-[32.0%] -translate-x-1/2 flex flex-col items-center pointer-events-none z-20">
+<span class="bg-surface-container-high border border-secondary/40 text-secondary font-mono text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">AGILE-02 [HOPPER]</span>
+<span class="text-secondary font-mono text-[8.5px] font-medium bg-surface-container-lowest/90 px-1 rounded mt-0.5">5,750 MHz // -35 dBm</span>
+<div class="w-px h-6 bg-secondary"></div>
+</div>
+<!-- Peak 4: TRACK-084 [X-BAND LOCK] at 8,450 MHz (~47.0%) TARGET LOCKED -->
+<div class="absolute top-[8px] left-[47.0%] -translate-x-1/2 flex flex-col items-center z-30 pointer-events-none">
+<div class="flex items-center gap-1 bg-primary text-surface-container-lowest font-mono text-[8.5px] font-bold px-2 py-0.5 rounded shadow-lg uppercase animate-bounce">
+<span class="w-1.5 h-1.5 rounded-full bg-surface-container-lowest"></span>
+<span>TRACK-084 [X-BAND LOCK]</span>
+</div>
+<span class="text-primary font-mono text-[9px] font-bold bg-surface-container-lowest px-1.5 py-0.5 rounded border border-primary/40 mt-0.5">8,450 MHz // -22 dBm // PRI 45µs</span>
+<div class="w-px h-7 bg-primary"></div>
+</div>
+<!-- Peak 5: RADAR-P12 [ROTARY] at 11,200 MHz (~62.2%) -->
+<div class="absolute top-[62px] left-[62.2%] -translate-x-1/2 flex flex-col items-center pointer-events-none z-20">
+<span class="bg-surface-container-high border border-tertiary/40 text-tertiary font-mono text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">RADAR-P12 [ROTARY]</span>
+<span class="text-tertiary font-mono text-[8.5px] font-medium bg-surface-container-lowest/90 px-1 rounded mt-0.5">11,200 MHz // -38 dBm</span>
+<div class="w-px h-6 bg-tertiary"></div>
+</div>
+<!-- Peak 6: SEC-COMMS [BURST] at 14,550 MHz (~80.8%) -->
+<div class="absolute top-[96px] left-[80.8%] -translate-x-1/2 flex flex-col items-center pointer-events-none z-20">
+<span class="bg-surface-container-high border border-outline/40 text-outline font-mono text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">SEC-COMMS [BURST]</span>
+<span class="text-outline font-mono text-[8.5px] font-medium bg-surface-container-lowest/90 px-1 rounded mt-0.5">14,550 MHz // -52 dBm</span>
+<div class="w-px h-6 bg-outline"></div>
+</div>
+<!-- X-Axis Frequency Baseline (0 to 18 GHz) -->
+<div class="w-full flex justify-between font-mono text-[9px] text-outline border-t border-outline-variant pt-1 px-1 select-none z-20 bg-surface-container-lowest/90">
+<span>0.0 GHz</span>
+<span>2.0 GHz</span>
+<span>4.0 GHz</span>
+<span>6.0 GHz</span>
+<span class="text-primary font-bold">8.0 GHz</span>
+<span class="text-primary font-bold">10.0 GHz</span>
+<span>12.0 GHz</span>
+<span>14.0 GHz</span>
+<span>16.0 GHz</span>
+<span>18.0 GHz</span>
+</div>
+</div>
+</section>
+<!-- HISTORICAL WATERFALL SPECTROGRAM (TIME VS. FREQUENCY 0-18 GHz) -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded p-3 flex flex-col gap-2 shadow-sm">
+<div class="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+<div class="flex items-center gap-2">
+<span class="font-mono text-[12px] font-bold uppercase tracking-wider text-primary">HISTORICAL WATERFALL SPECTROGRAM (T - 2.0s TO T = 0.0s)</span>
+<span class="font-mono text-[9.5px] text-outline">RESOLUTION: 10ms SLICES // 200 TIMESTEPS</span>
+</div>
+<div class="flex items-center gap-3 font-mono text-[9.5px] text-outline">
+<span class="flex items-center gap-1.5"><span class="w-2.5 h-2 rounded bg-primary/30 border border-primary"></span> RECEIVER DWELL FOOTPRINT</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-tertiary"></span> INTERCEPTED EMITTER BURST</span>
+</div>
+</div>
+<!-- Waterfall Spectrogram Canvas -->
+<div class="relative w-full h-64 bg-surface-container-lowest rounded border border-outline-variant/80 overflow-hidden flex flex-col justify-between">
+<!-- Y-Axis Time Labels -->
+<div class="absolute left-2 top-1 bottom-6 flex flex-col justify-between pointer-events-none z-30 font-mono text-[8.5px] text-outline opacity-70">
+<span>T - 0.0s [NOW]</span>
+<span>T - 0.5s</span>
+<span>T - 1.0s</span>
+<span>T - 1.5s</span>
+<span>T - 2.0s</span>
+</div>
+<!-- Procedural Spectrogram 2D Activity Field -->
+<div class="w-full h-full relative overflow-hidden">
+<!-- Background Thermal Graticule -->
+<div class="absolute inset-0 bg-[#0a0c10] opacity-95"></div>
+<!-- Jammer Column at 1.45 GHz (~8.1%) - Continuous active -->
+<div class="absolute top-0 bottom-0 left-[7.8%] w-[1.0%] bg-error/20 blur-[1px]"></div>
+<div class="absolute top-0 bottom-0 left-[8.1%] w-[0.4%] bg-error/80 shadow"></div>
+<!-- Intercepted Radar-P01 Pulses at 3.15 GHz (~17.5%) -->
+<div class="absolute top-[12%] h-[4%] left-[17.2%] w-[0.8%] bg-tertiary rounded shadow"></div>
+<div class="absolute top-[38%] h-[4%] left-[17.2%] w-[0.8%] bg-tertiary rounded shadow"></div>
+<div class="absolute top-[64%] h-[4%] left-[17.2%] w-[0.8%] bg-tertiary rounded shadow"></div>
+<div class="absolute top-[88%] h-[4%] left-[17.2%] w-[0.8%] bg-tertiary rounded shadow"></div>
+<!-- Agile Frequency Hopper points (Scattered Burst Tracks) -->
+<div class="absolute top-[15%] h-[3%] left-[29.5%] w-[0.6%] bg-secondary shadow-sm"></div>
+<div class="absolute top-[28%] h-[3%] left-[33.0%] w-[0.6%] bg-secondary shadow-sm"></div>
+<div class="absolute top-[44%] h-[3%] left-[30.8%] w-[0.6%] bg-secondary shadow-sm"></div>
+<div class="absolute top-[59%] h-[3%] left-[34.2%] w-[0.6%] bg-secondary shadow-sm"></div>
+<div class="absolute top-[75%] h-[3%] left-[31.5%] w-[0.6%] bg-secondary shadow-sm"></div>
+<!-- High Threat X-Band Track-084 at 8.45 GHz (~47.0%) - Dense Pulse Train -->
+<div class="absolute top-[4%] h-[32%] left-[46.8%] w-[0.6%] bg-primary shadow-md"></div>
+<div class="absolute top-[42%] h-[22%] left-[46.8%] w-[0.6%] bg-primary/75"></div>
+<div class="absolute top-[68%] h-[26%] left-[46.8%] w-[0.6%] bg-primary/45"></div>
+<!-- Periodic Radar-P12 Rotary Pulses at 11.2 GHz (~62.2%) -->
+<div class="absolute top-[8%] h-[5%] left-[62.0%] w-[0.7%] bg-tertiary shadow"></div>
+<div class="absolute top-[48%] h-[5%] left-[62.0%] w-[0.7%] bg-tertiary shadow"></div>
+<div class="absolute top-[86%] h-[5%] left-[62.0%] w-[0.7%] bg-tertiary shadow"></div>
+<!-- Intermittent Comms at 14.55 GHz (~80.8%) -->
+<div class="absolute top-[24%] h-[2%] left-[80.6%] w-[0.6%] bg-outline"></div>
+<div class="absolute top-[67%] h-[2%] left-[80.6%] w-[0.6%] bg-outline"></div>
+<!-- RECEIVER DWELL FOOTPRINT OVERLAYS (Visualizing SmartScan Stepping History) -->
+<!-- Step 1: Recent dwell at 8-9 GHz (Now) -->
+<div class="absolute top-0 h-[22%] left-[44.4%] w-[5.6%] bg-primary/20 border border-primary/40 flex items-center justify-center">
+<span class="font-mono text-[7.5px] text-primary font-bold opacity-90">DWELL #1084 (8-9 GHz)</span>
+</div>
+<!-- Step 2: Dwell at 5-6 GHz -->
+<div class="absolute top-[24%] h-[20%] left-[27.7%] w-[5.6%] bg-primary/15 border border-primary/25 flex items-center justify-center">
+<span class="font-mono text-[7.5px] text-outline font-bold opacity-75">DWELL #1083 (5-6 GHz)</span>
+</div>
+<!-- Step 3: Dwell at 11-12 GHz -->
+<div class="absolute top-[46%] h-[20%] left-[61.1%] w-[5.6%] bg-primary/15 border border-primary/25 flex items-center justify-center">
+<span class="font-mono text-[7.5px] text-outline font-bold opacity-75">DWELL #1082 (11-12 GHz)</span>
+</div>
+<!-- Step 4: Dwell back at 8-9 GHz (Smart AI Revisit based on PRI) -->
+<div class="absolute top-[68%] h-[22%] left-[44.4%] w-[5.6%] bg-primary/20 border border-primary/40 flex items-center justify-center">
+<span class="font-mono text-[7.5px] text-primary font-bold opacity-90">DWELL #1081 (8-9 GHz)</span>
+</div>
+<!-- Step 5: Dwell at 1-2 GHz -->
+<div class="absolute top-[92%] h-[8%] left-[5.5%] w-[5.6%] bg-primary/15 border border-primary/20"></div>
+</div>
+<!-- X-Axis Baseline for Waterfall -->
+<div class="w-full flex justify-between font-mono text-[8.5px] text-outline bg-surface-container-low/95 border-t border-outline-variant py-0.5 px-2 select-none z-20">
+<span>0.0 GHz</span>
+<span>2.0 GHz</span>
+<span>4.0 GHz</span>
+<span>6.0 GHz</span>
+<span class="text-primary font-semibold">8.0 GHz</span>
+<span class="text-primary font-semibold">10.0 GHz</span>
+<span>12.0 GHz</span>
+<span>14.0 GHz</span>
+<span>16.0 GHz</span>
+<span>18.0 GHz</span>
+</div>
+</div>
+</section>
+<!-- BOTTOM TELEMETRY HUD & QUICK FILTER ACTION STRIP -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded p-3 grid grid-cols-1 xl:grid-cols-4 gap-3 shadow-sm">
+<!-- Telemetry Column 1: RF Environmental Census -->
+<div class="bg-surface-container-low border border-outline-variant p-2.5 rounded flex flex-col justify-between gap-1.5">
+<div class="flex items-center justify-between">
+<span class="font-mono text-[9.5px] text-outline uppercase font-bold">RF Activity Summary</span>
+<span class="font-mono text-[9px] text-secondary font-semibold bg-surface-container-highest px-1 py-0.5 rounded">REAL-TIME</span>
+</div>
+<div class="grid grid-cols-2 gap-2 pt-1">
+<div>
+<span class="font-mono text-[8.5px] text-outline uppercase block">Active Emitters</span>
+<span class="font-mono text-[16px] text-primary font-bold">14 DETECTED</span>
+<span class="font-mono text-[8px] text-outline block">across 14 / 36 bands</span>
+</div>
+<div>
+<span class="font-mono text-[8.5px] text-outline uppercase block">Quiescent Bands</span>
+<span class="font-mono text-[16px] text-on-surface font-bold">22 / 36</span>
+<span class="font-mono text-[8px] text-tertiary block">No threat energy</span>
+</div>
+</div>
+</div>
+<!-- Telemetry Column 2: Hardware Dynamics -->
+<div class="bg-surface-container-low border border-outline-variant p-2.5 rounded flex flex-col justify-between gap-1.5">
+<div class="flex items-center justify-between">
+<span class="font-mono text-[9.5px] text-outline uppercase font-bold">Receiver Hardware Dynamics</span>
+<span class="font-mono text-[9px] text-tertiary font-semibold bg-tertiary/10 border border-tertiary/30 px-1 py-0.5 rounded">LOCKED</span>
+</div>
+<div class="grid grid-cols-2 gap-2 pt-1">
+<div>
+<span class="font-mono text-[8.5px] text-outline uppercase block">PLL Tune Latency</span>
+<span class="font-mono text-[16px] text-tertiary font-bold">12.0 µs</span>
+<span class="font-mono text-[8px] text-outline block">Fast agile hopping</span>
+</div>
+<div>
+<span class="font-mono text-[8.5px] text-outline uppercase block">Inst. Sample Rate</span>
+<span class="font-mono text-[16px] text-secondary font-bold">2.4 GS/s</span>
+<span class="font-mono text-[8px] text-outline block">14-bit dual ADC</span>
+</div>
+</div>
+</div>
+<!-- Telemetry Column 3: Signal Quality & Interception Fidelity -->
+<div class="bg-surface-container-low border border-outline-variant p-2.5 rounded flex flex-col justify-between gap-1.5">
+<div class="flex items-center justify-between">
+<span class="font-mono text-[9.5px] text-outline uppercase font-bold">Interception Fidelity</span>
+<span class="font-mono text-[9px] text-primary font-semibold bg-primary/10 border border-primary/30 px-1 py-0.5 rounded">DRQN+MoE</span>
+</div>
+<div class="grid grid-cols-2 gap-2 pt-1">
+<div>
+<span class="font-mono text-[8.5px] text-outline uppercase block">Mean RF SNR</span>
+<span class="font-mono text-[16px] text-primary font-bold">+19.4 dB</span>
+<span class="font-mono text-[8px] text-outline block">Dynamic margin</span>
+</div>
+<div>
+<span class="font-mono text-[8.5px] text-outline uppercase block">Intercept Efficiency</span>
+<span class="font-mono text-[16px] text-tertiary font-bold">94.7%</span>
+<span class="font-mono text-[8px] text-tertiary block">+62.9% vs Sweep</span>
+</div>
+</div>
+</div>
+<!-- Telemetry Column 4: Quick HUD Toggles -->
+<div class="bg-surface-container-low border border-outline-variant p-2.5 rounded flex flex-col justify-between gap-1.5">
+<div class="flex items-center justify-between">
+<span class="font-mono text-[9.5px] text-outline uppercase font-bold">Surveillance HUD Toggles</span>
+<span class="font-mono text-[8.5px] text-outline">VISUAL LAYERS</span>
+</div>
+<div class="grid grid-cols-2 gap-2 pt-1 font-mono text-[10px]">
+<label class="flex items-center gap-1.5 cursor-pointer select-none">
+<input checked="" class="w-3.5 h-3.5 bg-surface-container-highest border-outline-variant text-primary rounded focus:ring-0 cursor-pointer" type="checkbox"/>
+<span class="text-on-surface">EMITTER TRUTH</span>
+</label>
+<label class="flex items-center gap-1.5 cursor-pointer select-none">
+<input checked="" class="w-3.5 h-3.5 bg-surface-container-highest border-outline-variant text-primary rounded focus:ring-0 cursor-pointer" type="checkbox"/>
+<span class="text-on-surface">NOISE FLOOR</span>
+</label>
+<label class="flex items-center gap-1.5 cursor-pointer select-none">
+<input checked="" class="w-3.5 h-3.5 bg-surface-container-highest border-outline-variant text-primary rounded focus:ring-0 cursor-pointer" type="checkbox"/>
+<span class="text-on-surface">CARRIER TRACKS</span>
+</label>
+<label class="flex items-center gap-1.5 cursor-pointer select-none">
+<input checked="" class="w-3.5 h-3.5 bg-surface-container-highest border-outline-variant text-primary rounded focus:ring-0 cursor-pointer" type="checkbox"/>
+<span class="text-on-surface">DWELL FOOTPRINT</span>
+</label>
+</div>
+</div>
+</section>
+</main>
+</div>
+<!-- INTERACTIVE CLIENT SCRIPTS -->
+<script>
+    (function() {
+      // Play / Pause toggle
+      const simBtn = document.getElementById('sim-toggle-btn');
+      const playIcon = document.getElementById('play-icon');
+      const playLabel = document.getElementById('play-label');
+      let isRunning = true;
+
+      if (simBtn) {
+        simBtn.addEventListener('click', function() {
+          isRunning = !isRunning;
+          if (isRunning) {
+            playIcon.textContent = 'pause';
+            playIcon.classList.remove('text-outline');
+            playIcon.classList.add('text-tertiary');
+            playLabel.textContent = 'LIVE PULSE STREAM';
+          } else {
+            playIcon.textContent = 'play_arrow';
+            playIcon.classList.remove('text-tertiary');
+            playIcon.classList.add('text-outline');
+            playLabel.textContent = 'STREAM PAUSED';
+          }
+        });
+      }
+
+      // Speed selection
+      const speedButtons = document.querySelectorAll('.speed-btn');
+      speedButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+          speedButtons.forEach(b => {
+            b.classList.remove('bg-primary/20', 'text-primary', 'border', 'border-primary/40', 'font-bold', 'rounded');
+            b.classList.add('text-outline');
+          });
+          this.classList.add('bg-primary/20', 'text-primary', 'border', 'border-primary/40', 'font-bold', 'rounded');
+          this.classList.remove('text-outline');
+        });
+      });
+
+      // Window selection
+      const windowButtons = document.querySelectorAll('.window-btn');
+      windowButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+          windowButtons.forEach(b => {
+            b.classList.remove('bg-surface-container-highest', 'text-primary', 'font-bold', 'rounded');
+            b.classList.add('text-outline');
+          });
+          this.classList.add('bg-surface-container-highest', 'text-primary', 'font-bold', 'rounded');
+          this.classList.remove('text-outline');
+        });
+      });
+
+      // Strategy mode toggle buttons
+      const stratOpen = document.getElementById('strat-open');
+      const stratSmart = document.getElementById('strat-smart');
+
+      if (stratOpen && stratSmart) {
+        stratOpen.addEventListener('click', function() {
+          stratOpen.className = 'px-2 py-0.5 rounded bg-surface-container-high text-on-surface font-bold shadow-sm';
+          stratSmart.className = 'px-2 py-0.5 rounded text-outline hover:text-on-surface transition-colors';
+        });
+
+        stratSmart.addEventListener('click', function() {
+          stratSmart.className = 'px-2 py-0.5 rounded bg-primary text-surface-container-lowest font-bold shadow-sm';
+          stratOpen.className = 'px-2 py-0.5 rounded text-outline hover:text-on-surface transition-colors';
+        });
+      }
+    })();
+  </script>
+</body></html>
