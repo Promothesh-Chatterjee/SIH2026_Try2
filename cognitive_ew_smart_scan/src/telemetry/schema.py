@@ -52,6 +52,7 @@ REWARD_COMPONENT_FIELDS = [
     "reward_info_gain",
     "reward_redundant",
     "reward_delay",
+    "reward_staleness",
 ]
 
 # Canonical per-eval core metrics.

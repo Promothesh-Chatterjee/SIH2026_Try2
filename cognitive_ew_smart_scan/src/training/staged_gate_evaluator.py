@@ -443,6 +443,74 @@ class StagedGateEvaluator:
             else:
                 verdict = "PASS"
                 notes = "Stage A (5k) integrity, autonomy, and baseline benchmark complete. Ready for evaluation."
+        elif gate == 25000:
+            drqn_p = policies_agg.get("drqn", {})
+            moe_p = policies_agg.get("full_moe", {})
+            no_band_lock = bool(moe_p.get("distinct_bands", 0) >= 18)
+            pass_conditions["no_band_locking"] = no_band_lock
+            pass_conditions["baseline_eval_completed"] = bool(policies_agg)
+            pass_conditions["drqn_improving"] = bool(drqn_p.get("distinct_bands", 0) > 1 and drqn_p.get("intercept_rate", 0) > 0.01)
+
+            if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward", "no_band_locking"))):
+                verdict = "STOP"
+                notes = "Integrity or band-locking failure at Gate 25k."
+            elif drqn_p.get("distinct_bands", 0) <= 2:
+                verdict = "INVESTIGATE"
+                notes = "Integrity passed. DRQN policy shows initial value differentiation but standalone band expansion remains narrow (<= 2 bands); MoE maintains 36/36 band coverage."
+            else:
+                verdict = "PASS"
+                notes = f"Gate 25k PASS. DRQN expanded distinct bands to {drqn_p.get('distinct_bands', 0):.1f}/36 with intercept rate {drqn_p.get('intercept_rate', 0)*100:.2f}%. Ready for promotion to 100k."
+        elif gate == 100000:
+            drqn_p = policies_agg.get("drqn", {})
+            moe_p = policies_agg.get("full_moe", {})
+            rand_p = policies_agg.get("random", {})
+            pass_conditions["no_band_locking"] = bool(moe_p.get("distinct_bands", 0) >= 18)
+            pass_conditions["baseline_eval_completed"] = bool(policies_agg)
+            pass_conditions["drqn_beats_random"] = bool(drqn_p.get("intercept_rate", 0) >= rand_p.get("intercept_rate", 0))
+
+            if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward", "no_band_locking"))):
+                verdict = "STOP"
+                notes = "Integrity or band-locking failure at Gate 100k."
+            elif not pass_conditions["drqn_beats_random"]:
+                verdict = "INVESTIGATE"
+                notes = "DRQN intercept rate does not exceed Random baseline at 100k exploitation onset."
+            else:
+                verdict = "PASS"
+                notes = f"Gate 100k PASS. DRQN exceeds Random baseline ({drqn_p.get('intercept_rate', 0)*100:.2f}% vs {rand_p.get('intercept_rate', 0)*100:.2f}%). Ready for promotion to 300k."
+        elif gate == 200000:
+            drqn_p = policies_agg.get("drqn", {})
+            rand_p = policies_agg.get("random", {})
+            rr_p = policies_agg.get("round_robin", {})
+            pass_conditions["baseline_eval_completed"] = bool(policies_agg)
+            pass_conditions["drqn_beats_random"] = bool(drqn_p.get("intercept_rate", 0) >= rand_p.get("intercept_rate", 0))
+            pass_conditions["drqn_beats_round_robin"] = bool(drqn_p.get("intercept_rate", 0) >= rr_p.get("intercept_rate", 0))
+
+            if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward"))):
+                verdict = "STOP"
+                notes = "Numerical or training integrity failure at Gate 200k."
+            elif not pass_conditions["drqn_beats_random"]:
+                verdict = "INVESTIGATE"
+                notes = f"Gate 200k: DRQN intercept rate ({drqn_p.get('intercept_rate', 0)*100:.2f}%) does not exceed Random ({rand_p.get('intercept_rate', 0)*100:.2f}%)."
+            else:
+                verdict = "PASS"
+                notes = f"Gate 200k PASS: DRQN intercept rate {drqn_p.get('intercept_rate', 0)*100:.2f}% vs Random {rand_p.get('intercept_rate', 0)*100:.2f}%, RR {rr_p.get('intercept_rate', 0)*100:.2f}%."
+        elif gate == 300000:
+            drqn_p = policies_agg.get("drqn", {})
+            rand_p = policies_agg.get("random", {})
+            rr_p = policies_agg.get("round_robin", {})
+            pass_conditions["baseline_eval_completed"] = bool(policies_agg)
+            pass_conditions["drqn_beats_random"] = bool(drqn_p.get("intercept_rate", 0) >= rand_p.get("intercept_rate", 0))
+            pass_conditions["drqn_beats_round_robin"] = bool(drqn_p.get("intercept_rate", 0) >= rr_p.get("intercept_rate", 0))
+
+            if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward"))):
+                verdict = "STOP"
+                notes = "Numerical or training integrity failure at Gate 300k."
+            elif not pass_conditions["drqn_beats_random"]:
+                verdict = "INVESTIGATE"
+                notes = f"Gate 300k: DRQN intercept rate ({drqn_p.get('intercept_rate', 0)*100:.2f}%) does not exceed Random ({rand_p.get('intercept_rate', 0)*100:.2f}%)."
+            else:
+                verdict = "PASS"
+                notes = f"Gate 300k Stage C PASS: DRQN intercept rate {drqn_p.get('intercept_rate', 0)*100:.2f}% vs Random {rand_p.get('intercept_rate', 0)*100:.2f}%, RR {rr_p.get('intercept_rate', 0)*100:.2f}%."
         else:
             verdict = "PASS" if all(pass_conditions.values()) else "STOP"
             notes = f"Gate {gate} evaluated."

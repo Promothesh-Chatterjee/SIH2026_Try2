@@ -181,6 +181,8 @@ def train_scheduler(
     reset_semantic_memory: bool = False,
     staged_gates: list[int] | None = None,
     stop_at_step: int | None = None,
+    resume_checkpoint: str | None = None,
+    override_epsilon: float | None = None,
 ) -> None:
     """Full DRQN training with Thompson warmup, BPTT, target network, and MoE eval.
 
@@ -193,6 +195,8 @@ def train_scheduler(
         reset_semantic_memory: If True, resets SQLite database before training.
         staged_gates: Step numbers at which to execute quantitative gate evaluation.
         stop_at_step: Step number at which to cleanly stop training.
+        resume_checkpoint: Path to checkpoint .pt to resume training from.
+        override_epsilon: Optional exploration floor override for diagnostic retraining.
     """
     with open(model_cfg_path) as f:
         full_cfg = yaml.safe_load(f)
@@ -463,6 +467,30 @@ def train_scheduler(
     best_reward = -float("inf")
     eps = eps_start
 
+    if resume_checkpoint:
+        resume_path = Path(resume_checkpoint)
+        if resume_path.exists():
+            logger.info("Resuming DRQN scheduler from checkpoint: %s", resume_path)
+            ckpt = torch.load(resume_path, map_location=device)
+            if "state_dict" in ckpt:
+                online_drqn.load_state_dict(ckpt["state_dict"])
+                target_drqn.load_state_dict(ckpt["state_dict"])
+            if "optimizer_state_dict" in ckpt and optimizer is not None:
+                try:
+                    optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+                except Exception as exc:
+                    logger.warning("Could not restore optimizer state: %s", exc)
+            global_step = int(ckpt.get("global_step", 0))
+            episode = int(ckpt.get("episode", 0)) + 1
+            eps = float(ckpt.get("epsilon", eps_start))
+            best_reward = float(ckpt.get("metadata", {}).get("metrics", {}).get("best_episode_reward", -float("inf")))
+            logger.info("Resumed state: global_step=%d, episode=%d, eps=%.4f", global_step, episode, eps)
+            for g in gate_evaluator.gates:
+                if g <= global_step:
+                    gate_evaluator.completed_gates.add(g)
+        else:
+            logger.warning("Resume checkpoint not found: %s — starting fresh", resume_path)
+
     while global_step < total_steps:
         obs, _ = env.reset()
         obs_arr = np.asarray(obs)
@@ -505,7 +533,10 @@ def train_scheduler(
                     moe.set_periodic_urgency_vector(np.asarray(env.belief.periodic_urgency, dtype=np.float32))
                 except Exception:
                     pass
-            eps = eps_end + (eps_start - eps_end) * float(np.exp(-global_step / eps_decay))
+            if override_epsilon is not None:
+                eps = float(override_epsilon)
+            else:
+                eps = eps_end + (eps_start - eps_end) * float(np.exp(-global_step / eps_decay))
             if global_step < ts_warmup:
                 use_ts = True
                 action = ts_sampler.select_action()
@@ -521,8 +552,13 @@ def train_scheduler(
                     online_drqn.eval()
                     with torch.inference_mode():
                         obs_np = np.asarray(obs, dtype=np.float32)
-                        action, hidden_out, moe_attr = moe.select_action(obs_np, hidden)
-                        hidden = hidden_out if hidden_out is not None else hidden
+                        obs_t = torch.from_numpy(obs_np).to(device)
+                        action, hidden = online_drqn.act(obs_t, hidden)
+                        # Diagnostic MoE query for passive telemetry only (MoE quarantined from action selection)
+                        try:
+                            _, _, moe_attr = moe.select_action(obs_np, hidden)
+                        except Exception:
+                            moe_attr = None
                     online_drqn.train()
                     act_source = "greedy"
 
@@ -674,6 +710,7 @@ def train_scheduler(
             "reward_info_gain": "avg_reward_info_gain_term",
             "reward_redundant": "avg_reward_redundant_penalty",
             "reward_delay": "avg_reward_delay_penalty",
+            "reward_staleness": "avg_reward_staleness_bonus",
         }
         reward_components: dict = {}
         for canon, avg_key in _avg_to_total.items():
@@ -987,8 +1024,10 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", type=str, default=None, help="Override checkpoint output dir (CLI > YAML).")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--reset-semantic-memory", action="store_true", help="Reset semantic memory DB before training.")
-    parser.add_argument("--staged-gates", type=str, default="1000,5000,25000,100000,300000,500000", help="Comma-separated step gates.")
+    parser.add_argument("--staged-gates", type=str, default="1000,5000,25000,100000,200000,300000,500000", help="Comma-separated step gates.")
     parser.add_argument("--stop-at-step", type=int, default=None, help="Stop after reaching this step.")
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint .pt to resume from.")
+    parser.add_argument("--override-epsilon", type=float, default=None, help="Hold exploration epsilon at a fixed floor.")
     args = parser.parse_args()
     if args.device:
         os.environ["DEVICE"] = args.device
@@ -1001,4 +1040,6 @@ if __name__ == "__main__":
         reset_semantic_memory=args.reset_semantic_memory,
         staged_gates=gates_list,
         stop_at_step=args.stop_at_step,
+        resume_checkpoint=args.resume,
+        override_epsilon=args.override_epsilon,
     )
