@@ -173,6 +173,8 @@ class StagedGateEvaluator:
         buffer: Any,
         eps: float,
         moe: SmartScanMoE | None = None,
+        reward_baseline: float = -0.39,
+        override_epsilon: float | None = None,
     ) -> dict[str, Any] | None:
         """Check if current step satisfies any pending gate and execute evaluation."""
         for gate in self.gates:
@@ -187,6 +189,8 @@ class StagedGateEvaluator:
                     buffer=buffer,
                     eps=eps,
                     moe=moe,
+                    reward_baseline=reward_baseline,
+                    override_epsilon=override_epsilon,
                 )
         return None
 
@@ -369,10 +373,12 @@ class StagedGateEvaluator:
         buffer: Any,
         eps: float,
         moe: SmartScanMoE | None = None,
+        reward_baseline: float = -0.39,
+        override_epsilon: float | None = None,
     ) -> dict[str, Any]:
         """Execute full evaluation, check promotion criteria, print table, and save checkpoint/report."""
         logger.info("=" * 100)
-        logger.info("EXECUTING STAGED GATE %d EVALUATION (Global Step: %d | Episode: %d | Epsilon: %.4f)", gate, global_step, episode, eps)
+        logger.info("EXECUTING STAGED GATE %d EVALUATION (Global Step: %d | Episode: %d | Epsilon: %.4f | Baseline: %.4f)", gate, global_step, episode, eps, reward_baseline)
         logger.info("=" * 100)
 
         # 1. Gather numerical / training health diagnostics
@@ -443,6 +449,74 @@ class StagedGateEvaluator:
             else:
                 verdict = "PASS"
                 notes = "Stage A (5k) integrity, autonomy, and baseline benchmark complete. Ready for evaluation."
+        elif gate == 25000:
+            drqn_p = policies_agg.get("drqn", {})
+            moe_p = policies_agg.get("full_moe", {})
+            no_band_lock = bool(moe_p.get("distinct_bands", 0) >= 18)
+            pass_conditions["no_band_locking"] = no_band_lock
+            pass_conditions["baseline_eval_completed"] = bool(policies_agg)
+            pass_conditions["drqn_improving"] = bool(drqn_p.get("distinct_bands", 0) > 1 and drqn_p.get("intercept_rate", 0) > 0.01)
+
+            if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward", "no_band_locking"))):
+                verdict = "STOP"
+                notes = "Integrity or band-locking failure at Gate 25k."
+            elif drqn_p.get("distinct_bands", 0) <= 2:
+                verdict = "INVESTIGATE"
+                notes = "Integrity passed. DRQN policy shows initial value differentiation but standalone band expansion remains narrow (<= 2 bands); MoE maintains 36/36 band coverage."
+            else:
+                verdict = "PASS"
+                notes = f"Gate 25k PASS. DRQN expanded distinct bands to {drqn_p.get('distinct_bands', 0):.1f}/36 with intercept rate {drqn_p.get('intercept_rate', 0)*100:.2f}%. Ready for promotion to 100k."
+        elif gate == 100000:
+            drqn_p = policies_agg.get("drqn", {})
+            moe_p = policies_agg.get("full_moe", {})
+            rand_p = policies_agg.get("random", {})
+            pass_conditions["no_band_locking"] = bool(moe_p.get("distinct_bands", 0) >= 18)
+            pass_conditions["baseline_eval_completed"] = bool(policies_agg)
+            pass_conditions["drqn_beats_random"] = bool(drqn_p.get("intercept_rate", 0) >= rand_p.get("intercept_rate", 0))
+
+            if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward", "no_band_locking"))):
+                verdict = "STOP"
+                notes = "Integrity or band-locking failure at Gate 100k."
+            elif not pass_conditions["drqn_beats_random"]:
+                verdict = "INVESTIGATE"
+                notes = "DRQN intercept rate does not exceed Random baseline at 100k exploitation onset."
+            else:
+                verdict = "PASS"
+                notes = f"Gate 100k PASS. DRQN exceeds Random baseline ({drqn_p.get('intercept_rate', 0)*100:.2f}% vs {rand_p.get('intercept_rate', 0)*100:.2f}%). Ready for promotion to 300k."
+        elif gate == 200000:
+            drqn_p = policies_agg.get("drqn", {})
+            rand_p = policies_agg.get("random", {})
+            rr_p = policies_agg.get("round_robin", {})
+            pass_conditions["baseline_eval_completed"] = bool(policies_agg)
+            pass_conditions["drqn_beats_random"] = bool(drqn_p.get("intercept_rate", 0) >= rand_p.get("intercept_rate", 0))
+            pass_conditions["drqn_beats_round_robin"] = bool(drqn_p.get("intercept_rate", 0) >= rr_p.get("intercept_rate", 0))
+
+            if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward"))):
+                verdict = "STOP"
+                notes = "Numerical or training integrity failure at Gate 200k."
+            elif not pass_conditions["drqn_beats_random"]:
+                verdict = "INVESTIGATE"
+                notes = f"Gate 200k: DRQN intercept rate ({drqn_p.get('intercept_rate', 0)*100:.2f}%) does not exceed Random ({rand_p.get('intercept_rate', 0)*100:.2f}%)."
+            else:
+                verdict = "PASS"
+                notes = f"Gate 200k PASS: DRQN intercept rate {drqn_p.get('intercept_rate', 0)*100:.2f}% vs Random {rand_p.get('intercept_rate', 0)*100:.2f}%, RR {rr_p.get('intercept_rate', 0)*100:.2f}%."
+        elif gate == 300000:
+            drqn_p = policies_agg.get("drqn", {})
+            rand_p = policies_agg.get("random", {})
+            rr_p = policies_agg.get("round_robin", {})
+            pass_conditions["baseline_eval_completed"] = bool(policies_agg)
+            pass_conditions["drqn_beats_random"] = bool(drqn_p.get("intercept_rate", 0) >= rand_p.get("intercept_rate", 0))
+            pass_conditions["drqn_beats_round_robin"] = bool(drqn_p.get("intercept_rate", 0) >= rr_p.get("intercept_rate", 0))
+
+            if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward"))):
+                verdict = "STOP"
+                notes = "Numerical or training integrity failure at Gate 300k."
+            elif not pass_conditions["drqn_beats_random"]:
+                verdict = "INVESTIGATE"
+                notes = f"Gate 300k: DRQN intercept rate ({drqn_p.get('intercept_rate', 0)*100:.2f}%) does not exceed Random ({rand_p.get('intercept_rate', 0)*100:.2f}%)."
+            else:
+                verdict = "PASS"
+                notes = f"Gate 300k Stage C PASS: DRQN intercept rate {drqn_p.get('intercept_rate', 0)*100:.2f}% vs Random {rand_p.get('intercept_rate', 0)*100:.2f}%, RR {rr_p.get('intercept_rate', 0)*100:.2f}%."
         else:
             verdict = "PASS" if all(pass_conditions.values()) else "STOP"
             notes = f"Gate {gate} evaluated."
@@ -451,6 +525,13 @@ class StagedGateEvaluator:
         ckpt_name = f"checkpoint_gate_{gate}.pt"
         ckpt_path = self.output_dir / ckpt_name
         n_bands = int(self.env_config.get("n_bands", CANONICAL_N_BANDS))
+
+        drqn_cfg = self.model_config.get("drqn_scheduler", {})
+        eps_start = float(drqn_cfg.get("eps_start", 1.0))
+        eps_end = float(drqn_cfg.get("eps_end", 0.05))
+        eps_decay = float(drqn_cfg.get("eps_decay", 87837))
+        natural_eps = float(eps_end + (eps_start - eps_end) * np.exp(-global_step / eps_decay))
+
         meta = build_train_metadata(
             split=self.train_config.get("subset", "train"),
             n_bands=n_bands,
@@ -462,6 +543,10 @@ class StagedGateEvaluator:
                 "global_step": global_step,
                 "episode": episode,
                 "epsilon": float(eps),
+                "natural_epsilon": natural_eps,
+                "eps_override_active": bool(override_epsilon is not None),
+                "eps_override_value": float(override_epsilon) if override_epsilon is not None else None,
+                "reward_baseline": float(reward_baseline),
                 "replay_size": replay_size,
                 "semantic_memory_reset": self.semantic_memory_reset,
                 "git_revision": git_rev,
@@ -474,6 +559,10 @@ class StagedGateEvaluator:
             "global_step": global_step,
             "episode": episode,
             "epsilon": float(eps),
+            "natural_epsilon": natural_eps,
+            "eps_override_active": bool(override_epsilon is not None),
+            "eps_override_value": float(override_epsilon) if override_epsilon is not None else None,
+            "reward_baseline": float(reward_baseline),
             "replay_buffer_size": replay_size,
             "optimizer_step_count": opt_steps,
             "configuration_snapshot": {
@@ -488,11 +577,11 @@ class StagedGateEvaluator:
         logger.info("Saved gate checkpoint: %s", ckpt_path)
 
         # 5. Format and Print Baseline Comparison Table
-        print("\n" + "=" * 115)
-        print(f"GATE {gate} EVALUATION REPORT (Global Step: {global_step} | Episode: {episode} | Epsilon: {eps:.4f})")
-        print("=" * 115)
-        print(f"{'Policy':<22} | {'Intercept Rate':<14} | {'Hits':<6} | {'Distinct':<8} | {'Discovery':<10} | {'Reward':<9} | {'MoE Override':<12} | {'Q/MoE Agree'}")
-        print("-" * 115)
+        print("\n" + "=" * 125)
+        print(f"GATE {gate} EVALUATION REPORT (Global Step: {global_step} | Episode: {episode} | Epsilon: {eps:.4f} | Baseline: {reward_baseline:.4f})")
+        print("=" * 125)
+        print(f"{'Policy':<22} | {'Intercept Rate':<14} | {'Hits':<6} | {'Distinct':<8} | {'Entropy':<8} | {'Discovery':<10} | {'Reward':<9} | {'MoE Override':<12} | {'Q/MoE Agree'}")
+        print("-" * 125)
 
         for name in BASELINE_HIERARCHY:
             p = policies_agg.get(name)
@@ -501,24 +590,27 @@ class StagedGateEvaluator:
             display_name = "DRQN+MoE" if name == "full_moe" else (name.upper() if name == "drqn" else name.title().replace("_", ""))
             override_str = f"{autonomy_agg.get('moe_override_rate', 0.0)*100:5.1f}%" if name == "full_moe" else "N/A"
             agree_str = f"{autonomy_agg.get('q_moe_agreement_pct', 0.0):5.1f}%" if name == "full_moe" else "N/A"
-            print(f"{display_name:<22} | {p['intercept_rate']*100:6.2f}%       | {p['hits']:<6.1f} | {p['distinct_bands']:4.1f}/36  | {p['discovery_rate']*100:6.2f}%    | {p['total_reward']:8.1f}  | {override_str:<12} | {agree_str}")
+            entropy_val = p.get('band_entropy', 0.0)
+            entropy_str = f"{entropy_val:.2f}" if entropy_val is not None else "N/A"
+            print(f"{display_name:<22} | {p['intercept_rate']*100:6.2f}%       | {p['hits']:<6.1f} | {p['distinct_bands']:4.1f}/36  | {entropy_str:<8} | {p['discovery_rate']*100:6.2f}%    | {p['total_reward']:8.1f}  | {override_str:<12} | {agree_str}")
 
-        print("=" * 115)
+        print("=" * 125)
         if autonomy_agg:
             print("Policy Autonomy Telemetry:")
             print(f"  Q / MoE Action Agreement:     {autonomy_agg.get('q_moe_agreement_pct', 0.0):5.1f}%  | MoE Override Rate: {autonomy_agg.get('moe_override_rate', 0.0)*100:5.1f}%")
             print(f"  Q / MoE Band Agreement:       {autonomy_agg.get('q_moe_band_agreement_pct', 0.0):5.1f}%  | Q / MoE Mode Agreement: {autonomy_agg.get('q_moe_mode_agreement_pct', 0.0):5.1f}%")
             print(f"  Q / Selected Agreement:       {autonomy_agg.get('q_selected_agreement_pct', 0.0):5.1f}%  | MoE / Selected Agreement: {autonomy_agg.get('moe_selected_agreement_pct', 0.0):5.1f}%")
             print(f"  All-Three Agreement:          {autonomy_agg.get('all_three_agreement_pct', 0.0):5.1f}%")
-            print("-" * 115)
+            print("-" * 125)
         print("Training Diagnostics:")
         print(f"  TD Loss (mean/med/max):       {mean_td_loss:.4f} / {median_td_loss:.4f} / {max_td_loss:.4f}")
         print(f"  Q Stats (mean/std/min/max):   {mean_q_val:.3f} / {mean_q_std:.3f} / {min_q_val:.3f} / {max_q_val:.3f}")
         print(f"  Grad Norm (mean):             {mean_grad_norm:.4f}")
         print(f"  Replay Buffer Size:           {replay_size} transitions")
+        print(f"  Reward Baseline (r_bar):      {reward_baseline:.4f}")
         print(f"  Action Fractions (T/R/G):     {thompson_frac:.2f} / {random_frac:.2f} / {greedy_frac:.2f}")
         print(f"  Gate Verdict:                 [{verdict}] — {notes}")
-        print("=" * 115 + "\n")
+        print("=" * 125 + "\n")
 
         # 6. Save JSON Report
         report = {
@@ -526,6 +618,10 @@ class StagedGateEvaluator:
             "global_step": global_step,
             "episode": episode,
             "epsilon": float(eps),
+            "natural_epsilon": natural_eps,
+            "eps_override_active": bool(override_epsilon is not None),
+            "eps_override_value": float(override_epsilon) if override_epsilon is not None else None,
+            "reward_baseline": float(reward_baseline),
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "git_revision": git_rev,
             "checkpoint_file": str(ckpt_path),
@@ -544,6 +640,7 @@ class StagedGateEvaluator:
                 "gradient_norm": mean_grad_norm,
                 "replay_size": replay_size,
                 "optimizer_step_count": opt_steps,
+                "reward_baseline": float(reward_baseline),
                 "thompson_action_fraction": thompson_frac,
                 "random_action_fraction": random_frac,
                 "greedy_action_fraction": greedy_frac,

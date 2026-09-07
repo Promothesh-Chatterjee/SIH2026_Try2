@@ -42,7 +42,7 @@ def _sample_components() -> dict[str, float]:
         "reward_novel": 2.0, "reward_hit": 1.0, "reward_miss": -3.0,
         "reward_dwell_cost": -5.0, "reward_false_alarm": -2.0, "reward_timing": -0.5,
         "reward_priority": 1.0, "reward_info_gain": 0.5, "reward_redundant": -0.5,
-        "reward_delay": 0.0,
+        "reward_delay": 0.0, "reward_staleness": 0.6,
     }
 
 

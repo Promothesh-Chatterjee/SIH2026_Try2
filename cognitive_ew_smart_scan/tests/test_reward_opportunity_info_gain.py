@@ -226,6 +226,48 @@ class EnvOpportunityInfoGainTests(unittest.TestCase):
         self.assertEqual(comps["entropy_before"], 1.0)
         self.assertEqual(comps["entropy_after"], 0.6)
 
+    def test_staleness_bonus_scaling_and_fom_accumulation(self):
+        # 1. Scaling: band_age=25 with staleness_norm=50.0 and w_staleness=0.6 -> +0.30
+        comps_cold = receiver_reward_components(
+            _empty_obs(),
+            ground_truth_active=False,
+            novel_emitter=False,
+            had_any_opportunity=False,
+            band=10,
+            w_staleness=0.6,
+            staleness_norm=50.0,
+            band_age=25.0,
+            w_false_alarm=-0.5,
+            w_dwell_cost=0.0,
+        )
+        self.assertAlmostEqual(comps_cold["staleness_bonus"], 0.30, places=6)
+        self.assertAlmostEqual(comps_cold["reward"], -0.5 + 0.30, places=6)
+        self.assertEqual(comps_cold["redundant_penalty"], 0.0)
+
+        # 2. Maximum saturation: band_age=100 -> clamped to w_staleness (0.6)
+        comps_max = receiver_reward_components(
+            _empty_obs(),
+            ground_truth_active=False,
+            novel_emitter=False,
+            had_any_opportunity=False,
+            band=10,
+            w_staleness=0.6,
+            staleness_norm=50.0,
+            band_age=100.0,
+            w_false_alarm=-0.5,
+            w_dwell_cost=0.0,
+        )
+        self.assertAlmostEqual(comps_max["staleness_bonus"], 0.60, places=6)
+        self.assertAlmostEqual(comps_max["reward"], -0.5 + 0.60, places=6)
+
+        # 3. FoM accumulation:
+        fom = FiguresOfMerit(n_bands=36)
+        fom.record_reward_components(comps_cold)
+        fom.record_reward_components(comps_max)
+        s = fom.summary()
+        self.assertIn("avg_reward_staleness_bonus", s)
+        self.assertAlmostEqual(s["avg_reward_staleness_bonus"], (0.30 + 0.60) / 2.0, places=6)
+
 
 if __name__ == "__main__":
     unittest.main()
