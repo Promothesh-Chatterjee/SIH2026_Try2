@@ -1,0 +1,7 @@
+# Python generated artifacts
+__pycache__/
+*.pyc
+*.pyo
+
+# Large IQ recording artifacts (local development only)
+recordings/*.dat
