@@ -262,6 +262,7 @@ def run_generalization_gate(
         pds = [r["decision_level_pd"] for r in p_runs]
         discoveries = [r["discovery_rate"] * 100.0 for r in p_runs]
         distinct_bands = [r["distinct_bands"] for r in p_runs]
+        band_entropies = [r["band_entropy"] for r in p_runs]
         rewards = [r["total_reward"] for r in p_runs]
         latencies = [r["avg_intercept_time_us"] for r in p_runs if r["avg_intercept_time_us"] is not None]
 
@@ -277,6 +278,8 @@ def run_generalization_gate(
             "discovery_std": float(np.std(discoveries)),
             "distinct_bands_mean": float(np.mean(distinct_bands)),
             "distinct_bands_std": float(np.std(distinct_bands)),
+            "band_entropy_mean": float(np.mean(band_entropies)),
+            "band_entropy_std": float(np.std(band_entropies)),
             "latency_mean_us": float(np.mean(latencies)) if latencies else None,
             "latency_std_us": float(np.std(latencies)) if latencies else None,
             "reward_mean": float(np.mean(rewards)),
@@ -292,6 +295,7 @@ def run_generalization_gate(
             scen_row[f"{policy}_intercept_pct"] = float(np.mean([r["intercept_rate"] * 100.0 for r in p_scen_runs]))
             scen_row[f"{policy}_reward"] = float(np.mean([r["total_reward"] for r in p_scen_runs]))
             scen_row[f"{policy}_distinct_bands"] = float(np.mean([r["distinct_bands"] for r in p_scen_runs]))
+            scen_row[f"{policy}_band_entropy"] = float(np.mean([r["band_entropy"] for r in p_scen_runs]))
         per_scenario_table.append(scen_row)
 
     report = {
@@ -313,11 +317,11 @@ def run_generalization_gate(
     logger.info("Generalization report written to %s", out_file)
 
     # Print clean Markdown summary
-    print("\n" + "=" * 95)
-    print(f"GENERALIZATION GATE REPORT — Gate 100k ({len(scenarios_data)} Unseen TSRD Scenarios)")
-    print("=" * 95)
-    print(f"{'Policy':<20} | {'Intercept Rate %':<16} | {'Pd':<8} | {'Discovery %':<14} | {'Latency (us)':<14} | {'Bands':<10} | {'Total Reward':<14}")
-    print("-" * 105)
+    print("\n" + "=" * 115)
+    print(f"GENERALIZATION GATE REPORT — Step {int(ckpt.get('global_step', 0))} ({len(scenarios_data)} Unseen TSRD Scenarios)")
+    print("=" * 115)
+    print(f"{'Policy':<20} | {'Intercept Rate %':<16} | {'Pd':<8} | {'Discovery %':<14} | {'Latency (us)':<14} | {'Bands':<10} | {'Entropy':<12} | {'Total Reward':<14}")
+    print("-" * 125)
     for policy, s in summary_by_policy.items():
         lat_str = f"{s['latency_mean_us']:.1f} ± {s['latency_std_us']:.1f}" if s['latency_mean_us'] else "N/A"
         print(
@@ -327,9 +331,10 @@ def run_generalization_gate(
             f"{s['discovery_mean']:5.1f} ± {s['discovery_std']:4.1f}% | "
             f"{lat_str:<14} | "
             f"{s['distinct_bands_mean']:4.1f}/36    | "
+            f"{s['band_entropy_mean']:4.2f} ± {s['band_entropy_std']:4.2f} | "
             f"{s['reward_mean']:7.1f} ± {s['reward_std']:5.1f}"
         )
-    print("=" * 105)
+    print("=" * 125)
 
     return report
 

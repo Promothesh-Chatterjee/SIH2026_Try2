@@ -79,6 +79,8 @@ def _do_drqn_update(
     device: torch.device,
     aux_coef: float = 0.1,
     stats: dict | None = None,
+    reward_baseline: float = -0.39,
+    baseline_momentum: float = 0.99,
 ) -> float:
     """One Double-DQN BPTT update on a sampled batch. Returns loss value.
 
@@ -123,7 +125,15 @@ def _do_drqn_update(
         next_q_target, _, _ = target_drqn(next_obs_b)
         next_q = next_q_target.gather(-1, best_actions).squeeze(-1)
 
-    targets = rew_b + gamma * next_q * (1.0 - done_b)
+    # Track D: reward centering strictly applied to TD target computation
+    if loss_mask.any():
+        batch_mean = float(rew_b[loss_mask].mean().item())
+    else:
+        batch_mean = float(rew_b.mean().item())
+    updated_baseline = baseline_momentum * reward_baseline + (1.0 - baseline_momentum) * batch_mean
+    centered_rew_b = rew_b - updated_baseline
+
+    targets = centered_rew_b + gamma * next_q * (1.0 - done_b)
     q_loss = loss_fn(q_chosen[loss_mask], targets[loss_mask].detach())
 
     loss: torch.Tensor = q_loss
@@ -170,6 +180,9 @@ def _do_drqn_update(
         stats["target_online_gap"] = float(best_next.mean().item() - qm.mean().item())
         stats["gradient_norm"] = float(grad_norm.item()) if torch.is_tensor(grad_norm) else float(grad_norm)
         stats["n_graded_steps"] = int(loss_mask_t.sum().item())
+        stats["reward_baseline"] = float(updated_baseline)
+        stats["centered_reward_mean"] = float(centered_rew_b[loss_mask_t].mean().item())
+        stats["raw_reward_mean"] = float(batch_mean)
     return float(loss.item())
 
 
@@ -466,6 +479,7 @@ def train_scheduler(
     episode = 0
     best_reward = -float("inf")
     eps = eps_start
+    reward_baseline = -0.39
 
     if resume_checkpoint:
         resume_path = Path(resume_checkpoint)
@@ -483,13 +497,22 @@ def train_scheduler(
             global_step = int(ckpt.get("global_step", 0))
             episode = int(ckpt.get("episode", 0)) + 1
             eps = float(ckpt.get("epsilon", eps_start))
+            if "reward_baseline" in ckpt:
+                reward_baseline = float(ckpt["reward_baseline"])
+            elif "reward_baseline" in ckpt.get("metadata", {}).get("extra", {}):
+                reward_baseline = float(ckpt["metadata"]["extra"]["reward_baseline"])
+            else:
+                reward_baseline = -0.39
             best_reward = float(ckpt.get("metadata", {}).get("metrics", {}).get("best_episode_reward", -float("inf")))
-            logger.info("Resumed state: global_step=%d, episode=%d, eps=%.4f", global_step, episode, eps)
+            logger.info("Resumed state: global_step=%d, episode=%d, eps=%.4f, reward_baseline=%.4f", global_step, episode, eps, reward_baseline)
             for g in gate_evaluator.gates:
                 if g <= global_step:
                     gate_evaluator.completed_gates.add(g)
         else:
             logger.warning("Resume checkpoint not found: %s — starting fresh", resume_path)
+
+    from .eval_batch import get_or_create_fixed_eval_batch, evaluate_q_diagnostics
+    fixed_eval_batch = get_or_create_fixed_eval_batch(data_dir=str(canonical_root), device=device)
 
     while global_step < total_steps:
         obs, _ = env.reset()
@@ -605,8 +628,21 @@ def train_scheduler(
                 try:
                     batch = buffer.sample(batch_size)
                     upd_stats: dict = {}
-                    loss_val = _do_drqn_update(online_drqn, target_drqn, optimizer, loss_fn, batch, gamma, device, stats=upd_stats)
+                    loss_val = _do_drqn_update(
+                        online_drqn,
+                        target_drqn,
+                        optimizer,
+                        loss_fn,
+                        batch,
+                        gamma,
+                        device,
+                        stats=upd_stats,
+                        reward_baseline=reward_baseline,
+                        baseline_momentum=0.99,
+                    )
                     if upd_stats:
+                        if "reward_baseline" in upd_stats:
+                            reward_baseline = float(upd_stats["reward_baseline"])
                         ep_learn["n_updates"] += 1
                         ep_learn["td_loss"] += float(upd_stats["td_loss"])
                         ep_learn["mean_td_error"] += float(upd_stats["mean_td_error"])
@@ -647,6 +683,24 @@ def train_scheduler(
                     else:
                         raise
 
+            # ---- Periodic Q-margin and stuck-state diagnostics ----
+            if global_step % 500 == 0:
+                try:
+                    q_diag = evaluate_q_diagnostics(online_drqn, fixed_eval_batch, device)
+                    logger.info(
+                        "Step %d | QDiag: margin=%.5f spread=%.4f rew_base=%.4f | StuckState: Pick B%d-M%d (margin=%.5f, 2nd B%d)",
+                        global_step,
+                        q_diag["q_margin_mean"],
+                        q_diag["q_spread_mean"],
+                        reward_baseline,
+                        q_diag["stuck_state_top1_band"],
+                        q_diag["stuck_state_top1_mode"],
+                        q_diag["stuck_state_margin"],
+                        q_diag["stuck_state_top2_band"],
+                    )
+                except Exception as exc:
+                    logger.warning("Failed evaluating QDiag at step %d: %s", global_step, exc)
+
             # ---- Target update ----
             if global_step % target_update_freq == 0:
                 target_drqn.load_state_dict(online_drqn.state_dict())
@@ -660,6 +714,8 @@ def train_scheduler(
                 buffer=buffer,
                 eps=eps,
                 moe=moe,
+                reward_baseline=reward_baseline,
+                override_epsilon=override_epsilon,
             )
 
             if stop_at_step is not None and global_step >= stop_at_step:
