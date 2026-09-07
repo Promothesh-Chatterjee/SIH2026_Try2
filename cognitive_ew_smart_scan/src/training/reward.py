@@ -94,6 +94,9 @@ def compute_receiver_reward(
     w_novel: float = 2.0,
     w_miss: float = -1.0,
     w_timing: float = 0.001,
+    w_staleness: float = 0.6,
+    staleness_norm: float = 50.0,
+    band_age: float | None = None,
     **_extra,
 ) -> float:
     """Reward derived from a ReceiverObservation + ground-truth summary.
@@ -103,6 +106,7 @@ def compute_receiver_reward(
         +w_hit                       if any detection
         +w_novel                     if a new emitter was intercepted
         +w_miss                      if there was an opportunity elsewhere but we missed it
+        +w_staleness * min(age/50,1) intrinsic coverage bonus for visiting cold bands
         -w_timing * abs(peak_time - dwell_start)   small time-shape penalty on hits
 
     ``ground_truth_active`` and ``had_any_opportunity`` are evaluation-only signals
@@ -118,6 +122,9 @@ def compute_receiver_reward(
         w_novel: Novel-emitter bonus.
         w_miss: Miss penalty (<=0).
         w_timing: Per-unit timing penalty magnitude.
+        w_staleness: Intrinsic staleness/coverage bonus weight.
+        staleness_norm: Normalization age horizon for revisit age.
+        band_age: Dwell band's pre-touch revisit age from belief.
 
     Returns:
         Scalar reward (sum of component terms).
@@ -131,6 +138,10 @@ def compute_receiver_reward(
         w_novel=w_novel,
         w_miss=w_miss,
         w_timing=w_timing,
+        w_staleness=w_staleness,
+        staleness_norm=staleness_norm,
+        band_age=band_age,
+        **_extra,
     )
     return comps["reward"]
 
@@ -150,6 +161,8 @@ def receiver_reward_components(
     w_dwell_cost: float = -0.001,
     w_redundant_scan: float = -0.1,
     w_delay: float = 0.0,
+    w_staleness: float = 0.6,
+    staleness_norm: float = 50.0,
     band: int | None = None,
     belief=None,
     intercepted_emitters: set[int] | None = None,
@@ -158,6 +171,7 @@ def receiver_reward_components(
     information_gain: float | None = None,
     entropy_before: float | None = None,
     entropy_after: float | None = None,
+    band_age: float | None = None,
 ) -> dict[str, float]:
     """Per-component reward breakdown (SIH eval contract: log terms separately).
 
@@ -170,6 +184,7 @@ def receiver_reward_components(
                                           priority reference, never GT)
       +info_gain_term    w_information_gain*ΔH  true belief-entropy reduction on the
                                           selected band (IG = H_before - H_after, Phase 10)
+      +staleness_bonus   w_staleness*min(age/norm, 1) intrinsic bonus for exploring cold bands
       -false_alarm_pen   w_false_alarm*P(fa)   penalise tuning an empty band
       -dwell_cost       -w_dwell_cost*dwell    scan-efficiency cost
       -redundant_pen    -w_redundant_scan      penalty for re-walking a just-intercepted band
@@ -205,6 +220,7 @@ def receiver_reward_components(
     miss_penalty = 0.0
     priority_term = 0.0
     info_gain_term = 0.0
+    staleness_bonus = 0.0
     false_alarm_pen = 0.0
     dwell_cost = 0.0
     redundant_pen = 0.0
@@ -212,6 +228,17 @@ def receiver_reward_components(
 
     hit = n_hits > 0
     novel = bool(novel_emitter or (novel_ids is not None and len(novel_ids) > 0))
+
+    # Determine pre-touch band revisit age for staleness bonus and redundant penalty.
+    effective_age = 0.0
+    if band_age is not None:
+        effective_age = max(0.0, float(band_age))
+    elif band is not None and belief is not None:
+        effective_age = float(getattr(belief, "revisit_age", np.zeros(belief.n_bands))[band])
+
+    # Intrinsic staleness / coverage bonus (rewards exploring unvisited bands).
+    if staleness_norm > 0.0 and w_staleness != 0.0:
+        staleness_bonus = w_staleness * min(effective_age / staleness_norm, 1.0)
 
     if hit:
         hit_term = w_hit
@@ -221,11 +248,9 @@ def receiver_reward_components(
             novel_term = w_novel
         # Priority term rewards intercepting a high-observable-priority band.
         priority_term = w_priority * float(np.clip(priority_weight_reference, 0.0, 1.0))
-        # Redundant-scan penalty when we re-walk a band we just intercepted.
-        if band is not None and belief is not None:
-            age = int(getattr(belief, "revisit_age", np.zeros(belief.n_bands))[band])
-            if age <= 1:
-                redundant_pen = w_redundant_scan
+        # Redundant-scan penalty when we re-walk a band we just intercepted (age <= 1).
+        if effective_age <= 1.0 and (band_age is not None or (band is not None and belief is not None)):
+            redundant_pen = w_redundant_scan
         # Delay penalty for overdue high-urgency band (late preemptive intercept).
         if band is not None and belief is not None:
             urgent = float(belief.periodic_urgency[band])
@@ -250,7 +275,7 @@ def receiver_reward_components(
 
     total = (
         hit_term + novel_term + timing_penalty + priority_term + info_gain_term
-        + false_alarm_pen + dwell_cost + redundant_pen + miss_penalty + delay_pen
+        + staleness_bonus + false_alarm_pen + dwell_cost + redundant_pen + miss_penalty + delay_pen
     )
     return {
         "reward": float(total),
@@ -260,6 +285,7 @@ def receiver_reward_components(
         "miss_penalty": float(miss_penalty),
         "priority_term": float(priority_term),
         "info_gain_term": float(info_gain_term),
+        "staleness_bonus": float(staleness_bonus),
         "false_alarm_penalty": float(false_alarm_pen),
         "dwell_cost": float(dwell_cost),
         "redundant_penalty": float(redundant_pen),

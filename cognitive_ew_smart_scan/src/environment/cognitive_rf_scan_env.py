@@ -319,6 +319,8 @@ class CognitiveRFScanEnv(gym.Env):
         self.w_dwell_cost = reward_cfg.get("w_dwell_cost", -0.001)
         self.w_redundant_scan = reward_cfg.get("w_redundant_scan", -0.1)
         self.w_delay = reward_cfg.get("w_delay", 0.0)
+        self.w_staleness = float(reward_cfg.get("w_staleness", config.get("w_staleness", 0.6)))
+        self.staleness_norm = float(reward_cfg.get("staleness_norm", config.get("staleness_norm", 50.0)))
 
         # Feature layout: CANONICAL_BAND_FEATURES features per band (contract).
         self.band_features = CANONICAL_BAND_FEATURES
@@ -588,8 +590,10 @@ class CognitiveRFScanEnv(gym.Env):
         # occupancy activity belief (Bernoulli entropy).
         if self.belief is not None and 0 <= band < self.belief.n_bands:
             p_before = float(self.belief.occupancy_prob[band])
+            dwell_band_age = float(self.belief.revisit_age[band])
         else:
             p_before = 0.5
+            dwell_band_age = 0.0
         h_before = bernoulli_entropy(p_before)
         self.belief.record_visit(band, any_hit, detections=detections)
         self.belief.advance_time()
@@ -629,6 +633,8 @@ class CognitiveRFScanEnv(gym.Env):
             w_dwell_cost=self.w_dwell_cost,
             w_redundant_scan=self.w_redundant_scan,
             w_delay=self.w_delay,
+            w_staleness=self.w_staleness,
+            staleness_norm=self.staleness_norm,
             band=band,
             belief=self.belief,
             intercepted_emitters=self.intercepted_emitters,
@@ -637,6 +643,7 @@ class CognitiveRFScanEnv(gym.Env):
             information_gain=information_gain,
             entropy_before=h_before,
             entropy_after=h_after,
+            band_age=dwell_band_age,
         )
         reward = reward_components["reward"]
         self.fom.record_reward_components(reward_components)
@@ -708,6 +715,7 @@ class CognitiveRFScanEnv(gym.Env):
             "band_center_mhz": observation.center_frequency_mhz if observation is not None else 0.0,
             "receiver_time_us": self.receiver.current_time_us,
             "preemptive_band": getattr(self, "_preemptive_band", None),
+            "reward_components": reward_components,
         }
 
         next_obs = self._build_observation()
