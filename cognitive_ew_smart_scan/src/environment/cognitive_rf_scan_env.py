@@ -89,8 +89,15 @@ class BeliefState:
     10. risk/priority score (composite cognitive urgency)
     """
 
-    def __init__(self, n_bands: int = CANONICAL_N_BANDS):
+    def __init__(self, n_bands: int = CANONICAL_N_BANDS, priority_weights: dict[str, float] | None = None):
         self.n_bands = n_bands
+        self.priority_weights = priority_weights or {
+            "staleness_weight": 0.35,
+            "occupancy_weight": 0.25,
+            "uncertainty_weight": 0.20,
+            "periodic_weight": 0.10,
+            "semantic_weight": 0.10,
+        }
         self.reset()
 
     def reset(self) -> None:
@@ -107,6 +114,7 @@ class BeliefState:
         self.periodicity_stability = np.zeros(n, dtype=np.float32)
         self.agility_indicator = np.zeros(n, dtype=np.float32)
         self.priority_score = np.full(n, 0.5, dtype=np.float32)
+        self.semantic_boost = np.zeros(n, dtype=np.float32)
         # Observable periodic-imminent-arrival urgency (from PeriodicScanInterceptor
         # predictions, built purely from prior detections). Feeds priority (feature 9).
         self.periodic_urgency = np.zeros(n, dtype=np.float32)
@@ -208,17 +216,30 @@ class BeliefState:
             self.revisit_age[b] = 0
 
     def update_uncertainty(self) -> None:
-        p = np.clip(self.detection_rate, 0.0, 1.0)
-        self.uncertainty = 1.0 - np.abs(2.0 * p - 1.0)
+        p = np.clip(self.occupancy_prob, 0.0, 1.0)
+        # Raw activity uncertainty: peaked around 0.5
+        raw_uncertainty = 1.0 - np.abs(2.0 * p - 1.0)
+        # Evidence factor: slow accumulation over visits
+        evidence_factor = 1.0 - np.exp(-self._visits / 4.0)
+        epistemic_weight = 1.0 - evidence_factor
+        # Epistemic prior holds uncertainty high until evidence accumulates
+        self.uncertainty = 1.0 * epistemic_weight + raw_uncertainty * evidence_factor
         never_visited = self._visits == 0
         self.uncertainty[never_visited] = 1.0
 
-    def update_priority(self) -> None:
+    def update_priority(self, semantic_boost: np.ndarray | None = None) -> None:
+        if semantic_boost is not None:
+            self.semantic_boost = np.asarray(semantic_boost, dtype=np.float32)
         norm_age = np.clip(self.revisit_age.astype(np.float32) / 50.0, 0.0, 1.0)
-        # Observable periodic-imminent-arrival urgency contributes to priority so the
-        # scheduler can preempt dwell on a band where a periodic emitter is due.
+        w_st = float(self.priority_weights.get("staleness_weight", 0.35))
+        w_occ = float(self.priority_weights.get("occupancy_weight", 0.25))
+        w_unc = float(self.priority_weights.get("uncertainty_weight", 0.20))
+        w_per = float(self.priority_weights.get("periodic_weight", 0.10))
+        w_sem = float(self.priority_weights.get("semantic_weight", 0.10))
+        # Explicit multi-term combination without repeatedly overwriting stored semantic boost
         self.priority_score = np.clip(
-            0.4 * norm_age + 0.3 * self.occupancy_prob + 0.2 * self.uncertainty + 0.1 * self.periodic_urgency,
+            w_st * norm_age + w_occ * self.occupancy_prob + w_unc * self.uncertainty
+            + w_per * self.periodic_urgency + w_sem * self.semantic_boost,
             0.0,
             1.0,
         )
@@ -280,8 +301,19 @@ class CognitiveRFScanEnv(gym.Env):
         self.deinterleaver_config = deinterleaver_config or {}
         self.perception_enabled = deinterleaver_model is not None
 
-        # Semantic memory configuration
+        # Semantic memory configuration: enabled by default unless explicitly disabled in config
+        self.semantic_memory_enabled: bool = bool(config.get("semantic_memory_enabled", True))
         self.semantic_memory_path = semantic_memory_path or config.get("semantic_memory_path", "data/semantic_memory.db")
+
+        # Config-driven priority fusing weights
+        belief_cfg = config.get("belief", {})
+        self.priority_weights = belief_cfg.get("priority", {
+            "staleness_weight": 0.35,
+            "occupancy_weight": 0.25,
+            "uncertainty_weight": 0.20,
+            "periodic_weight": 0.10,
+            "semantic_weight": 0.10,
+        })
 
         # Periodic interceptor configuration
         self.periodic_min_obs = config.get("periodic_min_obs", 20)
@@ -312,6 +344,7 @@ class CognitiveRFScanEnv(gym.Env):
         self.w_hit = reward_cfg.get("w_hit", config.get("w_hit", 1.0))
         self.w_novel = reward_cfg.get("w_novel", config.get("w_novel", 2.0))
         self.w_miss = reward_cfg.get("w_miss", config.get("w_miss", -1.0))
+        self.w_missed_coverage = reward_cfg.get("w_missed_coverage", config.get("w_missed_coverage", -0.2))
         self.w_timing = reward_cfg.get("w_timing", config.get("w_timing", 0.001))
         self.w_priority = reward_cfg.get("w_priority", 0.5)
         self.w_information_gain = reward_cfg.get("w_information_gain", 0.2)
@@ -321,6 +354,12 @@ class CognitiveRFScanEnv(gym.Env):
         self.w_delay = reward_cfg.get("w_delay", 0.0)
         self.w_staleness = float(reward_cfg.get("w_staleness", config.get("w_staleness", 0.6)))
         self.staleness_norm = float(reward_cfg.get("staleness_norm", config.get("staleness_norm", 50.0)))
+        self.penalize_empty_dwell = bool(reward_cfg.get("penalize_empty_dwell", config.get("penalize_empty_dwell", False)))
+        self.context_scaled_miss = bool(reward_cfg.get("context_scaled_miss", config.get("context_scaled_miss", False)))
+        self.conditional_dwell_cost = bool(reward_cfg.get("conditional_dwell_cost", config.get("conditional_dwell_cost", False)))
+        self.w_active_track = float(reward_cfg.get("w_active_track", config.get("w_active_track", 0.0)))
+        self.w_pulse_scale = float(reward_cfg.get("w_pulse_scale", config.get("w_pulse_scale", 0.0)))
+        self.lull_tolerance = bool(reward_cfg.get("lull_tolerance", config.get("lull_tolerance", False)))
 
         # Feature layout: CANONICAL_BAND_FEATURES features per band (contract).
         self.band_features = CANONICAL_BAND_FEATURES
@@ -394,7 +433,7 @@ class CognitiveRFScanEnv(gym.Env):
 
         self.receiver = self._build_receiver()
         self.radio_env = self._build_radio_env()
-        self.belief = BeliefState(self.n_bands)
+        self.belief = BeliefState(self.n_bands, priority_weights=self.priority_weights)
 
         # Initialize emitter tracker for perception
         if self.perception_enabled:
@@ -402,8 +441,11 @@ class CognitiveRFScanEnv(gym.Env):
         else:
             self.emitter_tracker = None
 
-        # Initialize semantic memory
-        self.semantic_memory = SemanticMemory(self.semantic_memory_path)
+        # Initialize semantic memory only if explicitly enabled
+        if self.semantic_memory_enabled:
+            self.semantic_memory = SemanticMemory(self.semantic_memory_path)
+        else:
+            self.semantic_memory = None
 
         # Initialize periodic interceptor
         self.periodic_interceptor = PeriodicScanInterceptor(
@@ -534,8 +576,9 @@ class CognitiveRFScanEnv(gym.Env):
                 if perception_result is not None:
                     self.belief.update_from_perception(perception_result)
 
-                    # Update semantic memory with emitter profiles from tracker
-                    self._update_semantic_memory()
+                    # Update semantic memory with emitter profiles from tracker if enabled
+                    if self.semantic_memory_enabled and self.semantic_memory is not None:
+                        self._update_semantic_memory()
 
                     # Update periodic interceptor with detections
                     self._update_periodic_interceptor(detections, band, dwell_start, dwell_end)
@@ -543,16 +586,17 @@ class CognitiveRFScanEnv(gym.Env):
                 # Clear buffer after processing (keep last N for continuity)
                 self._pdw_buffer = self._pdw_buffer[-self._min_deinterleave_pulses:]
 
-        # Apply semantic memory band priority boost to belief
-        if self.semantic_memory is not None:
+        # Apply semantic memory band priority boost to belief if enabled
+        if self.semantic_memory_enabled and self.semantic_memory is not None:
             semantic_boost = self.semantic_memory.get_band_priority_boost(
                 n_bands=self.n_bands,
                 freq_min=self.freq_min,
                 freq_max=self.freq_max,
             )
-            # Blend into priority score (feature index 9)
-            alpha = 0.2
-            self.belief.priority_score = (1 - alpha) * self.belief.priority_score + alpha * semantic_boost
+            # Blend into priority score using the explicit multi-term method
+            self.belief.update_priority(semantic_boost)
+        else:
+            self.belief.update_priority()
 
         # Check periodic interceptor for preemptive schedule recommendation
         preemptive_band = None
@@ -617,15 +661,23 @@ class CognitiveRFScanEnv(gym.Env):
         newly = new_ids - self.intercepted_emitters
         self.intercepted_emitters.update(new_ids)
 
-        # 6. Calculate reward (uses ground truth ONLY for shaping)
+        # 6. Calculate reward using 5 explicit decision & coverage signals
+        other_bands_active = bool(int(active_bands_vec.sum()) - int(selected_band_active) > 0)
+        false_detection = bool(not selected_band_active and any_hit)
+
         reward_components = receiver_reward_components(
             observation=observation,
             ground_truth_active=selected_band_active,
             novel_emitter=bool(newly),
-            had_any_opportunity=bool(int(active_bands_vec.sum()) > 0 and not selected_band_active),
+            had_any_opportunity=other_bands_active,
+            selected_active=selected_band_active,
+            detected=any_hit,
+            other_bands_active=other_bands_active,
+            false_detection=false_detection,
             w_hit=self.w_hit,
             w_novel=self.w_novel,
             w_miss=self.w_miss,
+            w_missed_coverage=self.w_missed_coverage,
             w_timing=self.w_timing,
             w_priority=self.w_priority,
             w_information_gain=self.w_information_gain,
@@ -644,6 +696,12 @@ class CognitiveRFScanEnv(gym.Env):
             entropy_before=h_before,
             entropy_after=h_after,
             band_age=dwell_band_age,
+            penalize_empty_dwell=self.penalize_empty_dwell,
+            context_scaled_miss=self.context_scaled_miss,
+            conditional_dwell_cost=self.conditional_dwell_cost,
+            w_active_track=self.w_active_track,
+            w_pulse_scale=self.w_pulse_scale,
+            lull_tolerance=self.lull_tolerance,
         )
         reward = reward_components["reward"]
         self.fom.record_reward_components(reward_components)

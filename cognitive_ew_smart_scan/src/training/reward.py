@@ -148,12 +148,13 @@ def compute_receiver_reward(
 
 def receiver_reward_components(
     observation,
-    ground_truth_active: bool,
-    novel_emitter: bool,
-    had_any_opportunity: bool,
+    ground_truth_active: bool = False,
+    novel_emitter: bool = False,
+    had_any_opportunity: bool = False,
     w_hit: float = 1.0,
     w_novel: float = 2.0,
     w_miss: float = -1.0,
+    w_missed_coverage: float = -0.2,
     w_timing: float = 0.001,
     w_priority: float = 0.5,
     w_information_gain: float = 0.2,
@@ -172,42 +173,31 @@ def receiver_reward_components(
     entropy_before: float | None = None,
     entropy_after: float | None = None,
     band_age: float | None = None,
+    selected_active: bool | None = None,
+    detected: bool | None = None,
+    other_bands_active: bool | None = None,
+    false_detection: bool | None = None,
+    penalize_empty_dwell: bool = False,
+    context_scaled_miss: bool = False,
+    conditional_dwell_cost: bool = False,
+    w_active_track: float = 0.0,
+    w_pulse_scale: float = 0.0,
+    lull_tolerance: bool = False,
 ) -> dict[str, float]:
-    """Per-component reward breakdown (SIH eval contract: log terms separately).
+    """Per-component reward breakdown implementing 5 explicit decision & coverage signals.
 
-    Full config-driven shaping set (each term auditable via FoM):
+    Signals:
+      selected_active: ground truth activity in tuned band
+      detected: receiver declared detection in tuned band (n_hits > 0)
+      other_bands_active: activity present in unselected spectrum
+      false_detection: receiver false declaration on empty band (!selected_active && detected)
 
-      +hit_term          w_hit          if any detection this dwell
-      +novel_term        w_novel        if a not-before-seen emitter intercepted
-      +timing_penalty   -w_timing*Δt   fast interception is better (reduced dwell lag)
-      +priority_term     w_priority*prio  reward for dwelling high-priority bands (observable
-                                          priority reference, never GT)
-      +info_gain_term    w_information_gain*ΔH  true belief-entropy reduction on the
-                                          selected band (IG = H_before - H_after, Phase 10)
-      +staleness_bonus   w_staleness*min(age/norm, 1) intrinsic bonus for exploring cold bands
-      -false_alarm_pen   w_false_alarm*P(fa)   penalise tuning an empty band
-      -dwell_cost       -w_dwell_cost*dwell    scan-efficiency cost
-      -redundant_pen    -w_redundant_scan      penalty for re-walking a just-intercepted band
-      -delay_pen        -w_delay*dwell_lag     penalty for late preemptive intercept on a
-                                               high-urgency band (overdue periodic emitter)
-
-    Opportunity semantics (Phase 9): ONLY the selected dwell is a decision-level
-    opportunity. ``ground_truth_active`` / ``had_any_opportunity`` here carry the
-    **selected-band activity** (not "any band active anywhere"). Thus:
-      * selected band active + no detection -> miss_penalty (decision-level FN)
-      * selected band inactive + no detection -> false_alarm_pen (tuned an empty band),
-        regardless of activity elsewhere (unselected active bands are coverage
-        opportunities, NOT decision-level misses and must never emit a miss penalty).
-
-    ``novel_emitter`` / ``novel_ids`` derive from ground-truth emitter IDs and are
-    evaluation-only. ``priority_weight_reference`` and ``belief`` are derived from
-    scheduler-observable fields only. ``information_gain`` / ``entropy_before`` /
-    ``entropy_after`` are computed by the environment around the belief update and
-    are scheduler-observable (occupancy belief).
-
-    Returns:
-        Dict with reward (total), one key per component term, plus
-        entropy_before, entropy_after, information_gain for logging.
+    Derived states:
+      TP = selected_active && detected           -> hit_term (+ novel_term - timing_penalty + active_track_term)
+      FN = selected_active && !detected          -> miss_penalty (decision-level miss, subject to lull tolerance)
+      FP = !selected_active && detected          -> false_alarm_pen (false detection)
+      TN = !selected_active && !detected         -> empty dwell (penalized via false_alarm_pen/dwell_cost)
+      coverage_opportunity = !selected_active && other_bands_active -> missed_coverage_pen
     """
     detections = getattr(observation, "detections", [])
     n_hits = len(detections)
@@ -225,8 +215,16 @@ def receiver_reward_components(
     dwell_cost = 0.0
     redundant_pen = 0.0
     delay_pen = 0.0
+    missed_coverage_pen = 0.0
+    active_track_term = 0.0
+    pulse_bonus_term = 0.0
 
-    hit = n_hits > 0
+    # Derive 5 signals cleanly with backward compatibility
+    is_sel_active = bool(selected_active if selected_active is not None else ground_truth_active)
+    is_detected = bool(detected if detected is not None else (n_hits > 0))
+    is_other_active = bool(other_bands_active if other_bands_active is not None else had_any_opportunity)
+    is_false_det = bool(false_detection if false_detection is not None else (not is_sel_active and is_detected))
+
     novel = bool(novel_emitter or (novel_ids is not None and len(novel_ids) > 0))
 
     # Determine pre-touch band revisit age for staleness bonus and redundant penalty.
@@ -234,48 +232,93 @@ def receiver_reward_components(
     if band_age is not None:
         effective_age = max(0.0, float(band_age))
     elif band is not None and belief is not None:
-        effective_age = float(getattr(belief, "revisit_age", np.zeros(belief.n_bands))[band])
+        rev_age = getattr(belief, "revisit_age", None)
+        effective_age = float(rev_age[band]) if rev_age is not None and len(rev_age) > band else 0.0
 
     # Intrinsic staleness / coverage bonus (rewards exploring unvisited bands).
     if staleness_norm > 0.0 and w_staleness != 0.0:
         staleness_bonus = w_staleness * min(effective_age / staleness_norm, 1.0)
 
-    if hit:
+    # 1. True Positive: Hit on an active band
+    if is_sel_active and is_detected:
         hit_term = w_hit
-        first_time = float(getattr(detections[0], "time_us", start))
+        # Pulse-count aware scaling: reward catching multiple pulses in longer dwells
+        if w_pulse_scale > 0.0 and n_hits > 1:
+            pulse_bonus_term = w_pulse_scale * min(n_hits - 1, 4)
+            hit_term += pulse_bonus_term
+
+        first_time = float(getattr(detections[0], "time_us", start)) if n_hits > 0 else start
         timing_penalty = -w_timing * max(0.0, first_time - start)
         if novel:
             novel_term = w_novel
-        # Priority term rewards intercepting a high-observable-priority band.
         priority_term = w_priority * float(np.clip(priority_weight_reference, 0.0, 1.0))
-        # Redundant-scan penalty when we re-walk a band we just intercepted (age <= 1).
-        if effective_age <= 1.0 and (band_age is not None or (band is not None and belief is not None)):
-            redundant_pen = w_redundant_scan
-        # Delay penalty for overdue high-urgency band (late preemptive intercept).
-        if band is not None and belief is not None:
+
+        # Productive tracking incentive: reward consecutively confirming hits on an active emitter
+        if w_active_track > 0.0 and effective_age <= 2.0 and belief is not None and float(belief.occupancy_prob[band]) >= 0.4:
+            active_track_term = w_active_track
+
+        # Redundant scan penalty: only applies to unconfirmed / empty re-scans, NOT confirmed hits
+        if w_redundant_scan != 0.0 and effective_age <= 1.0 and (band_age is not None or (band is not None and belief is not None)):
+            # If hit was confirmed, this is productive tracking, not redundant waste
+            pass
+
+        if band is not None and belief is not None and hasattr(belief, "periodic_urgency"):
             urgent = float(belief.periodic_urgency[band])
             if urgent > 0.3:
                 delay_pen = -abs(w_delay) * urgent
-    else:
-        # Phase 9: the opportunity signal is about the SELECTED band only.
-        #   selected active + undetected  -> FN/miss
-        #   selected inactive             -> empty dwell (correct reject / false alarm)
-        if had_any_opportunity:
+
+    # 2. False Negative: Decision-level miss (selected band was active, but receiver missed it)
+    elif is_sel_active and not is_detected:
+        occ = float(belief.occupancy_prob[band]) if (band is not None and belief is not None) else 0.5
+        # Inter-pulse lull tolerance: if band is an active track (p_occ >= 0.6) and just visited, don't penalize lull
+        if lull_tolerance and effective_age <= 1.0 and occ >= 0.6:
+            miss_penalty = 0.0
+        elif context_scaled_miss:
+            miss_penalty = w_miss * max(0.2, occ)
+        else:
             miss_penalty = w_miss
-        elif ground_truth_active is False and float(observation.dwell_time_us) > 0:
+
+    # 3. Selected band was inactive (FP false alarm or TN empty dwell)
+    else:
+        # If receiver declared a false detection on an empty band (spurious detection / FP)
+        if is_false_det:
+            false_alarm_pen = w_false_alarm * 1.5
+        elif is_detected:
+            false_alarm_pen = w_false_alarm
+        elif penalize_empty_dwell and float(observation.dwell_time_us) > 0:
             false_alarm_pen = w_false_alarm
 
-    # Dwell cost (scan efficiency): penalise long dwell occupancy.
-    dwell_cost = w_dwell_cost * max(0.0, float(observation.dwell_time_us))
+        # Re-scanning an inactive band consecutively is a redundant scan
+        if w_redundant_scan != 0.0 and effective_age <= 1.0 and (band_age is not None or (band is not None and belief is not None)):
+            redundant_pen = w_redundant_scan
 
-    # True information gain (Phase 10): IG = H_before - H_after over the selected
-    # band's occupancy belief. Only meaningful when the env supplies it.
+        # Operational coverage opportunity: other bands were active while we tuned an empty band
+        if is_other_active:
+            missed_coverage_pen = w_missed_coverage
+
+    # Dwell cost: Conditional opportunity cost vs flat cost
+    dwell_us = max(0.0, float(observation.dwell_time_us))
+    if conditional_dwell_cost:
+        # Productive hit -> zero dwell penalty
+        if is_sel_active and is_detected:
+            dwell_cost = 0.0
+        # Likely-active band under tracking (p_occ >= 0.5) -> near-zero cost
+        elif band is not None and belief is not None and float(belief.occupancy_prob[band]) >= 0.5:
+            dwell_cost = 0.1 * w_dwell_cost * dwell_us
+        # Empty / unproductive dwell on cold band -> full opportunity cost
+        else:
+            dwell_cost = w_dwell_cost * dwell_us
+    else:
+        dwell_cost = w_dwell_cost * dwell_us
+
+    # True information gain (Phase 10): IG = H_before - H_after over the selected band belief.
     ig = float(information_gain) if information_gain is not None and information_gain == information_gain else 0.0
     info_gain_term = w_information_gain * ig
 
     total = (
         hit_term + novel_term + timing_penalty + priority_term + info_gain_term
-        + staleness_bonus + false_alarm_pen + dwell_cost + redundant_pen + miss_penalty + delay_pen
+        + staleness_bonus + false_alarm_pen + dwell_cost + redundant_pen + miss_penalty + missed_coverage_pen + delay_pen
+        + active_track_term
     )
     return {
         "reward": float(total),
@@ -283,6 +326,7 @@ def receiver_reward_components(
         "novel_term": float(novel_term),
         "timing_penalty": float(timing_penalty),
         "miss_penalty": float(miss_penalty),
+        "missed_coverage_penalty": float(missed_coverage_pen),
         "priority_term": float(priority_term),
         "info_gain_term": float(info_gain_term),
         "staleness_bonus": float(staleness_bonus),
@@ -290,6 +334,8 @@ def receiver_reward_components(
         "dwell_cost": float(dwell_cost),
         "redundant_penalty": float(redundant_pen),
         "delay_penalty": float(delay_pen),
+        "active_track_bonus": float(active_track_term),
+        "pulse_bonus": float(pulse_bonus_term),
         "entropy_before": float(entropy_before) if entropy_before is not None else 0.0,
         "entropy_after": float(entropy_after) if entropy_after is not None else 0.0,
         "information_gain": ig,

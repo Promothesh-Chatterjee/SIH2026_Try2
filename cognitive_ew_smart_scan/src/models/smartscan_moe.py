@@ -216,6 +216,10 @@ class SmartScanMoE(nn.Module):
 
         # Periodic preemptive prioritisation map: band -> urgency boost.
         self._preemptive_urgency = np.zeros(self.n_bands, dtype=np.float32)
+        self.confidence_margin_threshold: float = float(config.get("confidence_margin_threshold", 0.020))
+        self.default_tau: float = float(config.get("tau", 0.0))
+        self._consecutive_empty: int = 0
+        self._last_band: int = -1
 
         # Keep direct refs for torch MoE forward
         self.drqn = drqn_agent
@@ -225,6 +229,29 @@ class SmartScanMoE(nn.Module):
             self.eager_weight, self.revisit_weight, self.preemptive_weight,
             self.k_receivers, self.n_actions,
         )
+
+    def reset(self) -> None:
+        """Reset internal state of all components."""
+        self.revisit_agent.reset()
+        self.eager_agent.hidden = None
+        self._consecutive_empty = 0
+        self._last_band = -1
+
+    def update(self, action: int) -> None:
+        """Update revisit tracking when an action is executed."""
+        band = band_of_action(int(action), self.n_modes)
+        self.revisit_agent.step(band)
+
+    def update_result(self, hit: bool, band: int) -> None:
+        """Track hit results for consecutive unproductive dwells."""
+        if not hit:
+            if self._last_band == band or self._last_band == -1:
+                self._consecutive_empty += 1
+            else:
+                self._consecutive_empty = 1
+        else:
+            self._consecutive_empty = 0
+        self._last_band = band
 
     def set_preemptive_urgency(self, band: int | None, urgency: float) -> None:
         """Fold a periodic-intercept urgency boost into a band's selection pressure.
@@ -399,31 +426,109 @@ class SmartScanMoE(nn.Module):
         }
 
     def select_action(
-        self, obs: np.ndarray | torch.Tensor, eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None
+        self, obs: np.ndarray | torch.Tensor, eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None, tau: float | None = None
     ) -> tuple[int, tuple[torch.Tensor, torch.Tensor] | None, dict[str, float]]:
-        """Select the single best time-frequency action (band, dwell-mode).
+        """Select action via confidence gating: DRQN primary (stochastic), heuristics fallback."""
+        eff_tau = self.default_tau if tau is None else float(tau)
+        # 1. Compute components
+        fused_scores, eager_norm, revisit_norm, hidden, obs_1d, q_values = self._compute_fused_full(obs, eager_hidden)
 
-        Args:
-            obs: Observation vector (obs_dim,) numpy or (B,T,obs_dim) torch.
-            eager_hidden: Optional LSTM hidden state.
+        # 2. Confidence evaluation (Background-relative Q-margin)
+        band_max = np.array([np.max(q_values[b * self.n_modes : (b + 1) * self.n_modes]) for b in range(self.n_bands)])
+        order_b = np.argsort(band_max)[::-1]
+        q_top1 = float(band_max[order_b[0]])
+        q_top2 = float(band_max[order_b[1]]) if len(order_b) > 1 else q_top1
+        band_q_margin = q_top1 - q_top2
+        q_median = float(np.median(band_max))
+        c_bg = q_top1 - q_median
 
-        Returns:
-            Tuple (action int, hidden, attribution dict with mode semantics).
-        """
-        fused, eager_norm, revisit_norm, hidden, obs_1d, q_values = self._compute_fused_full(obs, eager_hidden)
-        action = int(np.argmax(fused))
+        fpb = max(1, int(obs_1d.size) // self.n_bands) if obs_1d is not None and obs_1d.size else 10
+        occ_vec = np.clip(obs_1d[0::fpb][: self.n_bands], 0.0, 1.0) if fpb > 0 else np.zeros(self.n_bands, dtype=np.float32)
+        unc_vec = np.clip(obs_1d[3::fpb][: self.n_bands], 0.0, 1.0) if fpb > 3 else np.zeros(self.n_bands, dtype=np.float32)
+        age_vec = np.clip(obs_1d[4::fpb][: self.n_bands], 0.0, 1.0) if fpb > 4 else np.zeros(self.n_bands, dtype=np.float32)
+
+        # 3. Decision Gate: DRQN confident when background-relative margin >= threshold
+        # (or top1-top2 margin is sufficiently distinct)
+        is_confident = (c_bg >= self.confidence_margin_threshold) or (band_q_margin >= self.confidence_margin_threshold)
+
+        # 4. Multi-emitter candidate set
+        per_vec = np.clip(self._preemptive_urgency[: self.n_bands], 0.0, 1.0)
+        q_candidates = [int(b) for b in order_b if band_max[b] >= q_top1 - 0.05]
+        occ_candidates = [int(b) for b in range(self.n_bands) if occ_vec[b] > 0.15]
+        per_candidates = [int(b) for b in range(self.n_bands) if per_vec[b] > 0.50] if self.preemptive_weight > 0.0 else []
+        all_candidates = list(dict.fromkeys(q_candidates + occ_candidates + per_candidates))[:5]
+
+        # Filter out repeatedly empty band to enforce escape
+        if self._consecutive_empty >= 2 and self._last_band in all_candidates and len(all_candidates) > 1:
+            all_candidates = [b for b in all_candidates if b != self._last_band]
+
+        if is_confident and all_candidates and (self._consecutive_empty < 3):
+            cand_scores = np.array([band_max[b] - q_median + 0.5 * occ_vec[b] + 2.0 * self.preemptive_weight * per_vec[b] for b in all_candidates])
+            if eff_tau > 0.0:
+                probs = np.exp((cand_scores - np.max(cand_scores)) / max(1e-5, eff_tau))
+                probs = probs / np.sum(probs)
+                best_b = int(np.random.choice(all_candidates, p=probs))
+            else:
+                best_b = int(all_candidates[int(np.argmax(cand_scores))])
+            reason = "DRQN_topk_active"
+        elif self.preemptive_weight > 0.0 and np.max(per_vec) > 0.5 and (self._consecutive_empty < 3):
+            best_b = int(np.argmax(per_vec))
+            reason = "Preemptive_intercept"
+        elif occ_candidates and (self._consecutive_empty < 3):
+            # Cognitive fallback: occupied bands
+            occ_vals = np.array([occ_vec[b] for b in occ_candidates])
+            probs = np.exp(occ_vals / 0.20)
+            probs = probs / np.sum(probs)
+            best_b = int(np.random.choice(occ_candidates, p=probs))
+            reason = "Occupancy_fallback"
+        else:
+            # Cognitive exploration: revisit + uncertainty + occupancy + periodic preemptive
+            per_vec = np.clip(self._preemptive_urgency[: self.n_bands], 0.0, 1.0)
+            explor_scores = 0.40 * revisit_norm + 0.30 * unc_vec + 0.15 * occ_vec + 0.15 * per_vec
+            if self.preemptive_weight > 0.0 and np.max(per_vec) > 0.5:
+                best_b = int(np.argmax(per_vec))
+            else:
+                best_b = int(np.argmax(explor_scores))
+            reason = "Cognitive_exploration"
+
+        # Mode hierarchy combining learned Q-values + uncertainty/safety
+        occ = float(occ_vec[best_b])
+        unc = float(unc_vec[best_b])
+        age = float(age_vec[best_b])
+
+        # If a single mode has a massive learned Q margin (e.g. unit test or specialized fine-tuning), honor it
+        q_modes = q_values[best_b * self.n_modes : (best_b + 1) * self.n_modes]
+        m_argmax = int(np.argmax(q_modes))
+        q_norm = float(q_values[best_b * self.n_modes + 1])
+        q_long = float(q_values[best_b * self.n_modes + 2])
+
+        if float(q_modes[m_argmax] - np.partition(q_modes, -2)[-2] if len(q_modes) > 1 else 0.0) >= 1.0:
+            mode = m_argmax
+        elif unc > 0.6 or age > 0.6:
+            mode = 2  # LONG_DWELL
+        elif self._consecutive_empty >= 2 and occ < 0.1:
+            mode = 0  # SHORT_DWELL
+        elif q_long > q_norm + 0.05:
+            mode = 2  # LONG_DWELL
+        else:
+            mode = 1  # NORMAL_DWELL
+
+        action = best_b * self.n_modes + mode
+
         attribution = self._attribution_for(action, obs_1d)
-        # Legacy keys preserved for API consumers.
+        
         eager_contrib = float(self.eager_weight * eager_norm[action])
         revisit_contrib = float(self.revisit_weight * revisit_norm[band_of_action(action, self.n_modes)])
         total = eager_contrib + revisit_contrib + 1e-8
+        
         attribution["eager_pct"] = float(eager_contrib / total)
         attribution["revisit_pct"] = float(revisit_contrib / total)
-        # Fused action score underlying the selection (action_score log field).
-        attribution["action_score"] = float(fused[action])
+        attribution["action_score"] = float(fused_scores[action])
         attribution["action"] = action
-        # RC-2 numeric attribution: scores at the selected action, raw-Q argmax
-        # and ranks so telemetry can detect MoE collapse (q_argmax != fused argmax).
+        attribution["q_margin"] = float(band_q_margin)
+        attribution["fallback_triggered"] = float(not is_confident)
+        attribution["reason"] = reason
+        
         attribution.update(self._score_attribution(action, q_values, eager_norm, revisit_norm, obs_1d))
         logger.debug("MoE selected action=%d %s", action, attribution)
         return action, hidden, attribution

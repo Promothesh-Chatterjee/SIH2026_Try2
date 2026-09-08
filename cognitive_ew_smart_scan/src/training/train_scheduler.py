@@ -137,12 +137,14 @@ def _do_drqn_update(
     q_loss = loss_fn(q_chosen[loss_mask], targets[loss_mask].detach())
 
     loss: torch.Tensor = q_loss
+    aux_loss: torch.Tensor = torch.zeros((), device=device)
     if aux_coef > 0:
         hit_probs = torch.tensor(batch["hit_probs"], dtype=torch.float32, device=device)
         prob_pred = aux["intercept_prob"].gather(-1, act_b.unsqueeze(-1)).squeeze(-1)
         bce = nn.functional.binary_cross_entropy(prob_pred[loss_mask], hit_probs[loss_mask].detach())
 
         # Time target only when the transition is a genuine hit.
+        # Targets are normalized by 1000.0 (milliseconds) to keep Huber loss bounded [0, 1]
         time_valid = (
             loss_mask
             & torch.tensor(batch["time_target_valid"], dtype=torch.bool, device=device)
@@ -150,14 +152,16 @@ def _do_drqn_update(
         if time_valid.any():
             intercept_times = torch.tensor(batch["intercept_times_us"], dtype=torch.float32, device=device)
             time_pred = aux["intercept_time_us"].gather(-1, act_b.unsqueeze(-1)).squeeze(-1)
-            huber = nn.functional.huber_loss(time_pred[time_valid], intercept_times[time_valid].detach(), delta=100.0)
+            # Delta 0.1 ms (= 100 µs), predictions and targets in ms (/ 1000.0)
+            huber = nn.functional.huber_loss(time_pred[time_valid] / 1000.0, intercept_times[time_valid].detach() / 1000.0, delta=0.1)
         else:
             huber = torch.zeros((), device=device)
-        loss = loss + aux_coef * (bce + huber)
+        aux_loss = bce + huber
+        loss = loss + aux_coef * aux_loss
 
     optimizer.zero_grad()
     loss.backward()
-    grad_norm = torch.nn.utils.clip_grad_norm_(online_drqn.parameters(), 1.0)
+    pre_clip_grad_norm = torch.nn.utils.clip_grad_norm_(online_drqn.parameters(), 1.0)
     optimizer.step()
     if stats is not None:
         loss_mask_t = loss_mask
@@ -166,8 +170,11 @@ def _do_drqn_update(
         # Double-DQN target values: target-network Q at online-argmax next actions.
         best_next = next_q[loss_mask_t]
         target_table = next_q_target[loss_mask_t]
-        stats["td_loss"] = float(loss.item())
+        # stats["td_loss"] tracks the genuine Bellman Q loss
+        stats["td_loss"] = float(q_loss.item())
+        stats["total_loss"] = float(loss.item())
         stats["q_loss"] = float(q_loss.item())
+        stats["aux_loss"] = float(aux_loss.item())
         stats["mean_td_error"] = float(td_err.mean().item())
         stats["max_td_error"] = float(td_err.max().item())
         stats["mean_q"] = float(qm.mean().item())
@@ -178,7 +185,9 @@ def _do_drqn_update(
         stats["mean_target_q"] = float(best_next.mean().item())
         stats["max_target_q"] = float(target_table.max().item())
         stats["target_online_gap"] = float(best_next.mean().item() - qm.mean().item())
-        stats["gradient_norm"] = float(grad_norm.item()) if torch.is_tensor(grad_norm) else float(grad_norm)
+        pre_gn = float(pre_clip_grad_norm.item()) if torch.is_tensor(pre_clip_grad_norm) else float(pre_clip_grad_norm)
+        stats["gradient_norm"] = min(1.0, pre_gn)
+        stats["pre_clip_gradient_norm"] = pre_gn
         stats["n_graded_steps"] = int(loss_mask_t.sum().item())
         stats["reward_baseline"] = float(updated_baseline)
         stats["centered_reward_mean"] = float(centered_rew_b[loss_mask_t].mean().item())
@@ -336,13 +345,17 @@ def train_scheduler(
         logger.warning("Scheduler training: RF world source = %s (non-standard)", world_mode)
 
     # One env; reset() draws a fresh random TSRD file each episode.
+    # Semantic memory explicitly disabled during training for clean DRQN ablation baseline
+    train_env_config = copy.deepcopy(env_config)
+    train_env_config["semantic_memory_enabled"] = False
     env = CognitiveRFScanEnv(
-        env_config, 
+        train_env_config, 
         records=None, 
         seed=seed, 
         records_provider=train_source.sample,
         deinterleaver_model=deinterleaver_model,
         deinterleaver_config={"fit_stats": fit_stats} if fit_stats else {},
+        semantic_memory_path=":memory:"
     )
     env.reset()  # populate first episode's records so obs_dim/action checks are valid
     assert env.obs_dim == obs_dim, f"env obs_dim {env.obs_dim} != configured {obs_dim}"
@@ -546,6 +559,11 @@ def train_scheduler(
                     "mean_online_q": 0.0, "mean_target_q": 0.0, "max_target_q": -1e9,
                     "target_online_gap": 0.0, "gradient_norm": 0.0}
 
+        consecutive_empty = 0
+        last_band = -1
+        ep_explore_mode_counts = np.zeros(n_modes, dtype=np.float64)
+        ep_greedy_mode_counts = np.zeros(n_modes, dtype=np.float64)
+
         while not done and global_step < total_steps:
             # ---- Action selection ----
             # Feed the MoE the observable periodic-imminent-arrival urgency so
@@ -568,7 +586,10 @@ def train_scheduler(
             else:
                 use_ts = False
                 if random.random() < eps:
-                    action = int(env.action_space.sample())
+                    b_rand = random.randint(0, n_bands - 1)
+                    m_rand = int(np.random.choice([0, 1, 2], p=[0.10, 0.70, 0.20]))
+                    action = b_rand * n_modes + m_rand
+                    ep_explore_mode_counts[m_rand] += 1
                     moe_attr = None
                     act_source = "random"
                 else:
@@ -576,7 +597,14 @@ def train_scheduler(
                     with torch.inference_mode():
                         obs_np = np.asarray(obs, dtype=np.float32)
                         obs_t = torch.from_numpy(obs_np).to(device)
-                        action, hidden = online_drqn.act(obs_t, hidden)
+                        action, hidden = online_drqn.act(
+                            obs_t,
+                            hidden,
+                            mode_selection="band_first_decoupled",
+                            consecutive_empty=consecutive_empty,
+                            tau=0.15,
+                        )
+                        ep_greedy_mode_counts[int(action % n_modes)] += 1
                         # Diagnostic MoE query for passive telemetry only (MoE quarantined from action selection)
                         try:
                             _, _, moe_attr = moe.select_action(obs_np, hidden)
@@ -607,7 +635,18 @@ def train_scheduler(
                     val = moe_attr.get(moe_key)
                     ep_ns["scores"][tel_key] += float(val) if val is not None and float(val) == float(val) else 0.0
 
-            ts_sampler.update(action, bool(info["hit"]))
+            band = int(action // n_modes)
+            hit = bool(info.get("hit", False))
+            if hit:
+                consecutive_empty = 0
+            else:
+                if last_band == band or last_band == -1:
+                    consecutive_empty += 1
+                else:
+                    consecutive_empty = 1
+            last_band = band
+
+            ts_sampler.update(action, hit)
             buffer.add(
                 np.asarray(obs, dtype=np.float32),
                 action,
@@ -724,7 +763,14 @@ def train_scheduler(
         episode += 1
         fom = env.get_fom()
         intercept_rate = ep_hits / max(1, getattr(env, "current_step", ep_steps))
-        logger.info("Ep %d | step %d/%d | rew %.2f hits %d intercept_rate %.3f eps %.3f", episode, global_step, total_steps, ep_reward, ep_hits, intercept_rate, eps)
+        exp_tot = max(1e-5, float(np.sum(ep_explore_mode_counts)))
+        grd_tot = max(1e-5, float(np.sum(ep_greedy_mode_counts)))
+        logger.info(
+            "Ep %d | step %d/%d | rew %.2f hits %d ir %.3f eps %.3f | Q-Modes: N=%.1f%% L=%.1f%% S=%.1f%% | Exp-Modes: N=%.1f%% L=%.1f%% S=%.1f%%",
+            episode, global_step, total_steps, ep_reward, ep_hits, intercept_rate, eps,
+            (ep_greedy_mode_counts[1] / grd_tot) * 100, (ep_greedy_mode_counts[2] / grd_tot) * 100, (ep_greedy_mode_counts[0] / grd_tot) * 100,
+            (ep_explore_mode_counts[1] / exp_tot) * 100, (ep_explore_mode_counts[2] / exp_tot) * 100, (ep_explore_mode_counts[0] / exp_tot) * 100,
+        )
         if use_wandb:
             try:
                 import wandb
