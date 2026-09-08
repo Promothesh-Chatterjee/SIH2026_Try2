@@ -7,22 +7,12 @@ export default function AppLayout({ children }) {
   const [mode, setMode] = useState("live");
 
   return (
-    <div className="app-shell">
-      <Sidebar
-        activePage={activePage}
-        setActivePage={setActivePage}
-        mode={mode}
-        setMode={setMode}
-      />
-
-      <div className="app-main">
+    <div className="st-shell">
+      <Sidebar activePage={activePage} setActivePage={setActivePage} mode={mode} setMode={setMode} />
+      <div className="st-main">
         <TopBar mode={mode} />
-
-        <main className="app-content">
-          {children({
-            activePage,
-            mode,
-          })}
+        <main className="st-content">
+          {children({ activePage, mode })}
         </main>
       </div>
     </div>
