@@ -182,6 +182,51 @@ class SmartScanMoETests(unittest.TestCase):
         # Neural & semantic score fusion parity
         np.testing.assert_allclose(fused_np, fused_t_np, rtol=1e-4, atol=1e-4)
 
+    def test_consecutive_empty_tracking(self):
+        """Alternating misses across different bands must increment total consecutive empty and trigger exploration."""
+        moe = _create_moe()
+        moe.reset()
+
+        # Step 1: Band 5 misses
+        moe.update_result(hit=False, band=5)
+        self.assertEqual(moe._consecutive_empty_band, 1)
+        self.assertEqual(moe._consecutive_empty_total, 1)
+
+        # Step 2: Band 10 misses
+        moe.update_result(hit=False, band=10)
+        self.assertEqual(moe._consecutive_empty_band, 1)  # reset for band 10
+        self.assertEqual(moe._consecutive_empty_total, 2)  # accumulated globally
+
+        # Step 3: Band 5 misses again
+        moe.update_result(hit=False, band=5)
+        self.assertEqual(moe._consecutive_empty_band, 1)
+        self.assertEqual(moe._consecutive_empty_total, 3)  # hits threshold >= 3
+
+        # Next selection must trigger cognitive exploration
+        obs = np.zeros(360, dtype=np.float32)
+        _, _, attr = moe.select_action(obs)
+        self.assertEqual(attr["reason"], "Cognitive_exploration")
+        self.assertEqual(attr["exploration_mode_active"], 1.0)
+
+        # A hit must reset both counters
+        moe.update_result(hit=True, band=attr["selected_band"])
+        self.assertEqual(moe._consecutive_empty_band, 0)
+        self.assertEqual(moe._consecutive_empty_total, 0)
+        self.assertEqual(moe._historical_hits[attr["selected_band"]], 1)
+
+    def test_reset_clears_state(self):
+        """reset() must clear both agents, hidden states, consecutive counters, and historical hits."""
+        moe = _create_moe()
+        moe.update_result(hit=False, band=2)
+        moe.update_result(hit=True, band=3)
+        moe.reset()
+
+        self.assertEqual(moe._consecutive_empty_band, 0)
+        self.assertEqual(moe._consecutive_empty_total, 0)
+        self.assertEqual(moe._last_band, -1)
+        self.assertEqual(int(np.sum(moe._historical_hits)), 0)
+        self.assertEqual(float(np.sum(moe._preemptive_urgency)), 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

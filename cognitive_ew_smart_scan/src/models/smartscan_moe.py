@@ -149,6 +149,8 @@ class SmartScanMoE(nn.Module):
             self.last_visit_time[int(selected_band)] = float(self.current_t)
             self.current_t += 1
 
+        step = update
+
         def scores(self) -> np.ndarray:
             """Return per-band urgency vector exp(decay * (t - last_visit)), normalised to [0,1].
 
@@ -218,8 +220,10 @@ class SmartScanMoE(nn.Module):
         self._preemptive_urgency = np.zeros(self.n_bands, dtype=np.float32)
         self.confidence_margin_threshold: float = float(config.get("confidence_margin_threshold", 0.020))
         self.default_tau: float = float(config.get("tau", 0.0))
-        self._consecutive_empty: int = 0
+        self._consecutive_empty_band: int = 0
+        self._consecutive_empty_total: int = 0
         self._last_band: int = -1
+        self._historical_hits = np.zeros(self.n_bands, dtype=np.int32)
 
         # Keep direct refs for torch MoE forward
         self.drqn = drqn_agent
@@ -232,26 +236,33 @@ class SmartScanMoE(nn.Module):
 
     def reset(self) -> None:
         """Reset internal state of all components."""
+        self.eager_agent.reset()
         self.revisit_agent.reset()
-        self.eager_agent.hidden = None
-        self._consecutive_empty = 0
+        self._consecutive_empty_band = 0
+        self._consecutive_empty_total = 0
         self._last_band = -1
+        self._historical_hits.fill(0)
+        self._preemptive_urgency.fill(0.0)
 
     def update(self, action: int) -> None:
         """Update revisit tracking when an action is executed."""
         band = band_of_action(int(action), self.n_modes)
-        self.revisit_agent.step(band)
+        self.revisit_agent.update(band)
 
     def update_result(self, hit: bool, band: int) -> None:
-        """Track hit results for consecutive unproductive dwells."""
-        if not hit:
-            if self._last_band == band or self._last_band == -1:
-                self._consecutive_empty += 1
-            else:
-                self._consecutive_empty = 1
+        """Track hit results for consecutive unproductive dwells and historical hits."""
+        if hit:
+            self._consecutive_empty_band = 0
+            self._consecutive_empty_total = 0
+            if 0 <= int(band) < self.n_bands:
+                self._historical_hits[int(band)] += 1
         else:
-            self._consecutive_empty = 0
-        self._last_band = band
+            self._consecutive_empty_total += 1
+            if self._last_band == band or self._last_band == -1:
+                self._consecutive_empty_band += 1
+            else:
+                self._consecutive_empty_band = 1
+        self._last_band = int(band)
 
     def set_preemptive_urgency(self, band: int | None, urgency: float) -> None:
         """Fold a periodic-intercept urgency boost into a band's selection pressure.
@@ -447,23 +458,39 @@ class SmartScanMoE(nn.Module):
         unc_vec = np.clip(obs_1d[3::fpb][: self.n_bands], 0.0, 1.0) if fpb > 3 else np.zeros(self.n_bands, dtype=np.float32)
         age_vec = np.clip(obs_1d[4::fpb][: self.n_bands], 0.0, 1.0) if fpb > 4 else np.zeros(self.n_bands, dtype=np.float32)
 
-        # 3. Decision Gate: DRQN confident when background-relative margin >= threshold
-        # (or top1-top2 margin is sufficiently distinct)
-        is_confident = (c_bg >= self.confidence_margin_threshold) or (band_q_margin >= self.confidence_margin_threshold)
+        # 3. Decision Gate: DRQN confident when eager_weight > 0 and background-relative margin >= threshold
+        is_confident = (self.eager_weight > 0.0) and (
+            (c_bg >= self.confidence_margin_threshold) or (band_q_margin >= self.confidence_margin_threshold)
+        )
 
         # 4. Multi-emitter candidate set
         per_vec = np.clip(self._preemptive_urgency[: self.n_bands], 0.0, 1.0)
-        q_candidates = [int(b) for b in order_b if band_max[b] >= q_top1 - 0.05]
-        occ_candidates = [int(b) for b in range(self.n_bands) if occ_vec[b] > 0.15]
-        per_candidates = [int(b) for b in range(self.n_bands) if per_vec[b] > 0.50] if self.preemptive_weight > 0.0 else []
-        all_candidates = list(dict.fromkeys(q_candidates + occ_candidates + per_candidates))[:5]
+        q_candidates = [int(b) for b in order_b if band_max[b] >= q_top1 - 0.05][:3]
+
+        # Adaptive occupancy threshold: in dense stare require 0.15, in sparse or scan regimes adapt down to 0.02
+        max_occ = float(np.max(occ_vec)) if len(occ_vec) > 0 else 0.0
+        occ_threshold = max(0.02, min(0.15, 0.5 * max_occ))
+        occ_candidates = [int(b) for b in range(self.n_bands) if occ_vec[b] >= occ_threshold][:3]
+        per_candidates = [int(b) for b in range(self.n_bands) if per_vec[b] > 0.50][:2] if self.preemptive_weight > 0.0 else []
+        all_candidates = list(dict.fromkeys(per_candidates + q_candidates + occ_candidates))[:7]
 
         # Filter out repeatedly empty band to enforce escape
-        if self._consecutive_empty >= 2 and self._last_band in all_candidates and len(all_candidates) > 1:
+        if self._consecutive_empty_band >= 2 and self._last_band in all_candidates and len(all_candidates) > 1:
             all_candidates = [b for b in all_candidates if b != self._last_band]
 
-        if is_confident and all_candidates and (self._consecutive_empty < 3):
-            cand_scores = np.array([band_max[b] - q_median + 0.5 * occ_vec[b] + 2.0 * self.preemptive_weight * per_vec[b] for b in all_candidates])
+        # Force exploration if 3 consecutive dwells anywhere produced zero hits
+        force_exploration = bool(self._consecutive_empty_total >= 3)
+
+        if self.preemptive_weight > 0.0 and np.max(per_vec) > 0.5 and (self._consecutive_empty_band < 2):
+            best_b = int(np.argmax(per_vec))
+            reason = "Preemptive_intercept"
+        elif is_confident and all_candidates and not force_exploration and (self._consecutive_empty_band < 2):
+            cand_scores = np.array([
+                self.eager_weight * (band_max[b] - q_median)
+                + 0.5 * occ_vec[b]
+                + 2.0 * self.preemptive_weight * per_vec[b]
+                for b in all_candidates
+            ])
             if eff_tau > 0.0:
                 probs = np.exp((cand_scores - np.max(cand_scores)) / max(1e-5, eff_tau))
                 probs = probs / np.sum(probs)
@@ -471,10 +498,7 @@ class SmartScanMoE(nn.Module):
             else:
                 best_b = int(all_candidates[int(np.argmax(cand_scores))])
             reason = "DRQN_topk_active"
-        elif self.preemptive_weight > 0.0 and np.max(per_vec) > 0.5 and (self._consecutive_empty < 3):
-            best_b = int(np.argmax(per_vec))
-            reason = "Preemptive_intercept"
-        elif occ_candidates and (self._consecutive_empty < 3):
+        elif occ_candidates and not force_exploration and (self._consecutive_empty_band < 2):
             # Cognitive fallback: occupied bands
             occ_vals = np.array([occ_vec[b] for b in occ_candidates])
             probs = np.exp(occ_vals / 0.20)
@@ -482,13 +506,13 @@ class SmartScanMoE(nn.Module):
             best_b = int(np.random.choice(occ_candidates, p=probs))
             reason = "Occupancy_fallback"
         else:
-            # Cognitive exploration: revisit + uncertainty + occupancy + periodic preemptive
-            per_vec = np.clip(self._preemptive_urgency[: self.n_bands], 0.0, 1.0)
-            explor_scores = 0.40 * revisit_norm + 0.30 * unc_vec + 0.15 * occ_vec + 0.15 * per_vec
-            if self.preemptive_weight > 0.0 and np.max(per_vec) > 0.5:
-                best_b = int(np.argmax(per_vec))
-            else:
-                best_b = int(np.argmax(explor_scores))
+            # Cognitive exploration: revisit + uncertainty + historical hits + preemptive urgency
+            max_hist = float(np.max(self._historical_hits)) if len(self._historical_hits) > 0 else 0.0
+            hist_norm = (self._historical_hits / max(1.0, max_hist)).astype(np.float32)
+            explor_scores = 0.40 * revisit_norm + 0.35 * unc_vec + 0.15 * hist_norm + 0.10 * per_vec
+            if self._consecutive_empty_band >= 1 and 0 <= self._last_band < self.n_bands:
+                explor_scores[self._last_band] = -1e9
+            best_b = int(np.argmax(explor_scores))
             reason = "Cognitive_exploration"
 
         # Mode hierarchy combining learned Q-values + uncertainty/safety
@@ -506,7 +530,7 @@ class SmartScanMoE(nn.Module):
             mode = m_argmax
         elif unc > 0.6 or age > 0.6:
             mode = 2  # LONG_DWELL
-        elif self._consecutive_empty >= 2 and occ < 0.1:
+        elif self._consecutive_empty_band >= 2 and occ < 0.1:
             mode = 0  # SHORT_DWELL
         elif q_long > q_norm + 0.05:
             mode = 2  # LONG_DWELL
@@ -526,7 +550,13 @@ class SmartScanMoE(nn.Module):
         attribution["action_score"] = float(fused_scores[action])
         attribution["action"] = action
         attribution["q_margin"] = float(band_q_margin)
-        attribution["fallback_triggered"] = float(not is_confident)
+        attribution["fallback_triggered"] = float(reason in ("Cognitive_exploration", "Occupancy_fallback"))
+        attribution["exploration_mode_active"] = float(reason == "Cognitive_exploration")
+        attribution["drqn_candidate_active"] = float(reason == "DRQN_topk_active")
+        attribution["occupancy_candidate_active"] = float(reason == "Occupancy_fallback")
+        attribution["preemptive_candidate_active"] = float(reason == "Preemptive_intercept")
+        attribution["consecutive_empty_total"] = int(self._consecutive_empty_total)
+        attribution["consecutive_empty_band"] = int(self._consecutive_empty_band)
         attribution["reason"] = reason
         
         attribution.update(self._score_attribution(action, q_values, eager_norm, revisit_norm, obs_1d))
@@ -584,20 +614,6 @@ class SmartScanMoE(nn.Module):
         logger.debug("MoE fused top=%s attribution=%s", top_k, attribution)
         return top_k, hidden, attribution
 
-    def update(self, selected_action: int) -> None:
-        """Update revisit agent after a time-frequency action.
-
-        Args:
-            selected_action: Flat action index (band*n_modes + mode).
-        """
-        band = band_of_action(int(selected_action), self.n_modes)
-        self.revisit_agent.update(band)
-
-    def reset(self) -> None:
-        """Reset both agents' episodic state and preemptive map."""
-        self.eager_agent.reset()
-        self.revisit_agent.reset()
-        self._preemptive_urgency.fill(0.0)
 
     # Torch forward for batched training (keeps old API)
     def forward(
