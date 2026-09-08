@@ -1,0 +1,107 @@
+{
+  "1. Decoupled_DRQN_B_Refined": {
+    "intercept_rate": 7.24,
+    "hits": 724,
+    "total_steps": 10000,
+    "empty_escape": 68.25775656324582,
+    "stale_escape": 67.77777777777779,
+    "distinct_bands": 9,
+    "mode_distribution": {
+      "SHORT_DWELL": 26.44,
+      "NORMAL_DWELL": 69.13,
+      "LONG_DWELL": 4.43,
+      "REVISIT": 0.0,
+      "PREEMPTIVE_INTERCEPT": 0.0
+    },
+    "discovery_rate": 28.42857142857143,
+    "coverage": 8.48590449698101,
+    "decision_pd": 69.73684210526316,
+    "pfa": 0.0,
+    "timing_error_us": 163.13784815187574,
+    "avg_reward": -333.5274184430988
+  },
+  "2. Decoupled_DRQN_MoE": {
+    "intercept_rate": 9.719999999999999,
+    "hits": 972,
+    "total_steps": 10000,
+    "empty_escape": 66.66666666666666,
+    "stale_escape": 95.21521521521521,
+    "distinct_bands": 36,
+    "mode_distribution": {
+      "SHORT_DWELL": 0.01,
+      "NORMAL_DWELL": 7.33,
+      "LONG_DWELL": 3.35,
+      "REVISIT": 89.31,
+      "PREEMPTIVE_INTERCEPT": 0.0
+    },
+    "discovery_rate": 77.23809523809524,
+    "coverage": 4.054344141824601,
+    "decision_pd": 99.15223880597014,
+    "pfa": 0.0,
+    "timing_error_us": 162.07591971193557,
+    "avg_reward": 55.72922000707579
+  },
+  "3. Baseline_HighestOccupancy": {
+    "intercept_rate": 46.25,
+    "hits": 4625,
+    "total_steps": 10000,
+    "empty_escape": 3.7701974865350087,
+    "stale_escape": 44.92492492492492,
+    "distinct_bands": 36,
+    "mode_distribution": {
+      "SHORT_DWELL": 0.0,
+      "NORMAL_DWELL": 100.0,
+      "LONG_DWELL": 0.0,
+      "REVISIT": 0.0,
+      "PREEMPTIVE_INTERCEPT": 0.0
+    },
+    "discovery_rate": 59.285714285714285,
+    "coverage": 35.3437334584637,
+    "decision_pd": 99.97624703087887,
+    "pfa": 0.0,
+    "timing_error_us": 149.52297433394114,
+    "avg_reward": 1354.191450932652
+  },
+  "4. Baseline_HighestUncertainty": {
+    "intercept_rate": 9.049999999999999,
+    "hits": 905,
+    "total_steps": 10000,
+    "empty_escape": 5.359477124183006,
+    "stale_escape": 82.26226226226227,
+    "distinct_bands": 36,
+    "mode_distribution": {
+      "SHORT_DWELL": 0.0,
+      "NORMAL_DWELL": 100.0,
+      "LONG_DWELL": 0.0,
+      "REVISIT": 0.0,
+      "PREEMPTIVE_INTERCEPT": 0.0
+    },
+    "discovery_rate": 71.14285714285715,
+    "coverage": 9.621671673662048,
+    "decision_pd": 99.93827160493828,
+    "pfa": 0.0,
+    "timing_error_us": 182.07719699779793,
+    "avg_reward": 25.384874497075508
+  },
+  "5. Baseline_RoundRobin": {
+    "intercept_rate": 3.37,
+    "hits": 337,
+    "total_steps": 10000,
+    "empty_escape": 100.0,
+    "stale_escape": 100.0,
+    "distinct_bands": 36,
+    "mode_distribution": {
+      "SHORT_DWELL": 0.0,
+      "NORMAL_DWELL": 100.0,
+      "LONG_DWELL": 0.0,
+      "REVISIT": 0.0,
+      "PREEMPTIVE_INTERCEPT": 0.0
+    },
+    "discovery_rate": 76.33333333333334,
+    "coverage": 2.9405864420295504,
+    "decision_pd": 98.18627450980392,
+    "pfa": 0.0,
+    "timing_error_us": 177.77265698283082,
+    "avg_reward": -131.08615979864425
+  }
+}

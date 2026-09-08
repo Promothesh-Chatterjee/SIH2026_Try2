@@ -1,0 +1,333 @@
+{
+  "baselines": {
+    "highest_occupancy": {
+      "policy": "highest_occupancy",
+      "intercept_rate": 0.9003333333333333,
+      "hits": 2701,
+      "total_steps": 3000,
+      "avg_reward": 4.865347745964978,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 100.0,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "hit_rate_by_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 90.03333333333333,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "distinct_bands": 36,
+      "empty_escape_rate": 0.8681318681318682,
+      "stale_escape_rate": 0.0035298270384751147,
+      "q_margin_mean": null
+    },
+    "highest_uncertainty": {
+      "policy": "highest_uncertainty",
+      "intercept_rate": 0.15366666666666667,
+      "hits": 461,
+      "total_steps": 3000,
+      "avg_reward": 0.767406349507206,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 100.0,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "hit_rate_by_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 15.366666666666667,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "distinct_bands": 36,
+      "empty_escape_rate": 0.8704418704418705,
+      "stale_escape_rate": 0.7486515641855448,
+      "q_margin_mean": null
+    },
+    "round_robin": {
+      "policy": "round_robin",
+      "intercept_rate": 0.07966666666666666,
+      "hits": 239,
+      "total_steps": 3000,
+      "avg_reward": 0.41605186260853533,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 100.0,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "hit_rate_by_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 7.966666666666667,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "distinct_bands": 36,
+      "empty_escape_rate": 1.0,
+      "stale_escape_rate": 1.0,
+      "q_margin_mean": null
+    },
+    "random": {
+      "policy": "random",
+      "intercept_rate": 0.074,
+      "hits": 222,
+      "total_steps": 3000,
+      "avg_reward": 0.3032856846590883,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 20.3,
+        "NORMAL_DWELL": 19.1,
+        "LONG_DWELL": 21.2,
+        "REVISIT": 19.6,
+        "PREEMPTIVE_INTERCEPT": 19.8
+      },
+      "hit_rate_by_mode_pct": {
+        "SHORT_DWELL": 5.0903119868637114,
+        "NORMAL_DWELL": 4.886561954624781,
+        "LONG_DWELL": 12.10691823899371,
+        "REVISIT": 5.612244897959184,
+        "PREEMPTIVE_INTERCEPT": 8.922558922558922
+      },
+      "distinct_bands": 36,
+      "empty_escape_rate": 0.9724164724164724,
+      "stale_escape_rate": 0.9730312837108953,
+      "q_margin_mean": null
+    }
+  },
+  "ablation_variants": {
+    "A0_Baseline_R4": {
+      "policy": "drqn",
+      "intercept_rate": 0.144,
+      "hits": 432,
+      "total_steps": 3000,
+      "avg_reward": 0.6255880117941006,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 87.13333333333333,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 0.33333333333333337,
+        "REVISIT": 0.06666666666666667,
+        "PREEMPTIVE_INTERCEPT": 12.466666666666667
+      },
+      "hit_rate_by_mode_pct": {
+        "SHORT_DWELL": 11.32364192807957,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 10.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 36.096256684491976
+      },
+      "distinct_bands": 10,
+      "empty_escape_rate": 0.7895212285456188,
+      "stale_escape_rate": 0.7899017282277194,
+      "q_margin_mean": 0.01906530527273814,
+      "td_loss_mean": 0.14642491693282786,
+      "grad_norm_mean": 0.83322775519333,
+      "reward_config": {
+        "penalize_empty_dwell": false,
+        "context_scaled_miss": true,
+        "w_hit": 5.0,
+        "w_novel": 5.0,
+        "w_miss": -0.5,
+        "w_dwell_cost": -0.0002,
+        "w_redundant_scan": -0.1,
+        "w_false_alarm": -0.5,
+        "w_staleness": 0.4,
+        "w_priority": 1.0,
+        "w_information_gain": 0.2,
+        "conditional_dwell_cost": false,
+        "w_active_track": 0.0,
+        "w_pulse_scale": 0.0,
+        "lull_tolerance": false
+      },
+      "description": "Baseline R4: unconditional dwell penalty (-0.0002/us), redundant scan penalty (-0.1)"
+    },
+    "A1_ConditionalDwell": {
+      "policy": "drqn",
+      "intercept_rate": 0.092,
+      "hits": 276,
+      "total_steps": 3000,
+      "avg_reward": 0.3526878586569212,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 79.83333333333333,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.16666666666666669,
+        "PREEMPTIVE_INTERCEPT": 20.0
+      },
+      "hit_rate_by_mode_pct": {
+        "SHORT_DWELL": 5.6784968684759916,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 23.333333333333332
+      },
+      "distinct_bands": 11,
+      "empty_escape_rate": 0.7996781979082864,
+      "stale_escape_rate": 0.7968167964781578,
+      "q_margin_mean": 0.016143470883369447,
+      "td_loss_mean": 0.11351915428049268,
+      "grad_norm_mean": 0.7907106055666698,
+      "reward_config": {
+        "penalize_empty_dwell": false,
+        "context_scaled_miss": true,
+        "w_hit": 5.0,
+        "w_novel": 5.0,
+        "w_miss": -0.5,
+        "w_dwell_cost": -0.0002,
+        "w_redundant_scan": 0.0,
+        "w_false_alarm": -0.5,
+        "w_staleness": 0.4,
+        "w_priority": 1.0,
+        "w_information_gain": 0.2,
+        "conditional_dwell_cost": true,
+        "w_active_track": 0.0,
+        "w_pulse_scale": 0.0,
+        "lull_tolerance": false
+      },
+      "description": "A0 + conditional dwell opportunity cost (0 on hit, 10% on active track, full on empty) & w_redundant=0"
+    },
+    "A2_ProductiveTracking": {
+      "policy": "drqn",
+      "intercept_rate": 0.15833333333333333,
+      "hits": 475,
+      "total_steps": 3000,
+      "avg_reward": 0.842152538061928,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 23.799999999999997,
+        "NORMAL_DWELL": 22.233333333333334,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 27.833333333333332,
+        "PREEMPTIVE_INTERCEPT": 26.13333333333333
+      },
+      "hit_rate_by_mode_pct": {
+        "SHORT_DWELL": 2.380952380952381,
+        "NORMAL_DWELL": 30.284857571214392,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 25.02994011976048,
+        "PREEMPTIVE_INTERCEPT": 5.994897959183673
+      },
+      "distinct_bands": 11,
+      "empty_escape_rate": 0.7797480167988801,
+      "stale_escape_rate": 0.7852052935188327,
+      "q_margin_mean": 0.005681663910547892,
+      "td_loss_mean": 0.1563060704984365,
+      "grad_norm_mean": 0.8306632102838506,
+      "reward_config": {
+        "penalize_empty_dwell": false,
+        "context_scaled_miss": true,
+        "w_hit": 5.0,
+        "w_novel": 5.0,
+        "w_miss": -0.5,
+        "w_dwell_cost": -0.0002,
+        "w_redundant_scan": 0.0,
+        "w_false_alarm": -0.5,
+        "w_staleness": 0.4,
+        "w_priority": 1.0,
+        "w_information_gain": 0.2,
+        "conditional_dwell_cost": true,
+        "w_active_track": 2.0,
+        "w_pulse_scale": 0.0,
+        "lull_tolerance": false
+      },
+      "description": "A1 + productive tracking incentive (w_active_track=2.0 on confirmed detection on active track)"
+    },
+    "A3_PulseScaledHit": {
+      "policy": "drqn",
+      "intercept_rate": 0.10066666666666667,
+      "hits": 302,
+      "total_steps": 3000,
+      "avg_reward": 0.5748803930255935,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 80.66666666666666,
+        "NORMAL_DWELL": 1.0666666666666667,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 1.2666666666666666,
+        "PREEMPTIVE_INTERCEPT": 17.0
+      },
+      "hit_rate_by_mode_pct": {
+        "SHORT_DWELL": 5.743801652892562,
+        "NORMAL_DWELL": 31.25,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 30.0
+      },
+      "distinct_bands": 11,
+      "empty_escape_rate": 0.7891072891072891,
+      "stale_escape_rate": 0.7916525279945708,
+      "q_margin_mean": 0.00602338707447052,
+      "td_loss_mean": 0.17677343505908924,
+      "grad_norm_mean": 0.8616758030867833,
+      "reward_config": {
+        "penalize_empty_dwell": false,
+        "context_scaled_miss": true,
+        "w_hit": 5.0,
+        "w_novel": 5.0,
+        "w_miss": -0.5,
+        "w_dwell_cost": -0.0002,
+        "w_redundant_scan": 0.0,
+        "w_false_alarm": -0.5,
+        "w_staleness": 0.4,
+        "w_priority": 1.0,
+        "w_information_gain": 0.2,
+        "conditional_dwell_cost": true,
+        "w_active_track": 2.0,
+        "w_pulse_scale": 0.5,
+        "lull_tolerance": false
+      },
+      "description": "A2 + pulse-count aware hit scaling (w_pulse_scale=0.5, rewarding multi-pulse catches in longer dwells)"
+    },
+    "A4_LullTolerant": {
+      "policy": "drqn",
+      "intercept_rate": 0.0006666666666666666,
+      "hits": 2,
+      "total_steps": 3000,
+      "avg_reward": -0.1958522082806888,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 58.8,
+        "NORMAL_DWELL": 21.3,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 19.8,
+        "PREEMPTIVE_INTERCEPT": 0.1
+      },
+      "hit_rate_by_mode_pct": {
+        "SHORT_DWELL": 0.05668934240362812,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 33.33333333333333
+      },
+      "distinct_bands": 9,
+      "empty_escape_rate": 0.7984625668449198,
+      "stale_escape_rate": 0.7985781990521327,
+      "q_margin_mean": 0.0014573250611623128,
+      "td_loss_mean": 0.1784396006731442,
+      "grad_norm_mean": 0.8551664776483013,
+      "reward_config": {
+        "penalize_empty_dwell": false,
+        "context_scaled_miss": true,
+        "w_hit": 5.0,
+        "w_novel": 5.0,
+        "w_miss": -0.5,
+        "w_dwell_cost": -0.0002,
+        "w_redundant_scan": 0.0,
+        "w_false_alarm": -0.5,
+        "w_staleness": 0.4,
+        "w_priority": 1.0,
+        "w_information_gain": 0.2,
+        "conditional_dwell_cost": true,
+        "w_active_track": 2.0,
+        "w_pulse_scale": 0.5,
+        "lull_tolerance": true
+      },
+      "description": "A3 + inter-pulse lull tolerance (lull_tolerance=True: 0 miss penalty on 1-dwell lull on active track)"
+    }
+  },
+  "winner": "A2_ProductiveTracking",
+  "winner_intercept_rate": 0.15833333333333333
+}

@@ -1,0 +1,167 @@
+{
+  "meta": {
+    "resume_checkpoint": "checkpoints/scheduler/checkpoint_gate_25000.pt",
+    "steps_per_variant": 5,
+    "device": "cpu",
+    "timestamp": "2026-09-08 03:05:15"
+  },
+  "reference_25k": {
+    "drqn_intercept": 0.025500000000000002,
+    "drqn_q_margin": 0.03299791660308838,
+    "drqn_empty_escape": 0.7930247126163483,
+    "drqn_stale_escape": 0.7981981981981983,
+    "highest_occ_intercept": 0.4624999999999999
+  },
+  "variants": {
+    "R0_Baseline": {
+      "description": "Baseline: TN empty dwell false alarm penalty (-0.5), w_hit=1.0, w_dwell=-0.001",
+      "train_stats": {
+        "variant": "R0_Baseline",
+        "steps_trained": 5,
+        "final_step": 25005,
+        "mean_td_loss": 0.0,
+        "mean_grad_norm": 0.0,
+        "training_time_sec": 0.4261915683746338
+      },
+      "checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\reward_ablation\\R0_Baseline\\checkpoint.pt",
+      "drqn": {
+        "intercept_rate": 0.027600000000000003,
+        "discovery_rate": 0.2833333333333333,
+        "pfa": 0.0,
+        "avg_intercept_time_us": 20.08290089422358,
+        "empty_band_escape_rate": 0.7969673533438602,
+        "stale_band_escape_rate": 0.7892892892892892,
+        "distinct_bands": 6.4,
+        "action_entropy": 2.3080187083201076,
+        "q_margin": 0.032998281359672546,
+        "total_reward": -86.85535363846286
+      },
+      "moe": {
+        "intercept_rate": 0.0268,
+        "q_margin": 0.0329965921163559
+      },
+      "highest_occupancy_intercept": 0.4624999999999999
+    },
+    "R1_TNClean": {
+      "description": "TN Clean: penalize_empty_dwell=False (0 FA penalty on empty dwell), w_hit=5.0",
+      "train_stats": {
+        "variant": "R1_TNClean",
+        "steps_trained": 5,
+        "final_step": 25005,
+        "mean_td_loss": 0.0,
+        "mean_grad_norm": 0.0,
+        "training_time_sec": 0.26607227325439453
+      },
+      "checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\reward_ablation\\R1_TNClean\\checkpoint.pt",
+      "drqn": {
+        "intercept_rate": 0.0251,
+        "discovery_rate": 0.2833333333333333,
+        "pfa": 0.0,
+        "avg_intercept_time_us": 28.57800000719383,
+        "empty_band_escape_rate": 0.7825578693794047,
+        "stale_band_escape_rate": 0.7952952952952952,
+        "distinct_bands": 6.4,
+        "action_entropy": 2.2995970330173816,
+        "q_margin": 0.032998489212989805,
+        "total_reward": -90.21970615979826
+      },
+      "moe": {
+        "intercept_rate": 0.027200000000000002,
+        "q_margin": 0.03299742724895477
+      },
+      "highest_occupancy_intercept": 0.4624999999999999
+    },
+    "R2_Opportunity": {
+      "description": "R1 + elevated priority weighting (w_priority=1.0) rewarding active band placement",
+      "train_stats": {
+        "variant": "R2_Opportunity",
+        "steps_trained": 5,
+        "final_step": 25005,
+        "mean_td_loss": 0.0,
+        "mean_grad_norm": 0.0,
+        "training_time_sec": 0.27045512199401855
+      },
+      "checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\reward_ablation\\R2_Opportunity\\checkpoint.pt",
+      "drqn": {
+        "intercept_rate": 0.028100000000000003,
+        "discovery_rate": 0.25,
+        "pfa": 0.0,
+        "avg_intercept_time_us": 19.5548938964618,
+        "empty_band_escape_rate": 0.7955728313040995,
+        "stale_band_escape_rate": 0.7946946946946947,
+        "distinct_bands": 6.5,
+        "action_entropy": 2.3052237341400845,
+        "q_margin": 0.032998729348182675,
+        "total_reward": -86.59286831012203
+      },
+      "moe": {
+        "intercept_rate": 0.027200000000000002,
+        "q_margin": 0.0329982474565506
+      },
+      "highest_occupancy_intercept": 0.4624999999999999
+    },
+    "R3_LowDwellCost": {
+      "description": "R2 + 5x reduced dwell cost (w_dwell_cost=-0.0002 / us)",
+      "train_stats": {
+        "variant": "R3_LowDwellCost",
+        "steps_trained": 5,
+        "final_step": 25005,
+        "mean_td_loss": 0.0,
+        "mean_grad_norm": 0.0,
+        "training_time_sec": 0.5505139827728271
+      },
+      "checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\reward_ablation\\R3_LowDwellCost\\checkpoint.pt",
+      "drqn": {
+        "intercept_rate": 0.023200000000000002,
+        "discovery_rate": 0.35,
+        "pfa": 0.0,
+        "avg_intercept_time_us": 17.86620896705238,
+        "empty_band_escape_rate": 0.7799631978723445,
+        "stale_band_escape_rate": 0.794894894894895,
+        "distinct_bands": 7.0,
+        "action_entropy": 2.30406621396572,
+        "q_margin": 0.03299391312599182,
+        "total_reward": -93.1716205228256
+      },
+      "moe": {
+        "intercept_rate": 0.0261,
+        "q_margin": 0.03299820692539215
+      },
+      "highest_occupancy_intercept": 0.4624999999999999
+    },
+    "R4_FullBalanced": {
+      "description": "R3 + w_novel=5.0, w_miss=-0.5, w_staleness=0.4, context_scaled_miss=True",
+      "train_stats": {
+        "variant": "R4_FullBalanced",
+        "steps_trained": 5,
+        "final_step": 25005,
+        "mean_td_loss": 0.0,
+        "mean_grad_norm": 0.0,
+        "training_time_sec": 0.28572773933410645
+      },
+      "checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\reward_ablation\\R4_FullBalanced\\checkpoint.pt",
+      "drqn": {
+        "intercept_rate": 0.0254,
+        "discovery_rate": 0.2833333333333333,
+        "pfa": 0.0,
+        "avg_intercept_time_us": 20.27948169435704,
+        "empty_band_escape_rate": 0.789346905523731,
+        "stale_band_escape_rate": 0.7935935935935936,
+        "distinct_bands": 6.0,
+        "action_entropy": 2.305169283883953,
+        "q_margin": 0.03300133476257325,
+        "total_reward": -89.91895442033206
+      },
+      "moe": {
+        "intercept_rate": 0.0234,
+        "q_margin": 0.03299873740673065
+      },
+      "highest_occupancy_intercept": 0.4624999999999999
+    }
+  },
+  "winner": {
+    "variant": "R2_Opportunity",
+    "intercept_rate": 0.028100000000000003,
+    "checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\reward_ablation\\R2_Opportunity\\checkpoint.pt"
+  }
+}
