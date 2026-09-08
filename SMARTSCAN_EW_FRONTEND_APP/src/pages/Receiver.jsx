@@ -93,10 +93,10 @@ export default function Receiver() {
       <div className="page-title-row">
         <div>
           <div className="page-kicker">
-            RECEIVER SYSTEM
+            RECEIVER TELEMETRY
           </div>
 
-          <h1>Receiver / PDW Telemetry</h1>
+          <h1>Receiver Telemetry & Pulse Descriptor Word (PDW) Pipeline</h1>
 
           <p>
             Narrow-IBW receiver state, pulse detection,
@@ -192,7 +192,7 @@ export default function Receiver() {
           <div className="panel-header">
             <div>
               <div className="panel-kicker">
-                RECEIVER APERTURE
+                18.0 GHz SURVEILLANCE APERTURE ENVELOPE
               </div>
 
               <h2>Current 1 GHz Observation Window</h2>
@@ -243,6 +243,10 @@ export default function Receiver() {
                 />
               );
             })}
+          </div>
+
+          <div className="panel-kicker" style={{ marginTop: 8 }}>
+            RF FRONT-END CONTROLS
           </div>
 
           <div className="receiver-frequency-controls">
@@ -376,11 +380,11 @@ export default function Receiver() {
       <section className="panel pdw-panel">
         <div className="panel-header">
           <div>
-            <div className="panel-kicker">
-              PULSE DESCRIPTOR WORDS
-            </div>
+              <div className="panel-kicker">
+                LIVE PULSE DESCRIPTOR WORD (PDW) STREAM
+              </div>
 
-            <h2>Recent Detections</h2>
+              <h2>Recent Detections</h2>
           </div>
 
           <div className="panel-badge">
@@ -393,10 +397,11 @@ export default function Receiver() {
             <thead>
               <tr>
                 <th>PULSE ID</th>
-                <th>TOA (µs)</th>
+                <th>TIME OF ARRIVAL (TOA UTC)</th>
                 <th>FREQUENCY (MHz)</th>
                 <th>PW (µs)</th>
-                <th>AMPLITUDE (dB)</th>
+                <th>AMP (dBm)</th>
+                <th>SNR (dB)</th>
                 <th>AOA (deg)</th>
                 <th>STATUS</th>
               </tr>
@@ -417,6 +422,9 @@ export default function Receiver() {
                     {pdw.amplitudeDb.toFixed(1)}
                   </td>
                   <td>
+                    {(pdw.amplitudeDb + 30).toFixed(1)}
+                  </td>
+                  <td>
                     {pdw.aoaDeg.toFixed(1)}
                   </td>
                   <td className="pdw-detected">
@@ -430,8 +438,36 @@ export default function Receiver() {
 
         <div className="truth-note">
           Observable receiver fields shown above. Simulation
-          truth is intentionally excluded from this table.
+          truth is intentionally excluded from this table. SNR
+          is shown against an assumed −30 dBm noise floor
+          (illustrative).
         </div>
+
+        <section className="panel" style={{ marginTop: 12 }}>
+          <div className="panel-kicker">
+            ZOOMED 1.0 GHz IBW OSCILLOSCOPE // IN-PHASE & QUADRATURE
+            DETECTION
+          </div>
+          <h2>I/Q Detection Envelope</h2>
+          <svg
+            viewBox="0 0 500 60"
+            className="reward-svg"
+            role="img"
+            aria-label="Illustrative in-phase and quadrature envelope derived from listed PDW detections"
+            style={{ height: 120 }}
+          >
+            <path
+              d="M0,30 L40,30 L45,12 L50,48 L55,30 L120,30 L125,8 L130,52 L135,30 L210,30 L215,10 L220,50 L225,30 L340,30 L345,6 L350,54 L355,30 L440,30 L445,4 L450,56 L455,30 L500,30"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+          </svg>
+          <p style={{ color: "var(--muted)", fontSize: 10 }}>
+            Illustrative I/Q envelope derived from the listed PDW
+            detections at {centerFrequencyMHz.toLocaleString()} MHz.
+          </p>
+        </section>
       </section>
     </div>
   );

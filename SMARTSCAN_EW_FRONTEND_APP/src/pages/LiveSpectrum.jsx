@@ -580,11 +580,12 @@ export default function LiveSpectrum() {
         <div>
 
           <div className="page-kicker">
-            RF SURVEILLANCE
+            RF SURVEILLANCE // IBW: 1.0 GHz vs 18.0 GHz
           </div>
 
           <h1>
-            Live Spectrum Monitoring
+            0–18 GHz Live Wideband Spectrum & Instantaneous Receiver
+            Aperture
           </h1>
 
           <p>

@@ -1,0 +1,417 @@
+/* SMARTSCAN EW — Stitch tactical system (DESIGN.md).
+   Zero-radius doctrine: every container is sharp (0px).
+   Fonts: Inter (command) + JetBrains Mono (telemetry). */
+
+.st-shell {
+  min-height: 100vh;
+  background: #111317;
+  color: #e2e2e8;
+}
+
+.st-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 288px;
+  height: 100vh;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  user-select: none;
+  background: #0c0e12;
+  border-right: 1px solid #454653;
+}
+
+.st-main {
+  padding-left: 288px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.st-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: rgba(12, 14, 18, 0.92);
+  border-bottom: 1px solid #454653;
+  overflow-x: auto;
+}
+
+.st-content {
+  flex: 1;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.st-headline {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.st-body {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0.01em;
+}
+
+.st-body-bold {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.01em;
+}
+
+.st-tlg {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 22px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-tmd {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-tsm {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 12px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-mark {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 10px;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-badge {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid #454653;
+  background: #333539;
+  color: #e2e2e8;
+  border-radius: 0;
+  white-space: nowrap;
+}
+
+.st-panel {
+  background: #0c0e12;
+  border: 1px solid #454653;
+  border-radius: 0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.st-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(26, 28, 32, 0.4);
+  border-bottom: 1px solid #454653;
+}
+
+.st-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+}
+
+.st-kpi {
+  background: #1a1c20;
+  border: 1px solid #454653;
+  border-radius: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.st-kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.st-kpi-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: #908f9e;
+  text-transform: uppercase;
+}
+
+.st-kpi-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  color: #908f9e;
+}
+
+.st-pipe {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  background: #0c0e12;
+  border: 1px solid #454653;
+  padding: 8px;
+}
+
+.st-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #1a1c20;
+  border: 1px solid #454653;
+  border-radius: 0;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.st-node-ai {
+  background: #1e2024;
+  border-color: #49df9d;
+}
+
+.st-arrow {
+  color: #454653;
+  font-size: 14px;
+  flex: 0 0 auto;
+}
+
+.st-grid-12 {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+}
+
+.st-span-8 { grid-column: span 8 / span 8; }
+.st-span-4 { grid-column: span 4 / span 4; }
+.st-span-6 { grid-column: span 6 / span 6; }
+.st-span-12 { grid-column: span 12 / span 12; }
+
+.st-spec {
+  position: relative;
+  width: 100%;
+  background: #1a1c20;
+  border: 1px solid #454653;
+  border-radius: 0;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.st-bars {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 256px;
+  padding-top: 24px;
+  z-index: 1;
+}
+
+.st-bar {
+  flex: 1 1 0;
+  min-width: 0;
+  cursor: crosshair;
+  border-radius: 0;
+}
+
+.st-ibw {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 41.66%;
+  width: 11.11%;
+  background: rgba(48, 151, 224, 0.15);
+  border-left: 1px solid #96ccff;
+  border-right: 1px solid #96ccff;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2px;
+}
+
+.st-timeline {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+}
+
+.st-dwell {
+  background: #1e2024;
+  border: 1px solid #454653;
+  border-radius: 0;
+  padding: 2px 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 40px;
+  min-width: 0;
+}
+
+.st-dwell-now {
+  background: #bdc2ff;
+  color: #0b1c93;
+  border-color: #bdc2ff;
+}
+
+.st-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #454653;
+  border-radius: 0;
+}
+
+.st-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+}
+
+.st-table th,
+.st-table td {
+  padding: 8px;
+  border-bottom: 1px solid rgba(69, 70, 83, 0.7);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.st-table th {
+  background: #282a2e;
+  color: #908f9e;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.st-table td {
+  color: #e2e2e8;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-table tbody tr:nth-child(even) td {
+  background: rgba(12, 14, 18, 0.6);
+}
+
+.st-heat {
+  display: grid;
+  gap: 1px;
+  background: #454653;
+  border: 1px solid #454653;
+  border-radius: 0;
+  overflow-x: auto;
+}
+
+.st-heat-cell {
+  min-width: 22px;
+  min-height: 22px;
+  display: grid;
+  place-items: center;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8px;
+  background: #0c0e12;
+  color: #908f9e;
+}
+
+.st-truth {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #f59e0b;
+  border-left: 2px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+  color: #e2e2e8;
+  border-radius: 0;
+}
+
+.st-select {
+  width: 100%;
+  background: #333539;
+  color: #e2e2e8;
+  border: 1px solid #454653;
+  border-radius: 0;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  padding: 2px 4px;
+  outline: none;
+}
+
+.st-select:focus {
+  border-color: #0e1e94;
+}
+
+.st-side-scroll {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 1100px) {
+  .st-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .st-span-8, .st-span-4, .st-span-6 { grid-column: span 12 / span 12; }
+}
+
+@media (max-width: 860px) {
+  .st-sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+  }
+  .st-main { padding-left: 0; }
+  .st-topbar { position: static; }
+  .st-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
