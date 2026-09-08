@@ -45,17 +45,36 @@ smartscan_moe:
   semantic_weight: 1.0    # mode semantic intent: REVISIT/REEMPTIVE/LONG linked to their drivers
   k_receivers: 1
   decay_rate: 0.05
+  confidence_margin_threshold: 0.020  # calibrated Gate 10k threshold
+  tau: 0.15                           # calibrated Boltzmann temperature
 
 reward:
-  w_hit: 1.0    # per-intercept reward
-  w_novel: 2.0  # novel-emitter bonus
-  w_miss: -0.3  # miss penalty (<=0)
-  w_timing: 0.001  # per-µs timing penalty on hits
-  w_priority: 0.5       # bonus scaled by priority of intercepted emitters
-  w_information_gain: 0.2  # belief-entropy/novelty gain bonus
-  w_false_alarm: -0.5   # penalty for tuning an empty band
-  w_dwell_cost: -0.001  # per-µs cost of occupying the receiver (scan efficiency)
-  w_redundant_scan: -0.1  # penalty for re-scanning a just-intercepted band
-  w_delay: -0.5         # penalty for late preemptive intercept of overdue periodic emitters
-  w_staleness: 0.6      # intrinsic staleness/coverage bonus for exploring unvisited bands
-  staleness_norm: 50.0  # normalization age horizon for revisit age
+  penalize_empty_dwell: false  # clean empty dwells (TN) receive 0.0 false alarm penalty
+  context_scaled_miss: true    # miss penalty scaled by belief occupancy probability
+  w_hit: 5.0                   # per-intercept primary incentive
+  w_novel: 5.0                 # novel-emitter discovery bonus
+  w_miss: -0.5                 # miss penalty
+  w_timing: 0.001              # per-µs timing penalty on hits
+  w_priority: 1.0              # bonus scaled by priority of intercepted emitters
+  w_information_gain: 0.2      # belief-entropy/novelty gain bonus
+  w_false_alarm: -0.5          # penalty for spurious receiver false alarm (FP)
+  w_dwell_cost: -0.0002        # per-µs cost of receiver dwell (0.100 for 500µs normal dwell)
+  w_redundant_scan: 0.0        # zero redundant scan penalty (no artificial penalty on active tracks)
+  w_delay: -0.5                # penalty for late preemptive intercept of overdue periodic emitters
+  w_staleness: 0.4             # intrinsic staleness bonus (balanced against interception)
+  w_missed_coverage: -0.2      # operational coverage opportunity loss when other bands active
+  staleness_norm: 50.0         # normalization age horizon for revisit age
+  conditional_dwell_cost: true # 0 cost on hit, 10% on active track (p>=0.5), full on empty dwell
+  w_active_track: 2.0          # productive tracking bonus on confirmed detection on active track
+  w_pulse_scale: 0.0           # pulse-count aware hit scaling
+  lull_tolerance: false        # zero miss penalty on 1-dwell gaps for confirmed active tracks
+
+belief:
+  priority:
+    staleness_weight: 0.35
+    occupancy_weight: 0.25
+    uncertainty_weight: 0.20
+    periodic_weight: 0.10
+    semantic_weight: 0.10
+
+semantic_memory_enabled: false  # disabled for clean DRQN ablation baseline

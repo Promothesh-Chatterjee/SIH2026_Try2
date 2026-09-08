@@ -15,6 +15,7 @@ LSTM hidden state is the episodic memory of the cognitive EW system.
 
 import logging
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -195,12 +196,23 @@ class DRQNScheduler(nn.Module):
         return (h0, c0)
 
     @torch.inference_mode()
-    def act(self, obs: torch.Tensor, hidden: tuple[torch.Tensor, torch.Tensor] | None = None) -> tuple[int, tuple[torch.Tensor, torch.Tensor]]:
-        """Single-step greedy action for deployment (sub-ms).
+    def act(
+        self,
+        obs: torch.Tensor,
+        hidden: tuple[torch.Tensor, torch.Tensor] | None = None,
+        mode_selection: str = "band_first_decoupled",
+        consecutive_empty: int = 0,
+        tau: float = 0.0,
+    ) -> tuple[int, tuple[torch.Tensor, torch.Tensor]]:
+        """Single-step action for deployment & training rollouts.
 
         Args:
             obs: (obs_dim,) or (1, obs_dim) or (1,1,obs_dim).
             hidden: Current hidden state.
+            mode_selection: "band_first_decoupled" for decoupled band-first hierarchy,
+                or "flat_argmax" for classic flat argmax.
+            consecutive_empty: consecutive non-detection count on current band.
+            tau: Boltzmann temperature for band selection (0.0 = argmax).
 
         Returns:
             Tuple (action int, next_hidden).
@@ -212,5 +224,48 @@ class DRQNScheduler(nn.Module):
             obs = obs.unsqueeze(1)
         # Ensure batch 1
         q, _aux, h = self.forward(obs, hidden)
-        action = int(torch.argmax(q[0, -1]).item())
+
+        if mode_selection == "band_first_decoupled":
+            q_vals = q[0, -1].detach().cpu().numpy()
+            obs_1d = obs[0, -1].detach().cpu().numpy().reshape(-1)
+
+            band_max = [np.max(q_vals[b * self.n_modes : (b + 1) * self.n_modes]) for b in range(self.n_bands)]
+            order_b = np.argsort(band_max)[::-1]
+
+            if tau > 0.0:
+                top_k = min(3, len(order_b))
+                top_idx = order_b[:top_k]
+                top_q = np.array([band_max[b] for b in top_idx])
+                probs = np.exp((top_q - np.max(top_q)) / max(1e-5, tau))
+                probs = probs / np.sum(probs)
+                best_b = int(np.random.choice(top_idx, p=probs))
+            else:
+                best_b = int(order_b[0])
+
+            fpb = max(1, int(obs_1d.size) // self.n_bands) if obs_1d.size else 10
+            occ = float(obs_1d[0::fpb][best_b]) if fpb > 0 else 0.0
+            unc = float(obs_1d[3::fpb][best_b]) if fpb > 3 else 0.0
+            age = float(obs_1d[4::fpb][best_b]) if fpb > 4 else 0.0
+
+            q_norm = float(q_vals[best_b * self.n_modes + 1])
+            q_long = float(q_vals[best_b * self.n_modes + 2])
+
+            # Calibrated hierarchy combining learned Q-values with uncertainty/safety:
+            # 1. High uncertainty / stale track -> prefer LONG
+            if unc > 0.6 or age > 0.6:
+                mode = 2  # LONG_DWELL
+            # 2. Repeatedly unproductive on this band -> SHORT (quick look)
+            elif consecutive_empty >= 2 and occ < 0.1:
+                mode = 0  # SHORT_DWELL
+            # 3. Strong track + Q(LONG) significantly better than Q(NORMAL) -> LONG
+            elif q_long > q_norm + 0.05:
+                mode = 2  # LONG_DWELL
+            # 4. Default -> NORMAL
+            else:
+                mode = 1  # NORMAL_DWELL
+
+            action = best_b * self.n_modes + mode
+        else:
+            action = int(torch.argmax(q[0, -1]).item())
+
         return action, h

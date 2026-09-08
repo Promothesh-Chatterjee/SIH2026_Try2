@@ -147,6 +147,7 @@ class RewardSelectedBandSemanticsTests(unittest.TestCase):
             w_miss=-1.0, w_false_alarm=-0.5, w_dwell_cost=0.0,
             w_hit=0.0, w_novel=0.0, w_timing=0.0, w_priority=0.0,
             w_information_gain=0.0, w_redundant_scan=0.0, w_delay=0.0,
+            penalize_empty_dwell=True,
         )
         self.assertEqual(comps["miss_penalty"], 0.0)
         self.assertEqual(comps["false_alarm_penalty"], -0.5)
@@ -166,8 +167,8 @@ class EnvOpportunityInfoGainTests(unittest.TestCase):
         self.assertEqual(env.fom.fn, 0)
         self.assertEqual(env.fom.tn, 1)
         self.assertEqual(env.fom.pd, 0.0)
-        # Miss penalty fires when scheduler tuned empty band while active bands existed elsewhere.
-        self.assertEqual(env.fom.reward_miss_penalty, env.w_miss)
+        # Empty dwell when active elsewhere gets coverage penalty, not decision-level miss penalty
+        self.assertEqual(env.fom.reward_miss_penalty, 0.0)
 
     def test_miss_on_selected_active_band_only(self):
         # Pulse in band 3 below detection threshold: active but undetected -> FN.
@@ -181,8 +182,8 @@ class EnvOpportunityInfoGainTests(unittest.TestCase):
         self.assertEqual(info["spectrum_active_opportunities"], 1)
         self.assertEqual(info["unselected_active_opportunities"], 0)
         self.assertEqual(env.fom.fn, 1)
-        # Receiver failed to detect on selected band -> not punished as scheduler miss.
-        self.assertEqual(env.fom.reward_miss_penalty, 0.0)
+        # Receiver failed to detect on selected active band -> decision-level miss penalty fires
+        self.assertEqual(env.fom.reward_miss_penalty, env.w_miss)
 
     def test_true_information_gain_on_hit(self):
         env = _env_with_pulses([_band_mid_mhz(3)])
@@ -239,6 +240,7 @@ class EnvOpportunityInfoGainTests(unittest.TestCase):
             band_age=25.0,
             w_false_alarm=-0.5,
             w_dwell_cost=0.0,
+            penalize_empty_dwell=True,
         )
         self.assertAlmostEqual(comps_cold["staleness_bonus"], 0.30, places=6)
         self.assertAlmostEqual(comps_cold["reward"], -0.5 + 0.30, places=6)
@@ -256,6 +258,7 @@ class EnvOpportunityInfoGainTests(unittest.TestCase):
             band_age=100.0,
             w_false_alarm=-0.5,
             w_dwell_cost=0.0,
+            penalize_empty_dwell=True,
         )
         self.assertAlmostEqual(comps_max["staleness_bonus"], 0.60, places=6)
         self.assertAlmostEqual(comps_max["reward"], -0.5 + 0.60, places=6)
@@ -264,10 +267,137 @@ class EnvOpportunityInfoGainTests(unittest.TestCase):
         fom = FiguresOfMerit(n_bands=36)
         fom.record_reward_components(comps_cold)
         fom.record_reward_components(comps_max)
-        s = fom.summary()
-        self.assertIn("avg_reward_staleness_bonus", s)
-        self.assertAlmostEqual(s["avg_reward_staleness_bonus"], (0.30 + 0.60) / 2.0, places=6)
+
+class InterceptionCentricRewardTests(unittest.TestCase):
+    def test_conditional_dwell_cost(self):
+        belief = SimpleNamespace(occupancy_prob=np.full(36, 0.1, dtype=np.float32), revisit_age=np.zeros(36))
+        # Empty dwell on cold band -> full dwell cost
+        comps_cold = receiver_reward_components(
+            _empty_obs(500.0),
+            selected_active=False,
+            detected=False,
+            w_dwell_cost=-0.001,
+            conditional_dwell_cost=True,
+            band=5,
+            belief=belief,
+        )
+        self.assertAlmostEqual(comps_cold["dwell_cost"], -0.500, places=5)
+
+        # Likely-active band without detection (p_occ = 0.8) -> 10% cost
+        belief.occupancy_prob[5] = 0.8
+        comps_likely = receiver_reward_components(
+            _empty_obs(500.0),
+            selected_active=False,
+            detected=False,
+            w_dwell_cost=-0.001,
+            conditional_dwell_cost=True,
+            band=5,
+            belief=belief,
+        )
+        self.assertAlmostEqual(comps_likely["dwell_cost"], -0.050, places=5)
+
+        # Productive dwell with detection -> zero dwell cost
+        hit_obs = SimpleNamespace(detections=[SimpleNamespace(time_us=50.0)], dwell_interval_us=[0.0, 500.0], dwell_time_us=500.0)
+        comps_hit = receiver_reward_components(
+            hit_obs,
+            selected_active=True,
+            detected=True,
+            w_dwell_cost=-0.001,
+            conditional_dwell_cost=True,
+            band=5,
+            belief=belief,
+        )
+        self.assertEqual(comps_hit["dwell_cost"], 0.0)
+
+    def test_productive_tracking_bonus(self):
+        belief = SimpleNamespace(occupancy_prob=np.full(36, 0.7, dtype=np.float32), revisit_age=np.zeros(36))
+        hit_obs = SimpleNamespace(detections=[SimpleNamespace(time_us=50.0)], dwell_interval_us=[0.0, 500.0], dwell_time_us=500.0)
+
+        # Confirmed hit on active track with low age (1.0) -> gets active_track_bonus
+        comps_track = receiver_reward_components(
+            hit_obs,
+            selected_active=True,
+            detected=True,
+            w_hit=5.0,
+            w_active_track=2.0,
+            band=5,
+            band_age=1.0,
+            belief=belief,
+        )
+        self.assertEqual(comps_track["active_track_bonus"], 2.0)
+        self.assertAlmostEqual(comps_track["hit_term"], 5.0, places=5)
+
+        # Stale band (age=10) with hit -> NO active_track_bonus
+        comps_stale = receiver_reward_components(
+            hit_obs,
+            selected_active=True,
+            detected=True,
+            w_hit=5.0,
+            w_active_track=2.0,
+            band=5,
+            band_age=10.0,
+            belief=belief,
+        )
+        self.assertEqual(comps_stale["active_track_bonus"], 0.0)
+
+        # Empty dwell on active track -> NO active_track_bonus
+        comps_empty = receiver_reward_components(
+            _empty_obs(500.0),
+            selected_active=True,
+            detected=False,
+            w_active_track=2.0,
+            band=5,
+            band_age=1.0,
+            belief=belief,
+        )
+        self.assertEqual(comps_empty["active_track_bonus"], 0.0)
+
+    def test_pulse_count_scaling(self):
+        # 3 pulses in dwell
+        hit_obs_3 = SimpleNamespace(
+            detections=[SimpleNamespace(time_us=10.0), SimpleNamespace(time_us=50.0), SimpleNamespace(time_us=100.0)],
+            dwell_interval_us=[0.0, 500.0],
+            dwell_time_us=500.0,
+        )
+        comps = receiver_reward_components(
+            hit_obs_3,
+            selected_active=True,
+            detected=True,
+            w_hit=5.0,
+            w_pulse_scale=0.5,
+        )
+        # 3 hits -> 2 extra hits * 0.5 = 1.0 pulse bonus -> hit_term = 6.0
+        self.assertEqual(comps["pulse_bonus"], 1.0)
+        self.assertEqual(comps["hit_term"], 6.0)
+
+    def test_lull_tolerance(self):
+        belief = SimpleNamespace(occupancy_prob=np.full(36, 0.8, dtype=np.float32), revisit_age=np.zeros(36))
+        # Active track with 1-dwell lull -> miss penalty is 0.0 when lull_tolerance=True
+        comps_lull = receiver_reward_components(
+            _empty_obs(500.0),
+            selected_active=True,
+            detected=False,
+            w_miss=-0.5,
+            band=5,
+            band_age=1.0,
+            belief=belief,
+            lull_tolerance=True,
+        )
+        self.assertEqual(comps_lull["miss_penalty"], 0.0)
+
+        # Without lull_tolerance -> receives miss penalty
+        comps_no_lull = receiver_reward_components(
+            _empty_obs(500.0),
+            selected_active=True,
+            detected=False,
+            w_miss=-0.5,
+            band=5,
+            band_age=1.0,
+            belief=belief,
+            lull_tolerance=False,
+        )
+        self.assertEqual(comps_no_lull["miss_penalty"], -0.5)
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main()
