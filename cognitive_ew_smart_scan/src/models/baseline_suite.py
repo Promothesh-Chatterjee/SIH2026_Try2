@@ -70,7 +70,16 @@ BASELINE_NAMES: tuple[str, ...] = (
     "full_moe",
 )
 
-NN_BASELINES: frozenset[str] = frozenset({"drqn", "drqn_revisit", "drqn_periodic", "full_moe"})
+EXTENDED_BASELINES: tuple[str, ...] = (
+    "gate100k_ar",
+    "t0_predictive_candidates",
+    "t1_predictive_utility",
+)
+
+NN_BASELINES: frozenset[str] = frozenset({
+    "drqn", "drqn_revisit", "drqn_periodic", "full_moe",
+    "gate100k_ar", "t0_predictive_candidates", "t1_predictive_utility",
+})
 
 HEURISTIC_BASELINES: frozenset[str] = frozenset(set(BASELINE_NAMES) - NN_BASELINES)
 
@@ -337,8 +346,31 @@ class MoEBaseline:
     def update(self, action: int) -> None:
         self.moe.update(action)
 
-    def update_result(self, hit: bool, band: int) -> None:
-        self.moe.update_result(hit, band)
+    def update_result(self, hit: bool, band: int, detections: list | None = None, current_time: float | None = None) -> None:
+        self.moe.update_result(hit, band, detections=detections, current_time=current_time)
+
+    def update_detections(self, detections: list, current_time: float | None = None) -> None:
+        if hasattr(self.moe, "update_detections"):
+            self.moe.update_detections(detections, current_time)
+
+    def set_stage3_modes(
+        self,
+        enable_t0: bool = False,
+        enable_t1: bool = False,
+        lambda_p: float | None = None,
+        lambda_t: float | None = None,
+        lambda_d: float | None = None,
+        lambda_a: float | None = None,
+    ) -> None:
+        if hasattr(self.moe, "set_stage3_modes"):
+            self.moe.set_stage3_modes(
+                enable_t0=enable_t0,
+                enable_t1=enable_t1,
+                lambda_p=lambda_p,
+                lambda_t=lambda_t,
+                lambda_d=lambda_d,
+                lambda_a=lambda_a,
+            )
 
     def set_periodic_urgency_vector(self, urgency: np.ndarray | list | tuple) -> None:
         self.moe.set_periodic_urgency_vector(urgency)
@@ -379,9 +411,9 @@ def build_baseline(
         ValueError: Unknown baseline name.
     """
     key = name.lower()
-    if key not in BASELINE_NAMES:
+    if key not in BASELINE_NAMES and key not in EXTENDED_BASELINES:
         raise ValueError(
-            f"Unknown baseline '{name}'. Expected one of {BASELINE_NAMES}"
+            f"Unknown baseline '{name}'. Expected one of {BASELINE_NAMES + EXTENDED_BASELINES}"
         )
     cfg = dict(config or {})
     resolved_modes = CANONICAL_N_MODES if n_modes is None else int(n_modes)
@@ -445,11 +477,27 @@ def build_baseline(
         moe_cfg["semantic_weight"] = 0.0
         return MoEBaseline(SmartScanMoE(drqn, moe_cfg), source="drqn_periodic")
 
-    # full_moe: all fusion terms active (configurable, canonical defaults).
+    # full_moe / gate100k_ar: all fusion terms active (configurable, canonical defaults).
     moe_cfg.setdefault("eager_weight", 0.6)
     moe_cfg.setdefault("revisit_weight", 0.4)
     moe_cfg.setdefault("preemptive_weight", 0.3)
     moe_cfg.setdefault("semantic_weight", 1.0)
+
+    if key in ("full_moe", "gate100k_ar"):
+        moe_cfg["enable_t0"] = False
+        moe_cfg["enable_t1"] = False
+        return MoEBaseline(SmartScanMoE(drqn, moe_cfg), source=key)
+
+    if key == "t0_predictive_candidates":
+        moe_cfg["enable_t0"] = True
+        moe_cfg["enable_t1"] = False
+        return MoEBaseline(SmartScanMoE(drqn, moe_cfg), source="t0_predictive_candidates")
+
+    if key == "t1_predictive_utility":
+        moe_cfg["enable_t0"] = True
+        moe_cfg["enable_t1"] = True
+        return MoEBaseline(SmartScanMoE(drqn, moe_cfg), source="t1_predictive_utility")
+
     return MoEBaseline(SmartScanMoE(drqn, moe_cfg), source="full_moe")
 
 
