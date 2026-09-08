@@ -205,6 +205,7 @@ def train_scheduler(
     stop_at_step: int | None = None,
     resume_checkpoint: str | None = None,
     override_epsilon: float | None = None,
+    disable_latency_reward: bool = False,
 ) -> None:
     """Full DRQN training with Thompson warmup, BPTT, target network, and MoE eval.
 
@@ -219,6 +220,7 @@ def train_scheduler(
         stop_at_step: Step number at which to cleanly stop training.
         resume_checkpoint: Path to checkpoint .pt to resume training from.
         override_epsilon: Optional exploration floor override for diagnostic retraining.
+        disable_latency_reward: Optional ablation switch to zero out latency bonus.
     """
     with open(model_cfg_path) as f:
         full_cfg = yaml.safe_load(f)
@@ -257,6 +259,8 @@ def train_scheduler(
 
     # Merge reward weights into env config
     env_config = {**env_cfg, **reward_cfg}
+    if disable_latency_reward:
+        env_config["disable_latency_reward"] = True
     env_config.setdefault("n_bands", n_bands)
     env_config.setdefault("n_modes", n_modes)
     env_config.setdefault("n_actions", n_actions)
@@ -412,7 +416,7 @@ def train_scheduler(
     batch_size = int(sched_cfg.get("batch_size", 32))
     update_freq = int(sched_cfg.get("update_freq", 4))
     target_update_freq = int(sched_cfg.get("target_update_freq", 1000))
-    total_steps = int(sched_cfg.get("total_timesteps", 500000))
+    total_steps = int(stop_at_step) if stop_at_step is not None else int(sched_cfg.get("total_timesteps", 500000))
 
     buffer = SequenceReplayBuffer(
         capacity=int(sched_cfg.get("replay_buffer_size", 50000)),
@@ -486,6 +490,7 @@ def train_scheduler(
         seed=seed,
         device=device,
         semantic_memory_reset=reset_semantic_memory,
+        parent_checkpoint=resume_checkpoint,
     )
 
     global_step = 0
@@ -497,16 +502,28 @@ def train_scheduler(
     if resume_checkpoint:
         resume_path = Path(resume_checkpoint)
         if resume_path.exists():
-            logger.info("Resuming DRQN scheduler from checkpoint: %s", resume_path)
-            ckpt = torch.load(resume_path, map_location=device)
+            try:
+                ckpt = torch.load(resume_path, map_location=device, weights_only=False)
+            except TypeError:
+                ckpt = torch.load(resume_path, map_location=device)
             if "state_dict" in ckpt:
                 online_drqn.load_state_dict(ckpt["state_dict"])
-                target_drqn.load_state_dict(ckpt["state_dict"])
+                target_drqn.load_state_dict(ckpt.get("target_state_dict", ckpt["state_dict"]))
             if "optimizer_state_dict" in ckpt and optimizer is not None:
                 try:
                     optimizer.load_state_dict(ckpt["optimizer_state_dict"])
                 except Exception as exc:
                     logger.warning("Could not restore optimizer state: %s", exc)
+            if "rng_state" in ckpt:
+                try:
+                    torch.set_rng_state(ckpt["rng_state"])
+                except Exception:
+                    pass
+            if "np_rng_state" in ckpt:
+                try:
+                    np.random.set_state(ckpt["np_rng_state"])
+                except Exception:
+                    pass
             global_step = int(ckpt.get("global_step", 0))
             episode = int(ckpt.get("episode", 0)) + 1
             eps = float(ckpt.get("epsilon", eps_start))
@@ -755,6 +772,7 @@ def train_scheduler(
                 moe=moe,
                 reward_baseline=reward_baseline,
                 override_epsilon=override_epsilon,
+                target_drqn=target_drqn,
             )
 
             if stop_at_step is not None and global_step >= stop_at_step:
@@ -1130,6 +1148,7 @@ if __name__ == "__main__":
     parser.add_argument("--stop-at-step", type=int, default=None, help="Stop after reaching this step.")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint .pt to resume from.")
     parser.add_argument("--override-epsilon", type=float, default=None, help="Hold exploration epsilon at a fixed floor.")
+    parser.add_argument("--disable-latency-reward", action="store_true", help="Ablate latency reward bonus.")
     args = parser.parse_args()
     if args.device:
         os.environ["DEVICE"] = args.device
@@ -1144,4 +1163,5 @@ if __name__ == "__main__":
         stop_at_step=args.stop_at_step,
         resume_checkpoint=args.resume,
         override_epsilon=args.override_epsilon,
+        disable_latency_reward=args.disable_latency_reward,
     )

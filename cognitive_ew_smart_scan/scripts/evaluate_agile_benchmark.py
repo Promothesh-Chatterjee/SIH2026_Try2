@@ -466,10 +466,16 @@ def evaluate_policy_on_agile(
     scenarios: List[str],
     n_steps: int = 500,
     seeds: List[int] = [42, 43, 44],
+    alpha_dirichlet: float = 0.0,
+    enable_guard: bool = False,
+    guard_confidence: float = 0.45,
+    guard_eta: float = 500.0,
+    enable_spatial: bool = False,
+    tau: float = 0.0,
 ) -> Dict[str, Any]:
     """Evaluate a scheduling policy across agile scenarios with multiple seeds."""
     device = torch.device("cpu")
-    ckpt = torch.load(checkpoint_path, map_location=device)
+    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
 
     drqn = DRQNScheduler(
         obs_dim=360,
@@ -533,7 +539,19 @@ def evaluate_policy_on_agile(
                 agent.reset()
 
             if hasattr(agent, "set_stage3_modes"):
-                agent.set_stage3_modes(enable_t0=use_t0, enable_t1=use_t1)
+                agent.set_stage3_modes(
+                    enable_t0=use_t0,
+                    enable_t1=use_t1,
+                    alpha_dirichlet=alpha_dirichlet,
+                    enable_exploration_guard=enable_guard,
+                    exploration_guard_confidence=guard_confidence,
+                    exploration_guard_eta_us=guard_eta,
+                    enable_spatial=enable_spatial,
+                )
+            if hasattr(agent, "moe"):
+                agent.moe.tau = tau
+            if hasattr(agent, "tau"):
+                agent.tau = tau
 
             hidden = None
             if hasattr(agent, "init_hidden"):
@@ -619,10 +637,16 @@ def evaluate_policy_on_agile(
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate Agile Benchmark Suite (AG-01 to AG-10)")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/scheduler/checkpoint_gate_100000.pt")
+    parser.add_argument("--checkpoint", type=str, default="checkpoints/scheduler/checkpoint_gate_110000.pt")
     parser.add_argument("--steps", type=int, default=500)
     parser.add_argument("--policy", type=str, default="gate100k_ar", help="gate100k_ar | round_robin | drqn | t0_predictive_candidates | t1_predictive_utility | all")
     parser.add_argument("--predictor-only", action="store_true", help="Run offline causal evaluation of TemporalPredictor")
+    parser.add_argument("--alpha-dirichlet", type=float, default=0.0, help="Dirichlet smoothing alpha for agile transitions")
+    parser.add_argument("--enable-guard", action="store_true", help="Enable cognitive exploration guard")
+    parser.add_argument("--guard-confidence", type=float, default=0.45, help="Exploration guard confidence threshold")
+    parser.add_argument("--guard-eta", type=float, default=500.0, help="Exploration guard ETA threshold in us")
+    parser.add_argument("--enable-spatial", action="store_true", help="Enable spatial / AoA intelligence")
+    parser.add_argument("--tau", type=float, default=0.0, help="Softmax temperature for action selection")
     parser.add_argument("--output", type=str, default="results/agile_benchmark_report.json")
     args = parser.parse_args()
 
@@ -642,7 +666,18 @@ def main():
 
     for pol in policies_to_run:
         logger.info("\n=== Evaluating Policy: %s ===", pol)
-        res = evaluate_policy_on_agile(pol, args.checkpoint, scenarios, n_steps=args.steps)
+        res = evaluate_policy_on_agile(
+            pol,
+            args.checkpoint,
+            scenarios,
+            n_steps=args.steps,
+            alpha_dirichlet=args.alpha_dirichlet,
+            enable_guard=args.enable_guard,
+            guard_confidence=args.guard_confidence,
+            guard_eta=args.guard_eta,
+            enable_spatial=args.enable_spatial,
+            tau=args.tau,
+        )
         all_reports[pol] = res
 
         print("\n" + "=" * 95)

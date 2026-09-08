@@ -37,6 +37,7 @@ from ..contracts import (
 )
 from .drqn_scheduler import DRQNScheduler
 from ..cognitive.temporal_predictor import TemporalPredictor
+from ..cognitive.spatial_tracker import SpatialTracker
 
 logger = logging.getLogger(__name__)
 
@@ -227,10 +228,12 @@ class SmartScanMoE(nn.Module):
         self._historical_hits = np.zeros(self.n_bands, dtype=np.int32)
 
         # Stage 3: Deterministic Temporal Predictor for frequency agility & latency optimization
+        self.alpha_dirichlet: float = float(config.get("alpha_dirichlet", 0.0))
         self.temporal_predictor = TemporalPredictor(
             n_bands=self.n_bands,
             n_modes=self.n_modes,
             base_dwell_us=float(config.get("base_dwell_us", 500.0)),
+            alpha_dirichlet=self.alpha_dirichlet,
         )
         self.enable_t0: bool = bool(config.get("enable_t0", False))
         self.enable_t1: bool = bool(config.get("enable_t1", False))
@@ -238,15 +241,27 @@ class SmartScanMoE(nn.Module):
         self.lambda_t: float = float(config.get("lambda_t", 0.5))
         self.lambda_d: float = float(config.get("lambda_d", 0.1))
         self.lambda_a: float = float(config.get("lambda_a", 0.2))
+
+        # Cognitive Exploration Guard
+        self.enable_exploration_guard: bool = bool(config.get("enable_exploration_guard", False))
+        self.exploration_guard_confidence: float = float(config.get("exploration_guard_confidence", 0.45))
+        self.exploration_guard_eta_us: float = float(config.get("exploration_guard_eta_us", 500.0))
+
+        # Spatial / AoA Intelligence Layer (enrichment per EmitterTrack)
+        self.spatial_tracker = SpatialTracker(n_sectors=int(config.get("n_spatial_sectors", 12)))
+        self.enable_spatial: bool = bool(config.get("enable_spatial", False))
+        self.lambda_spatial: float = float(config.get("lambda_spatial", 0.25))
+
         self._simulated_clock_us: float = 0.0
 
         # Keep direct refs for torch MoE forward
         self.drqn = drqn_agent
         self._config = config
         logger.info(
-            "SmartScanMoE eager=%.1f revisit=%.1f preemptive=%.1f K=%d actions=%d (T0=%s, T1=%s)",
+            "SmartScanMoE eager=%.1f revisit=%.1f preemptive=%.1f K=%d actions=%d (T0=%s, T1=%s, Spatial=%s, Guard=%s, Alpha=%.2f)",
             self.eager_weight, self.revisit_weight, self.preemptive_weight,
-            self.k_receivers, self.n_actions, self.enable_t0, self.enable_t1,
+            self.k_receivers, self.n_actions, self.enable_t0, self.enable_t1, self.enable_spatial,
+            self.enable_exploration_guard, self.alpha_dirichlet,
         )
 
     def set_stage3_modes(
@@ -257,10 +272,17 @@ class SmartScanMoE(nn.Module):
         lambda_t: float | None = None,
         lambda_d: float | None = None,
         lambda_a: float | None = None,
+        enable_spatial: bool = False,
+        lambda_spatial: float | None = None,
+        alpha_dirichlet: float | None = None,
+        enable_exploration_guard: bool | None = None,
+        exploration_guard_confidence: float | None = None,
+        exploration_guard_eta_us: float | None = None,
     ) -> None:
-        """Dynamically configure Stage 3 prediction modes."""
+        """Dynamically configure Stage 3 prediction, exploration guard, and spatial modes."""
         self.enable_t0 = bool(enable_t0)
         self.enable_t1 = bool(enable_t1)
+        self.enable_spatial = bool(enable_spatial)
         if lambda_p is not None:
             self.lambda_p = float(lambda_p)
         if lambda_t is not None:
@@ -269,6 +291,17 @@ class SmartScanMoE(nn.Module):
             self.lambda_d = float(lambda_d)
         if lambda_a is not None:
             self.lambda_a = float(lambda_a)
+        if lambda_spatial is not None:
+            self.lambda_spatial = float(lambda_spatial)
+        if alpha_dirichlet is not None:
+            self.alpha_dirichlet = float(alpha_dirichlet)
+            self.temporal_predictor.alpha_dirichlet = float(alpha_dirichlet)
+        if enable_exploration_guard is not None:
+            self.enable_exploration_guard = bool(enable_exploration_guard)
+        if exploration_guard_confidence is not None:
+            self.exploration_guard_confidence = float(exploration_guard_confidence)
+        if exploration_guard_eta_us is not None:
+            self.exploration_guard_eta_us = float(exploration_guard_eta_us)
 
     def reset(self) -> None:
         """Reset internal state of all components."""
@@ -291,7 +324,7 @@ class SmartScanMoE(nn.Module):
         self._simulated_clock_us += 500.0 * dwell_mult
 
     def update_detections(self, detections: list, current_time: float | None = None) -> None:
-        """Ingest detected pulses into temporal predictor."""
+        """Ingest detected pulses into temporal predictor and spatial tracker."""
         if current_time is not None and current_time > self._simulated_clock_us:
             self._simulated_clock_us = float(current_time)
         for d in detections:
@@ -300,12 +333,16 @@ class SmartScanMoE(nn.Module):
                 f = float(d.get("frequency_mhz", 0.0))
                 b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))
                 eid = int(d.get("emitter_id", 0))
+                aoa = d.get("aoa_deg", d.get("angle_deg"))
             else:
                 t = float(getattr(d, "toa_us", getattr(d, "time_us", self._simulated_clock_us)))
                 f = float(getattr(d, "frequency_mhz", 0.0))
                 b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))
                 eid = int(getattr(d, "emitter_id", 0))
+                aoa = getattr(d, "aoa_deg", getattr(d, "angle_deg", None))
             self.temporal_predictor.update_from_pulse(eid, t, f, b)
+            if aoa is not None and np.isfinite(aoa):
+                self.spatial_tracker.update_from_track(eid, float(aoa), t)
 
     def update_result(
         self, hit: bool, band: int, detections: list | None = None, current_time: float | None = None
@@ -556,6 +593,18 @@ class SmartScanMoE(nn.Module):
         # Force exploration if 3 consecutive dwells anywhere produced zero hits
         force_exploration = bool(self._consecutive_empty_total >= 3)
 
+        # Exploration Guard: protect high-confidence impending arrivals from being overridden
+        has_guarded_arrival = False
+        if force_exploration and self.enable_exploration_guard:
+            curr_t = self._simulated_clock_us
+            preds = self.temporal_predictor.predict_all(curr_t, horizon_us=self.exploration_guard_eta_us)
+            for p in preds:
+                if p.prediction_confidence >= self.exploration_guard_confidence and p.eta_us <= self.exploration_guard_eta_us:
+                    has_guarded_arrival = True
+                    break
+            if has_guarded_arrival:
+                force_exploration = False
+
         # Evaluate T1 Action-Conditioned Predictive Utility if enabled
         u_action = None
         if self.enable_t1 and not force_exploration and (self._consecutive_empty_band < 2):
@@ -569,9 +618,21 @@ class SmartScanMoE(nn.Module):
             )
             pred_b_set = set(u_telem.get("predicted_bands", []))
             if pred_b_set and all_candidates:
-                # Rank candidates by U(b, m)
+                # Rank candidates by U(b, m) + optional gated spatial priority
                 cand_actions = [b * self.n_modes + m for b in all_candidates for m in range(self.n_modes)]
-                best_cand_act = int(cand_actions[int(np.argmax([u_scores[a] for a in cand_actions]))])
+                if self.enable_spatial:
+                    cand_act_scores = []
+                    for a in cand_actions:
+                        b = band_of_action(a, self.n_modes)
+                        # Bounded spatial priority across tracks active in band b
+                        s_prio = 0.0
+                        for eid, track in getattr(self.temporal_predictor, "tracks", {}).items():
+                            if getattr(track, "last_band", None) == b:
+                                s_prio = max(s_prio, self.spatial_tracker.get_spatial_priority(eid, self._simulated_clock_us))
+                        cand_act_scores.append(u_scores[a] + self.lambda_spatial * s_prio)
+                    best_cand_act = int(cand_actions[int(np.argmax(cand_act_scores))])
+                else:
+                    best_cand_act = int(cand_actions[int(np.argmax([u_scores[a] for a in cand_actions]))])
                 b_cand = band_of_action(best_cand_act, self.n_modes)
                 if b_cand in pred_b_set or pred_probs[b_cand] >= 0.4:
                     u_action = best_cand_act
@@ -607,6 +668,13 @@ class SmartScanMoE(nn.Module):
                 + (1.5 * pred_probs[b] if self.enable_t0 else 0.0)
                 for b in all_candidates
             ])
+            if self.enable_spatial:
+                for idx_c, b in enumerate(all_candidates):
+                    s_prio = 0.0
+                    for eid, track in getattr(self.temporal_predictor, "tracks", {}).items():
+                        if getattr(track, "last_band", None) == b:
+                            s_prio = max(s_prio, self.spatial_tracker.get_spatial_priority(eid, self._simulated_clock_us))
+                    cand_scores[idx_c] += self.lambda_spatial * s_prio
             if eff_tau > 0.0:
                 probs = np.exp((cand_scores - np.max(cand_scores)) / max(1e-5, eff_tau))
                 probs = probs / np.sum(probs)
@@ -617,9 +685,12 @@ class SmartScanMoE(nn.Module):
         elif occ_candidates and not force_exploration and (self._consecutive_empty_band < 2):
             # Cognitive fallback: occupied bands
             occ_vals = np.array([occ_vec[b] for b in occ_candidates])
-            probs = np.exp(occ_vals / 0.20)
-            probs = probs / np.sum(probs)
-            best_b = int(np.random.choice(occ_candidates, p=probs))
+            if eff_tau > 0.0:
+                probs = np.exp(occ_vals / max(1e-5, eff_tau))
+                probs = probs / np.sum(probs)
+                best_b = int(np.random.choice(occ_candidates, p=probs))
+            else:
+                best_b = int(occ_candidates[int(np.argmax(occ_vals))])
             reason = "Occupancy_fallback"
         else:
             # Cognitive exploration: revisit + uncertainty + historical hits + preemptive urgency
@@ -675,6 +746,44 @@ class SmartScanMoE(nn.Module):
         attribution["consecutive_empty_total"] = int(self._consecutive_empty_total)
         attribution["consecutive_empty_band"] = int(self._consecutive_empty_band)
         attribution["reason"] = reason
+
+        # Cognitive Decision Explanation fields for telemetry & dashboard
+        attribution["guarded_arrival_active"] = float(has_guarded_arrival)
+        attribution["dirichlet_alpha"] = float(self.alpha_dirichlet)
+
+        best_p_obj = None
+        for p in self.temporal_predictor.predict_all(self._simulated_clock_us):
+            if p.target_band == best_b:
+                if best_p_obj is None or p.prediction_confidence > best_p_obj.prediction_confidence:
+                    best_p_obj = p
+        
+        if best_p_obj is not None:
+            attribution["predicted_track_id"] = int(best_p_obj.track_id)
+            attribution["predicted_band"] = int(best_p_obj.target_band)
+            attribution["p_next_band"] = float(best_p_obj.band_probabilities[best_b])
+            attribution["eta_us"] = float(best_p_obj.eta_us)
+            attribution["agility_score"] = float(best_p_obj.agility_score)
+            attribution["prediction_confidence"] = float(best_p_obj.prediction_confidence)
+            s_track = self.spatial_tracker.tracks.get(best_p_obj.track_id, None)
+            attribution["spatial_confidence"] = float(s_track.confidence) if s_track else 0.0
+            attribution["aoa_deg"] = float(s_track.mean_aoa_deg) if s_track else -1.0
+        else:
+            attribution["predicted_track_id"] = -1
+            attribution["predicted_band"] = -1
+            attribution["p_next_band"] = 0.0
+            attribution["eta_us"] = -1.0
+            attribution["agility_score"] = 0.0
+            attribution["prediction_confidence"] = 0.0
+            attribution["spatial_confidence"] = 0.0
+            attribution["aoa_deg"] = -1.0
+
+        attribution["drqn_score"] = float(q_values[action])
+        attribution["predictive_score"] = float(u_scores[action]) if (u_action is not None and "u_scores" in locals()) else 0.0
+        s_prio = 0.0
+        if self.enable_spatial and best_p_obj is not None:
+            s_prio = self.spatial_tracker.get_spatial_priority(best_p_obj.track_id, self._simulated_clock_us)
+        attribution["spatial_score"] = float(s_prio)
+        attribution["exploration_pressure"] = float(self.revisit_weight * revisit_norm[best_b] + 0.35 * unc_vec[best_b])
         
         attribution.update(self._score_attribution(action, q_values, eager_norm, revisit_norm, obs_1d))
         logger.debug("MoE selected action=%d %s", action, attribution)
