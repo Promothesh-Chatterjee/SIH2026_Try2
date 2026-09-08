@@ -118,10 +118,10 @@ export default function Interception() {
       <div className="page-title-row">
         <div>
           <div className="page-kicker">
-            MISSION ANALYSIS
+            2-D JOINT SEARCH SPACE OPTIMIZATION
           </div>
 
-          <h1>Interception Timeline & Analysis</h1>
+          <h1>Time – Frequency Interception Matrix & Search Coincidence</h1>
 
           <p>
             Frequency and time are jointly evaluated to determine
@@ -178,11 +178,11 @@ export default function Interception() {
       <section className="panel interception-matrix-panel">
         <div className="panel-header">
           <div>
-            <div className="panel-kicker">
-              TIME × FREQUENCY
-            </div>
+              <div className="panel-kicker">
+                T-F APERTURE COINCIDENCE PLANE
+              </div>
 
-            <h2>Interception Matrix</h2>
+              <h2>Interception Matrix</h2>
           </div>
 
           <div className="panel-badge">
@@ -290,7 +290,7 @@ export default function Interception() {
           <div className="panel-header">
             <div>
               <div className="panel-kicker">
-                EVENT LOG
+                CHRONOLOGICAL DWELL INTERCEPTION STREAM
               </div>
 
               <h2>Interception Events</h2>
@@ -340,11 +340,64 @@ export default function Interception() {
               </button>
             ))}
           </div>
+
+          <div className="st-table-wrap" style={{ marginTop: 8 }}>
+            <table className="st-table">
+              <thead>
+                <tr>
+                  <th>T-OFFSET</th>
+                  <th>RX CENTER FREQ</th>
+                  <th>BAND ID</th>
+                  <th>DWELL DURATION</th>
+                  <th>STATUS</th>
+                  <th>EMITTER ID</th>
+                  <th>TIMING DELTA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {MOCK_INTERCEPT_EVENTS.map((event) => (
+                  <tr key={`stream-${event.id}`}>
+                    <td>{event.timeUs} µs</td>
+                    <td>{event.frequencyMHz.toLocaleString()} MHz</td>
+                    <td>B{event.band}</td>
+                    <td>
+                      {event.mode === "SHORT_DWELL"
+                        ? "50 µs"
+                        : event.mode === "NORMAL_DWELL"
+                          ? "100 µs"
+                          : event.mode === "LONG_DWELL"
+                            ? "200 µs"
+                            : event.mode === "REVISIT"
+                              ? "120 µs"
+                              : "80 µs"}
+                    </td>
+                    <td>{TYPE_LABELS[event.type]}</td>
+                    <td>
+                      {event.band === 6
+                        ? "E-01"
+                        : event.band === 10
+                          ? "E-02"
+                          : event.band === 16
+                            ? "E-03"
+                            : event.band === 28
+                              ? "E-04"
+                              : "—"}
+                    </td>
+                    <td>
+                      {event.errorUs === null
+                        ? "N/A"
+                        : `${event.errorUs > 0 ? "+" : ""}${event.errorUs} µs`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <aside className="panel interception-detail-panel">
           <div className="panel-kicker">
-            SELECTED EVENT
+            EVENT TELEMETRY — SELECTED EVENT
           </div>
 
           <h2>
@@ -440,6 +493,17 @@ export default function Interception() {
 
       <section className="panel interception-controls">
         <div className="panel-kicker">
+          THE 2-D SEARCH CHALLENGE
+        </div>
+
+        <p style={{ color: "var(--muted)", fontSize: 11, lineHeight: 1.5 }}>
+          Interception demands coincidence in both time and frequency: the
+          receiver must dwell on the right band at the right instant. Hits
+          mark declared coincidence; misses mark lost timing; false alarms
+          mark energy without a valid target transmission.
+        </p>
+
+        <div className="panel-kicker" style={{ marginTop: 8 }}>
           ANALYSIS CONTROLS
         </div>
 

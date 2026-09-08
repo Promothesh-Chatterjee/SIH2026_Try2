@@ -5,6 +5,9 @@ import SmartScan from "./pages/SmartScan";
 import Receiver from "./pages/Receiver";
 import Interception from "./pages/Interception";
 import Emitters from "./pages/Emitters";
+import Performance from "./pages/Performance";
+import DatasetAudit from "./pages/DatasetAudit";
+import SystemConfig from "./pages/SystemConfig";
 import DataExplorer from "./pages/DataExplorer";
 import TrainingMonitor from "./pages/TrainingMonitor";
 import RewardMonitor from "./pages/RewardMonitor";
@@ -88,6 +91,18 @@ export default function App() {
 
         if (activePage === "emitters") {
           return <Emitters />;
+        }
+
+        if (activePage === "performance") {
+          return <Performance />;
+        }
+
+        if (activePage === "dataset") {
+          return <DatasetAudit />;
+        }
+
+        if (activePage === "system") {
+          return <SystemConfig />;
         }
 
         if (activePage === "data") {

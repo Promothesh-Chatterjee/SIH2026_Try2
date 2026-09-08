@@ -103,15 +103,40 @@ export default function SmartScan() {
     selectedAction.band * 5 +
     MODES.indexOf(selectedAction.mode);
 
+  const occupancyRank = useMemo(() => {
+    const order = [...observation].sort(
+      (a, b) => b.values[0] - a.values[0]
+    );
+    const rank = {};
+    order.forEach((row, index) => {
+      rank[row.band] = index + 1;
+    });
+    return rank;
+  }, [observation]);
+
+  const SHORT_FEATURES = [
+    "OCC",
+    "DET",
+    "MISS",
+    "UNC",
+    "AGE",
+    "CNT",
+    "CONF",
+    "PRI",
+    "AGIL",
+    "RISK",
+    "RANK",
+  ];
+
   return (
     <div className="smart-scan-page">
       <div className="page-title-row">
         <div>
           <div className="page-kicker">
-            AI DECISION ENGINE
+            NEURAL PIPELINE ACTIVE
           </div>
 
-          <h1>Smart Scan Decision Engine</h1>
+          <h1>Smart Scan Decision Engine & Observation Space</h1>
 
           <p>
             The scheduler converts receiver-derived spectrum
@@ -128,13 +153,13 @@ export default function SmartScan() {
       <section className="panel scheduler-pipeline">
         <div className="panel-header">
           <div>
-            <div className="panel-kicker">
-              DECISION PIPELINE
-            </div>
+              <div className="panel-kicker">
+                ZONE B — AI INFERENCE ARCHITECTURE PIPELINE DRQN + MoE
+              </div>
 
-            <h2>
-              Observation → Policy → Action
-            </h2>
+              <h2>
+                Observation → Policy → Action
+              </h2>
           </div>
         </div>
 
@@ -190,11 +215,12 @@ export default function SmartScan() {
           <div className="panel-header">
             <div>
               <div className="panel-kicker">
-                CURRENT OBSERVATION
+                ZONE A — 36-BAND OBSERVATION VECTOR HEATMAP 0.00 – 18.00 GHz
               </div>
 
               <h2>
-                36-Band Scenario Vector
+                36-Band Scenario Vector — INSPECTOR: BAND {selectedBand} (
+                {selectedBand * 500}–{(selectedBand + 1) * 500} MHz)
               </h2>
             </div>
 
@@ -211,9 +237,9 @@ export default function SmartScan() {
             <table className="observation-table">
               <thead>
                 <tr>
-                  <th>Band</th>
+                  <th>BAND (FREQ)</th>
 
-                  {FEATURES.map((feature) => (
+                  {SHORT_FEATURES.map((feature) => (
                     <th key={feature}>
                       {feature}
                     </th>
@@ -253,6 +279,24 @@ export default function SmartScan() {
                         </div>
                       </td>
                     ))}
+                    <td>
+                      <div className="feature-cell">
+                        <span
+                          className="feature-fill"
+                          style={{
+                            width: `${Math.max(row.values[3], row.values[4]) * 100}%`,
+                          }}
+                        />
+                        <span className="feature-value">
+                          {Math.max(row.values[3], row.values[4]).toFixed(2)}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="feature-value">
+                        {occupancyRank[row.band]}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -295,7 +339,8 @@ export default function SmartScan() {
             <div className="panel-header">
               <div>
                 <div className="panel-kicker">
-                  SELECTED ACTION
+                  CHOSEN ACTION: BAND {selectedAction.band} //{" "}
+                  {selectedAction.mode}
                 </div>
 
                 <h2>
@@ -306,6 +351,10 @@ export default function SmartScan() {
               <div className="live-badge">
                 INFERENCE
               </div>
+            </div>
+
+            <div className="panel-kicker" style={{ marginTop: 8 }}>
+              DRQN LSTM RECURRENT CORE // MoE GATING ROUTER (SOFTMAX)
             </div>
 
             <div className="action-primary">
@@ -368,7 +417,7 @@ export default function SmartScan() {
 
           <section className="panel candidate-panel">
             <div className="panel-kicker">
-              TOP CANDIDATES
+              ZONE C — TOP CANDIDATE ACTIONS & REASONING · TOP 5 OF 180
             </div>
 
             <div className="candidate-list">

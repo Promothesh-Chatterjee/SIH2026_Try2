@@ -17,33 +17,40 @@ export const navigation = [
   {
     section: "MISSION",
     items: [
-      { id: "overview", label: "Mission Overview" },
-      { id: "spectrum", label: "Live Spectrum" },
-      { id: "smart-scan", label: "Smart Scan" },
+      { id: "overview", label: "OVERVIEW", badge: "SUM" },
+      { id: "spectrum", label: "LIVE SPECTRUM", badge: "18GHz" },
+      { id: "smart-scan", label: "SMART SCAN", badge: "DRQN" },
     ],
   },
   {
     section: "RECEIVER",
     items: [
-      { id: "receiver", label: "Receiver / PDW" },
-      { id: "emitters", label: "Emitters / Truth" },
-      { id: "interception", label: "Interception" },
+      { id: "receiver", label: "RECEIVER", badge: "PDW" },
+      { id: "emitters", label: "EMITTERS", badge: "TRUTH" },
+      { id: "interception", label: "INTERCEPTION", badge: "TxF" },
     ],
   },
   {
-    section: "TRAINING & DATA",
+    section: "EVALUATION",
     items: [
-      { id: "training", label: "Training" },
-      { id: "data", label: "Data & Explorer" },
-      { id: "experiments", label: "Experiments" },
-      { id: "performance", label: "Performance" },
-      { id: "replay", label: "Replay" },
+      { id: "performance", label: "PERFORMANCE", badge: "EVAL" },
+      { id: "dataset", label: "DATASET", badge: "AUDIT" },
+    ],
+  },
+  {
+    section: "EXTENSIONS",
+    items: [
+      { id: "data", label: "Data Explorer", badge: "EXT" },
+      { id: "training", label: "Training", badge: "EXT" },
+      { id: "rewards", label: "Rewards", badge: "EXT" },
+      { id: "experiments", label: "Experiments", badge: "EXT" },
+      { id: "replay", label: "Replay", badge: "EXT" },
     ],
   },
   {
     section: "SYSTEM",
     items: [
-      { id: "system", label: "System / Config" },
+      { id: "system", label: "SYSTEM / CONFIG", badge: "SYS" },
     ],
   },
 ];

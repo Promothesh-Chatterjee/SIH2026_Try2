@@ -96,10 +96,10 @@ export default function Emitters() {
       <div className="page-title-row">
         <div>
           <div className="page-kicker">
-            SIMULATION / SCENARIO
+            SIMULATION TRUTH // OPERATOR VIEW ONLY
           </div>
 
-          <h1>Emitter Scenario & Intelligence</h1>
+          <h1>Emitter Ground Truth Intelligence</h1>
 
           <p>
             Operator-facing simulation truth for understanding
@@ -119,6 +119,29 @@ export default function Emitters() {
           This information describes the simulated RF environment.
           It is not supplied to the scheduler observation.
         </span>
+      </div>
+
+      <div className="st-grid-12" style={{ marginBottom: 4 }}>
+        <div className="st-span-4 st-panel" style={{ padding: 8 }}>
+          <span className="st-tsm" style={{ color: "#908f9e" }}>
+            Mean Detection Latency
+          </span>
+          <strong className="st-tlg">42 µs</strong>
+        </div>
+        <div className="st-span-4 st-panel" style={{ padding: 8 }}>
+          <span className="st-tsm" style={{ color: "#908f9e" }}>
+            Missed Revisit Deadlines
+          </span>
+          <strong className="st-tlg">0</strong>
+        </div>
+        <div className="st-span-4 st-panel" style={{ padding: 8 }}>
+          <span className="st-tsm" style={{ color: "#908f9e" }}>
+            Scheduler Omniscience Leak
+          </span>
+          <strong className="st-tlg" style={{ color: "#49df9d" }}>
+            0 — ENFORCED
+          </strong>
+        </div>
       </div>
 
       <div className="emitter-kpis">
@@ -190,11 +213,11 @@ export default function Emitters() {
       <section className="panel emitter-track-panel">
         <div className="panel-header">
           <div>
-            <div className="panel-kicker">
-              FREQUENCY TRACKS
-            </div>
+              <div className="panel-kicker">
+                AGILE HOP TRAJECTORY
+              </div>
 
-            <h2>Emitter Frequency vs Time</h2>
+              <h2>Agile Hop Trajectory: {selectedEmitterId} // Spatial Bearing (AoA) vs RF Bands</h2>
           </div>
 
           <div className="panel-badge">
@@ -341,10 +364,10 @@ export default function Emitters() {
           <div className="panel-header">
             <div>
               <div className="panel-kicker">
-                EMITTER INVENTORY
+                GROUND TRUTH EMITTER REGISTRY & WAVEFORM PROFILES
               </div>
 
-              <h2>Scenario Emitters</h2>
+              <h2>Scenario Emitters — Simulation Truth</h2>
             </div>
 
             <div className="panel-badge">
@@ -356,14 +379,15 @@ export default function Emitters() {
             <table className="emitter-table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>FREQUENCY</th>
-                  <th>PRI</th>
-                  <th>PW</th>
-                  <th>AMPLITUDE</th>
+                  <th>EMIT-ID</th>
+                  <th>TRACK TAG</th>
+                  <th>BAND / FREQUENCY</th>
+                  <th>PRI (PULSE INTERVAL)</th>
+                  <th>PW (WIDTH)</th>
                   <th>AOA</th>
-                  <th>ACTIVITY</th>
-                  <th>AGILITY</th>
+                  <th>THREAT TIER</th>
+                  <th>REVISIT DEADLINE</th>
+                  <th>REAL-TIME STATUS</th>
                 </tr>
               </thead>
 
@@ -381,17 +405,23 @@ export default function Emitters() {
                     }
                   >
                     <td>{emitter.id}</td>
+                    <td>TRK-{emitter.id.replace("E-", "").padStart(3, "0")}</td>
                     <td>
+                      B{Math.floor(emitter.frequencyMHz / 500)} /{" "}
                       {emitter.frequencyMHz.toFixed(1)} MHz
                     </td>
                     <td>{emitter.priUs} µs</td>
                     <td>{emitter.pulseWidthUs} µs</td>
-                    <td>
-                      {emitter.amplitudeDb.toFixed(1)} dB
-                    </td>
                     <td>{emitter.aoaDeg}°</td>
+                    <td>
+                      {emitter.agility === "HIGH"
+                        ? "TIER-1"
+                        : emitter.agility === "MEDIUM"
+                          ? "TIER-2"
+                          : "TIER-3"}
+                    </td>
+                    <td>{emitter.nextExpectedUs} µs</td>
                     <td>{emitter.activity}</td>
-                    <td>{emitter.agility}</td>
                   </tr>
                 ))}
               </tbody>
