@@ -68,6 +68,7 @@ class StagedGateEvaluator:
         seed: int = 42,
         device: torch.device | str = "cpu",
         semantic_memory_reset: bool = False,
+        parent_checkpoint: str | None = None,
     ) -> None:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -79,6 +80,7 @@ class StagedGateEvaluator:
         self.seed = int(seed)
         self.device = torch.device(device) if isinstance(device, str) else device
         self.semantic_memory_reset = bool(semantic_memory_reset)
+        self.parent_checkpoint = str(parent_checkpoint) if parent_checkpoint else None
         self.completed_gates: set[int] = set()
 
         # Step-level rolling diagnostic statistics
@@ -175,6 +177,7 @@ class StagedGateEvaluator:
         moe: SmartScanMoE | None = None,
         reward_baseline: float = -0.39,
         override_epsilon: float | None = None,
+        target_drqn: DRQNScheduler | None = None,
     ) -> dict[str, Any] | None:
         """Check if current step satisfies any pending gate and execute evaluation."""
         for gate in self.gates:
@@ -191,6 +194,7 @@ class StagedGateEvaluator:
                     moe=moe,
                     reward_baseline=reward_baseline,
                     override_epsilon=override_epsilon,
+                    target_drqn=target_drqn,
                 )
         return None
 
@@ -449,6 +453,7 @@ class StagedGateEvaluator:
         moe: SmartScanMoE | None = None,
         reward_baseline: float = -0.39,
         override_epsilon: float | None = None,
+        target_drqn: DRQNScheduler | None = None,
     ) -> dict[str, Any]:
         """Execute full evaluation, check promotion criteria, print table, and save checkpoint/report."""
         logger.info("=" * 100)
@@ -691,6 +696,7 @@ class StagedGateEvaluator:
         )
         torch.save({
             "state_dict": online_drqn.state_dict(),
+            "target_state_dict": target_drqn.state_dict() if target_drqn is not None else online_drqn.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
             "global_step": global_step,
             "episode": episode,
@@ -706,6 +712,9 @@ class StagedGateEvaluator:
                 "training_config": self.train_config,
                 "env_config": self.env_config,
             },
+            "rng_state": torch.get_rng_state(),
+            "np_rng_state": np.random.get_state(),
+            "parent_checkpoint": self.parent_checkpoint,
             "git_revision": git_rev,
             "seed": self.seed,
             "metadata": meta,

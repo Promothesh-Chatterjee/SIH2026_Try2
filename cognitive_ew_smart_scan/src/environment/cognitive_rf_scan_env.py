@@ -65,6 +65,7 @@ from src.evaluation.metrics import FiguresOfMerit
 from src.perception import EmitterTracker, build_band_belief_from_tracks
 from src.cognitive.memory import SemanticMemory, EmitterProfile
 from src.cognitive.periodic_interceptor import PeriodicScanInterceptor
+from src.cognitive.temporal_predictor import TemporalPredictor
 from src.training.reward import bernoulli_entropy, receiver_reward_components
 
 logger = logging.getLogger(__name__)
@@ -360,6 +361,11 @@ class CognitiveRFScanEnv(gym.Env):
         self.w_active_track = float(reward_cfg.get("w_active_track", config.get("w_active_track", 0.0)))
         self.w_pulse_scale = float(reward_cfg.get("w_pulse_scale", config.get("w_pulse_scale", 0.0)))
         self.lull_tolerance = bool(reward_cfg.get("lull_tolerance", config.get("lull_tolerance", False)))
+        # Stage 3 Step 7 Latency-aware & predictive reward configuration
+        self.w_latency = float(reward_cfg.get("w_latency", config.get("w_latency", 1.0)))
+        self.tau_latency = float(reward_cfg.get("tau_latency", config.get("tau_latency", 100.0)))
+        self.w_prediction = float(reward_cfg.get("w_prediction", config.get("w_prediction", 0.5)))
+        self.disable_latency_reward = bool(reward_cfg.get("disable_latency_reward", config.get("disable_latency_reward", False)))
 
         # Feature layout: CANONICAL_BAND_FEATURES features per band (contract).
         self.band_features = CANONICAL_BAND_FEATURES
@@ -390,6 +396,7 @@ class CognitiveRFScanEnv(gym.Env):
         self.radio_env: RadioEnvironment | None = None
         self.belief: BeliefState | None = None
         self.emitter_tracker: EmitterTracker | None = None
+        self.temporal_predictor: TemporalPredictor | None = None
         self.semantic_memory: SemanticMemory | None = None
         self.periodic_interceptor: PeriodicScanInterceptor | None = None
         self.records: list[PulseRecord] = list(records or [])
@@ -452,6 +459,13 @@ class CognitiveRFScanEnv(gym.Env):
             min_observations=self.periodic_min_obs,
         )
 
+        # Initialize deterministic temporal & agile predictor
+        self.temporal_predictor = TemporalPredictor(
+            n_bands=self.n_bands,
+            n_modes=self.n_modes,
+            base_dwell_us=self.base_dwell_time_us,
+        )
+
         self.current_step = 0
         self.intercepted_emitters = set()
         self._gt_active_ever = set()
@@ -488,6 +502,21 @@ class CognitiveRFScanEnv(gym.Env):
 
         dwell_start = self.receiver.current_time_us
         dwell_end = dwell_start + base_dwell_us
+
+        # Check if the chosen band was predicted for an imminent arrival
+        is_predicted_band = False
+        if getattr(self, "temporal_predictor", None) is not None:
+            try:
+                preds = self.temporal_predictor.predict_all(
+                    current_time=dwell_start,
+                    horizon_us=base_dwell_us * 3.0,
+                )
+                for p in preds:
+                    if p.target_band == band and p.confidence >= 0.4:
+                        is_predicted_band = True
+                        break
+            except Exception:
+                pass
 
         # --- Mode semantics beyond dwell length (Phase 5) --------------------
         # REVISIT prioritizes a previously observed / overdue band: re-confirm it
@@ -567,6 +596,14 @@ class CognitiveRFScanEnv(gym.Env):
                     "aoa_deg": float(d.aoa_deg),
                     "emitter_id": getattr(d, "emitter_id", -1),  # GT for evaluation only
                 })
+            # Stage 3: Causal pulse ingestion into deterministic temporal & agile predictor
+            if getattr(self, "temporal_predictor", None) is not None:
+                for d in detections:
+                    eid = int(getattr(d, "emitter_id", 0))
+                    t = float(getattr(d, "toa_us", getattr(d, "time_us", dwell_start)))
+                    f = float(getattr(d, "frequency_mhz", 0.0))
+                    b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))
+                    self.temporal_predictor.update_from_pulse(eid, t, f, b)
 
         # Run perception at intervals if enabled
         perception_result = None
@@ -651,6 +688,8 @@ class CognitiveRFScanEnv(gym.Env):
 
         # Store preemptive recommendation in info for scheduler
         self._preemptive_band = preemptive_band
+        if not is_predicted_band and preemptive_band is not None and int(preemptive_band) == band:
+            is_predicted_band = True
 
         # Update intercepted set from detection emitter_id (ground truth for reward/eval only)
         new_ids = set()
@@ -661,7 +700,17 @@ class CognitiveRFScanEnv(gym.Env):
         newly = new_ids - self.intercepted_emitters
         self.intercepted_emitters.update(new_ids)
 
-        # 6. Calculate reward using 5 explicit decision & coverage signals
+        # 6. Real intercept-time error: earliest detected pulse ToA minus the dwell
+        # onset (receiver clock). Computed before reward so early-latency bonus has ground truth arrival.
+        detect_toas = [float(getattr(d, "toa_us", getattr(d, "time_us", float("nan")))) for d in detections]
+        detect_toas = [t for t in detect_toas if t == t]
+        if any_hit and detect_toas:
+            first_detect_toa = min(detect_toas)
+            intercept_time_error_us = max(0.0, first_detect_toa - dwell_start)
+        else:
+            intercept_time_error_us = float("nan")
+
+        # 7. Calculate reward using explicit decision & coverage signals + early-interception & prediction bonuses
         other_bands_active = bool(int(active_bands_vec.sum()) - int(selected_band_active) > 0)
         false_detection = bool(not selected_band_active and any_hit)
 
@@ -702,22 +751,17 @@ class CognitiveRFScanEnv(gym.Env):
             w_active_track=self.w_active_track,
             w_pulse_scale=self.w_pulse_scale,
             lull_tolerance=self.lull_tolerance,
+            w_latency=self.w_latency,
+            tau_latency=self.tau_latency,
+            w_prediction=self.w_prediction,
+            is_predicted=is_predicted_band,
+            intercept_time_us=intercept_time_error_us,
+            disable_latency_reward=self.disable_latency_reward,
         )
         reward = reward_components["reward"]
         self.fom.record_reward_components(reward_components)
 
-        # 7. Update metrics (ground-truth-based eval only).
-        # Real intercept-time error: earliest detected pulse ToA minus the dwell
-        # onset (receiver clock). Never hard-coded to 0.0; reported only for
-        # actual intercepts (a non-intercepted active band is not a 'miss' per
-        # the evaluation contract).
-        detect_toas = [float(getattr(d, "toa_us", getattr(d, "time_us", float("nan")))) for d in detections]
-        detect_toas = [t for t in detect_toas if t == t]
-        if any_hit and detect_toas:
-            first_detect_toa = min(detect_toas)
-            intercept_time_error_us = max(0.0, first_detect_toa - dwell_start)
-        else:
-            intercept_time_error_us = float("nan")
+        # 8. Update metrics (ground-truth-based eval only).
         self.fom.record_emitters(active_emitters, new_ids)
         self.fom.update(
             band_chosen=band,
@@ -773,6 +817,10 @@ class CognitiveRFScanEnv(gym.Env):
             "band_center_mhz": observation.center_frequency_mhz if observation is not None else 0.0,
             "receiver_time_us": self.receiver.current_time_us,
             "preemptive_band": getattr(self, "_preemptive_band", None),
+            "latency_bonus": float(reward_components.get("latency_bonus", 0.0)),
+            "prediction_bonus": float(reward_components.get("prediction_bonus", 0.0)),
+            "is_predicted": bool(is_predicted_band),
+            "active_bands": [b for b, v in enumerate(active_bands_vec) if v > 0],
             "reward_components": reward_components,
         }
 

@@ -68,6 +68,10 @@ reward:
   w_active_track: 2.0          # productive tracking bonus on confirmed detection on active track
   w_pulse_scale: 0.0           # pulse-count aware hit scaling
   lull_tolerance: false        # zero miss penalty on 1-dwell gaps for confirmed active tracks
+  w_latency: 1.0               # early-interception bonus: w_latency * exp(-t_hit / tau_latency) on hits
+  tau_latency: 100.0           # exponential decay constant in µs
+  w_prediction: 0.5            # bonus for correctly intercepting a predicted agile arrival
+  disable_latency_reward: false # ablation switch for zero-latency-reward diagnostic runs
 
 belief:
   priority:

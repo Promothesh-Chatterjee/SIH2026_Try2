@@ -183,6 +183,12 @@ def receiver_reward_components(
     w_active_track: float = 0.0,
     w_pulse_scale: float = 0.0,
     lull_tolerance: bool = False,
+    w_latency: float = 1.0,
+    tau_latency: float = 100.0,
+    w_prediction: float = 0.5,
+    is_predicted: bool = False,
+    intercept_time_us: float | None = None,
+    disable_latency_reward: bool = False,
 ) -> dict[str, float]:
     """Per-component reward breakdown implementing 5 explicit decision & coverage signals.
 
@@ -193,7 +199,7 @@ def receiver_reward_components(
       false_detection: receiver false declaration on empty band (!selected_active && detected)
 
     Derived states:
-      TP = selected_active && detected           -> hit_term (+ novel_term - timing_penalty + active_track_term)
+      TP = selected_active && detected           -> hit_term (+ novel_term + latency_bonus + prediction_bonus + active_track_term)
       FN = selected_active && !detected          -> miss_penalty (decision-level miss, subject to lull tolerance)
       FP = !selected_active && detected          -> false_alarm_pen (false detection)
       TN = !selected_active && !detected         -> empty dwell (penalized via false_alarm_pen/dwell_cost)
@@ -218,6 +224,8 @@ def receiver_reward_components(
     missed_coverage_pen = 0.0
     active_track_term = 0.0
     pulse_bonus_term = 0.0
+    latency_bonus_term = 0.0
+    prediction_bonus_term = 0.0
 
     # Derive 5 signals cleanly with backward compatibility
     is_sel_active = bool(selected_active if selected_active is not None else ground_truth_active)
@@ -256,6 +264,20 @@ def receiver_reward_components(
         # Productive tracking incentive: reward consecutively confirming hits on an active emitter
         if w_active_track > 0.0 and effective_age <= 2.0 and belief is not None and float(belief.occupancy_prob[band]) >= 0.4:
             active_track_term = w_active_track
+
+        # Stage 3 Step 7: Early-interception reward (w_latency * exp(-t_hit / tau_latency))
+        # Strictly conditioned on hit == True. Zero false-early bonus.
+        if not disable_latency_reward and w_latency > 0.0:
+            if intercept_time_us is not None and np.isfinite(intercept_time_us):
+                t_hit = max(0.0, float(intercept_time_us))
+            else:
+                first_time = float(getattr(detections[0], "time_us", start)) if n_hits > 0 else start
+                t_hit = max(0.0, first_time - start)
+            latency_bonus_term = float(w_latency * np.exp(-t_hit / max(1.0, float(tau_latency))))
+
+        # Stage 3 Step 7: Prediction bonus for confirmed hit on predicted agile arrival
+        if w_prediction > 0.0 and is_predicted:
+            prediction_bonus_term = float(w_prediction)
 
         # Redundant scan penalty: only applies to unconfirmed / empty re-scans, NOT confirmed hits
         if w_redundant_scan != 0.0 and effective_age <= 1.0 and (band_age is not None or (band is not None and belief is not None)):
@@ -318,7 +340,7 @@ def receiver_reward_components(
     total = (
         hit_term + novel_term + timing_penalty + priority_term + info_gain_term
         + staleness_bonus + false_alarm_pen + dwell_cost + redundant_pen + miss_penalty + missed_coverage_pen + delay_pen
-        + active_track_term
+        + active_track_term + latency_bonus_term + prediction_bonus_term
     )
     return {
         "reward": float(total),
@@ -336,6 +358,8 @@ def receiver_reward_components(
         "delay_penalty": float(delay_pen),
         "active_track_bonus": float(active_track_term),
         "pulse_bonus": float(pulse_bonus_term),
+        "latency_bonus": float(latency_bonus_term),
+        "prediction_bonus": float(prediction_bonus_term),
         "entropy_before": float(entropy_before) if entropy_before is not None else 0.0,
         "entropy_after": float(entropy_after) if entropy_after is not None else 0.0,
         "information_gain": ig,
