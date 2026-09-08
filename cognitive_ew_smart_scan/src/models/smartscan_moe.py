@@ -36,6 +36,7 @@ from ..contracts import (
     n_actions_for,
 )
 from .drqn_scheduler import DRQNScheduler
+from ..cognitive.temporal_predictor import TemporalPredictor
 
 logger = logging.getLogger(__name__)
 
@@ -225,32 +226,91 @@ class SmartScanMoE(nn.Module):
         self._last_band: int = -1
         self._historical_hits = np.zeros(self.n_bands, dtype=np.int32)
 
+        # Stage 3: Deterministic Temporal Predictor for frequency agility & latency optimization
+        self.temporal_predictor = TemporalPredictor(
+            n_bands=self.n_bands,
+            n_modes=self.n_modes,
+            base_dwell_us=float(config.get("base_dwell_us", 500.0)),
+        )
+        self.enable_t0: bool = bool(config.get("enable_t0", False))
+        self.enable_t1: bool = bool(config.get("enable_t1", False))
+        self.lambda_p: float = float(config.get("lambda_p", 1.0))
+        self.lambda_t: float = float(config.get("lambda_t", 0.5))
+        self.lambda_d: float = float(config.get("lambda_d", 0.1))
+        self.lambda_a: float = float(config.get("lambda_a", 0.2))
+        self._simulated_clock_us: float = 0.0
+
         # Keep direct refs for torch MoE forward
         self.drqn = drqn_agent
         self._config = config
         logger.info(
-            "SmartScanMoE eager=%.1f revisit=%.1f preemptive=%.1f K=%d actions=%d",
+            "SmartScanMoE eager=%.1f revisit=%.1f preemptive=%.1f K=%d actions=%d (T0=%s, T1=%s)",
             self.eager_weight, self.revisit_weight, self.preemptive_weight,
-            self.k_receivers, self.n_actions,
+            self.k_receivers, self.n_actions, self.enable_t0, self.enable_t1,
         )
+
+    def set_stage3_modes(
+        self,
+        enable_t0: bool = False,
+        enable_t1: bool = False,
+        lambda_p: float | None = None,
+        lambda_t: float | None = None,
+        lambda_d: float | None = None,
+        lambda_a: float | None = None,
+    ) -> None:
+        """Dynamically configure Stage 3 prediction modes."""
+        self.enable_t0 = bool(enable_t0)
+        self.enable_t1 = bool(enable_t1)
+        if lambda_p is not None:
+            self.lambda_p = float(lambda_p)
+        if lambda_t is not None:
+            self.lambda_t = float(lambda_t)
+        if lambda_d is not None:
+            self.lambda_d = float(lambda_d)
+        if lambda_a is not None:
+            self.lambda_a = float(lambda_a)
 
     def reset(self) -> None:
         """Reset internal state of all components."""
         self.eager_agent.reset()
         self.revisit_agent.reset()
+        self.temporal_predictor.reset()
         self._consecutive_empty_band = 0
         self._consecutive_empty_total = 0
         self._last_band = -1
         self._historical_hits.fill(0)
         self._preemptive_urgency.fill(0.0)
+        self._simulated_clock_us = 0.0
 
     def update(self, action: int) -> None:
-        """Update revisit tracking when an action is executed."""
+        """Update revisit tracking and simulated clock when an action is executed."""
         band = band_of_action(int(action), self.n_modes)
+        mode = mode_of_action(int(action), self.n_modes)
         self.revisit_agent.update(band)
+        dwell_mult = DEFAULT_DWELL_MULTIPLIERS[mode] if mode < len(DEFAULT_DWELL_MULTIPLIERS) else 1.0
+        self._simulated_clock_us += 500.0 * dwell_mult
 
-    def update_result(self, hit: bool, band: int) -> None:
-        """Track hit results for consecutive unproductive dwells and historical hits."""
+    def update_detections(self, detections: list, current_time: float | None = None) -> None:
+        """Ingest detected pulses into temporal predictor."""
+        if current_time is not None and current_time > self._simulated_clock_us:
+            self._simulated_clock_us = float(current_time)
+        for d in detections:
+            if isinstance(d, dict):
+                t = float(d.get("toa_us", d.get("time_us", self._simulated_clock_us)))
+                f = float(d.get("frequency_mhz", 0.0))
+                b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))
+                eid = int(d.get("emitter_id", 0))
+            else:
+                t = float(getattr(d, "toa_us", getattr(d, "time_us", self._simulated_clock_us)))
+                f = float(getattr(d, "frequency_mhz", 0.0))
+                b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))
+                eid = int(getattr(d, "emitter_id", 0))
+            self.temporal_predictor.update_from_pulse(eid, t, f, b)
+
+    def update_result(
+        self, hit: bool, band: int, detections: list | None = None, current_time: float | None = None
+    ) -> None:
+        """Track hit results for consecutive unproductive dwells, historical hits, and pulse arrivals."""
         if hit:
             self._consecutive_empty_band = 0
             self._consecutive_empty_total = 0
@@ -263,6 +323,8 @@ class SmartScanMoE(nn.Module):
             else:
                 self._consecutive_empty_band = 1
         self._last_band = int(band)
+        if detections:
+            self.update_detections(detections, current_time=current_time)
 
     def set_preemptive_urgency(self, band: int | None, urgency: float) -> None:
         """Fold a periodic-intercept urgency boost into a band's selection pressure.
@@ -467,12 +529,25 @@ class SmartScanMoE(nn.Module):
         per_vec = np.clip(self._preemptive_urgency[: self.n_bands], 0.0, 1.0)
         q_candidates = [int(b) for b in order_b if band_max[b] >= q_top1 - 0.05][:3]
 
+        # Stage 3 Temporal Predictor candidates & arrival forecasts
+        pred_candidates = []
+        pred_probs = np.zeros(self.n_bands, dtype=np.float32)
+        pred_etas = {}
+        if self.enable_t0 or self.enable_t1:
+            curr_t = self._simulated_clock_us
+            pred_candidates = self.temporal_predictor.get_predicted_candidate_bands(current_time=curr_t, top_k=2)
+            for p in self.temporal_predictor.predict_all(curr_t):
+                if p.prediction_confidence > 0.2:
+                    b_p = p.target_band
+                    pred_probs[b_p] = max(pred_probs[b_p], float(p.prediction_confidence))
+                    pred_etas[b_p] = min(pred_etas.get(b_p, float("inf")), float(p.eta_us))
+
         # Adaptive occupancy threshold: in dense stare require 0.15, in sparse or scan regimes adapt down to 0.02
         max_occ = float(np.max(occ_vec)) if len(occ_vec) > 0 else 0.0
         occ_threshold = max(0.02, min(0.15, 0.5 * max_occ))
         occ_candidates = [int(b) for b in range(self.n_bands) if occ_vec[b] >= occ_threshold][:3]
         per_candidates = [int(b) for b in range(self.n_bands) if per_vec[b] > 0.50][:2] if self.preemptive_weight > 0.0 else []
-        all_candidates = list(dict.fromkeys(per_candidates + q_candidates + occ_candidates))[:7]
+        all_candidates = list(dict.fromkeys(pred_candidates + per_candidates + q_candidates + occ_candidates))[:7]
 
         # Filter out repeatedly empty band to enforce escape
         if self._consecutive_empty_band >= 2 and self._last_band in all_candidates and len(all_candidates) > 1:
@@ -481,7 +556,47 @@ class SmartScanMoE(nn.Module):
         # Force exploration if 3 consecutive dwells anywhere produced zero hits
         force_exploration = bool(self._consecutive_empty_total >= 3)
 
-        if self.preemptive_weight > 0.0 and np.max(per_vec) > 0.5 and (self._consecutive_empty_band < 2):
+        # Evaluate T1 Action-Conditioned Predictive Utility if enabled
+        u_action = None
+        if self.enable_t1 and not force_exploration and (self._consecutive_empty_band < 2):
+            u_scores, u_telem = self.temporal_predictor.compute_action_conditioned_utility(
+                q_values=q_values,
+                current_time=self._simulated_clock_us,
+                lambda_p=self.lambda_p,
+                lambda_t=self.lambda_t,
+                lambda_d=self.lambda_d,
+                lambda_a=self.lambda_a,
+            )
+            pred_b_set = set(u_telem.get("predicted_bands", []))
+            if pred_b_set and all_candidates:
+                # Rank candidates by U(b, m)
+                cand_actions = [b * self.n_modes + m for b in all_candidates for m in range(self.n_modes)]
+                best_cand_act = int(cand_actions[int(np.argmax([u_scores[a] for a in cand_actions]))])
+                b_cand = band_of_action(best_cand_act, self.n_modes)
+                if b_cand in pred_b_set or pred_probs[b_cand] >= 0.4:
+                    u_action = best_cand_act
+
+        mode = None
+        if self.eager_weight == 0.0 and self.revisit_weight == 0.0 and self.semantic_weight > 0.0 and not force_exploration:
+            action = int(np.argmax(fused_scores))
+            best_b = band_of_action(action, self.n_modes)
+            mode = int(mode_of_action(action, self.n_modes))
+            reason = DWELL_MODE_SEMANTICS[mode]
+        elif u_action is not None:
+            best_b = band_of_action(u_action, self.n_modes)
+            mode = int(mode_of_action(u_action, self.n_modes))
+            reason = "Predictive_utility_active"
+        elif self.enable_t0 and pred_candidates and (pred_probs[pred_candidates[0]] >= 0.5) and not force_exploration and (self._consecutive_empty_band < 2):
+            best_b = pred_candidates[0]
+            reason = "Predictive_hop_intercept"
+            eta = pred_etas.get(best_b, 500.0)
+            if eta <= 125.0:
+                mode = 0  # SHORT_DWELL
+            elif eta <= 500.0:
+                mode = 1  # NORMAL_DWELL
+            else:
+                mode = 2  # LONG_DWELL
+        elif self.preemptive_weight > 0.0 and np.max(per_vec) > 0.5 and (self._consecutive_empty_band < 2):
             best_b = int(np.argmax(per_vec))
             reason = "Preemptive_intercept"
         elif is_confident and all_candidates and not force_exploration and (self._consecutive_empty_band < 2):
@@ -489,6 +604,7 @@ class SmartScanMoE(nn.Module):
                 self.eager_weight * (band_max[b] - q_median)
                 + 0.5 * occ_vec[b]
                 + 2.0 * self.preemptive_weight * per_vec[b]
+                + (1.5 * pred_probs[b] if self.enable_t0 else 0.0)
                 for b in all_candidates
             ])
             if eff_tau > 0.0:
@@ -515,27 +631,28 @@ class SmartScanMoE(nn.Module):
             best_b = int(np.argmax(explor_scores))
             reason = "Cognitive_exploration"
 
-        # Mode hierarchy combining learned Q-values + uncertainty/safety
-        occ = float(occ_vec[best_b])
-        unc = float(unc_vec[best_b])
-        age = float(age_vec[best_b])
+        if mode is None:
+            # Mode hierarchy combining learned Q-values + uncertainty/safety
+            occ = float(occ_vec[best_b])
+            unc = float(unc_vec[best_b])
+            age = float(age_vec[best_b])
 
-        # If a single mode has a massive learned Q margin (e.g. unit test or specialized fine-tuning), honor it
-        q_modes = q_values[best_b * self.n_modes : (best_b + 1) * self.n_modes]
-        m_argmax = int(np.argmax(q_modes))
-        q_norm = float(q_values[best_b * self.n_modes + 1])
-        q_long = float(q_values[best_b * self.n_modes + 2])
+            # If a single mode has a massive learned Q margin (e.g. unit test or specialized fine-tuning), honor it
+            q_modes = q_values[best_b * self.n_modes : (best_b + 1) * self.n_modes]
+            m_argmax = int(np.argmax(q_modes))
+            q_norm = float(q_values[best_b * self.n_modes + 1])
+            q_long = float(q_values[best_b * self.n_modes + 2])
 
-        if float(q_modes[m_argmax] - np.partition(q_modes, -2)[-2] if len(q_modes) > 1 else 0.0) >= 1.0:
-            mode = m_argmax
-        elif unc > 0.6 or age > 0.6:
-            mode = 2  # LONG_DWELL
-        elif self._consecutive_empty_band >= 2 and occ < 0.1:
-            mode = 0  # SHORT_DWELL
-        elif q_long > q_norm + 0.05:
-            mode = 2  # LONG_DWELL
-        else:
-            mode = 1  # NORMAL_DWELL
+            if float(q_modes[m_argmax] - np.partition(q_modes, -2)[-2] if len(q_modes) > 1 else 0.0) >= 1.0:
+                mode = m_argmax
+            elif unc > 0.6 or age > 0.6:
+                mode = 2  # LONG_DWELL
+            elif self._consecutive_empty_band >= 2 and occ < 0.1:
+                mode = 0  # SHORT_DWELL
+            elif q_long > q_norm + 0.05:
+                mode = 2  # LONG_DWELL
+            else:
+                mode = 1  # NORMAL_DWELL
 
         action = best_b * self.n_modes + mode
 

@@ -217,8 +217,15 @@ def evaluate_canonical_gate(
                     else:
                         consecutive_empty_band = 1
 
+                detections = info.get("detections", [])
+                curr_t = float(getattr(env.receiver, "current_time_us", 0.0))
+                if hasattr(agent, "update_detections"):
+                    agent.update_detections(detections, current_time=curr_t)
                 if hasattr(agent, "update_result"):
-                    agent.update_result(hit, b)
+                    try:
+                        agent.update_result(hit, b, detections=detections, current_time=curr_t)
+                    except TypeError:
+                        agent.update_result(hit, b)
                 if hasattr(agent, "update"):
                     agent.update(action)
 
