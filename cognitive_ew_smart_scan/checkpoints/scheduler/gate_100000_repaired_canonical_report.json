@@ -1,0 +1,1070 @@
+{
+  "checkpoint": "checkpoints/scheduler/checkpoint_gate_100000.pt",
+  "n_scenarios": 10,
+  "n_steps_per_scenario": 1000,
+  "seed": 42,
+  "summary": {
+    "random": {
+      "mean_intercept_rate": 0.0337,
+      "total_hits": 337,
+      "mean_reward": -344.6055325342188,
+      "mean_distinct_bands": 36.0,
+      "mean_empty_escape_rate": 1.0,
+      "mean_intercept_time_us": 274.52552465906433,
+      "mean_discovery_rate": 0.7064285714285714,
+      "mean_cognitive_exploration_rate": 0.0,
+      "scenarios": [
+        {
+          "scenario_id": "config_117",
+          "intercept_rate": 0.046,
+          "hits": 46,
+          "total_reward": -385.29260507198313,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 186.2944972826087,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_119",
+          "intercept_rate": 0.007,
+          "hits": 7,
+          "total_reward": -292.73265467444224,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 204.80803571428572,
+          "discovery_rate": 0.75,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_143",
+          "intercept_rate": 0.002,
+          "hits": 2,
+          "total_reward": -298.29423313206166,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 573.3125,
+          "discovery_rate": 0.5,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_194",
+          "intercept_rate": 0.051,
+          "hits": 51,
+          "total_reward": -407.9045837385155,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 159.21966911764707,
+          "discovery_rate": 0.8,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_195",
+          "intercept_rate": 0.055,
+          "hits": 55,
+          "total_reward": -389.8587505007656,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 140.26558948863635,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_241",
+          "intercept_rate": 0.012,
+          "hits": 12,
+          "total_reward": -312.1102825115694,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 516.7096354166666,
+          "discovery_rate": 0.5,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_29",
+          "intercept_rate": 0.0,
+          "hits": 0,
+          "total_reward": -314.6560242813132,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": NaN,
+          "discovery_rate": 0.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_42",
+          "intercept_rate": 0.03,
+          "hits": 30,
+          "total_reward": -365.1384047999879,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 405.428125,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_64",
+          "intercept_rate": 0.107,
+          "hits": 107,
+          "total_reward": -307.540887262454,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 99.32535046728972,
+          "discovery_rate": 0.8,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_96",
+          "intercept_rate": 0.027,
+          "hits": 27,
+          "total_reward": -372.5268993690956,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 185.36631944444446,
+          "discovery_rate": 0.7142857142857143,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        }
+      ]
+    },
+    "round_robin": {
+      "mean_intercept_rate": 0.0349,
+      "total_hits": 349,
+      "mean_reward": -147.2625019082057,
+      "mean_distinct_bands": 36.0,
+      "mean_empty_escape_rate": 1.0,
+      "mean_intercept_time_us": 166.53592369067908,
+      "mean_discovery_rate": 0.7780952380952381,
+      "mean_cognitive_exploration_rate": 0.0,
+      "scenarios": [
+        {
+          "scenario_id": "config_117",
+          "intercept_rate": 0.033,
+          "hits": 33,
+          "total_reward": -225.68586812940777,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 146.59895833333334,
+          "discovery_rate": 0.8,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_119",
+          "intercept_rate": 0.004,
+          "hits": 4,
+          "total_reward": -94.37665739667884,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 305.6015625,
+          "discovery_rate": 0.6666666666666666,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_143",
+          "intercept_rate": 0.003,
+          "hits": 3,
+          "total_reward": -95.66703735021895,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 148.60416666666666,
+          "discovery_rate": 0.5,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_194",
+          "intercept_rate": 0.044,
+          "hits": 44,
+          "total_reward": -222.2296471747704,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 91.0791015625,
+          "discovery_rate": 0.8,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_195",
+          "intercept_rate": 0.071,
+          "hits": 71,
+          "total_reward": -182.06063266804176,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 113.71553147007042,
+          "discovery_rate": 0.7142857142857143,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_241",
+          "intercept_rate": 0.011,
+          "hits": 11,
+          "total_reward": -114.9510277018938,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 240.7365056818182,
+          "discovery_rate": 0.5,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_29",
+          "intercept_rate": 0.005,
+          "hits": 5,
+          "total_reward": -104.90565086586577,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 150.515625,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_42",
+          "intercept_rate": 0.024,
+          "hits": 24,
+          "total_reward": -168.49208417899223,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 194.88932291666666,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_64",
+          "intercept_rate": 0.12,
+          "hits": 120,
+          "total_reward": -100.92074617690362,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 109.5005859375,
+          "discovery_rate": 0.8,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_96",
+          "intercept_rate": 0.034,
+          "hits": 34,
+          "total_reward": -163.33566743928395,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 164.1178768382353,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        }
+      ]
+    },
+    "highest_occupancy": {
+      "mean_intercept_rate": 0.4624999999999999,
+      "total_hits": 4625,
+      "mean_reward": 205.40645093265215,
+      "mean_distinct_bands": 33.0,
+      "mean_empty_escape_rate": 0.2759363210048364,
+      "mean_intercept_time_us": 149.52297433394114,
+      "mean_discovery_rate": 0.5928571428571429,
+      "mean_cognitive_exploration_rate": 0.0,
+      "scenarios": [
+        {
+          "scenario_id": "config_117",
+          "intercept_rate": 0.882,
+          "hits": 882,
+          "total_reward": 494.12932542805726,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.0,
+          "avg_intercept_time_us": 144.5328443877551,
+          "discovery_rate": 0.2,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_119",
+          "intercept_rate": 0.014,
+          "hits": 14,
+          "total_reward": -140.17710882688425,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.0196078431372549,
+          "avg_intercept_time_us": 265.90848214285717,
+          "discovery_rate": 0.6666666666666666,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_143",
+          "intercept_rate": 0.009,
+          "hits": 9,
+          "total_reward": -117.706911671528,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.043478260869565216,
+          "avg_intercept_time_us": 291.97222222222223,
+          "discovery_rate": 0.5,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_194",
+          "intercept_rate": 0.995,
+          "hits": 995,
+          "total_reward": 784.4784550243755,
+          "distinct_bands": 6,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 22.985356469849247,
+          "discovery_rate": 0.6,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_195",
+          "intercept_rate": 0.864,
+          "hits": 864,
+          "total_reward": 584.6793541878471,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.5555555555555556,
+          "avg_intercept_time_us": 47.87632921006944,
+          "discovery_rate": 0.42857142857142855,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_241",
+          "intercept_rate": 0.071,
+          "hits": 71,
+          "total_reward": -118.55189687280738,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.044642857142857144,
+          "avg_intercept_time_us": 181.79676496478874,
+          "discovery_rate": 0.5,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_29",
+          "intercept_rate": 0.03,
+          "hits": 30,
+          "total_reward": -105.6310752022296,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.05128205128205128,
+          "avg_intercept_time_us": 179.29453125,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_42",
+          "intercept_rate": 0.42,
+          "hits": 420,
+          "total_reward": 17.838295422409058,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.014184397163120567,
+          "avg_intercept_time_us": 158.93794642857142,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_64",
+          "intercept_rate": 0.801,
+          "hits": 801,
+          "total_reward": 466.8960138326414,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 91.2327656835206,
+          "discovery_rate": 0.2,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_96",
+          "intercept_rate": 0.539,
+          "hits": 539,
+          "total_reward": 188.1100580046404,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.030612244897959183,
+          "avg_intercept_time_us": 110.69250057977736,
+          "discovery_rate": 0.8333333333333334,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        }
+      ]
+    },
+    "highest_uncertainty": {
+      "mean_intercept_rate": 0.0905,
+      "total_hits": 905,
+      "mean_reward": -148.9601255029244,
+      "mean_distinct_bands": 36.0,
+      "mean_empty_escape_rate": 0.07525048016400385,
+      "mean_intercept_time_us": 182.07719699779793,
+      "mean_discovery_rate": 0.7114285714285715,
+      "mean_cognitive_exploration_rate": 0.0,
+      "scenarios": [
+        {
+          "scenario_id": "config_117",
+          "intercept_rate": 0.093,
+          "hits": 93,
+          "total_reward": -255.7026498461942,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.046052631578947366,
+          "avg_intercept_time_us": 179.80460349462365,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_119",
+          "intercept_rate": 0.011,
+          "hits": 11,
+          "total_reward": -111.81226445447163,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.0392156862745098,
+          "avg_intercept_time_us": 228.45738636363637,
+          "discovery_rate": 0.3333333333333333,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_143",
+          "intercept_rate": 0.002,
+          "hits": 2,
+          "total_reward": -98.83567982020995,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.2857142857142857,
+          "avg_intercept_time_us": 246.90625,
+          "discovery_rate": 0.5,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_194",
+          "intercept_rate": 0.085,
+          "hits": 85,
+          "total_reward": -220.62702124641308,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.0625,
+          "avg_intercept_time_us": 162.13727022058825,
+          "discovery_rate": 0.6,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_195",
+          "intercept_rate": 0.073,
+          "hits": 73,
+          "total_reward": -219.86359852337864,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.07758620689655173,
+          "avg_intercept_time_us": 143.419895119863,
+          "discovery_rate": 0.7142857142857143,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_241",
+          "intercept_rate": 0.026,
+          "hits": 26,
+          "total_reward": -138.57865852622558,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.05660377358490566,
+          "avg_intercept_time_us": 180.6544471153846,
+          "discovery_rate": 0.5,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_29",
+          "intercept_rate": 0.028,
+          "hits": 28,
+          "total_reward": -106.89833935440768,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.07692307692307693,
+          "avg_intercept_time_us": 163.54296875,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_42",
+          "intercept_rate": 0.161,
+          "hits": 161,
+          "total_reward": -149.1113663665779,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.05714285714285714,
+          "avg_intercept_time_us": 183.27950310559007,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_64",
+          "intercept_rate": 0.192,
+          "hits": 192,
+          "total_reward": -92.346162527027,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.027777777777777776,
+          "avg_intercept_time_us": 132.91630045572916,
+          "discovery_rate": 0.8,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_96",
+          "intercept_rate": 0.234,
+          "hits": 234,
+          "total_reward": -95.8255143643383,
+          "distinct_bands": 36,
+          "empty_escape_rate": 0.022988505747126436,
+          "avg_intercept_time_us": 199.65334535256412,
+          "discovery_rate": 0.6666666666666666,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        }
+      ]
+    },
+    "revisit_heuristic": {
+      "mean_intercept_rate": 0.0349,
+      "total_hits": 349,
+      "mean_reward": -147.2625019082057,
+      "mean_distinct_bands": 36.0,
+      "mean_empty_escape_rate": 1.0,
+      "mean_intercept_time_us": 166.53592369067908,
+      "mean_discovery_rate": 0.7780952380952381,
+      "mean_cognitive_exploration_rate": 0.0,
+      "scenarios": [
+        {
+          "scenario_id": "config_117",
+          "intercept_rate": 0.033,
+          "hits": 33,
+          "total_reward": -225.68586812940777,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 146.59895833333334,
+          "discovery_rate": 0.8,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_119",
+          "intercept_rate": 0.004,
+          "hits": 4,
+          "total_reward": -94.37665739667884,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 305.6015625,
+          "discovery_rate": 0.6666666666666666,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_143",
+          "intercept_rate": 0.003,
+          "hits": 3,
+          "total_reward": -95.66703735021895,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 148.60416666666666,
+          "discovery_rate": 0.5,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_194",
+          "intercept_rate": 0.044,
+          "hits": 44,
+          "total_reward": -222.2296471747704,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 91.0791015625,
+          "discovery_rate": 0.8,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_195",
+          "intercept_rate": 0.071,
+          "hits": 71,
+          "total_reward": -182.06063266804176,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 113.71553147007042,
+          "discovery_rate": 0.7142857142857143,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_241",
+          "intercept_rate": 0.011,
+          "hits": 11,
+          "total_reward": -114.9510277018938,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 240.7365056818182,
+          "discovery_rate": 0.5,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_29",
+          "intercept_rate": 0.005,
+          "hits": 5,
+          "total_reward": -104.90565086586577,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 150.515625,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_42",
+          "intercept_rate": 0.024,
+          "hits": 24,
+          "total_reward": -168.49208417899223,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 194.88932291666666,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_64",
+          "intercept_rate": 0.12,
+          "hits": 120,
+          "total_reward": -100.92074617690362,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 109.5005859375,
+          "discovery_rate": 0.8,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_96",
+          "intercept_rate": 0.034,
+          "hits": 34,
+          "total_reward": -163.33566743928395,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 164.1178768382353,
+          "discovery_rate": 1.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        }
+      ]
+    },
+    "drqn": {
+      "mean_intercept_rate": 0.0335,
+      "total_hits": 335,
+      "mean_reward": -483.2840405777303,
+      "mean_distinct_bands": 6.5,
+      "mean_empty_escape_rate": 0.6704542238070914,
+      "mean_intercept_time_us": 211.263016643876,
+      "mean_discovery_rate": 0.13666666666666666,
+      "mean_cognitive_exploration_rate": 0.0,
+      "scenarios": [
+        {
+          "scenario_id": "config_117",
+          "intercept_rate": 0.0,
+          "hits": 0,
+          "total_reward": -563.6262785566871,
+          "distinct_bands": 6,
+          "empty_escape_rate": 0.6181318681318682,
+          "avg_intercept_time_us": NaN,
+          "discovery_rate": 0.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_119",
+          "intercept_rate": 0.0,
+          "hits": 0,
+          "total_reward": -445.6002785566893,
+          "distinct_bands": 6,
+          "empty_escape_rate": 0.7037037037037037,
+          "avg_intercept_time_us": NaN,
+          "discovery_rate": 0.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_143",
+          "intercept_rate": 0.0,
+          "hits": 0,
+          "total_reward": -440.1409298933544,
+          "distinct_bands": 7,
+          "empty_escape_rate": 0.6377708978328174,
+          "avg_intercept_time_us": NaN,
+          "discovery_rate": 0.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_194",
+          "intercept_rate": 0.0,
+          "hits": 0,
+          "total_reward": -610.0743417433089,
+          "distinct_bands": 7,
+          "empty_escape_rate": 0.6584022038567493,
+          "avg_intercept_time_us": NaN,
+          "discovery_rate": 0.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_195",
+          "intercept_rate": 0.259,
+          "hits": 259,
+          "total_reward": -278.3364491895904,
+          "distinct_bands": 7,
+          "empty_escape_rate": 0.7008196721311475,
+          "avg_intercept_time_us": 81.36066451496139,
+          "discovery_rate": 0.5,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_241",
+          "intercept_rate": 0.0,
+          "hits": 0,
+          "total_reward": -448.3382785566885,
+          "distinct_bands": 6,
+          "empty_escape_rate": 0.7029702970297029,
+          "avg_intercept_time_us": NaN,
+          "discovery_rate": 0.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_29",
+          "intercept_rate": 0.0,
+          "hits": 0,
+          "total_reward": -447.3722785566891,
+          "distinct_bands": 6,
+          "empty_escape_rate": 0.7125748502994012,
+          "avg_intercept_time_us": NaN,
+          "discovery_rate": 0.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_42",
+          "intercept_rate": 0.016,
+          "hits": 16,
+          "total_reward": -520.1321345669522,
+          "distinct_bands": 7,
+          "empty_escape_rate": 0.6550632911392406,
+          "avg_intercept_time_us": 316.966796875,
+          "discovery_rate": 0.6666666666666666,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_64",
+          "intercept_rate": 0.0,
+          "hits": 0,
+          "total_reward": -589.1292544400419,
+          "distinct_bands": 7,
+          "empty_escape_rate": 0.6369047619047619,
+          "avg_intercept_time_us": NaN,
+          "discovery_rate": 0.0,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        },
+        {
+          "scenario_id": "config_96",
+          "intercept_rate": 0.06,
+          "hits": 60,
+          "total_reward": -490.09018171730196,
+          "distinct_bands": 6,
+          "empty_escape_rate": 0.6782006920415224,
+          "avg_intercept_time_us": 235.46158854166666,
+          "discovery_rate": 0.2,
+          "cognitive_exploration_rate": 0.0,
+          "drqn_candidate_rate": 0.0
+        }
+      ]
+    },
+    "full_moe": {
+      "mean_intercept_rate": 0.3968,
+      "total_hits": 3968,
+      "mean_reward": -367.480351891419,
+      "mean_distinct_bands": 36.0,
+      "mean_empty_escape_rate": 1.0,
+      "mean_intercept_time_us": 204.87957915805788,
+      "mean_discovery_rate": 0.7246520146520148,
+      "mean_cognitive_exploration_rate": 0.5052,
+      "scenarios": [
+        {
+          "scenario_id": "config_117",
+          "intercept_rate": 0.476,
+          "hits": 476,
+          "total_reward": -256.9823994614333,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 174.72465861344537,
+          "discovery_rate": 0.8,
+          "cognitive_exploration_rate": 0.376,
+          "drqn_candidate_rate": 0.624
+        },
+        {
+          "scenario_id": "config_119",
+          "intercept_rate": 0.207,
+          "hits": 207,
+          "total_reward": -626.6489661477606,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 231.42738526570048,
+          "discovery_rate": 0.7777777777777778,
+          "cognitive_exploration_rate": 0.698,
+          "drqn_candidate_rate": 0.302
+        },
+        {
+          "scenario_id": "config_143",
+          "intercept_rate": 0.025,
+          "hits": 25,
+          "total_reward": -827.1284684098351,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 491.5625,
+          "discovery_rate": 0.6666666666666666,
+          "cognitive_exploration_rate": 0.942,
+          "drqn_candidate_rate": 0.058
+        },
+        {
+          "scenario_id": "config_194",
+          "intercept_rate": 0.69,
+          "hits": 690,
+          "total_reward": 186.1277369927712,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 33.153509963768116,
+          "discovery_rate": 0.7142857142857143,
+          "cognitive_exploration_rate": 0.185,
+          "drqn_candidate_rate": 0.815
+        },
+        {
+          "scenario_id": "config_195",
+          "intercept_rate": 0.77,
+          "hits": 770,
+          "total_reward": 284.08648740560574,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 70.05883345170454,
+          "discovery_rate": 0.75,
+          "cognitive_exploration_rate": 0.136,
+          "drqn_candidate_rate": 0.864
+        },
+        {
+          "scenario_id": "config_241",
+          "intercept_rate": 0.064,
+          "hits": 64,
+          "total_reward": -808.8827872112552,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 318.163818359375,
+          "discovery_rate": 0.8,
+          "cognitive_exploration_rate": 0.88,
+          "drqn_candidate_rate": 0.12
+        },
+        {
+          "scenario_id": "config_29",
+          "intercept_rate": 0.265,
+          "hits": 265,
+          "total_reward": -569.2844202469493,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 236.5686320754717,
+          "discovery_rate": 0.75,
+          "cognitive_exploration_rate": 0.608,
+          "drqn_candidate_rate": 0.392
+        },
+        {
+          "scenario_id": "config_42",
+          "intercept_rate": 0.313,
+          "hits": 313,
+          "total_reward": -551.2656468153104,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 269.75439297124603,
+          "discovery_rate": 0.7142857142857143,
+          "cognitive_exploration_rate": 0.518,
+          "drqn_candidate_rate": 0.482
+        },
+        {
+          "scenario_id": "config_64",
+          "intercept_rate": 0.587,
+          "hits": 587,
+          "total_reward": -361.3350263905132,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 58.65402070911414,
+          "discovery_rate": 0.38461538461538464,
+          "cognitive_exploration_rate": 0.395,
+          "drqn_candidate_rate": 0.605
+        },
+        {
+          "scenario_id": "config_96",
+          "intercept_rate": 0.571,
+          "hits": 571,
+          "total_reward": -143.49002862951056,
+          "distinct_bands": 36,
+          "empty_escape_rate": 1.0,
+          "avg_intercept_time_us": 164.72804017075308,
+          "discovery_rate": 0.8888888888888888,
+          "cognitive_exploration_rate": 0.314,
+          "drqn_candidate_rate": 0.686
+        }
+      ]
+    }
+  },
+  "h2h_vs_round_robin": {
+    "drqn": {
+      "wins": 2,
+      "losses": 8,
+      "ties": 0,
+      "record": "2W-8L-0T",
+      "details": [
+        {
+          "scenario_id": "config_117",
+          "policy_ir": 0.0,
+          "rr_ir": 0.033,
+          "result": "LOSS"
+        },
+        {
+          "scenario_id": "config_119",
+          "policy_ir": 0.0,
+          "rr_ir": 0.004,
+          "result": "LOSS"
+        },
+        {
+          "scenario_id": "config_143",
+          "policy_ir": 0.0,
+          "rr_ir": 0.003,
+          "result": "LOSS"
+        },
+        {
+          "scenario_id": "config_194",
+          "policy_ir": 0.0,
+          "rr_ir": 0.044,
+          "result": "LOSS"
+        },
+        {
+          "scenario_id": "config_195",
+          "policy_ir": 0.259,
+          "rr_ir": 0.071,
+          "result": "WIN"
+        },
+        {
+          "scenario_id": "config_241",
+          "policy_ir": 0.0,
+          "rr_ir": 0.011,
+          "result": "LOSS"
+        },
+        {
+          "scenario_id": "config_29",
+          "policy_ir": 0.0,
+          "rr_ir": 0.005,
+          "result": "LOSS"
+        },
+        {
+          "scenario_id": "config_42",
+          "policy_ir": 0.016,
+          "rr_ir": 0.024,
+          "result": "LOSS"
+        },
+        {
+          "scenario_id": "config_64",
+          "policy_ir": 0.0,
+          "rr_ir": 0.12,
+          "result": "LOSS"
+        },
+        {
+          "scenario_id": "config_96",
+          "policy_ir": 0.06,
+          "rr_ir": 0.034,
+          "result": "WIN"
+        }
+      ]
+    },
+    "full_moe": {
+      "wins": 10,
+      "losses": 0,
+      "ties": 0,
+      "record": "10W-0L-0T",
+      "details": [
+        {
+          "scenario_id": "config_117",
+          "policy_ir": 0.476,
+          "rr_ir": 0.033,
+          "result": "WIN"
+        },
+        {
+          "scenario_id": "config_119",
+          "policy_ir": 0.207,
+          "rr_ir": 0.004,
+          "result": "WIN"
+        },
+        {
+          "scenario_id": "config_143",
+          "policy_ir": 0.025,
+          "rr_ir": 0.003,
+          "result": "WIN"
+        },
+        {
+          "scenario_id": "config_194",
+          "policy_ir": 0.69,
+          "rr_ir": 0.044,
+          "result": "WIN"
+        },
+        {
+          "scenario_id": "config_195",
+          "policy_ir": 0.77,
+          "rr_ir": 0.071,
+          "result": "WIN"
+        },
+        {
+          "scenario_id": "config_241",
+          "policy_ir": 0.064,
+          "rr_ir": 0.011,
+          "result": "WIN"
+        },
+        {
+          "scenario_id": "config_29",
+          "policy_ir": 0.265,
+          "rr_ir": 0.005,
+          "result": "WIN"
+        },
+        {
+          "scenario_id": "config_42",
+          "policy_ir": 0.313,
+          "rr_ir": 0.024,
+          "result": "WIN"
+        },
+        {
+          "scenario_id": "config_64",
+          "policy_ir": 0.587,
+          "rr_ir": 0.12,
+          "result": "WIN"
+        },
+        {
+          "scenario_id": "config_96",
+          "policy_ir": 0.571,
+          "rr_ir": 0.034,
+          "result": "WIN"
+        }
+      ]
+    }
+  }
+}
