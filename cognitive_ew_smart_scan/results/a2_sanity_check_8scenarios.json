@@ -1,0 +1,124 @@
+{
+  "a2": {
+    "policy": "drqn",
+    "intercept_rate": 0.07,
+    "hits": 280,
+    "total_steps": 4000,
+    "avg_reward": 0.3785701924545001,
+    "mode_distribution_pct": {
+      "SHORT_DWELL": 60.25,
+      "NORMAL_DWELL": 20.825,
+      "LONG_DWELL": 0.0,
+      "REVISIT": 0.22499999999999998,
+      "PREEMPTIVE_INTERCEPT": 18.7
+    },
+    "hit_rate_by_mode_pct": {
+      "SHORT_DWELL": 6.680497925311204,
+      "NORMAL_DWELL": 0.36014405762304924,
+      "LONG_DWELL": 0.0,
+      "REVISIT": 0.0,
+      "PREEMPTIVE_INTERCEPT": 15.508021390374333
+    },
+    "distinct_bands": 10,
+    "empty_escape_rate": 0.7339761769710721,
+    "stale_escape_rate": 0.7269220879403445,
+    "q_margin_mean": 0.0016315090656280518,
+    "td_loss_mean": 0.16516224333467933,
+    "grad_norm_mean": 0.8284141896463977,
+    "reward_config": {
+      "penalize_empty_dwell": false,
+      "context_scaled_miss": true,
+      "w_hit": 5.0,
+      "w_novel": 5.0,
+      "w_miss": -0.5,
+      "w_dwell_cost": -0.0002,
+      "w_redundant_scan": 0.0,
+      "w_false_alarm": -0.5,
+      "w_staleness": 0.4,
+      "w_priority": 1.0,
+      "w_information_gain": 0.2,
+      "conditional_dwell_cost": true,
+      "w_active_track": 2.0,
+      "w_pulse_scale": 0.0,
+      "lull_tolerance": false
+    },
+    "description": "A1 + productive tracking incentive (w_active_track=2.0 on confirmed detection on active track)"
+  },
+  "baselines": {
+    "highest_occupancy": {
+      "policy": "highest_occupancy",
+      "intercept_rate": 0.51325,
+      "hits": 2053,
+      "total_steps": 4000,
+      "avg_reward": 2.8144661139903446,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 100.0,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "hit_rate_by_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 51.324999999999996,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "distinct_bands": 36,
+      "empty_escape_rate": 0.9325529542920847,
+      "stale_escape_rate": 0.3489951882253043,
+      "q_margin_mean": null
+    },
+    "highest_uncertainty": {
+      "policy": "highest_uncertainty",
+      "intercept_rate": 0.044,
+      "hits": 176,
+      "total_steps": 4000,
+      "avg_reward": 0.29728867617989707,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 100.0,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "hit_rate_by_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 4.3999999999999995,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "distinct_bands": 36,
+      "empty_escape_rate": 0.9741100323624595,
+      "stale_escape_rate": 0.9370608899297423,
+      "q_margin_mean": null
+    },
+    "round_robin": {
+      "policy": "round_robin",
+      "intercept_rate": 0.02975,
+      "hits": 119,
+      "total_steps": 4000,
+      "avg_reward": 0.22548467399715819,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 100.0,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "hit_rate_by_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 2.9749999999999996,
+        "LONG_DWELL": 0.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "distinct_bands": 36,
+      "empty_escape_rate": 1.0,
+      "stale_escape_rate": 1.0,
+      "q_margin_mean": null
+    }
+  }
+}

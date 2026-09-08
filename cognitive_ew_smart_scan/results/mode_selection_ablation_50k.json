@@ -1,0 +1,66 @@
+[
+  {
+    "name": "A_FlatArgmax",
+    "intercept_rate": 1.53,
+    "hits": 153,
+    "total_steps": 10000,
+    "empty_escape": 79.80099502487562,
+    "stale_escape": 79.3893893893894,
+    "distinct_bands": 12,
+    "mode_distribution": {
+      "SHORT_DWELL": 99.97,
+      "NORMAL_DWELL": 0.0,
+      "LONG_DWELL": 0.0,
+      "REVISIT": 0.0,
+      "PREEMPTIVE_INTERCEPT": 0.03
+    }
+  },
+  {
+    "name": "B_BandFirst_NormLongPref",
+    "intercept_rate": 8.28,
+    "hits": 828,
+    "total_steps": 10000,
+    "empty_escape": 65.77540106951871,
+    "stale_escape": 66.55655655655656,
+    "distinct_bands": 9,
+    "mode_distribution": {
+      "SHORT_DWELL": 0.0,
+      "NORMAL_DWELL": 94.47,
+      "LONG_DWELL": 5.53,
+      "REVISIT": 0.0,
+      "PREEMPTIVE_INTERCEPT": 0.0
+    }
+  },
+  {
+    "name": "C_BandFirst_BoltzmannNormLong",
+    "intercept_rate": 7.180000000000001,
+    "hits": 718,
+    "total_steps": 10000,
+    "empty_escape": 67.62129380053908,
+    "stale_escape": 67.02702702702703,
+    "distinct_bands": 8,
+    "mode_distribution": {
+      "SHORT_DWELL": 0.0,
+      "NORMAL_DWELL": 99.18,
+      "LONG_DWELL": 0.8200000000000001,
+      "REVISIT": 0.0,
+      "PREEMPTIVE_INTERCEPT": 0.0
+    }
+  },
+  {
+    "name": "D_BandFirst_ConfidenceConditioned",
+    "intercept_rate": 3.93,
+    "hits": 393,
+    "total_steps": 10000,
+    "empty_escape": 67.34499205087441,
+    "stale_escape": 66.93693693693695,
+    "distinct_bands": 9,
+    "mode_distribution": {
+      "SHORT_DWELL": 95.65,
+      "NORMAL_DWELL": 3.1,
+      "LONG_DWELL": 1.24,
+      "REVISIT": 0.01,
+      "PREEMPTIVE_INTERCEPT": 0.0
+    }
+  }
+]

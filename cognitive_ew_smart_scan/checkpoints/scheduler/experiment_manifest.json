@@ -1,0 +1,205 @@
+{
+  "checkpoint_metadata": {
+    "arch": "DRQNScheduler+SmartScanMoE",
+    "feature_order_per_band": [
+      "occupancy",
+      "det_rate",
+      "miss_rate",
+      "uncertainty",
+      "revisit_age",
+      "emitter_count",
+      "deint_confidence",
+      "pri_stability",
+      "agility",
+      "priority"
+    ],
+    "git_revision": "a942e7d",
+    "metrics": {
+      "best_episode_reward": 3321.8293700711292
+    },
+    "mode": "stare",
+    "n_bands": 36,
+    "obs_dim": 360,
+    "preproc_version": "v1",
+    "seed": 42,
+    "split": "train",
+    "timestamp": "2026-09-08T13:53:10.919503+00:00"
+  },
+  "created_at": "2026-09-08T13:53:11.039649+00:00",
+  "dataset_fingerprint": "5f76abbba10e240b413b55d2f1282304f3bed04a46353a7c7b2e39b75f020423",
+  "dataset_mode": "stare",
+  "dataset_root": "D:/TSRD",
+  "device": "cpu",
+  "git_revision": "a942e7d56d3224ea5aed49971819a19ee4124246",
+  "manifest_version": 1,
+  "metrics": {
+    "best_episode_reward": 3321.8293700711292
+  },
+  "model_configuration": {
+    "belief": {
+      "priority": {
+        "occupancy_weight": 0.25,
+        "periodic_weight": 0.1,
+        "semantic_weight": 0.1,
+        "staleness_weight": 0.35,
+        "uncertainty_weight": 0.2
+      }
+    },
+    "deinterleaver": {
+      "d_model": 128,
+      "dim_feedforward": 512,
+      "dropout": 0.1,
+      "embed_dim": 64,
+      "nhead": 8,
+      "num_layers": 4,
+      "pdw_dim": 6,
+      "triplet_margin": 0.5
+    },
+    "drqn_scheduler": {
+      "eps_decay": 87837,
+      "eps_end": 0.05,
+      "eps_start": 1.0,
+      "gamma": 0.99,
+      "lr": "1e-4",
+      "lstm_hidden": 256,
+      "lstm_layers": 2,
+      "n_actions": 180,
+      "n_bands": 36,
+      "n_modes": 5,
+      "obs_dim": 360
+    },
+    "dwell_modes": {
+      "base_dwell_time_us": 500.0,
+      "mode_multipliers": [
+        {
+          "multiplier": 0.25,
+          "name": "SHORT_DWELL"
+        },
+        {
+          "multiplier": 1.0,
+          "name": "NORMAL_DWELL"
+        },
+        {
+          "multiplier": 2.5,
+          "name": "LONG_DWELL"
+        },
+        {
+          "multiplier": 1.0,
+          "name": "REVISIT"
+        },
+        {
+          "multiplier": 1.0,
+          "name": "PREEMPTIVE_INTERCEPT"
+        }
+      ]
+    },
+    "reward": {
+      "conditional_dwell_cost": true,
+      "context_scaled_miss": true,
+      "lull_tolerance": false,
+      "penalize_empty_dwell": false,
+      "staleness_norm": 50.0,
+      "w_active_track": 2.0,
+      "w_delay": -0.5,
+      "w_dwell_cost": -0.0002,
+      "w_false_alarm": -0.5,
+      "w_hit": 5.0,
+      "w_information_gain": 0.2,
+      "w_miss": -0.5,
+      "w_missed_coverage": -0.2,
+      "w_novel": 5.0,
+      "w_priority": 1.0,
+      "w_pulse_scale": 0.0,
+      "w_redundant_scan": 0.0,
+      "w_staleness": 0.4,
+      "w_timing": 0.001
+    },
+    "semantic_memory_enabled": false,
+    "smartscan_moe": {
+      "confidence_margin_threshold": 0.02,
+      "decay_rate": 0.05,
+      "eager_weight": 0.6,
+      "k_receivers": 1,
+      "preemptive_weight": 0.1,
+      "revisit_weight": 0.3,
+      "semantic_weight": 1.0,
+      "tau": 0.15
+    }
+  },
+  "normalization_stats_hash": "bacee02ac1c29428",
+  "process": {
+    "hostname": "DELLg15-C6S8DCG",
+    "pid": 26348
+  },
+  "seed": 42,
+  "software_versions": {
+    "h5py": "3.16.0",
+    "numpy": "2.5.2",
+    "pandas": "3.0.5",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.7",
+    "scikit-learn": "1.9.0",
+    "scipy": "1.18.1",
+    "torch": "2.13.0+cpu"
+  },
+  "split": "train",
+  "training_configuration": {
+    "data_dir": "D:/TSRD",
+    "deinterleaver": {
+      "batch_size": 8,
+      "epochs": 3,
+      "lr": "3e-4",
+      "max_pulses_per_train": 512,
+      "mode": "scan",
+      "save_every": 5,
+      "scheduler": "cosine",
+      "val_every": 2,
+      "val_mode": "scan",
+      "warmup_steps": 500,
+      "weight_decay": "1e-5"
+    },
+    "deinterleaver_ckpt": "checkpoints/deinterleaver/best.pt",
+    "environment": {
+      "band_features": 10,
+      "detection_threshold_db": -140.0,
+      "dwell_time_us": 500.0,
+      "freq_max_mhz": 18000.0,
+      "freq_min_mhz": 0.0,
+      "frequency_step_mhz": 500.0,
+      "ibw_mhz": 500.0,
+      "max_pulses": 50000,
+      "max_steps_per_episode": 1000,
+      "n_actions": 180,
+      "n_bands": 36,
+      "n_modes": 5,
+      "obs_dim": 360,
+      "time_horizon_us": 30000000.0
+    },
+    "mode": "scan",
+    "normalization_stats": "checkpoints/deinterleaver/normalization_stats.json",
+    "observation_mode": "scan",
+    "scheduler": {
+      "batch_size": 32,
+      "burn_in": 8,
+      "replay_buffer_size": 50000,
+      "seq_len": 16,
+      "target_update_freq": 1000,
+      "thompson_warmup_steps": 5000,
+      "total_timesteps": 500000,
+      "update_freq": 4
+    },
+    "seed": 42,
+    "subset": "train",
+    "telemetry": {
+      "schema_version": "2.0"
+    },
+    "training_mode": "real_tsrd",
+    "validation": {
+      "allow_synthetic_fallback": false,
+      "n_files": 10,
+      "seed": 42,
+      "subset": "val"
+    },
+    "world_mode": "stare"
+  }
+}
