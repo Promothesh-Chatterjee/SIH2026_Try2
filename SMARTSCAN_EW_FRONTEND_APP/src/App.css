@@ -1,15 +1,27 @@
 :root {
-  --bg: #090d10;
-  --panel: #0f1519;
-  --panel-2: #131b20;
-  --panel-3: #182127;
-  --border: #26343b;
-  --text: #f1f5f6;
-  --muted: #91a0a7;
-  --accent: #42d5d0;
-  --success: #58d68d;
-  --warning: #e7b65b;
-  --danger: #e56b6f;
+  /* Stitch canonical palette (DESIGN.md) mapped onto existing tokens */
+  --bg: #111317;
+  --panel: #1a1c20;
+  --panel-2: #1e2024;
+  --panel-3: #282a2e;
+  --panel-lowest: #0c0e12;
+  --panel-highest: #333539;
+  --border: #454653;
+  --border-dim: #1e293b;
+  --text: #e2e2e8;
+  --muted: #908f9e;
+  --text-muted: #c6c5d5;
+  --accent: #bdc2ff;
+  --accent-deep: #0e1e94;
+  --accent-bright: #8391ff;
+  --secondary: #96ccff;
+  --secondary-deep: #3097e0;
+  --success: #49df9d;
+  --success-deep: #003a24;
+  --warning: #f59e0b;
+  --danger: #ffb4ab;
+  --danger-deep: #93000a;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 * {
