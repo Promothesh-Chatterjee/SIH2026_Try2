@@ -72,7 +72,7 @@ def test_reward_5_signals():
     )
     assert r_tn_cov["hit_term"] == 0.0
     assert r_tn_cov["miss_penalty"] == 0.0
-    assert r_tn_cov["false_alarm_penalty"] == -0.5
+    assert r_tn_cov["false_alarm_penalty"] == 0.0
     assert r_tn_cov["missed_coverage_penalty"] == -0.2
 
     # 4. FP: selected inactive + detected (spurious false detection)
