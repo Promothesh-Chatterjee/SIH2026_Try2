@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { syntheticSystem } from "../data/mockSystem";
 import { loadMissionOverview } from "../services/missionService";
+import { api } from "../services/api";
 import {
   BandMatrix,
   CandidateActions,
@@ -15,27 +16,39 @@ import {
 export default function MissionOverview() {
   const { spectrum, receiver, mission, scheduler } = syntheticSystem;
   const [backendData, setBackendData] = useState(null);
+  const [missionStatus, setMissionStatus] = useState(null);
 
   useEffect(() => {
     let active = true;
     async function loadData() {
       try {
-        const data = await loadMissionOverview();
+        const [data, stat] = await Promise.allSettled([
+          loadMissionOverview(),
+          api.getMissionStatus(),
+        ]);
         if (!active) return;
-        setBackendData(data);
+        if (data.status === "fulfilled") setBackendData(data.value);
+        if (stat.status === "fulfilled") setMissionStatus(stat.value);
       } catch {
         if (!active) return;
-        setBackendData(null);
       }
     }
     loadData();
+    const interval = setInterval(loadData, 1000);
     return () => {
       active = false;
+      clearInterval(interval);
     };
   }, []);
 
-  const usingBackend = backendData?.connected === true;
+  const usingBackend = backendData?.connected === true || (missionStatus && missionStatus.total_dwells > 0);
   const activeBands = spectrum.bandCount - mission.quietBands;
+
+  const hasLive = missionStatus && missionStatus.total_dwells > 0;
+  const liveHits = hasLive ? missionStatus.total_hits : receiver.detections;
+  const liveInterceptions = hasLive ? `${(missionStatus.rolling_pd * 100).toFixed(1)}% Pd` : mission.interceptions.toLocaleString();
+  const liveTune = hasLive && backendData?.telemetry?.band !== undefined ? (backendData.telemetry.band * 500 + 250) : spectrum.currentTuneMHz;
+  const liveBandNum = hasLive && backendData?.telemetry?.band !== undefined ? backendData.telemetry.band : spectrum.currentBand;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -44,17 +57,18 @@ export default function MissionOverview() {
         <div className="st-body" style={{ color: "#c6c5d5" }}>
           Intelligent frequency and dwell selection across a wideband RF
           environment. <DataSourceBadge connected={usingBackend} />
+          {hasLive && <span style={{ color: "#49df9d", marginLeft: 8 }}>● Live Operational Mission ({missionStatus.total_dwells} Dwells)</span>}
         </div>
       </div>
 
       <section className="st-kpi-grid" aria-label="Mission KPI strip">
         <KpiCard label="TOTAL SPECTRUM" icon="tune" value="18.00" unit="GHz" footLeft="0.00 MHz" footRight="18,000 MHz" valueColor="#bdc2ff" />
-        <KpiCard label="INSTANTANEOUS BW" icon="cell_tower" value="1.00" unit="GHz" footLeft="STEP Δ: 500 MHz" footRight="TUNABLE" valueColor="#96ccff" />
+        <KpiCard label="INSTANTANEOUS BW" icon="cell_tower" value="500" unit="MHz" footLeft="CANONICAL IBW" footRight="TUNABLE" valueColor="#96ccff" />
         <KpiCard label="ACTIVE BANDS" icon="sensors" value={`${activeBands}`} unit="/ 36" footLeft="38.8% OCCUPIED" footRight="22 QUIET" valueColor="#49df9d" />
-        <KpiCard label="CURRENT TUNE" icon="file_download_done" value={spectrum.currentTuneMHz.toLocaleString()} unit="MHz" footLeft={`BAND ${spectrum.currentBand}`} footRight="8000–8500 MHz" valueColor="#bdc2ff" />
-        <KpiCard label="DETECTIONS" icon="grain" value={receiver.detections.toLocaleString()} unit="PDW" footLeft="+128/s" footRight="VALID SNR ≥15dB" valueColor="#e2e2e8" />
-        <KpiCard label="INTERCEPTIONS" icon="verified" value={mission.interceptions.toLocaleString()} unit="EVTS" footLeft="TRACK LOCK 98.2%" footRight="0 FALSE POS" valueColor="#6afcb8" />
-        <KpiCard label="CURRENT MODE" icon="neurology" value={receiver.currentMode} unit={`${receiver.dwellTimeUs}µs`} footLeft="SCHED: DRQN" footRight="PRIO: TIER-1" valueColor="#96ccff" />
+        <KpiCard label="CURRENT TUNE" icon="file_download_done" value={liveTune.toLocaleString()} unit="MHz" footLeft={`BAND ${liveBandNum}`} footRight={`${liveTune - 250}–${liveTune + 250} MHz`} valueColor="#bdc2ff" />
+        <KpiCard label="TOTAL HITS" icon="grain" value={liveHits.toLocaleString()} unit="PULSES" footLeft={hasLive ? `DWELLS: ${missionStatus.total_dwells}` : "+128/s"} footRight="CONFIRMED" valueColor="#e2e2e8" />
+        <KpiCard label="INTERCEPT RATE" icon="verified" value={liveInterceptions} unit="RATE" footLeft={hasLive ? `LAT: ${missionStatus.rolling_median_latency_us.toFixed(0)}µs` : "TRACK LOCK"} footRight="0 FALSE POS" valueColor="#6afcb8" />
+        <KpiCard label="CURRENT MODE" icon="neurology" value={hasLive ? (backendData?.telemetry?.mode_name ?? "NORMAL_DWELL") : receiver.currentMode} unit="500µs" footLeft="SCHED: DRQN" footRight="PRIO: TIER-1" valueColor="#96ccff" />
       </section>
 
       <PipelineFlow />
