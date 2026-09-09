@@ -23,11 +23,18 @@ const INITIAL_WATERFALL = Array.from({ length: 12 }, (_, row) =>
   })
 );
 
-function rateColor(value) {
-  const r = Math.round(255 - (value / 100) * 206);
-  const g = Math.round(222 - (value / 100) * 173);
-  const b = Math.round(232 - (value / 100) * 140);
-  return `rgba(${r},${g},${b},${0.25 + (value / 100) * 0.75})`;
+function waterfallColor(value) {
+  const t = Math.min(1, Math.max(0, value / 100));
+  if (t < 0.3) {
+    const s = t / 0.3;
+    return `rgba(6,${Math.round(20 + s * 60)},${Math.round(10 + s * 30)},0.9)`;
+  }
+  if (t < 0.7) {
+    const s = (t - 0.3) / 0.4;
+    return `rgba(${Math.round(10 + s * 30)},${Math.round(80 + s * 100)},${Math.round(40 + s * 30)},0.92)`;
+  }
+  const s = (t - 0.7) / 0.3;
+  return `rgba(${Math.round(40 + s * 10)},${Math.round(180 + s * 60)},${Math.round(70 + s * 40)},0.95)`;
 }
 
 function TelemetryInspector({ telemetry }) {
@@ -88,9 +95,6 @@ function TelemetryInspector({ telemetry }) {
 }
 
 export default function LiveSpectrum() {
-  const [running, setRunning] = useState(true);
-  const [speed, setSpeed] = useState("1x");
-  const [timeWindow, setTimeWindow] = useState("1 s");
   const [selectedBand, setSelectedBand] = useState(
     syntheticSystem.spectrum.currentBand ?? 16
   );
@@ -101,7 +105,6 @@ export default function LiveSpectrum() {
   const [waterfall, setWaterfall] = useState(INITIAL_WATERFALL);
   const [userSelectedBand, setUserSelectedBand] = useState(false);
 
-  /* REST POLLING AS SOLID FALLBACK & INITIAL SNAPSHOT */
   useEffect(() => {
     let active = true;
     async function loadTelemetry() {
@@ -143,7 +146,6 @@ export default function LiveSpectrum() {
     };
   }, []);
 
-  /* REAL BACKEND WEBSOCKET + SYNTHETIC FALLBACK */
   useEffect(() => {
     let active = true;
     let backendConnection = null;
@@ -277,45 +279,9 @@ export default function LiveSpectrum() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div className="st-panel">
-        <PanelHead icon="graphic_eq" title="0–18 GHz LIVE WIDEBAND SPECTRUM & INSTANTANEOUS RECEIVER APERTURE" badge={running ? "LIVE STREAM" : "STREAM PAUSED"} badgeColor={running ? "#49df9d" : "#f59e0b"} />
-        <div className="st-body" style={{ color: "#c6c5d5" }}>
-          Wideband RF surveillance with a narrow instantaneous receiver
-          window and adaptive scan selection.{" "}
-          <span className="st-tsm">
-            {hasRealTelemetry ? "LIVE BACKEND TELEMETRY" : "SYNTHETIC RF TELEMETRY"}
-          </span>{" "}
+        <PanelHead icon="graphic_eq" title="0–18 GHz LIVE WIDEBAND SPECTRUM & INSTANTANEOUS RECEIVER APERTURE" badge="LIVE STREAM" badgeColor="#49df9d" />
+        <div className="st-body" style={{ color: "#c6c5d5", display: "flex", alignItems: "center", gap: 8 }}>
           <DataSourceBadge connected={hasRealTelemetry} />
-        </div>
-
-        <div className="st-grid-12" style={{ gap: 6 }}>
-          <div className="st-span-2" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label className="st-body-bold" style={{ color: "#908f9e" }}>STREAM</label>
-            <button
-              className="st-badge"
-              style={{ cursor: "pointer", color: running ? "#e2e2e8" : "#0b1c93", background: running ? "#1a1c20" : "#bdc2ff", padding: "4px 10px" }}
-              onClick={() => setRunning((value) => !value)}
-            >
-              {running ? "PAUSE" : "PLAY"}
-            </button>
-          </div>
-          <div className="st-span-4" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label className="st-body-bold" style={{ color: "#908f9e" }}>SPEED</label>
-            <select className="st-select" value={speed} onChange={(e) => setSpeed(e.target.value)}>
-              <option>0.5x</option>
-              <option>1x</option>
-              <option>2x</option>
-              <option>4x</option>
-            </select>
-          </div>
-          <div className="st-span-6" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label className="st-body-bold" style={{ color: "#908f9e" }}>TIME WINDOW</label>
-            <select className="st-select" value={timeWindow} onChange={(e) => setTimeWindow(e.target.value)}>
-              <option>250 ms</option>
-              <option>500 ms</option>
-              <option>1 s</option>
-              <option>5 s</option>
-            </select>
-          </div>
         </div>
       </div>
 
@@ -367,11 +333,10 @@ export default function LiveSpectrum() {
               {Array.from({ length: 36 }, (_, band) => (
                 <button
                   key={band}
-                  className="st-tsm"
                   style={{
                     cursor: "pointer",
-                    padding: "2px 0",
-                    font: "inherit",
+                    padding: "1px 0",
+                    font: "600 10px/1.2 Inter, system-ui, sans-serif",
                     textAlign: "center",
                     background: selectedBand === band ? "#bdc2ff" : "#1a1c20",
                     color: selectedBand === band ? "#0b1c93" : "#e2e2e8",
@@ -473,32 +438,37 @@ export default function LiveSpectrum() {
       </div>
 
       <div className="st-panel">
-        <PanelHead icon="view_agenda" title="TEMPORAL RF ACTIVITY" badge={running ? "LIVE" : "PAUSED"} badgeColor={running ? "#49df9d" : "#f59e0b"} />
-        <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", color: "#908f9e" }}>
-          <span>NOW</span><span>-100 ms</span><span>-200 ms</span><span>-300 ms</span><span>-400 ms</span><span>-500 ms</span>
-        </div>
+        <PanelHead icon="view_agenda" title="SPECTRUM WATERFALL" badge="LIVE" badgeColor="#49df9d" />
         <div style={{ display: "flex", gap: 4 }}>
-          <div className="st-mark" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", color: "#908f9e", textAlign: "right" }}>
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", color: "#908f9e", textAlign: "right", paddingRight: 4 }}>
             {["NOW", "-100 ms", "-200 ms", "-300 ms", "-400 ms", "-500 ms"].map((t) => (
-              <span key={t} style={{ height: 22 }}>{t}</span>
+              <span key={t} style={{ height: 18, fontSize: 10, lineHeight: "18px" }}>{t}</span>
             ))}
           </div>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 1, background: "#0a0c0f", border: "1px solid #454653", padding: 2 }}>
             {waterfall.map((row, rowIndex) => (
-              <div key={rowIndex} style={{ display: "flex", gap: 2 }}>
-                {row.map((value, columnIndex) => {
-                  const normalized = Math.min(1, Math.max(0, (value - 10) / 70));
-                  return (
-                    <div
-                      key={columnIndex}
-                      title={`Band ${columnIndex}: ${value.toFixed(1)}`}
-                      style={{ flex: 1, height: 22, background: rateColor(normalized * 100) }}
-                    />
-                  );
-                })}
+              <div key={rowIndex} style={{ display: "flex", gap: 1 }}>
+                {row.map((value, colIndex) => (
+                  <div
+                    key={colIndex}
+                    title={`Band ${colIndex}: ${value.toFixed(1)}`}
+                    style={{
+                      flex: 1,
+                      height: 18,
+                      background: waterfallColor(value),
+                      transition: "background 0.15s ease",
+                    }}
+                  />
+                ))}
               </div>
             ))}
           </div>
+        </div>
+        <div className="st-tsm" style={{ display: "flex", gap: 8, color: "#908f9e", marginTop: 4 }}>
+          <span><i style={{ display: "inline-block", width: 8, height: 8, background: "rgba(6,20,10,0.9)", marginRight: 4, border: "1px solid #454653" }} />QUIET</span>
+          <span><i style={{ display: "inline-block", width: 8, height: 8, background: "rgba(20,120,60,0.9)", marginRight: 4 }} />LOW ACTIVITY</span>
+          <span><i style={{ display: "inline-block", width: 8, height: 8, background: "rgba(40,200,100,0.9)", marginRight: 4 }} />HIGH ACTIVITY</span>
+          <span><i style={{ display: "inline-block", width: 8, height: 8, background: "rgba(50,240,110,0.95)", marginRight: 4 }} />HIT</span>
         </div>
       </div>
 
