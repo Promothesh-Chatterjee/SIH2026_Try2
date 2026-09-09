@@ -72,10 +72,9 @@ export default function Performance() {
         <PanelHead title="LOSS & REWARD CONVERGENCE CURVES" badge="ILLUSTRATIVE" />
         <svg
           viewBox="0 0 500 160"
-          className="reward-svg"
           role="img"
           aria-label="Illustrative loss and reward convergence curves"
-          style={{ height: 180 }}
+          style={{ height: 180, background: "#0c0e12", border: "1px solid #454653" }}
         >
           <line x1="0" y1="140" x2="500" y2="140" stroke="rgba(255,255,255,0.12)" />
           <path

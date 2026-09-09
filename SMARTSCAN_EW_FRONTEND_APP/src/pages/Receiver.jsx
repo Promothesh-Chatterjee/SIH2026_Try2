@@ -1,289 +1,127 @@
 import { useMemo, useState } from "react";
+import {
+  CmdBadge,
+  PanelHead,
+  StitchTable,
+} from "../components/stitch";
 
 const MOCK_PDWS = [
-  {
-    id: 18421,
-    toaUs: 12480.5,
-    frequencyMHz: 8248.7,
-    pulseWidthUs: 10.4,
-    amplitudeDb: -12.8,
-    aoaDeg: 0.0,
-    status: "DETECTED",
-  },
-  {
-    id: 18422,
-    toaUs: 12580.9,
-    frequencyMHz: 8251.2,
-    pulseWidthUs: 10.1,
-    amplitudeDb: -13.4,
-    aoaDeg: 0.0,
-    status: "DETECTED",
-  },
-  {
-    id: 18423,
-    toaUs: 12681.4,
-    frequencyMHz: 8249.8,
-    pulseWidthUs: 10.2,
-    amplitudeDb: -12.2,
-    aoaDeg: 0.0,
-    status: "DETECTED",
-  },
-  {
-    id: 18424,
-    toaUs: 12781.7,
-    frequencyMHz: 8250.4,
-    pulseWidthUs: 10.3,
-    amplitudeDb: -13.1,
-    aoaDeg: 0.0,
-    status: "DETECTED",
-  },
-  {
-    id: 18425,
-    toaUs: 12882.1,
-    frequencyMHz: 8249.2,
-    pulseWidthUs: 10.2,
-    amplitudeDb: -12.9,
-    aoaDeg: 0.0,
-    status: "DETECTED",
-  },
-  {
-    id: 18426,
-    toaUs: 12982.5,
-    frequencyMHz: 8251.0,
-    pulseWidthUs: 10.5,
-    amplitudeDb: -13.6,
-    aoaDeg: 0.0,
-    status: "DETECTED",
-  },
+  { id: 18421, toaUs: 12480.5, frequencyMHz: 8248.7, pulseWidthUs: 10.4, amplitudeDb: -12.8, aoaDeg: 0.0, status: "DETECTED" },
+  { id: 18422, toaUs: 12580.9, frequencyMHz: 8251.2, pulseWidthUs: 10.1, amplitudeDb: -13.4, aoaDeg: 0.0, status: "DETECTED" },
+  { id: 18423, toaUs: 12681.4, frequencyMHz: 8249.8, pulseWidthUs: 10.2, amplitudeDb: -12.2, aoaDeg: 0.0, status: "DETECTED" },
+  { id: 18424, toaUs: 12781.7, frequencyMHz: 8250.4, pulseWidthUs: 10.3, amplitudeDb: -13.1, aoaDeg: 0.0, status: "DETECTED" },
+  { id: 18425, toaUs: 12882.1, frequencyMHz: 8249.2, pulseWidthUs: 10.2, amplitudeDb: -12.9, aoaDeg: 0.0, status: "DETECTED" },
+  { id: 18426, toaUs: 12982.5, frequencyMHz: 8251.0, pulseWidthUs: 10.5, amplitudeDb: -13.6, aoaDeg: 0.0, status: "DETECTED" },
 ];
 
-const FREQUENCY_RANGE = {
-  min: 0,
-  max: 18000,
-};
+const FREQUENCY_RANGE = { min: 0, max: 18000 };
+
+// 36-band occupancy (receiver-observable energy, not GT identity).
+const BANDS = Array.from({ length: 36 }, (_, band) => {
+  const base = [6, 10, 16, 28].includes(band) ? 0.55 + (band % 3) * 0.12 : 0.05 + ((band * 7) % 10) * 0.015;
+  return [Math.round(base * 100), base];
+});
 
 export default function Receiver() {
-  const [centerFrequencyMHz, setCenterFrequencyMHz] =
-    useState(8250);
-
+  const [centerFrequencyMHz, setCenterFrequencyMHz] = useState(8250);
   const [thresholdDb, setThresholdDb] = useState(15);
-
   const [dwellTimeUs, setDwellTimeUs] = useState(120);
 
   const windowStart = useMemo(
-    () =>
-      Math.max(
-        FREQUENCY_RANGE.min,
-        centerFrequencyMHz - 500
-      ),
+    () => Math.max(FREQUENCY_RANGE.min, centerFrequencyMHz - 500),
     [centerFrequencyMHz]
   );
-
   const windowEnd = useMemo(
-    () =>
-      Math.min(
-        FREQUENCY_RANGE.max,
-        centerFrequencyMHz + 500
-      ),
+    () => Math.min(FREQUENCY_RANGE.max, centerFrequencyMHz + 500),
     [centerFrequencyMHz]
   );
 
   return (
-    <div className="receiver-page">
-      <div className="page-title-row">
-        <div>
-          <div className="page-kicker">
-            RECEIVER TELEMETRY
-          </div>
-
-          <h1>Receiver Telemetry & Pulse Descriptor Word (PDW) Pipeline</h1>
-
-          <p>
-            Narrow-IBW receiver state, pulse detection,
-            and current RF observation window.
-          </p>
-        </div>
-
-        <div className="mission-state">
-          <span className="status-dot" />
-          RECEIVER ONLINE
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div className="st-panel">
+        <PanelHead icon="settings_input_antenna" title="RECEIVER TELEMETRY & PULSE DESCRIPTOR WORD (PDW) PIPELINE" badge="RECEIVER ONLINE" badgeColor="#49df9d" />
+        <div className="st-body" style={{ color: "#c6c5d5" }}>
+          Narrow-IBW receiver state, pulse detection, and current RF
+          observation window.
         </div>
       </div>
 
-      <div className="receiver-kpi-grid">
-        <div className="metric-card">
-          <div className="metric-label">
-            TOTAL BANDWIDTH
+      <section className="st-kpi-grid" aria-label="Receiver KPI strip">
+        {[
+          ["TOTAL BANDWIDTH", "18.00", "GHz", "0–18,000 MHz"],
+          ["INSTANTANEOUS BW", "1.00", "GHz", "Current receiver IBW"],
+          ["FREQUENCY STEP", "500", "MHz", "Tunable increment"],
+          ["DETECTION THRESHOLD", `${thresholdDb}`, "dB", "Production integration"],
+          ["CURRENT DWELL", `${dwellTimeUs}`, "µs", "Active receiver dwell"],
+          ["PDWS IN BUFFER", `${MOCK_PDWS.length}`, "", "Last 500 ms"],
+          ["LIVE STREAM", "ACTIVE", "", "Pulse descriptor words"],
+        ].map(([label, value, unit, foot]) => (
+          <div className="st-kpi" key={label}>
+            <span className="st-tsm" style={{ color: "#908f9e" }}>{label}</span>
+            <span className="st-tlg" style={{ color: label === "LIVE STREAM" ? "#49df9d" : "#e2e2e8" }}>
+              {value} {unit && <span className="st-tsm" style={{ color: "#908f9e" }}>{unit}</span>}
+            </span>
+            <span className="st-kpi-foot"><span>{foot}</span></span>
           </div>
+        ))}
+      </section>
 
-          <div className="metric-value">
-            18.00
-            <span className="metric-unit">GHz</span>
-          </div>
-
-          <div className="metric-status">
-            0–18,000 MHz
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-label">
-            INSTANTANEOUS BANDWIDTH
-          </div>
-
-          <div className="metric-value">
-            1.00
-            <span className="metric-unit">GHz</span>
-          </div>
-
-          <div className="metric-status">
-            Current receiver IBW
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-label">
-            FREQUENCY STEP
-          </div>
-
-          <div className="metric-value">
-            500
-            <span className="metric-unit">MHz</span>
-          </div>
-
-          <div className="metric-status">
-            Tunable increment
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-label">
-            DETECTION THRESHOLD
-          </div>
-
-          <div className="metric-value">
-            {thresholdDb}
-            <span className="metric-unit">dB</span>
-          </div>
-
-          <div className="metric-status">
-            Production integration
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-label">
-            CURRENT DWELL
-          </div>
-
-          <div className="metric-value">
-            {dwellTimeUs}
-            <span className="metric-unit">µs</span>
-          </div>
-
-          <div className="metric-status">
-            Active receiver dwell
-          </div>
-        </div>
-      </div>
-
-      <div className="receiver-main-grid">
-        <section className="panel receiver-spectrum-panel">
-          <div className="panel-header">
-            <div>
-              <div className="panel-kicker">
-                18.0 GHz SURVEILLANCE APERTURE ENVELOPE
+      <div className="st-grid-12">
+        <div className="st-span-8 st-panel">
+          <PanelHead icon="show_chart" title="18.0 GHz SURVEILLANCE APERTURE ENVELOPE" badge={`${centerFrequencyMHz.toLocaleString()} MHz`} badgeColor="#96ccff" />
+          <div className="st-spec">
+            <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px", color: "#908f9e" }}>
+              <span>0 GHz</span><span>4 GHz</span><span>8 GHz</span><span>12 GHz</span><span>16 GHz</span><span>18 GHz</span>
+            </div>
+            <div style={{ position: "relative", height: "auto" }}>
+              <div className="st-bars" style={{ height: 180 }}>
+                {BANDS.map(([h], i) => (
+                  <div
+                    key={i}
+                    className="st-bar"
+                    title={`BAND ${String(i + 1).padStart(2, "0")} (${i * 500}–${(i + 1) * 500} MHz)`}
+                    style={{ height: `${h}%`, background: [6, 10, 16, 28].includes(i) ? "#96ccff" : "#282a2e" }}
+                  />
+                ))}
               </div>
-
-              <h2>Current 1 GHz Observation Window</h2>
-            </div>
-
-            <div className="panel-badge">
-              {centerFrequencyMHz.toLocaleString()} MHz
-            </div>
-          </div>
-
-          <div className="receiver-spectrum-scale">
-            <span>0 GHz</span>
-            <span>4 GHz</span>
-            <span>8 GHz</span>
-            <span>12 GHz</span>
-            <span>18 GHz</span>
-          </div>
-
-          <div className="receiver-spectrum">
-            <div
-              className="receiver-aperture"
-              style={{
-                left: `${(windowStart / 18000) * 100}%`,
-                width: `${((windowEnd - windowStart) / 18000) * 100}%`,
-              }}
-            >
-              <span>
-                1 GHz RECEIVER WINDOW
-              </span>
-
-              <div className="aperture-center">
-                {centerFrequencyMHz.toLocaleString()} MHz
+              <div
+                className="st-ibw"
+                style={{ position: "absolute", left: `${(windowStart / 18000) * 100}%`, width: `${((windowEnd - windowStart) / 18000) * 100}%`, top: 0, bottom: 0 }}
+              >
+                <span className="st-badge" style={{ color: "#96ccff" }}>1 GHz RECEIVER WINDOW</span>
+                <span className="st-mark" style={{ color: "#96ccff", textAlign: "center" }}>
+                  {centerFrequencyMHz.toLocaleString()} MHz
+                </span>
               </div>
             </div>
-
-            {MOCK_PDWS.map((pdw) => {
-              const position =
-                ((pdw.frequencyMHz - 0) / 18000) * 100;
-
-              return (
-                <div
-                  key={pdw.id}
-                  className="pdw-spectrum-marker"
-                  style={{
-                    left: `${position}%`,
-                  }}
-                  title={`${pdw.frequencyMHz} MHz`}
-                />
-              );
-            })}
           </div>
 
-          <div className="panel-kicker" style={{ marginTop: 8 }}>
+          <div className="st-tsm" style={{ display: "flex", gap: 8, color: "#908f9e" }}>
+            {[0, 4, 8, 12, 16, 18].map((g) => (
+              <span key={g} style={{ flex: 1 }}>{g} GHz</span>
+            ))}
+          </div>
+
+          <div className="st-headline" style={{ color: "#96ccff", marginTop: 4 }}>
             RF FRONT-END CONTROLS
           </div>
-
-          <div className="receiver-frequency-controls">
-            <div>
-              <label>
-                CENTER FREQUENCY
-              </label>
-
+          <div className="st-grid-12" style={{ gap: 6 }}>
+            <div className="st-span-6 st-body-bold" style={{ color: "#908f9e", display: "flex", flexDirection: "column", gap: 4 }}>
+              CENTER FREQUENCY
               <input
                 type="range"
                 min="500"
                 max="17500"
                 step="500"
                 value={centerFrequencyMHz}
-                onChange={(event) =>
-                  setCenterFrequencyMHz(
-                    Number(event.target.value)
-                  )
-                }
+                onChange={(e) => setCenterFrequencyMHz(Number(e.target.value))}
+                style={{ width: "100%", accentColor: "#96ccff" }}
               />
-
-              <strong>
-                {centerFrequencyMHz.toLocaleString()} MHz
-              </strong>
+              <strong style={{ color: "#bdc2ff" }}>{centerFrequencyMHz.toLocaleString()} MHz</strong>
             </div>
-
-            <div>
-              <label>DWELL TIME</label>
-
-              <select
-                value={dwellTimeUs}
-                onChange={(event) =>
-                  setDwellTimeUs(
-                    Number(event.target.value)
-                  )
-                }
-              >
+            <div className="st-span-3" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label className="st-body-bold" style={{ color: "#908f9e" }}>DWELL TIME</label>
+              <select className="st-select" value={dwellTimeUs} onChange={(e) => setDwellTimeUs(Number(e.target.value))}>
                 <option value="50">50 µs</option>
                 <option value="100">100 µs</option>
                 <option value="120">120 µs</option>
@@ -291,20 +129,9 @@ export default function Receiver() {
                 <option value="500">500 µs</option>
               </select>
             </div>
-
-            <div>
-              <label>
-                DETECTION THRESHOLD
-              </label>
-
-              <select
-                value={thresholdDb}
-                onChange={(event) =>
-                  setThresholdDb(
-                    Number(event.target.value)
-                  )
-                }
-              >
+            <div className="st-span-3" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label className="st-body-bold" style={{ color: "#908f9e" }}>DETECTION THRESHOLD</label>
+              <select className="st-select" value={thresholdDb} onChange={(e) => setThresholdDb(Number(e.target.value))}>
                 <option value="10">10 dB</option>
                 <option value="15">15 dB</option>
                 <option value="20">20 dB</option>
@@ -312,163 +139,76 @@ export default function Receiver() {
               </select>
             </div>
           </div>
-        </section>
+        </div>
 
-        <aside className="receiver-side-column">
-          <section className="panel receiver-state-panel">
-            <div className="panel-kicker">
-              RECEIVER STATE
+        <aside className="st-span-4 st-panel">
+          <PanelHead title="RECEIVER STATE" badge="ACTIVE" badgeColor="#49df9d" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div className="st-tmd" style={{ color: "#bdc2ff" }}>
+              {centerFrequencyMHz.toLocaleString()} MHz
             </div>
-
-            <div className="receiver-state-main">
-              <span>CENTER FREQUENCY</span>
-
-              <strong>
-                {centerFrequencyMHz.toLocaleString()} MHz
-              </strong>
-
-              <small>
-                Window:{" "}
-                {windowStart.toLocaleString()}–
-                {windowEnd.toLocaleString()} MHz
-              </small>
+            <div className="st-tsm" style={{ color: "#908f9e" }}>
+              Window: {windowStart.toLocaleString()}–{windowEnd.toLocaleString()} MHz
             </div>
-
-            <div className="receiver-state-grid">
-              <div>
-                <span>STATUS</span>
-                <strong>ACTIVE</strong>
+            {[
+              ["STATUS", "ACTIVE"],
+              ["IBW", "1 GHz"],
+              ["STEP", "500 MHz"],
+              ["PDWS", `${MOCK_PDWS.length}`],
+              ["THRESHOLD", `${thresholdDb} dB`],
+            ].map(([label, value]) => (
+              <div key={label} className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "4px 6px", background: "#1a1c20", border: "1px solid #454653" }}>
+                <span style={{ color: "#908f9e" }}>{label}</span>
+                <strong style={{ color: "#e2e2e8" }}>{value}</strong>
               </div>
-
-              <div>
-                <span>IBW</span>
-                <strong>1 GHz</strong>
-              </div>
-
-              <div>
-                <span>STEP</span>
-                <strong>500 MHz</strong>
-              </div>
-
-              <div>
-                <span>PDWS</span>
-                <strong>{MOCK_PDWS.length}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel receiver-note-panel">
-            <div className="panel-kicker">
-              OBSERVABILITY
-            </div>
-
-            <h2>Receiver-Side Data</h2>
-
-            <p>
-              This view represents information observable by
-              the receiver from the RF stream.
-            </p>
-
-            <div className="receiver-rule">
-              Ground-truth emitter identity is not required
-              for this observable PDW stream.
-            </div>
-          </section>
+            ))}
+          </div>
+          <div className="st-truth" style={{ marginTop: 4 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14, color: "#49df9d" }}>
+              visibility
+            </span>
+            <span className="st-body" style={{ color: "#c6c5d5" }}>
+              This view represents information observable by the receiver
+              from the RF stream. Ground-truth emitter identity is not
+              required for this observable PDW stream.
+            </span>
+          </div>
         </aside>
       </div>
 
-      <section className="panel pdw-panel">
-        <div className="panel-header">
-          <div>
-              <div className="panel-kicker">
-                LIVE PULSE DESCRIPTOR WORD (PDW) STREAM
-              </div>
-
-              <h2>Recent Detections</h2>
-          </div>
-
-          <div className="panel-badge">
-            {MOCK_PDWS.length} RECORDS
-          </div>
+      <div className="st-panel">
+        <PanelHead icon="stream" title="LIVE PULSE DESCRIPTOR WORD (PDW) STREAM" badge={`${MOCK_PDWS.length} RECORDS`} badgeColor="#96ccff" />
+        <StitchTable
+          columns={["PULSE ID", "TIME OF ARRIVAL (TOA UTC)", "FREQUENCY (MHz)", "PW (µs)", "AMP (dBm)", "SNR (dB)", "AOA (deg)", "STATUS"]}
+          rows={MOCK_PDWS.map((pdw) => [
+            pdw.id,
+            pdw.toaUs.toFixed(1),
+            pdw.frequencyMHz.toFixed(1),
+            pdw.pulseWidthUs.toFixed(1),
+            pdw.amplitudeDb.toFixed(1),
+            (pdw.amplitudeDb + 30).toFixed(1),
+            pdw.aoaDeg.toFixed(1),
+            <span key="s" style={{ color: "#49df9d", fontWeight: 700 }}>{pdw.status}</span>,
+          ])}
+        />
+        <div className="st-tsm" style={{ color: "#908f9e" }}>
+          Observable receiver fields shown above. Simulation truth is
+          intentionally excluded from this table. SNR is shown against an
+          assumed −30 dBm noise floor (illustrative).
         </div>
+      </div>
 
-        <div className="pdw-table-wrapper">
-          <table className="pdw-table">
-            <thead>
-              <tr>
-                <th>PULSE ID</th>
-                <th>TIME OF ARRIVAL (TOA UTC)</th>
-                <th>FREQUENCY (MHz)</th>
-                <th>PW (µs)</th>
-                <th>AMP (dBm)</th>
-                <th>SNR (dB)</th>
-                <th>AOA (deg)</th>
-                <th>STATUS</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {MOCK_PDWS.map((pdw) => (
-                <tr key={pdw.id}>
-                  <td>{pdw.id}</td>
-                  <td>{pdw.toaUs.toFixed(1)}</td>
-                  <td>
-                    {pdw.frequencyMHz.toFixed(1)}
-                  </td>
-                  <td>
-                    {pdw.pulseWidthUs.toFixed(1)}
-                  </td>
-                  <td>
-                    {pdw.amplitudeDb.toFixed(1)}
-                  </td>
-                  <td>
-                    {(pdw.amplitudeDb + 30).toFixed(1)}
-                  </td>
-                  <td>
-                    {pdw.aoaDeg.toFixed(1)}
-                  </td>
-                  <td className="pdw-detected">
-                    {pdw.status}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="st-panel">
+        <PanelHead icon="monitor_heart" title="ZOOMED 1.0 GHz IBW OSCILLOSCOPE // IN-PHASE & QUADRATURE DETECTION" badge="I/Q ENVELOPE" badgeColor="#49df9d" />
+        <svg viewBox="0 0 500 60" role="img" aria-label="Illustrative in-phase and quadrature envelope derived from listed PDW detections" style={{ height: 120, color: "#49df9d", background: "#0c0e12", border: "1px solid #454653" }}>
+          <path d="M0,30 L40,30 L45,12 L50,48 L55,30 L120,30 L125,8 L130,52 L135,30 L210,30 L215,10 L220,50 L225,30 L340,30 L345,6 L350,54 L355,30 L440,30 L445,4 L450,56 L455,30 L500,30" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+        <div className="st-tsm" style={{ color: "#908f9e" }}>
+          Illustrative I/Q envelope derived from the listed PDW detections at{" "}
+          {centerFrequencyMHz.toLocaleString()} MHz. SNR floor shown is
+          illustrative, not a backend claim.
         </div>
-
-        <div className="truth-note">
-          Observable receiver fields shown above. Simulation
-          truth is intentionally excluded from this table. SNR
-          is shown against an assumed −30 dBm noise floor
-          (illustrative).
-        </div>
-
-        <section className="panel" style={{ marginTop: 12 }}>
-          <div className="panel-kicker">
-            ZOOMED 1.0 GHz IBW OSCILLOSCOPE // IN-PHASE & QUADRATURE
-            DETECTION
-          </div>
-          <h2>I/Q Detection Envelope</h2>
-          <svg
-            viewBox="0 0 500 60"
-            className="reward-svg"
-            role="img"
-            aria-label="Illustrative in-phase and quadrature envelope derived from listed PDW detections"
-            style={{ height: 120 }}
-          >
-            <path
-              d="M0,30 L40,30 L45,12 L50,48 L55,30 L120,30 L125,8 L130,52 L135,30 L210,30 L215,10 L220,50 L225,30 L340,30 L345,6 L350,54 L355,30 L440,30 L445,4 L450,56 L455,30 L500,30"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-          </svg>
-          <p style={{ color: "var(--muted)", fontSize: 10 }}>
-            Illustrative I/Q envelope derived from the listed PDW
-            detections at {centerFrequencyMHz.toLocaleString()} MHz.
-          </p>
-        </section>
-      </section>
+      </div>
     </div>
   );
 }
