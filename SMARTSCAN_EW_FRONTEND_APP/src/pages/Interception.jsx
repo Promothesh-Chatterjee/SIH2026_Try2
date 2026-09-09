@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "../services/api";
+import { startTelemetryStream } from "../services/liveSocket";
 import {
   PanelHead,
   StitchTable,
@@ -35,6 +37,46 @@ function eventClass(type) {
 export default function Interception() {
   const [selectedEventId, setSelectedEventId] = useState(3);
   const [timeWindow, setTimeWindow] = useState("500 µs");
+  const [missionStatus, setMissionStatus] = useState(null);
+  const [liveTelemetry, setLiveTelemetry] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    async function fetchStatus() {
+      try {
+        const stat = await api.getMissionStatus();
+        if (active) setMissionStatus(stat);
+      } catch {
+        // Backend offline or quiet
+      }
+    }
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 1000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let stream = null;
+    try {
+      stream = startTelemetryStream({
+        onTelemetry(t) {
+          if (active && t?.valid && t?.live) {
+            setLiveTelemetry(t);
+          }
+        },
+      });
+    } catch {
+      // Ignored
+    }
+    return () => {
+      active = false;
+      stream?.close();
+    };
+  }, []);
 
   const selectedEvent = useMemo(
     () =>
@@ -43,19 +85,30 @@ export default function Interception() {
     [selectedEventId]
   );
 
-  const hitCount = MOCK_INTERCEPT_EVENTS.filter((event) => event.type === "HIT").length;
-  const missCount = MOCK_INTERCEPT_EVENTS.filter((event) => event.type === "MISS").length;
-  const falseAlarmCount = MOCK_INTERCEPT_EVENTS.filter((event) => event.type === "FALSE_ALARM").length;
+  const hasLive = missionStatus && missionStatus.total_dwells > 0;
+  const hitCount = hasLive ? missionStatus.total_hits : MOCK_INTERCEPT_EVENTS.filter((event) => event.type === "HIT").length;
+  const totalCount = hasLive ? missionStatus.total_dwells : MOCK_INTERCEPT_EVENTS.length;
+  const missCount = hasLive ? (missionStatus.total_dwells - missionStatus.total_hits) : MOCK_INTERCEPT_EVENTS.filter((event) => event.type === "MISS").length;
+  const pdPct = hasLive ? (missionStatus.rolling_pd * 100).toFixed(1) + "%" : "74.0%";
+  const latencyUs = hasLive ? missionStatus.rolling_median_latency_us.toFixed(1) + " µs" : "110 µs";
+  const currentAperture = liveTelemetry
+    ? `B${liveTelemetry.band ?? 5} · ${liveTelemetry.modeName ?? "NORMAL_DWELL"}`
+    : "B5 · NORMAL_DWELL";
 
   const gridColumns = 30;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div className="st-panel">
-        <PanelHead icon="grid_on" title="TIME – FREQUENCY INTERCEPTION MATRIX & SEARCH COINCIDENCE" badge="2-D SEARCH ACTIVE" badgeColor="#96ccff" />
+        <PanelHead
+          icon="grid_on"
+          title="TIME – FREQUENCY INTERCEPTION MATRIX & SEARCH COINCIDENCE"
+          badge={hasLive ? "LIVE MISSION TELEMETRY" : "2-D SEARCH ACTIVE"}
+          badgeColor={hasLive ? "#49df9d" : "#96ccff"}
+        />
         <div className="st-body" style={{ color: "#c6c5d5" }}>
           Frequency and time are jointly evaluated to determine interception
-          success, misses, and false alarms.
+          success, misses, and false alarms. {hasLive && <span style={{ color: "#49df9d" }}>● Live Closed-Loop Mode Active</span>}
         </div>
       </div>
 
@@ -63,15 +116,15 @@ export default function Interception() {
         {[
           ["HITS", `${hitCount}`, "Successful interceptions"],
           ["MISSES", `${missCount}`, "Transmission not intercepted"],
-          ["FALSE ALARMS", `${falseAlarmCount}`, "No valid target transmission"],
-          ["TOTAL EVENTS", `${MOCK_INTERCEPT_EVENTS.length}`, "Last 500 ms window"],
-          ["TIME WINDOW", timeWindow, "Analysis window"],
+          ["INTERCEPT RATE (Pd)", `${pdPct}`, "Cognitive scheduler accuracy"],
+          ["MEDIAN LATENCY", `${latencyUs}`, "Lead time to intercept"],
+          ["TOTAL DWELLS", `${totalCount}`, "Operational cycles executed"],
           ["SEARCH DIM", "2-D", "Time × frequency coincidence"],
-          ["CURRENT", "REVISIT", "B16 · 120 µs arm"],
+          ["ACTIVE APERTURE", currentAperture, "Live tuned receiver window"],
         ].map(([label, value, foot], i) => (
           <div className="st-kpi" key={label}>
             <span className="st-tsm" style={{ color: "#908f9e" }}>{label}</span>
-            <span className="st-tlg" style={{ color: i === 0 ? "#49df9d" : i === 1 ? "#ffb4ab" : "#e2e2e8" }}>
+            <span className="st-tlg" style={{ color: i === 0 || i === 2 ? "#49df9d" : i === 1 ? "#ffb4ab" : "#e2e2e8" }}>
               {value}
             </span>
             <span className="st-kpi-foot"><span>{foot}</span></span>
