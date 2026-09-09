@@ -1,4 +1,8 @@
 import { useMemo, useState } from "react";
+import {
+  CmdBadge,
+  PanelHead,
+} from "../components/stitch";
 
 const FEATURES = [
   "Occupancy",
@@ -23,9 +27,7 @@ const MODES = [
 
 function buildMockObservation() {
   return Array.from({ length: 36 }, (_, band) => {
-    const activity =
-      [6, 10, 16, 28].includes(band);
-
+    const activity = [6, 10, 16, 28].includes(band);
     return {
       band,
       values: [
@@ -45,68 +47,26 @@ function buildMockObservation() {
 }
 
 const MOCK_ACTIONS = [
-  {
-    band: 16,
-    mode: "REVISIT",
-    score: 0.941,
-    probability: 0.88,
-    timeUs: 42,
-  },
-  {
-    band: 6,
-    mode: "PREEMPTIVE_INTERCEPT",
-    score: 0.912,
-    probability: 0.84,
-    timeUs: 54,
-  },
-  {
-    band: 28,
-    mode: "NORMAL_DWELL",
-    score: 0.861,
-    probability: 0.79,
-    timeUs: 71,
-  },
-  {
-    band: 10,
-    mode: "LONG_DWELL",
-    score: 0.824,
-    probability: 0.75,
-    timeUs: 93,
-  },
-  {
-    band: 22,
-    mode: "SHORT_DWELL",
-    score: 0.611,
-    probability: 0.42,
-    timeUs: 120,
-  },
+  { band: 16, mode: "REVISIT", score: 0.941, probability: 0.88, timeUs: 42 },
+  { band: 6, mode: "PREEMPTIVE_INTERCEPT", score: 0.912, probability: 0.84, timeUs: 54 },
+  { band: 28, mode: "NORMAL_DWELL", score: 0.861, probability: 0.79, timeUs: 71 },
+  { band: 10, mode: "LONG_DWELL", score: 0.824, probability: 0.75, timeUs: 93 },
+  { band: 22, mode: "SHORT_DWELL", score: 0.611, probability: 0.42, timeUs: 120 },
 ];
 
-export default function SmartScan() {
-  const observation = useMemo(
-    () => buildMockObservation(),
-    []
-  );
+const SHORT_FEATURES = ["OCC", "DET", "MISS", "UNC", "AGE", "CNT", "CONF", "PRI", "AGIL", "RISK", "RANK"];
 
+export default function SmartScan() {
+  const observation = useMemo(() => buildMockObservation(), []);
   const [selectedBand, setSelectedBand] = useState(16);
 
-  const selected = observation.find(
-    (item) => item.band === selectedBand
-  );
-
+  const selected = observation.find((item) => item.band === selectedBand);
   const selectedAction =
-    MOCK_ACTIONS.find(
-      (item) => item.band === selectedBand
-    ) ?? MOCK_ACTIONS[0];
-
-  const actionId =
-    selectedAction.band * 5 +
-    MODES.indexOf(selectedAction.mode);
+    MOCK_ACTIONS.find((item) => item.band === selectedBand) ?? MOCK_ACTIONS[0];
+  const actionId = selectedAction.band * 5 + MODES.indexOf(selectedAction.mode);
 
   const occupancyRank = useMemo(() => {
-    const order = [...observation].sort(
-      (a, b) => b.values[0] - a.values[0]
-    );
+    const order = [...observation].sort((a, b) => b.values[0] - a.values[0]);
     const rank = {};
     order.forEach((row, index) => {
       rank[row.band] = index + 1;
@@ -114,392 +74,219 @@ export default function SmartScan() {
     return rank;
   }, [observation]);
 
-  const SHORT_FEATURES = [
-    "OCC",
-    "DET",
-    "MISS",
-    "UNC",
-    "AGE",
-    "CNT",
-    "CONF",
-    "PRI",
-    "AGIL",
-    "RISK",
-    "RANK",
-  ];
-
   return (
-    <div className="smart-scan-page">
-      <div className="page-title-row">
-        <div>
-          <div className="page-kicker">
-            NEURAL PIPELINE ACTIVE
-          </div>
-
-          <h1>Smart Scan Decision Engine & Observation Space</h1>
-
-          <p>
-            The scheduler converts receiver-derived spectrum
-            state into frequency and scan-strategy decisions.
-          </p>
-        </div>
-
-        <div className="mission-state">
-          <span className="status-dot" />
-          DRQN + MoE READY
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div className="st-panel">
+        <PanelHead icon="neurology" title="SMART SCAN DECISION ENGINE & OBSERVATION SPACE" badge="DRQN + MoE READY" badgeColor="#49df9d" />
+        <div className="st-body" style={{ color: "#c6c5d5" }}>
+          The scheduler converts receiver-derived spectrum state into
+          frequency and scan-strategy decisions. Scheduler-visible state
+          only; ground truth excluded.
         </div>
       </div>
 
-      <section className="panel scheduler-pipeline">
-        <div className="panel-header">
-          <div>
-              <div className="panel-kicker">
-                ZONE B — AI INFERENCE ARCHITECTURE PIPELINE DRQN + MoE
-              </div>
-
-              <h2>
-                Observation → Policy → Action
-              </h2>
-          </div>
+      <div className="st-panel">
+        <PanelHead icon="account_tree" title="ZONE B — AI INFERENCE ARCHITECTURE PIPELINE DRQN + MoE" badge="OBSERVATION → POLICY → ACTION" badgeColor="#bdc2ff" />
+        <div className="st-pipe">
+          <div className="st-node"><CmdBadge>INPUT</CmdBadge><span className="st-tmd">360-D</span><span className="st-mark" style={{ color: "#908f9e" }}>36 bands × 10 features</span></div>
+          <span className="material-symbols-outlined st-arrow">arrow_forward</span>
+          <div className="st-node"><CmdBadge color="#96ccff">NET</CmdBadge><span className="st-tmd">DRQN</span><span className="st-mark" style={{ color: "#908f9e" }}>LSTM temporal memory</span></div>
+          <span className="material-symbols-outlined st-arrow">arrow_forward</span>
+          <div className="st-node"><CmdBadge color="#49df9d">POL</CmdBadge><span className="st-tmd">MoE</span><span className="st-mark" style={{ color: "#908f9e" }}>Strategy fusion</span></div>
+          <span className="material-symbols-outlined st-arrow">arrow_forward</span>
+          <div className="st-node"><CmdBadge>SPC</CmdBadge><span className="st-tmd">180</span><span className="st-mark" style={{ color: "#908f9e" }}>36 bands × 5 modes</span></div>
+          <span className="material-symbols-outlined st-arrow">arrow_forward</span>
+          <div className="st-node st-node-ai"><CmdBadge color="#49df9d">SEL</CmdBadge><span className="st-tmd" style={{ color: "#49df9d" }}>B{selectedAction.band}</span><span className="st-mark" style={{ color: "#c6c5d5" }}>{selectedAction.mode}</span></div>
         </div>
-
-        <div className="pipeline-row">
-          <div className="pipeline-node">
-            <span>INPUT</span>
-            <strong>360-D</strong>
-            <small>
-              36 bands × 10 features
-            </small>
-          </div>
-
-          <div className="pipeline-arrow">→</div>
-
-          <div className="pipeline-node">
-            <span>NETWORK</span>
-            <strong>DRQN</strong>
-            <small>LSTM temporal memory</small>
-          </div>
-
-          <div className="pipeline-arrow">→</div>
-
-          <div className="pipeline-node">
-            <span>POLICY</span>
-            <strong>MoE</strong>
-            <small>Strategy fusion</small>
-          </div>
-
-          <div className="pipeline-arrow">→</div>
-
-          <div className="pipeline-node">
-            <span>ACTION SPACE</span>
-            <strong>180</strong>
-            <small>36 bands × 5 modes</small>
-          </div>
-
-          <div className="pipeline-arrow">→</div>
-
-          <div className="pipeline-node selected">
-            <span>SELECTED</span>
-            <strong>
-              B{selectedAction.band}
-            </strong>
-            <small>
-              {selectedAction.mode}
-            </small>
-          </div>
+        <div className="st-tsm" style={{ display: "flex", gap: 8 }}>
+          <span style={{ color: "#908f9e" }}>ACTION SPACE: 180 · 36 BANDS × 5 MODES</span>
         </div>
-      </section>
+      </div>
 
-      <div className="smart-scan-grid">
-        <section className="panel observation-panel">
-          <div className="panel-header">
-            <div>
-              <div className="panel-kicker">
-                ZONE A — 36-BAND OBSERVATION VECTOR HEATMAP 0.00 – 18.00 GHz
-              </div>
-
-              <h2>
-                36-Band Scenario Vector — INSPECTOR: BAND {selectedBand} (
-                {selectedBand * 500}–{(selectedBand + 1) * 500} MHz)
-              </h2>
-            </div>
-
-            <div className="panel-badge">
-              360 FEATURES
-            </div>
-          </div>
-
-          <div className="observation-subtitle">
-            Scheduler-visible state. Ground truth excluded.
-          </div>
-
-          <div className="observation-table-wrap">
-            <table className="observation-table">
+      <div className="st-grid-12">
+        <div className="st-span-8 st-panel">
+          <PanelHead
+            icon="grid_view"
+            title={`ZONE A — 36-BAND OBSERVATION VECTOR HEATMAP 0.00 – 18.00 GHz`}
+            badge={`INSPECTOR: BAND ${selectedBand} (${selectedBand * 500}–${(selectedBand + 1) * 500} MHz)`}
+            badgeColor="#96ccff"
+          />
+          <span className="st-tsm" style={{ color: "#908f9e" }}>
+            360 FEATURES · SCHEDULER-VISIBLE STATE · GROUND TRUTH EXCLUDED
+          </span>
+          <div className="st-table-wrap">
+            <table className="st-table">
               <thead>
                 <tr>
                   <th>BAND (FREQ)</th>
-
                   {SHORT_FEATURES.map((feature) => (
-                    <th key={feature}>
-                      {feature}
-                    </th>
+                    <th key={feature}>{feature}</th>
                   ))}
                 </tr>
               </thead>
-
               <tbody>
                 {observation.map((row) => (
                   <tr
                     key={row.band}
-                    className={
-                      selectedBand === row.band
-                        ? "selected-row"
-                        : ""
-                    }
-                    onClick={() =>
-                      setSelectedBand(row.band)
-                    }
+                    style={{ cursor: "pointer", background: selectedBand === row.band ? "rgba(189,194,255,0.08)" : undefined }}
+                    onClick={() => setSelectedBand(row.band)}
                   >
                     <td>
-                      <strong>B{row.band}</strong>
+                      <strong style={{ color: selectedBand === row.band ? "#bdc2ff" : "#e2e2e8" }}>
+                        B{row.band}
+                      </strong>
                     </td>
-
                     {row.values.map((value, index) => (
                       <td key={index}>
-                        <div className="feature-cell">
+                        <div style={{ position: "relative", height: 16, background: "#0c0e12", border: "1px solid rgba(69,70,83,0.4)" }}>
                           <span
-                            className="feature-fill"
                             style={{
+                              position: "absolute",
+                              left: 0,
+                              top: 0,
+                              bottom: 0,
                               width: `${value * 100}%`,
+                              background: selectedBand === row.band ? "#96ccff" : "#333539",
                             }}
                           />
-                          <span className="feature-value">
+                          <span className="st-mark" style={{ position: "absolute", left: 4, top: 2 }}>
                             {value.toFixed(2)}
                           </span>
                         </div>
                       </td>
                     ))}
                     <td>
-                      <div className="feature-cell">
+                      <div style={{ position: "relative", height: 16, background: "#0c0e12", border: "1px solid rgba(69,70,83,0.4)" }}>
                         <span
-                          className="feature-fill"
                           style={{
+                            position: "absolute",
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
                             width: `${Math.max(row.values[3], row.values[4]) * 100}%`,
+                            background: "#ffb4ab",
                           }}
                         />
-                        <span className="feature-value">
+                        <span className="st-mark" style={{ position: "absolute", left: 4, top: 2, color: "#c6c5d5" }}>
                           {Math.max(row.values[3], row.values[4]).toFixed(2)}
                         </span>
                       </div>
                     </td>
                     <td>
-                      <span className="feature-value">
-                        {occupancyRank[row.band]}
-                      </span>
+                      <strong style={{ color: "#49df9d" }}>{occupancyRank[row.band]}</strong>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </section>
+        </div>
 
-        <aside className="smart-scan-side">
-          <section className="panel selected-band-panel">
-            <div className="panel-kicker">
-              SELECTED BAND
+        <aside className="st-span-4" style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+          <div className="st-panel">
+            <PanelHead title="SELECTED BAND" badge={`B${selectedBand}`} badgeColor="#bdc2ff" />
+            <div className="st-tmd" style={{ color: "#e2e2e8" }}>
+              {selectedBand * 500}–{(selectedBand + 1) * 500} MHz
             </div>
-
-            <div className="selected-band-heading">
-              <strong>B{selectedBand}</strong>
-
-              <span>
-                {selectedBand * 500}–
-                {(selectedBand + 1) * 500} MHz
-              </span>
-            </div>
-
-            <div className="selected-feature-list">
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               {FEATURES.map((feature, index) => (
-                <div
-                  className="feature-detail-row"
-                  key={feature}
-                >
-                  <span>{feature}</span>
-
-                  <strong>
-                    {selected.values[index].toFixed(3)}
-                  </strong>
+                <div key={feature} className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "3px 6px", background: "#1a1c20", border: "1px solid #454653" }}>
+                  <span style={{ color: "#908f9e" }}>{feature}</span>
+                  <strong style={{ color: "#e2e2e8" }}>{selected.values[index].toFixed(3)}</strong>
                 </div>
               ))}
             </div>
-          </section>
+          </div>
 
-          <section className="panel action-panel">
-            <div className="panel-header">
-              <div>
-                <div className="panel-kicker">
-                  CHOSEN ACTION: BAND {selectedAction.band} //{" "}
-                  {selectedAction.mode}
-                </div>
-
-                <h2>
-                  Band + Scan Mode
-                </h2>
-              </div>
-
-              <div className="live-badge">
-                INFERENCE
-              </div>
-            </div>
-
-            <div className="panel-kicker" style={{ marginTop: 8 }}>
+          <div className="st-panel">
+            <PanelHead title={`CHOSEN ACTION: BAND ${selectedAction.band} // ${selectedAction.mode}`} badge="INFERENCE" badgeColor="#49df9d" />
+            <span className="st-tsm" style={{ color: "#908f9e" }}>
               DRQN LSTM RECURRENT CORE // MoE GATING ROUTER (SOFTMAX)
+            </span>
+            <div className="st-tlg" style={{ color: "#bdc2ff" }}>
+              ACTION ID: {actionId}
             </div>
-
-            <div className="action-primary">
-              <span>ACTION ID</span>
-
-              <strong>{actionId}</strong>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              {[
+                ["BAND", `B${selectedAction.band}`],
+                ["FREQUENCY", `${(selectedAction.band * 500 + 250).toLocaleString()} MHz`],
+                ["MODE", selectedAction.mode],
+                ["SCORE", selectedAction.score.toFixed(3)],
+                ["INTERCEPT PROB.", `${(selectedAction.probability * 100).toFixed(1)}%`],
+                ["PREDICTED TIME", `${selectedAction.timeUs} µs`],
+              ].map(([label, value]) => (
+                <div key={label} className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "3px 6px", background: "#1a1c20", border: "1px solid #454653" }}>
+                  <span style={{ color: "#908f9e" }}>{label}</span>
+                  <strong style={{ color: "#e2e2e8" }}>{value}</strong>
+                </div>
+              ))}
             </div>
+          </div>
 
-            <div className="action-grid">
-              <div>
-                <span>BAND</span>
-                <strong>
-                  B{selectedAction.band}
-                </strong>
-              </div>
-
-              <div>
-                <span>FREQUENCY</span>
-                <strong>
-                  {(
-                    selectedAction.band * 500 +
-                    250
-                  ).toLocaleString()}{" "}
-                  MHz
-                </strong>
-              </div>
-
-              <div>
-                <span>MODE</span>
-                <strong>
-                  {selectedAction.mode}
-                </strong>
-              </div>
-
-              <div>
-                <span>SCORE</span>
-                <strong>
-                  {selectedAction.score.toFixed(3)}
-                </strong>
-              </div>
-
-              <div>
-                <span>INTERCEPT PROB.</span>
-                <strong>
-                  {(
-                    selectedAction.probability * 100
-                  ).toFixed(1)}
-                  %
-                </strong>
-              </div>
-
-              <div>
-                <span>PREDICTED TIME</span>
-                <strong>
-                  {selectedAction.timeUs} µs
-                </strong>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel candidate-panel">
-            <div className="panel-kicker">
-              ZONE C — TOP CANDIDATE ACTIONS & REASONING · TOP 5 OF 180
-            </div>
-
-            <div className="candidate-list">
-              {MOCK_ACTIONS.map(
-                (action, index) => (
-                  <button
-                    key={`${action.band}-${action.mode}`}
-                    className={
-                      action.band === selectedAction.band
-                        ? "candidate selected"
-                        : "candidate"
-                    }
-                    onClick={() =>
-                      setSelectedBand(action.band)
-                    }
-                  >
-                    <span>
+          <div className="st-panel">
+            <PanelHead title="ZONE C — TOP CANDIDATE ACTIONS & REASONING · TOP 5 OF 180" badge="CANDIDATES" badgeColor="#96ccff" />
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {MOCK_ACTIONS.map((action, index) => (
+                <button
+                  key={`${action.band}-${action.mode}`}
+                  onClick={() => setSelectedBand(action.band)}
+                  className="st-tsm"
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    alignItems: "center",
+                    cursor: "pointer",
+                    font: "inherit",
+                    padding: "4px 6px",
+                    justifyContent: "space-between",
+                    background: action.band === selectedAction.band ? "#1e2024" : "#1a1c20",
+                    border: `1px solid ${action.band === selectedAction.band ? "#454653" : "rgba(69,70,83,0.4)"}`,
+                  }}
+                >
+                  <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <CmdBadge color={action.band === selectedAction.band ? "#49df9d" : "#908f9e"}>
                       #{index + 1}
-                    </span>
-
-                    <strong>
+                    </CmdBadge>
+                    <strong style={{ color: action.band === selectedAction.band ? "#bdc2ff" : "#e2e2e8" }}>
                       B{action.band}
                     </strong>
-
-                    <span>{action.mode}</span>
-
-                    <em>
-                      {action.score.toFixed(3)}
-                    </em>
-                  </button>
-                )
-              )}
+                    <span style={{ color: "#c6c5d5" }}>{action.mode}</span>
+                  </span>
+                  <em style={{ color: "#49df9d", fontStyle: "normal" }}>{action.score.toFixed(3)}</em>
+                </button>
+              ))}
             </div>
-          </section>
+          </div>
         </aside>
       </div>
 
-      <section className="panel mode-panel">
-        <div className="panel-header">
-          <div>
-            <div className="panel-kicker">
-              ACTION SPACE
-            </div>
-
-            <h2>Five Scan Modes</h2>
-          </div>
-        </div>
-
-        <div className="mode-card-grid">
+      <div className="st-panel">
+        <PanelHead icon="category" title="ACTION SPACE" badge="FIVE SCAN MODES" badgeColor="#96ccff" />
+        <div className="st-grid-12" style={{ gap: 4 }}>
           {MODES.map((mode, index) => (
             <div
-              className={
-                mode === selectedAction.mode
-                  ? "mode-card selected"
-                  : "mode-card"
-              }
               key={mode}
+              className="st-kpi"
+              style={{
+                gridColumn: "span 4 / span 4",
+                borderColor: mode === selectedAction.mode ? "#bdc2ff" : "#454653",
+              }}
             >
-              <span>MODE {index}</span>
-
-              <strong>{mode}</strong>
-
-              <small>
-                {mode === "SHORT_DWELL" &&
-                  "Rapid confirmation / quick search"}
-
-                {mode === "NORMAL_DWELL" &&
-                  "Standard surveillance dwell"}
-
-                {mode === "LONG_DWELL" &&
-                  "Extended observation under uncertainty"}
-
-                {mode === "REVISIT" &&
-                  "Return to previously important activity"}
-
-                {mode === "PREEMPTIVE_INTERCEPT" &&
-                  "Act before predicted transmission"}
-              </small>
+              <span className="st-tsm" style={{ color: "#908f9e" }}>MODE {index}</span>
+              <strong className="st-tmd" style={{ color: mode === selectedAction.mode ? "#bdc2ff" : "#e2e2e8" }}>
+                {mode}
+              </strong>
+              <span className="st-mark" style={{ color: "#908f9e", lineHeight: 1.5 }}>
+                {mode === "SHORT_DWELL" && "Rapid confirmation / quick search"}
+                {mode === "NORMAL_DWELL" && "Standard surveillance dwell"}
+                {mode === "LONG_DWELL" && "Extended observation under uncertainty"}
+                {mode === "REVISIT" && "Return to previously important activity"}
+                {mode === "PREEMPTIVE_INTERCEPT" && "Act before predicted transmission"}
+              </span>
             </div>
           ))}
         </div>
-      </section>
+      </div>
     </div>
   );
 }

@@ -54,18 +54,34 @@ export default function SystemConnection() {
     };
   }, []);
 
+  const connected = status === "CONNECTED";
+
   return (
     <div
-      className={`system-connection ${status.toLowerCase()}`}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "2px 6px",
+        background: "#1a1c20",
+        border: "1px solid #454653",
+        borderRadius: 0,
+      }}
     >
-      <span className="connection-dot" />
-
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          background: connected ? "#49df9d" : "#f59e0b",
+          display: "inline-block",
+        }}
+      />
       <div>
-        <strong>
+        <strong style={{ color: "#e2e2e8" }}>
           {status}
         </strong>
-
-        <span>
+        <span style={{ color: "#908f9e" }}>
+          {" "}
           {detail}
         </span>
       </div>
