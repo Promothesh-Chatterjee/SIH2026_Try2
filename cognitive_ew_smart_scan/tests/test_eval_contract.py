@@ -103,6 +103,7 @@ class RewardComponentTests(unittest.TestCase):
             w_hit=1.0, w_novel=2.0, w_miss=-1.0, w_timing=0.001,
             w_priority=0.0, w_information_gain=0.0, w_false_alarm=0.0,
             w_dwell_cost=0.0, w_redundant_scan=0.0, w_delay=0.0,
+            w_staleness=0.0, disable_latency_reward=True, w_prediction=0.0,
         )
         self.assertEqual(comps["hit_term"], 1.0)
         self.assertEqual(comps["novel_term"], 2.0)
