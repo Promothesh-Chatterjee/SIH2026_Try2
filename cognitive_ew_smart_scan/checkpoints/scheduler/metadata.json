@@ -16,9 +16,9 @@
     "agility",
     "priority"
   ],
-  "git_revision": "a942e7d",
+  "git_revision": "13f2623",
   "metrics": {
-    "best_episode_reward": 3321.8293700711292
+    "best_episode_reward": -315.95547836635006
   },
   "mode": "stare",
   "n_bands": 36,
@@ -26,5 +26,5 @@
   "preproc_version": "v1",
   "seed": 42,
   "split": "train",
-  "timestamp": "2026-09-08T13:53:10.919503+00:00"
+  "timestamp": "2026-09-08T18:46:37.024565+00:00"
 }

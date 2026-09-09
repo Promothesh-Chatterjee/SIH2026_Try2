@@ -171,8 +171,14 @@ class TrackTemporalState:
             else:
                 self.agility_score = float(raw_hop_ratio)
 
-    def predict_next_band_distribution(self) -> Tuple[np.ndarray, int, float]:
+    def predict_next_band_distribution(
+        self, alpha_dirichlet: float = 0.0
+    ) -> Tuple[np.ndarray, int, float]:
         """Predict probability distribution over next band using hierarchical backoff.
+
+        If alpha_dirichlet > 0.0, applies additive Dirichlet smoothing:
+            P(j|h) = (N(h,j) + alpha) / (N(h) + alpha*K)
+        while keeping confidence strictly evidence-based (low evidence yields low confidence).
 
         Returns:
             probs: (n_bands,) float32 probability distribution
@@ -180,49 +186,72 @@ class TrackTemporalState:
             confidence: float in [0, 1]
         """
         probs = np.zeros(self.n_bands, dtype=np.float32)
+        alpha = max(0.0, float(alpha_dirichlet))
+        K = self.n_bands
+
+        def compute_smoothed(counts_dict: Dict[int, int], level_factor: float, min_total: int) -> Optional[Tuple[np.ndarray, float]]:
+            total = sum(counts_dict.values())
+            if total < min_total:
+                return None
+            p_vec = np.zeros(self.n_bands, dtype=np.float32)
+            if alpha > 0.0:
+                denom = total + alpha * K
+                p_vec.fill(alpha / denom)
+                for b, cnt in counts_dict.items():
+                    p_vec[b] = (cnt + alpha) / denom
+                best_b = int(np.argmax(p_vec))
+                evidence_cnt = counts_dict.get(best_b, 0)
+                if evidence_cnt <= 0:
+                    conf = 0.0
+                else:
+                    empirical_p = evidence_cnt / total
+                    evidence_weight = total / (total + 1.0)
+                    conf = min(1.0, level_factor * empirical_p * evidence_weight)
+            else:
+                for b, cnt in counts_dict.items():
+                    p_vec[b] = cnt / total
+                top_p = float(np.max(p_vec))
+                conf = min(1.0, top_p * level_factor)
+            return p_vec, conf
 
         # Level 3: Tri-gram backoff
         if len(self.band_history) >= 3:
             tg_key = (self.band_history[-3], self.band_history[-2], self.band_history[-1])
             if tg_key in self.trigram_counts:
-                t_counts = self.trigram_counts[tg_key]
-                total = sum(t_counts.values())
-                if total >= 3:
-                    for b, cnt in t_counts.items():
-                        probs[b] = cnt / total
-                    top_prob = float(np.max(probs))
-                    return probs, 3, min(1.0, top_prob * 0.95)
+                res = compute_smoothed(self.trigram_counts[tg_key], level_factor=0.95, min_total=3)
+                if res is not None:
+                    return res[0], 3, res[1]
 
         # Level 2: Bi-gram backoff
         if len(self.band_history) >= 2:
             bg_key = (self.band_history[-2], self.band_history[-1])
             if bg_key in self.bigram_counts:
-                b_counts = self.bigram_counts[bg_key]
-                total = sum(b_counts.values())
-                if total >= 2:
-                    for b, cnt in b_counts.items():
-                        probs[b] = cnt / total
-                    top_prob = float(np.max(probs))
-                    return probs, 2, min(1.0, top_prob * 0.85)
+                res = compute_smoothed(self.bigram_counts[bg_key], level_factor=0.85, min_total=2)
+                if res is not None:
+                    return res[0], 2, res[1]
 
         # Level 1: Uni-gram backoff
         if len(self.band_history) >= 1:
             last_b = self.band_history[-1]
             if last_b in self.unigram_counts:
-                u_counts = self.unigram_counts[last_b]
-                total = sum(u_counts.values())
-                if total >= 1:
-                    for b, cnt in u_counts.items():
-                        probs[b] = cnt / total
-                    top_prob = float(np.max(probs))
-                    return probs, 1, min(1.0, top_prob * 0.70)
+                res = compute_smoothed(self.unigram_counts[last_b], level_factor=0.70, min_total=1)
+                if res is not None:
+                    return res[0], 1, res[1]
 
         # Level 0: Empirical occurrence prior
         total_b = int(np.sum(self.band_counts))
         if total_b > 0:
-            probs = (self.band_counts / total_b).astype(np.float32)
-            top_prob = float(np.max(probs))
-            return probs, 0, min(0.5, top_prob * 0.5)
+            if alpha > 0.0:
+                denom = total_b + alpha * K
+                probs = ((self.band_counts + alpha) / denom).astype(np.float32)
+                best_b = int(np.argmax(probs))
+                ev_cnt = self.band_counts[best_b]
+                conf = min(0.5, 0.5 * (ev_cnt / total_b) * (total_b / (total_b + 2.0)))
+            else:
+                probs = (self.band_counts / total_b).astype(np.float32)
+                top_prob = float(np.max(probs))
+                conf = min(0.5, top_prob * 0.5)
+            return probs, 0, conf
 
         # Fallback: uniform
         probs.fill(1.0 / self.n_bands)
@@ -271,11 +300,13 @@ class TemporalPredictor:
         n_modes: int = CANONICAL_N_MODES,
         base_dwell_us: float = CANONICAL_BASE_DWELL_US,
         dwell_multipliers: Tuple[float, ...] = CANONICAL_DWELL_MULTIPLIERS,
+        alpha_dirichlet: float = 0.0,
     ) -> None:
         self.n_bands: int = n_bands
         self.n_modes: int = n_modes
         self.base_dwell_us: float = base_dwell_us
         self.dwell_multipliers: Tuple[float, ...] = dwell_multipliers
+        self.alpha_dirichlet: float = float(alpha_dirichlet)
         self.dwell_durations_us: np.ndarray = np.array(
             [base_dwell_us * m for m in dwell_multipliers], dtype=np.float32
         )
@@ -335,7 +366,7 @@ class TemporalPredictor:
             if eta_us > horizon_us:
                 continue
 
-            probs, level, band_conf = t_state.predict_next_band_distribution()
+            probs, level, band_conf = t_state.predict_next_band_distribution(alpha_dirichlet=self.alpha_dirichlet)
             best_band = int(np.argmax(probs))
             overall_conf = float(arr_prob * band_conf)
 

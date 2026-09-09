@@ -61,6 +61,12 @@ def evaluate_canonical_gate(
     n_steps: int = 1000,
     seed: int = 42,
     policy: str = "all",
+    alpha_dirichlet: float = 0.0,
+    enable_guard: bool = False,
+    guard_confidence: float = 0.45,
+    guard_eta: float = 500.0,
+    enable_spatial: bool = False,
+    tau: float = 0.0,
 ) -> dict:
     with open(model_config_path) as f:
         model_cfg = yaml.safe_load(f)
@@ -76,7 +82,7 @@ def evaluate_canonical_gate(
     # 1. Load trained DRQN checkpoint
     ckpt_path = Path(checkpoint_path)
     logger.info("Loading checkpoint: %s", ckpt_path)
-    ckpt = torch.load(ckpt_path, map_location=device)
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
 
     drqn_cfg = model_cfg.get("drqn_scheduler", {})
     n_bands = int(env_cfg.get("n_bands", CANONICAL_N_BANDS))
@@ -129,12 +135,20 @@ def evaluate_canonical_gate(
         active_policies = POLICIES
     elif policy == "gate100k_ar":
         active_policies = ["round_robin", "drqn", "full_moe"]
-    elif policy in POLICIES:
-        active_policies = ["round_robin", policy] if policy != "round_robin" else ["round_robin"]
+    elif policy == "round_robin":
+        active_policies = ["round_robin"]
     else:
-        active_policies = [policy]
+        active_policies = ["round_robin", policy]
 
-    moe_cfg = model_cfg.get("smartscan_moe", {})
+    moe_cfg = dict(model_cfg.get("smartscan_moe", {}))
+    moe_cfg["alpha_dirichlet"] = float(alpha_dirichlet)
+    moe_cfg["enable_exploration_guard"] = bool(enable_guard)
+    moe_cfg["enable_guard"] = bool(enable_guard)
+    moe_cfg["exploration_guard_confidence"] = float(guard_confidence)
+    moe_cfg["exploration_guard_eta_us"] = float(guard_eta)
+    moe_cfg["enable_spatial"] = bool(enable_spatial)
+    if tau is not None:
+        moe_cfg["tau"] = float(tau)
     all_results = {p: [] for p in active_policies}
     all_timing_errors = {p: [] for p in active_policies}
 
@@ -348,7 +362,7 @@ def evaluate_canonical_gate(
     if h2h_vs_rr:
         print("\nHEAD-TO-HEAD VS ROUNDROBIN (Per-Scenario Majority Tracking):")
         print("-" * 105)
-        tracked_policies = [p for p in ("drqn", "full_moe") if p in h2h_vs_rr]
+        tracked_policies = [p for p in active_policies if p != "round_robin" and p in h2h_vs_rr]
         header = f"{'Scenario ID':<14} | {'RoundRobin':<10}"
         for p in tracked_policies:
             header += f" | {p:<14} | {'H2H':<8}"
@@ -389,10 +403,17 @@ def evaluate_canonical_gate(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate canonical gate")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/scheduler/checkpoint_gate_100000.pt")
+    parser.add_argument("--checkpoint", type=str, default="checkpoints/scheduler/checkpoint_gate_110000.pt")
     parser.add_argument("--steps", type=int, default=1000)
-    parser.add_argument("--output", type=str, default="results/gate_100000_repaired_canonical_report.json")
-    parser.add_argument("--policy", type=str, default="all", help="all | gate100k_ar | <policy_name>")
+    parser.add_argument("--output", type=str, default="results/canonical_gate_phase6.json")
+    parser.add_argument("--policy", type=str, default="all", help="all | gate100k_ar | t1_predictive_utility | <policy_name>")
+    parser.add_argument("--alpha-dirichlet", type=float, default=0.0, help="Dirichlet smoothing alpha for agile transitions")
+    parser.add_argument("--enable-guard", action="store_true", help="Enable cognitive exploration guard")
+    parser.add_argument("--guard-confidence", type=float, default=0.45, help="Exploration guard confidence threshold")
+    parser.add_argument("--guard-eta", type=float, default=500.0, help="Exploration guard ETA threshold in us")
+    parser.add_argument("--enable-spatial", action="store_true", help="Enable spatial / AoA intelligence")
+    parser.add_argument("--tau", type=float, default=0.0, help="Softmax temperature for action selection (0.0 for argmax)")
+    parser.add_argument("--seed", type=int, default=42, help="Evaluation random seed")
     args = parser.parse_args()
 
     evaluate_canonical_gate(
@@ -400,4 +421,11 @@ if __name__ == "__main__":
         n_steps=args.steps,
         output_report_path=args.output,
         policy=args.policy,
+        alpha_dirichlet=args.alpha_dirichlet,
+        enable_guard=args.enable_guard,
+        guard_confidence=args.guard_confidence,
+        guard_eta=args.guard_eta,
+        enable_spatial=args.enable_spatial,
+        tau=args.tau,
+        seed=args.seed,
     )
