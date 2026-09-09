@@ -4,7 +4,6 @@ import { loadMissionOverview } from "../services/missionService";
 import { api } from "../services/api";
 import {
   BandMatrix,
-  CandidateActions,
   CmdBadge,
   DataSourceBadge,
   DwellTimeline,
@@ -47,8 +46,6 @@ export default function MissionOverview() {
   const hasLive = missionStatus && missionStatus.total_dwells > 0;
   const liveHits = hasLive ? missionStatus.total_hits : receiver.detections;
   const liveInterceptions = hasLive ? `${(missionStatus.rolling_pd * 100).toFixed(1)}% Pd` : mission.interceptions.toLocaleString();
-  const liveTune = hasLive && backendData?.telemetry?.band !== undefined ? (backendData.telemetry.band * 500 + 250) : spectrum.currentTuneMHz;
-  const liveBandNum = hasLive && backendData?.telemetry?.band !== undefined ? backendData.telemetry.band : spectrum.currentBand;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -65,7 +62,6 @@ export default function MissionOverview() {
         <KpiCard label="TOTAL SPECTRUM" icon="tune" value="18.00" unit="GHz" footLeft="0.00 MHz" footRight="18,000 MHz" valueColor="#bdc2ff" />
         <KpiCard label="INSTANTANEOUS BW" icon="cell_tower" value="500" unit="MHz" footLeft="CANONICAL IBW" footRight="TUNABLE" valueColor="#96ccff" />
         <KpiCard label="ACTIVE BANDS" icon="sensors" value={`${activeBands}`} unit="/ 36" footLeft="38.8% OCCUPIED" footRight="22 QUIET" valueColor="#49df9d" />
-        <KpiCard label="CURRENT TUNE" icon="file_download_done" value={liveTune.toLocaleString()} unit="MHz" footLeft={`BAND ${liveBandNum}`} footRight={`${liveTune - 250}–${liveTune + 250} MHz`} valueColor="#bdc2ff" />
         <KpiCard label="TOTAL HITS" icon="grain" value={liveHits.toLocaleString()} unit="PULSES" footLeft={hasLive ? `DWELLS: ${missionStatus.total_dwells}` : "+128/s"} footRight="CONFIRMED" valueColor="#e2e2e8" />
         <KpiCard label="INTERCEPT RATE" icon="verified" value={liveInterceptions} unit="RATE" footLeft={hasLive ? `LAT: ${missionStatus.rolling_median_latency_us.toFixed(0)}µs` : "TRACK LOCK"} footRight="0 FALSE POS" valueColor="#6afcb8" />
         <KpiCard label="CURRENT MODE" icon="neurology" value={hasLive ? (backendData?.telemetry?.mode_name ?? "NORMAL_DWELL") : receiver.currentMode} unit="500µs" footLeft="SCHED: DRQN" footRight="PRIO: TIER-1" valueColor="#96ccff" />
@@ -101,7 +97,7 @@ export default function MissionOverview() {
 
         <div className="st-span-4" style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
           <div className="st-panel">
-            <PanelHead icon="psychology" title="CURRENT SCHEDULER DECISION" badge="DRQN ACTIVE" badgeColor="#bdc2ff" />
+            <PanelHead icon="psychology" title="CURRENT SCHEDULER DECISION" badge="DRQN + MoE ACTIVE" badgeColor="#bdc2ff" />
             <div style={{ background: "#1a1c20", border: "1px solid #454653", padding: 6, display: "flex", flexDirection: "column", gap: 4 }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span className="st-tsm" style={{ color: "#908f9e" }}>CHOSEN TARGET</span>
@@ -130,48 +126,6 @@ export default function MissionOverview() {
                 <strong className="st-tmd">{scheduler.actionCount}</strong>
               </div>
             </div>
-
-            <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", color: "#908f9e" }}>
-              <span className="st-headline">REASONING & UTILITY DECOMPOSITION</span>
-              <span>MoE GATING 0.992</span>
-            </div>
-            <div style={{ background: "#1a1c20", border: "1px solid #454653", padding: 6, display: "flex", flexDirection: "column", gap: 6 }}>
-              <div className="st-body" style={{ color: "#c6c5d5" }}>
-                <strong style={{ color: "#e2e2e8" }}>Primary Driver: Revisit Timeout. </strong>
-                Threshold exceeded on radar threat track <strong style={{ color: "#bdc2ff" }}>TRK-084</strong> (+20 ms over limit).
-              </div>
-              <div className="st-body" style={{ color: "#c6c5d5" }}>
-                <strong style={{ color: "#e2e2e8" }}>Secondary Driver: Pulse Train Agility. </strong>
-                Agility 0.78 with predicted imminent PRI emission in <strong style={{ color: "#96ccff" }}>[T+45 µs]</strong>.
-              </div>
-              <div className="st-body" style={{ color: "#c6c5d5" }}>
-                <strong style={{ color: "#e2e2e8" }}>Uncertainty Delta. </strong>
-                Entropy +14% over previous 3 dwell cycles. Immediate intercept mandated.
-              </div>
-            </div>
-
-            <div className="st-tsm" style={{ background: "#1a1c20", border: "1px solid #454653", padding: 6 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "#908f9e" }}>DRQN LSTM MEMORY</span>
-                <span style={{ color: "#49df9d" }}>WARM STATE [L-HIDDEN 256]</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                <span>EXPERT 2: PERIODIC TRACKS</span>
-                <strong style={{ color: "#bdc2ff" }}>W: 0.64</strong>
-              </div>
-              <div style={{ height: 6, background: "#333539" }}>
-                <div style={{ width: "64%", height: "100%", background: "#bdc2ff" }} />
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                <span>EXPERT 4: AGILE INTERCEPT</span>
-                <strong style={{ color: "#96ccff" }}>W: 0.36</strong>
-              </div>
-              <div style={{ height: 6, background: "#333539" }}>
-                <div style={{ width: "36%", height: "100%", background: "#96ccff" }} />
-              </div>
-            </div>
-
-            <CandidateActions />
           </div>
         </div>
       </div>
