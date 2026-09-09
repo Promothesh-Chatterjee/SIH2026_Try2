@@ -55,19 +55,6 @@ export default function TopBar() {
           whiteSpace: "nowrap",
         }}
       >
-        RF STREAM: <strong style={{ color: "#96ccff" }}>50.0k DW/S</strong>
-      </span>
-      <span
-        className="st-tsm"
-        style={{
-          background: "#1a1c20",
-          border: "1px solid #454653",
-          borderRadius: 0,
-          padding: "2px 6px",
-          color: "#c6c5d5",
-          whiteSpace: "nowrap",
-        }}
-      >
         RX: <strong style={{ color: "#bdc2ff" }}>1 GHz IBW LOCKED</strong>
       </span>
       <span
