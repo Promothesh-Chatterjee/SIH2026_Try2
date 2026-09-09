@@ -89,102 +89,193 @@ export function PipelineFlow() {
   );
 }
 
-// 36-band matrix: [heightPct, colorKey] per Stitch mission overview.
-const BANDS = [
-  [14, "q"], [48, "s"], [18, "q"], [72, "i"], [22, "q"], [64, "a"],
-  [55, "s"], [42, "s"], [12, "q"], [68, "i"], [20, "q"], [78, "a"],
-  [15, "q"], [50, "s"], [24, "q"], [94, "p"], [62, "s"], [82, "i"],
-  [70, "a"], [16, "q"], [45, "s"], [18, "q"], [14, "q"], [74, "a"],
-  [21, "q"], [53, "s"], [19, "q"], [86, "i"], [12, "q"], [17, "q"],
-  [40, "s"], [22, "q"], [59, "a"], [15, "q"], [47, "s"], [13, "q"],
-];
-
-const BAND_COLORS = {
-  q: "#333539",
-  s: "#96ccff",
-  i: "#49df9d",
-  a: "#3097e0",
-  p: "#bdc2ff",
+const BAND_STATE_COLORS = {
+  quiet:       "#1e2126",
+  stable:      "#96ccff",
+  intercepted: "#49df9d",
+  agile:       "#3097e0",
+  active:      "#bdc2ff",
 };
 
-export function BandMatrix({ tuneBand = 16 }) {
+export function BandMatrix({
+  tuneBand = 16,
+  bandHeights = null,
+  bandStates = null,
+  dwellUs = 120,
+  freqMHz = 8250,
+}) {
+  const N = 36;
+  const STATIC_H = [
+    14, 48, 18, 72, 22, 64, 55, 42, 12, 68, 20, 78,
+    15, 50, 24, 94, 62, 82, 70, 16, 45, 18, 14, 74,
+    21, 53, 19, 86, 12, 17, 40, 22, 59, 15, 47, 13,
+  ];
+  const heights = bandHeights
+    ? bandHeights.map((h) => Math.round(Math.max(4, h * 96)))
+    : STATIC_H;
+
+  const states = bandStates ?? Array(N).fill("stable");
+
+  const ibwLo = Math.max(0, tuneBand - 1);
+  const ibwHi = Math.min(N - 1, tuneBand);
+  const ibwLoGHz = (ibwLo * 0.5).toFixed(1);
+  const ibwHiGHz = ((ibwHi + 1) * 0.5).toFixed(1);
+
+  const tuneGHz = (freqMHz / 1000).toFixed(3);
+
+  const freqLabels = [
+    "0 GHz", "2.0 GHz", "4.0 GHz", "6.0 GHz",
+    `${tuneGHz} GHz ↑`,
+    "10.0 GHz", "12.0 GHz", "14.0 GHz", "16.0 GHz", "18.0 GHz",
+  ];
+
   return (
     <div className="st-spec">
       <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          padding: "2px 4px",
-        }}
+        style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px" }}
         className="st-tsm"
       >
-        {["0 GHz", "2.0 GHz", "4.0 GHz", "6.0 GHz", "8.0 GHz", "10.0 GHz", "12.0 GHz", "14.0 GHz", "16.0 GHz", "18.0 GHz"].map(
-          (t) => (
-            <span key={t} style={{ color: "#908f9e" }}>
-              {t}
-            </span>
-          )
-        )}
-      </div>
-      <div style={{ position: "relative" }}>
-        <div className="st-bars">
-          {BANDS.map(([h, k], i) => (
-            <div
-              key={i}
-              className="st-bar"
-              title={`BAND ${String(i + 1).padStart(2, "0")} (${i * 500}\u2013${(i + 1) * 500} MHz)`}
-              style={{
-                height: `${h}%`,
-                background: BAND_COLORS[k],
-              }}
-            />
-          ))}
-        </div>
-      </div>
-      <div className="st-mark" style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px", color: "#908f9e" }}>
-        {["B01", "B04", "B08", "B12", "B16", "B20", "B24", "B28", "B32", "B36"].map((t) => (
-          <span key={t} style={{ color: "#908f9e" }}>
+        {freqLabels.map((t, idx) => (
+          <span key={idx} style={{ color: idx === 4 ? "#96ccff" : "#908f9e" }}>
             {t}
           </span>
         ))}
       </div>
+      <div style={{ position: "relative" }}>
+        <div className="st-bars">
+          {Array.from({ length: N }, (_, i) => {
+            const state = states[i];
+            const h = heights[i];
+            const isActive = i === tuneBand;
+            const isIBW = i >= ibwLo && i <= ibwHi;
+            return (
+              <div
+                key={i}
+                className="st-bar"
+                title={`B${String(i + 1).padStart(2, "0")} ${i * 500}–${(i + 1) * 500} MHz [${state.toUpperCase()}]`}
+                style={{
+                  height: `${h}%`,
+                  background: BAND_STATE_COLORS[state] ?? "#333539",
+                  boxShadow: isActive
+                    ? "0 0 10px rgba(189,194,255,0.7)"
+                    : isIBW
+                    ? "0 0 4px rgba(150,204,255,0.3)"
+                    : "none",
+                  opacity: state === "quiet" ? 0.35 : 1,
+                  transition: "height 0.25s ease, background 0.25s ease",
+                }}
+              />
+            );
+          })}
+        </div>
+        <div className="st-ibw">
+          <span className="st-badge" style={{ color: "#bdc2ff" }}>
+            IBW RX: {ibwLoGHz}–{ibwHiGHz} GHz
+          </span>
+          <span className="st-mark" style={{ color: "#bdc2ff", textAlign: "center" }}>
+            1 GHz IBW LOCKED
+          </span>
+          <span className="st-badge" style={{ color: "#bdc2ff", justifyContent: "center" }}>
+            DWELL: {Number(dwellUs).toFixed(0)}µs
+          </span>
+        </div>
+      </div>
+      <div
+        className="st-mark"
+        style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px", color: "#908f9e" }}
+      >
+        {["B01", "B04", "B08", "B12", "B16", "B20", "B24", "B28", "B32", "B36"].map((t) => {
+          const bNum = parseInt(t.replace("B", ""), 10) - 1;
+          const isNear = bNum === tuneBand;
+          return (
+            <span key={t} style={isNear ? { color: "#bdc2ff", fontWeight: 700 } : undefined}>
+              {t}{isNear ? " ↑" : ""}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-const DWELLS = [
-  ["B04: PREEMPT", "80µs", "hit", 0.8],
-  ["B12: NORMAL", "110µs", "agile", 1.1],
-  ["B24: SHORT", "60µs", "miss", 0.7],
-  ["B06: SEARCH", "140µs", "hit", 1.2],
-  ["B28: LOCK", "100µs", "hit2", 1.0],
-  ["B16: REVISIT", "DWELL: 120µs · ARMED [NOW]", "now", 1.3],
+
+const DWELL_KIND_COLORS = {
+  hit:  "#49df9d",
+  miss: "#908f9e",
+  now:  "#0b1c93",
+};
+
+const STATIC_DWELLS = [
+  { id: "1", band: 4,  freqMHz: 2250,  mode: "PREEMPTIVE_INTERCEPT", hit: true,  dwellUs: 80,  now: false, clockUs: -500000 },
+  { id: "2", band: 12, freqMHz: 6250,  mode: "NORMAL_DWELL",         hit: false, dwellUs: 110, now: false, clockUs: -400000 },
+  { id: "3", band: 24, freqMHz: 12250, mode: "SHORT_DWELL",          hit: false, dwellUs: 60,  now: false, clockUs: -300000 },
+  { id: "4", band: 6,  freqMHz: 3250,  mode: "SEARCH",               hit: true,  dwellUs: 140, now: false, clockUs: -200000 },
+  { id: "5", band: 28, freqMHz: 14250, mode: "LONG_DWELL",           hit: true,  dwellUs: 100, now: false, clockUs: -100000 },
+  { id: "6", band: 16, freqMHz: 8250,  mode: "REVISIT",              hit: false, dwellUs: 120, now: true,  clockUs: 0 },
 ];
 
-export function DwellTimeline() {
+/**
+ * DwellTimeline accepts live `entries` array from useOverviewTelemetry.
+ * Each entry: { id, band, freqMHz, mode, hit, dwellUs, clockUs, now }
+ * Falls back to static placeholder when no live data.
+ */
+export function DwellTimeline({ entries = null }) {
+  const data = entries && entries.length > 0 ? entries : STATIC_DWELLS;
+  // Pad to always show 6 slots
+  const slots = [...data];
+  while (slots.length < 6) {
+    slots.unshift({ id: `pad-${slots.length}`, band: "—", mode: "—", hit: null, dwellUs: 0, now: false, freqMHz: 0, clockUs: 0 });
+  }
+
+  // Compute relative timestamps from the newest entry
+  const newestClock = slots[slots.length - 1]?.clockUs ?? 0;
+
   return (
     <div className="st-panel">
-      <PanelHead icon="timeline" title="DWELL & INTERCEPT EVENT TIMELINE" badge="LAST 500 MS BUFFER" />
+      <PanelHead icon="timeline" title="DWELL & INTERCEPT EVENT TIMELINE" badge="LAST 6 DWELLS" />
       <div className="st-timeline">
-        {DWELLS.map(([label, sub, kind]) => (
-          <div key={label} className={kind === "now" ? "st-dwell st-dwell-now" : "st-dwell"} style={{ flex: 1 }}>
-            <span className="st-badge" style={{ color: kind === "now" ? "#0b1c93" : "#e2e2e8" }}>
-              {label}
-            </span>
-            <span className="st-mark" style={{ color: kind === "now" ? "#0b1c93" : "#908f9e" }}>
-              {sub}
-            </span>
-          </div>
-        ))}
+        {slots.map((entry, idx) => {
+          const kind = entry.now ? "now" : entry.hit ? "hit" : "miss";
+          const deltUs = entry.clockUs ? entry.clockUs - newestClock : 0;
+          const deltMs = (deltUs / 1000).toFixed(0);
+          const label = entry.band !== "—"
+            ? `B${String(Number(entry.band) + 1).padStart(2, "0")}: ${entry.mode}`
+            : "—";
+          const sub = entry.now
+            ? `DWELL: ${Number(entry.dwellUs).toFixed(0)}µs · ARMED [NOW]`
+            : entry.band !== "—"
+            ? `${Number(entry.dwellUs).toFixed(0)}µs · ${entry.hit ? "HIT ✓" : "MISS"}`
+            : "—";
+
+          return (
+            <div
+              key={entry.id ?? idx}
+              className={kind === "now" ? "st-dwell st-dwell-now" : "st-dwell"}
+              style={{ flex: 1 }}
+            >
+              <span className="st-badge" style={{ color: kind === "now" ? "#0b1c93" : DWELL_KIND_COLORS[kind] }}>
+                {label}
+              </span>
+              <span className="st-mark" style={{ color: kind === "now" ? "#0b1c93" : "#908f9e" }}>
+                {sub}
+              </span>
+            </div>
+          );
+        })}
       </div>
       <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", color: "#908f9e" }}>
-        {["T-500 ms", "T-400 ms", "T-300 ms", "T-200 ms", "T-100 ms", "NOW [T-0]"].map((t) => (
-          <span key={t}>{t}</span>
-        ))}
+        {slots.map((entry, idx) => {
+          const deltUs = entry.clockUs ? entry.clockUs - newestClock : null;
+          if (entry.now) return <span key={idx}>NOW [T-0]</span>;
+          if (deltUs === null || entry.band === "—") return <span key={idx}>—</span>;
+          const ms = Math.round(deltUs / 1000);
+          return <span key={idx}>T{ms} ms</span>;
+        })}
       </div>
     </div>
   );
 }
+
 
 export function CandidateActions() {
   const rows = [
