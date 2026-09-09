@@ -350,6 +350,8 @@ class FiguresOfMerit:
         self.reward_redundant_penalty: float = 0.0
         self.reward_delay_penalty: float = 0.0
         self.reward_staleness_bonus: float = 0.0
+        self.reward_latency_bonus: float = 0.0
+        self.reward_prediction_bonus: float = 0.0
         self._reward_count: int = 0
 
         # Auxiliary prediction metrics (time-frequency contract): interception
@@ -388,6 +390,8 @@ class FiguresOfMerit:
         self.reward_redundant_penalty += float(components.get("redundant_penalty", 0.0))
         self.reward_delay_penalty += float(components.get("delay_penalty", 0.0))
         self.reward_staleness_bonus += float(components.get("staleness_bonus", 0.0))
+        self.reward_latency_bonus += float(components.get("latency_bonus", 0.0))
+        self.reward_prediction_bonus += float(components.get("prediction_bonus", 0.0))
         # Phase 10 true entropy reduction (scheduler-observable belief, not GT).
         ig = components.get("information_gain")
         if ig is not None and ig == ig:
@@ -643,6 +647,8 @@ class FiguresOfMerit:
             "avg_reward_redundant_penalty": self._avg_component(self.reward_redundant_penalty),
             "avg_reward_delay_penalty": self._avg_component(self.reward_delay_penalty),
             "avg_reward_staleness_bonus": self._avg_component(self.reward_staleness_bonus),
+            "avg_reward_latency_bonus": self._avg_component(self.reward_latency_bonus),
+            "avg_reward_prediction_bonus": self._avg_component(self.reward_prediction_bonus),
             "brier_score_intercept_prob": float(self.brier_score),
             "avg_intercept_time_pred_error_us": float(self.avg_intercept_time_pred_error_us),
             "discovery_rate": float(self.unique_emitter_discovery_rate),

@@ -13,9 +13,9 @@
       "agility",
       "priority"
     ],
-    "git_revision": "a942e7d",
+    "git_revision": "13f2623",
     "metrics": {
-      "best_episode_reward": 3321.8293700711292
+      "best_episode_reward": -315.95547836635006
     },
     "mode": "stare",
     "n_bands": 36,
@@ -23,17 +23,17 @@
     "preproc_version": "v1",
     "seed": 42,
     "split": "train",
-    "timestamp": "2026-09-08T13:53:10.919503+00:00"
+    "timestamp": "2026-09-08T18:46:37.024565+00:00"
   },
-  "created_at": "2026-09-08T13:53:11.039649+00:00",
+  "created_at": "2026-09-08T18:46:37.098197+00:00",
   "dataset_fingerprint": "5f76abbba10e240b413b55d2f1282304f3bed04a46353a7c7b2e39b75f020423",
   "dataset_mode": "stare",
   "dataset_root": "D:/TSRD",
   "device": "cpu",
-  "git_revision": "a942e7d56d3224ea5aed49971819a19ee4124246",
+  "git_revision": "13f2623f2eda8fbfd9bad2599e41a41d365250d1",
   "manifest_version": 1,
   "metrics": {
-    "best_episode_reward": 3321.8293700711292
+    "best_episode_reward": -315.95547836635006
   },
   "model_configuration": {
     "belief": {
@@ -96,18 +96,22 @@
     "reward": {
       "conditional_dwell_cost": true,
       "context_scaled_miss": true,
+      "disable_latency_reward": false,
       "lull_tolerance": false,
       "penalize_empty_dwell": false,
       "staleness_norm": 50.0,
+      "tau_latency": 100.0,
       "w_active_track": 2.0,
       "w_delay": -0.5,
       "w_dwell_cost": -0.0002,
       "w_false_alarm": -0.5,
       "w_hit": 5.0,
       "w_information_gain": 0.2,
+      "w_latency": 1.0,
       "w_miss": -0.5,
       "w_missed_coverage": -0.2,
       "w_novel": 5.0,
+      "w_prediction": 0.5,
       "w_priority": 1.0,
       "w_pulse_scale": 0.0,
       "w_redundant_scan": 0.0,
@@ -129,7 +133,7 @@
   "normalization_stats_hash": "bacee02ac1c29428",
   "process": {
     "hostname": "DELLg15-C6S8DCG",
-    "pid": 26348
+    "pid": 29904
   },
   "seed": 42,
   "software_versions": {

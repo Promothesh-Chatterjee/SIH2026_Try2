@@ -74,11 +74,12 @@ EXTENDED_BASELINES: tuple[str, ...] = (
     "gate100k_ar",
     "t0_predictive_candidates",
     "t1_predictive_utility",
+    "t1_spatial",
 )
 
 NN_BASELINES: frozenset[str] = frozenset({
     "drqn", "drqn_revisit", "drqn_periodic", "full_moe",
-    "gate100k_ar", "t0_predictive_candidates", "t1_predictive_utility",
+    "gate100k_ar", "t0_predictive_candidates", "t1_predictive_utility", "t1_spatial",
 })
 
 HEURISTIC_BASELINES: frozenset[str] = frozenset(set(BASELINE_NAMES) - NN_BASELINES)
@@ -361,6 +362,9 @@ class MoEBaseline:
         lambda_t: float | None = None,
         lambda_d: float | None = None,
         lambda_a: float | None = None,
+        enable_spatial: bool = False,
+        lambda_spatial: float | None = None,
+        **kwargs: Any,
     ) -> None:
         if hasattr(self.moe, "set_stage3_modes"):
             self.moe.set_stage3_modes(
@@ -370,6 +374,9 @@ class MoEBaseline:
                 lambda_t=lambda_t,
                 lambda_d=lambda_d,
                 lambda_a=lambda_a,
+                enable_spatial=enable_spatial,
+                lambda_spatial=lambda_spatial,
+                **kwargs,
             )
 
     def set_periodic_urgency_vector(self, urgency: np.ndarray | list | tuple) -> None:
@@ -496,7 +503,14 @@ def build_baseline(
     if key == "t1_predictive_utility":
         moe_cfg["enable_t0"] = True
         moe_cfg["enable_t1"] = True
+        moe_cfg.setdefault("enable_spatial", False)
         return MoEBaseline(SmartScanMoE(drqn, moe_cfg), source="t1_predictive_utility")
+
+    if key == "t1_spatial":
+        moe_cfg["enable_t0"] = True
+        moe_cfg["enable_t1"] = True
+        moe_cfg["enable_spatial"] = True
+        return MoEBaseline(SmartScanMoE(drqn, moe_cfg), source="t1_spatial")
 
     return MoEBaseline(SmartScanMoE(drqn, moe_cfg), source="full_moe")
 

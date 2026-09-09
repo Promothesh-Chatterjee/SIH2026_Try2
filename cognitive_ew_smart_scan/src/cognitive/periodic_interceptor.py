@@ -240,5 +240,5 @@ class PeriodicScanInterceptor:
                     break
                 t = pred["expected_time_us"] + repeats * pri
         schedule.sort(key=lambda x: x["expected_time_us"])
-        logger.info("Preemptive schedule horizon=%.0f → %d entries", horizon_us, len(schedule))
+        logger.debug("Preemptive schedule horizon=%.0f -> %d entries", horizon_us, len(schedule))
         return schedule
