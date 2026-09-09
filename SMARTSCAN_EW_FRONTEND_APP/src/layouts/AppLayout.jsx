@@ -4,15 +4,14 @@ import TopBar from "../components/TopBar";
 
 export default function AppLayout({ children }) {
   const [activePage, setActivePage] = useState("overview");
-  const [mode, setMode] = useState("live");
 
   return (
     <div className="st-shell">
-      <Sidebar activePage={activePage} setActivePage={setActivePage} mode={mode} setMode={setMode} />
+      <Sidebar activePage={activePage} setActivePage={setActivePage} />
       <div className="st-main">
-        <TopBar mode={mode} />
+        <TopBar />
         <main className="st-content">
-          {children({ activePage, mode })}
+          {children({ activePage })}
         </main>
       </div>
     </div>
