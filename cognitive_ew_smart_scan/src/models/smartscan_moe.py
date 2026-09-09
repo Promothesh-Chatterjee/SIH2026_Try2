@@ -617,6 +617,13 @@ class SmartScanMoE(nn.Module):
                 lambda_a=self.lambda_a,
             )
             pred_b_set = set(u_telem.get("predicted_bands", []))
+            act_res = u_telem.get("actionable_reservation", None)
+            if act_res is not None:
+                res_b = int(act_res["target_band"])
+                if res_b not in all_candidates:
+                    all_candidates.insert(0, res_b)
+                pred_b_set.add(res_b)
+
             if pred_b_set and all_candidates:
                 # Rank candidates by U(b, m) + optional gated spatial priority
                 cand_actions = [b * self.n_modes + m for b in all_candidates for m in range(self.n_modes)]
@@ -646,7 +653,13 @@ class SmartScanMoE(nn.Module):
         elif u_action is not None:
             best_b = band_of_action(u_action, self.n_modes)
             mode = int(mode_of_action(u_action, self.n_modes))
-            reason = "Predictive_utility_active"
+            act_res = u_telem.get("actionable_reservation", None) if "u_telem" in locals() else None
+            if act_res is not None and best_b == act_res["target_band"]:
+                reason = "Temporal_reservation_active"
+                if hasattr(self.temporal_predictor, "reservation_manager"):
+                    self.temporal_predictor.reservation_manager.mark_executed(act_res["reservation_id"])
+            else:
+                reason = "Predictive_utility_active"
         elif self.enable_t0 and pred_candidates and (pred_probs[pred_candidates[0]] >= 0.5) and not force_exploration and (self._consecutive_empty_band < 2):
             best_b = pred_candidates[0]
             reason = "Predictive_hop_intercept"

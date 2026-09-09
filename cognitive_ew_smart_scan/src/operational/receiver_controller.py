@@ -1,18 +1,20 @@
-﻿"""End-to-End Operational Receiver Controller for Cognitive EW Scanning.
+"""
+End-to-End Operational Receiver Controller for Cognitive EW Scanning.
 
 Architectural Contract:
-    Ingest -> Perception -> Tracking -> Prediction -> Scheduling -> Receiver Actuation -> Feedback
+    MissionClock -> OperationalStateBuilder (360-D) -> SmartScanMoE (Frozen 110k) ->
+    ReceiverAdapter (Retune + Dwell) -> Physical RF Extraction ->
+    EmitterTracker (Unsupervised Association) -> Temporal & Spatial Feedback -> Telemetry
 
-CRITICAL GOVERNANCE RULE:
-    The receiver controller MUST NOT contain an independent scheduling policy.
-    The single scheduling authority is strictly:
-        TemporalPredictor + SpatialTracker + Gate-110k SmartScanMoE
-
-Progressive validation levels supported:
-    Level 1: Synthetic PDW stream
-    Level 2: TSRD replay
-    Level 3: TSRD -> receiver simulation (CognitiveRFScanEnv)
-    Level 4: Hardware / Software-defined radio adapter interface
+CRITICAL GOVERNANCE RULES:
+    1. The controller MUST NOT contain an independent scheduling policy.
+       Scheduling authority is strictly:
+           TemporalPredictor + SpatialTracker + Gate-110k SmartScanMoE
+    2. ZERO dependence on ground-truth emitter IDs during live operation.
+       Interception, association, and tracking operate purely on measured physical attributes:
+           (frequency_mhz, time_us, pulse_width_us, amplitude_db, aoa_deg)
+       Ground-truth emitter labels are restricted to offline simulation verification.
+    3. Single authoritative MissionClock across all receiver, scheduling, and tracking layers.
 """
 
 from __future__ import annotations
@@ -38,15 +40,19 @@ from src.contracts import (
 from src.cognitive.spatial_tracker import SpatialTracker
 from src.cognitive.temporal_predictor import TemporalPredictor
 from src.models.smartscan_moe import SmartScanMoE
-from src.receiver.sieve_receiver import SieveReceiver
+from src.perception.emitter_tracker import EmitterTracker
+from src.receiver.mission_clock import MissionClock
 from src.receiver.models import DetectionObservation, ReceiverObservation
+from src.receiver.sieve_receiver import SieveReceiver
+from src.operational.receiver_adapter import ReceiverAdapter, ReceiverHardwareError
+from src.operational.state_builder import OperationalStateBuilder
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ReceiverTelemetryFrame:
-    """Standardized operational telemetry frame for logging and dashboard UI."""
+    """Standardized operational telemetry frame for logging, APIs, and dashboard."""
 
     step: int
     timestamp_us: float
@@ -68,7 +74,7 @@ class ReceiverTelemetryFrame:
 
     # Cognitive Explanation ("WHY THIS BAND?")
     decision_reason: str = "unknown"
-    predicted_track_id: int = -1
+    predicted_track_id: str = "None"
     predicted_band: int = -1
     p_next_band: float = 0.0
     predicted_eta_us: float = -1.0
@@ -109,7 +115,7 @@ class ReceiverTelemetryFrame:
             "detections": self.detections,
             "cognitive_explanation": {
                 "decision_reason": self.decision_reason,
-                "predicted_track_id": f"Track-{self.predicted_track_id:02d}" if self.predicted_track_id >= 0 else "None",
+                "predicted_track_id": self.predicted_track_id,
                 "predicted_band": self.predicted_band,
                 "p_next_band": self.p_next_band,
                 "predicted_eta_us": self.predicted_eta_us,
@@ -133,36 +139,36 @@ class ReceiverTelemetryFrame:
 
 
 class OperationalReceiverController:
-    """End-to-End Operational Receiver Controller Loop.
+    """Closed-Loop Operational Receiver Controller & Mission Orchestrator.
 
-    Coordinates physical receiver tuning, PDW ingestion, temporal prediction,
-    spatial tracking, and the cognitive MoE scheduler.
+    Owns the full operational loop without simulation shortcuts or oracle truth.
     """
 
     def __init__(
         self,
         moe_scheduler: SmartScanMoE,
-        receiver: Optional[SieveReceiver] = None,
+        receiver_adapter: Optional[ReceiverAdapter] = None,
+        clock: Optional[MissionClock] = None,
+        state_builder: Optional[OperationalStateBuilder] = None,
+        emitter_tracker: Optional[EmitterTracker] = None,
         retune_latency_us: float = 15.0,
         n_bands: int = CANONICAL_N_BANDS,
         n_modes: int = CANONICAL_N_MODES,
     ) -> None:
         self.moe_scheduler = moe_scheduler
-        self.n_bands = n_bands
-        self.n_modes = n_modes
+        self.n_bands = int(n_bands)
+        self.n_modes = int(n_modes)
         self.retune_latency_us = float(retune_latency_us)
 
-        # Receiver hardware / simulation instance
-        self.receiver = receiver or SieveReceiver(
-            total_bandwidth=18000.0,
-            ibw=500.0,
-            frequency_step=500.0,
-            dwell_time=500.0,
-        )
+        # Core runtime components
+        self.clock = clock or MissionClock()
+        self.receiver_adapter = receiver_adapter or ReceiverAdapter()
+        self.state_builder = state_builder or OperationalStateBuilder(n_bands=self.n_bands)
+        self.emitter_tracker = emitter_tracker or EmitterTracker(n_bands=self.n_bands)
 
-        # Pipeline state
+        # Operational state
         self.current_step: int = 0
-        self.clock_us: float = 0.0
+        self.is_mission_active: bool = False
         self.pdw_buffer: List[Dict[str, Any]] = []
         self.telemetry_history: List[ReceiverTelemetryFrame] = []
 
@@ -171,17 +177,41 @@ class OperationalReceiverController:
         self.total_hits: int = 0
         self.latencies: List[float] = []
 
-    def reset(self) -> None:
-        """Reset internal receiver and pipeline states."""
+    @property
+    def clock_us(self) -> float:
+        """Compatibility property for mission clock."""
+        return self.clock.current_time_us
+
+    @clock_us.setter
+    def clock_us(self, val: float) -> None:
+        self.clock.reset(float(val))
+
+    def reset(self, initial_time_us: float = 0.0) -> None:
+        """Reset internal receiver, mission clock, and tracking states."""
         self.current_step = 0
-        self.clock_us = 0.0
+        self.is_mission_active = False
+        self.clock.reset(initial_time_us)
         self.pdw_buffer.clear()
         self.telemetry_history.clear()
         self.total_dwells = 0
         self.total_hits = 0
         self.latencies.clear()
-        self.receiver.reset()
+
+        self.receiver_adapter.reset()
+        self.state_builder.reset()
+        self.emitter_tracker.reset()
         self.moe_scheduler.reset()
+
+    def start_mission(self, initial_time_us: float = 0.0) -> None:
+        """Commence operational closed-loop mission."""
+        self.reset(initial_time_us)
+        self.is_mission_active = True
+        logger.info("[OPERATIONAL CONTROLLER] Mission started at t = %.1f µs", initial_time_us)
+
+    def stop_mission(self) -> None:
+        """Terminate operational mission."""
+        self.is_mission_active = False
+        logger.info("[OPERATIONAL CONTROLLER] Mission stopped after %d dwells (%d hits)", self.total_dwells, self.total_hits)
 
     def band_to_center_freq(self, band: int) -> float:
         """Map band index [0, 35] to receiver center frequency in MHz."""
@@ -199,120 +229,209 @@ class OperationalReceiverController:
         pulse_width_us: float = 1.0,
         amplitude_db: float = -50.0,
         aoa_deg: float = 0.0,
-        emitter_id: int = 0,
-    ) -> None:
-        """Ingest external PDW into perception pipeline."""
+        source_pulse_id: Optional[Any] = None,
+        ground_truth_emitter_id: Optional[int] = None,
+    ) -> int:
+        """Ingest external PDW into perception pipeline WITHOUT privileged truth.
+        
+        Associates pulse via EmitterTracker to determine internal associated_track_id.
+        
+        Returns:
+            The associated internal track ID.
+        """
+        # Validate input parameters against corruption / NaNs
+        if not math.isfinite(float(time_us)) or float(time_us) < 0.0:
+            raise ValueError(f"Invalid pulse time_us: {time_us!r}")
+        if not math.isfinite(float(frequency_mhz)) or float(frequency_mhz) < 0.0 or float(frequency_mhz) > 18000.0:
+            raise ValueError(f"Invalid pulse frequency_mhz: {frequency_mhz!r}")
+        if not math.isfinite(float(pulse_width_us)) or float(pulse_width_us) <= 0.0:
+            raise ValueError(f"Invalid pulse_width_us: {pulse_width_us!r}")
+        if not math.isfinite(float(amplitude_db)):
+            raise ValueError(f"Invalid amplitude_db: {amplitude_db!r}")
+
+        band = int(min(self.n_bands - 1, max(0, int(frequency_mhz // 500.0))))
+        clean_aoa = float(aoa_deg) if math.isfinite(float(aoa_deg)) else 0.0
+
         pdw = {
             "time_us": float(time_us),
             "frequency_mhz": float(frequency_mhz),
             "pulse_width_us": float(pulse_width_us),
             "amplitude_db": float(amplitude_db),
-            "aoa_deg": float(aoa_deg),
-            "emitter_id": int(emitter_id),
-            "band": int(min(self.n_bands - 1, max(0, int(frequency_mhz // 500.0)))),
+            "aoa_deg": clean_aoa,
+            "pulse_id": source_pulse_id,
+            "band": band,
         }
         self.pdw_buffer.append(pdw)
 
-        # Causal live updates to tracking layers
+        # Associate pulse into internal tracks
+        track_id = self._associate_pulse_to_track(pdw)
+
+        # Update causal tracking layers using internal track_id
         self.moe_scheduler.temporal_predictor.update_from_pulse(
-            track_id=pdw["emitter_id"],
+            track_id=track_id,
             toa_us=pdw["time_us"],
             freq_mhz=pdw["frequency_mhz"],
             band=pdw["band"],
         )
-        if np.isfinite(aoa_deg):
+        if math.isfinite(clean_aoa):
             self.moe_scheduler.spatial_tracker.update_from_track(
-                track_id=pdw["emitter_id"],
-                new_aoa_deg=float(aoa_deg),
+                track_id=track_id,
+                new_aoa_deg=clean_aoa,
                 current_time_us=pdw["time_us"],
             )
 
+        return track_id
+
+    def _associate_pulse_to_track(self, pdw: Dict[str, Any]) -> int:
+        """Associate a single physical PDW to an existing or new emitter track."""
+        f_pulse = float(pdw["frequency_mhz"])
+        aoa_pulse = float(pdw.get("aoa_deg", 0.0))
+        t_pulse = float(pdw["time_us"])
+        band = int(pdw.get("band", min(self.n_bands - 1, max(0, int(f_pulse // 500.0)))))
+
+        labels = np.array([0], dtype=np.int64)
+        toa_us = np.array([t_pulse], dtype=np.float64)
+        freq_mhz = np.array([f_pulse], dtype=np.float64)
+        aoa_deg = np.array([aoa_pulse], dtype=np.float64)
+        pw_us = np.array([pdw["pulse_width_us"]], dtype=np.float64)
+        amp_db = np.array([pdw["amplitude_db"]], dtype=np.float64)
+
+        updated_tracks = self.emitter_tracker.update_from_deinterleaver(
+            labels=labels,
+            toa_us=toa_us,
+            freq_mhz=freq_mhz,
+            aoa_deg=aoa_deg,
+            pw_us=pw_us,
+            amp_db=amp_db,
+            current_time=t_pulse,
+            band=band,
+            min_cluster_size=1,
+        )
+
+        assigned_tids = self.emitter_tracker.get_pulse_track_assignment(labels)
+        if len(assigned_tids) > 0 and assigned_tids[0] >= 0:
+            return int(assigned_tids[0])
+        elif updated_tracks:
+            return int(next(iter(updated_tracks.keys())))
+        return 0
+
     def execute_operational_step(
         self,
-        obs: np.ndarray,
+        obs: Optional[np.ndarray] = None,
         scenario_pulses: Optional[Sequence[Any]] = None,
+        external_rf_stream: Optional[Sequence[Any]] = None,
     ) -> ReceiverTelemetryFrame:
-        """Execute one complete cognitive scan cycle:
+        """Execute one complete, closed-loop operational scan cycle.
         
-        1. Schedule action via Gate-110k MoE scheduler
-        2. Actuate receiver tuning + retune latency
-        3. Execute physical RF dwell aperture
-        4. Detect pulses matching (frequency, time) window
-        5. Feedback results into MoE and temporal/spatial trackers
-        6. Generate telemetry frame
+        Flow:
+          1. Synchronize Mission Clock
+          2. Causally buffer incident RF (if pulses provided)
+          3. Build canonical 360-D observation state (or use supplied obs)
+          4. SmartScanMoE cognitive arbitration (action = b * 5 + m)
+          5. Advance clock by retune latency and tune receiver
+          6. Advance clock by dwell duration and execute physical aperture
+          7. Unsupervised pulse association (no ground-truth emitter_id)
+          8. Feedback to trackers and state builder
+          9. Publish standardized telemetry frame
         """
-        # 1. Cognitive Scheduling (Strictly delegates to Gate-110k MoE)
-        action, _, attr = self.moe_scheduler.select_action(obs)
+        t_now = self.clock.current_time_us
+
+        # 1. Ingest incident RF causally into receiver front-end
+        stream = external_rf_stream if external_rf_stream is not None else scenario_pulses
+        if stream is not None:
+            # Allow feeding up to generous dwell lookahead (e.g. 15 us retune + 1250 us max dwell)
+            self.receiver_adapter.feed_incident_rf(
+                stream,
+                max_time_us=t_now + self.retune_latency_us + 1500.0,
+            )
+
+        # 2. Build canonical 360-D observation state
+        if obs is not None:
+            effective_obs = obs
+        else:
+            effective_obs = self.state_builder.build_state(
+                current_time_us=t_now,
+                active_tracks=self.emitter_tracker.tracks,
+                spatial_tracker=self.moe_scheduler.spatial_tracker,
+            )
+
+        # 3. Schedule action via Gate-110k MoE scheduler
+        self.moe_scheduler._simulated_clock_us = t_now
+        action, _, attr = self.moe_scheduler.select_action(effective_obs)
         action = int(action)
         selected_band = band_of_action(action, self.n_modes)
         selected_mode = mode_of_action(action, self.n_modes)
         dwell_duration = self.mode_to_duration(selected_mode)
 
-        # 2. Receiver Actuation
+        # 4. Receiver Actuation: Retune
         target_center_mhz = self.band_to_center_freq(selected_band)
-        # Advance clock by retune latency
-        self.clock_us += self.retune_latency_us
-        dwell_start = self.clock_us
-        dwell_end = dwell_start + dwell_duration
-        self.clock_us = dwell_end
+        self.receiver_adapter.tune(target_center_mhz)
+        self.receiver_adapter.set_dwell_time(dwell_duration)
+        retune_start, retune_end = self.clock.advance_retune(self.retune_latency_us)
 
-        self.receiver.tune(target_center_mhz)
-        self.receiver.set_dwell_time(dwell_duration)
+        # 5. Dwell Execution: Physical Aperture Window
+        dwell_start, dwell_end = self.clock.advance_dwell(dwell_duration)
+        detected_pdws = self.receiver_adapter.execute_dwell(dwell_start, dwell_end)
 
-        # 3 & 4. Dwell Execution & Detection
-        f_min = selected_band * 500.0
-        f_max = (selected_band + 1) * 500.0
-        detections: List[Dict[str, Any]] = []
+        hit = len(detected_pdws) > 0
         intercept_time_us: Optional[float] = None
+        if hit:
+            t_first = min(p["time_us"] for p in detected_pdws)
+            intercept_time_us = float(max(0.0, t_first - dwell_start))
+            self.latencies.append(intercept_time_us)
+            self.total_hits += 1
 
-        if scenario_pulses is not None:
-            for p in scenario_pulses:
-                t_arr = float(getattr(p, "time_us", getattr(p, "toa_us", 0.0)))
-                f_pulse = float(getattr(p, "frequency_mhz", 0.0))
-                if (dwell_start <= t_arr <= dwell_end) and (f_min <= f_pulse <= f_max):
-                    aoa = float(getattr(p, "aoa_deg", 0.0))
-                    eid = int(getattr(p, "emitter_id", 0))
-                    det_dict = {
-                        "time_us": t_arr,
-                        "frequency_mhz": f_pulse,
-                        "aoa_deg": aoa,
-                        "emitter_id": eid,
-                        "pulse_width_us": float(getattr(p, "pulse_width_us", 1.0)),
-                    }
-                    detections.append(det_dict)
-                    if intercept_time_us is None or (t_arr - dwell_start) < intercept_time_us:
-                        intercept_time_us = float(t_arr - dwell_start)
-                    # Ingest causally into pipeline
-                    self.ingest_pdw(
-                        time_us=t_arr,
-                        frequency_mhz=f_pulse,
-                        aoa_deg=aoa,
-                        emitter_id=eid,
+        self.total_dwells += 1
+
+        # 6. Unsupervised Track Association & Perception Feedback
+        if hit:
+            # Associate detected pulses without ground-truth labels
+            for p in detected_pdws:
+                t_arr = p["time_us"]
+                f_pulse = p["frequency_mhz"]
+                aoa = p["aoa_deg"]
+                tid = self._associate_pulse_to_track(p)
+
+                # Feed into causal predictors
+                self.moe_scheduler.temporal_predictor.update_from_pulse(
+                    track_id=tid,
+                    toa_us=t_arr,
+                    freq_mhz=f_pulse,
+                    band=selected_band,
+                )
+                if math.isfinite(aoa):
+                    self.moe_scheduler.spatial_tracker.update_from_track(
+                        track_id=tid,
+                        new_aoa_deg=aoa,
+                        current_time_us=t_arr,
                     )
 
-        hit = len(detections) > 0
-
-        # 5. Feedback Loop
-        self.moe_scheduler.update_result(
-            hit=hit,
+        # Feedback dwell outcome to state builder and MoE scheduler
+        self.state_builder.record_dwell_outcome(
             band=selected_band,
-            detections=detections,
-            current_time=dwell_end,
+            hit=hit,
+            current_time_us=dwell_end,
+            num_pulses=len(detected_pdws),
         )
-        self.moe_scheduler.update(action)
+        if hasattr(self.moe_scheduler, "update_result"):
+            try:
+                self.moe_scheduler.update_result(
+                    hit=hit,
+                    band=selected_band,
+                    detections=detected_pdws,
+                    current_time=dwell_end,
+                )
+            except TypeError:
+                self.moe_scheduler.update_result(hit=hit, band=selected_band)
 
-        # 6. Accumulate Metrics
-        self.total_dwells += 1
-        if hit:
-            self.total_hits += 1
-            if intercept_time_us is not None:
-                self.latencies.append(intercept_time_us)
+        if hasattr(self.moe_scheduler, "update"):
+            self.moe_scheduler.update(action)
 
-        rolling_pd = self.total_hits / max(1, self.total_dwells)
-        rolling_med_lat = float(np.median(self.latencies)) if self.latencies else float("nan")
+        # 7. Construct Standardized Telemetry Frame
+        rolling_pd = float(self.total_hits / self.total_dwells) if self.total_dwells > 0 else 0.0
+        rolling_med_lat = float(np.median(self.latencies)) if self.latencies else 0.0
 
-        # 7. Construct Telemetry Frame
-        frame = ReceiverTelemetryFrame(
+        telemetry_frame = ReceiverTelemetryFrame(
             step=self.current_step,
             timestamp_us=dwell_end,
             dwell_start_us=dwell_start,
@@ -325,14 +444,14 @@ class OperationalReceiverController:
             dwell_duration_us=dwell_duration,
             retune_latency_us=self.retune_latency_us,
             hit=hit,
-            num_detections=len(detections),
+            num_detections=len(detected_pdws),
             intercept_time_us=intercept_time_us,
-            detections=detections,
-            decision_reason=str(attr.get("reason", "unknown")),
-            predicted_track_id=int(attr.get("predicted_track_id", -1)),
+            detections=detected_pdws,
+            decision_reason=str(attr.get("reason", "DRQN_active")),
+            predicted_track_id=str(attr.get("predicted_track_id", "None")),
             predicted_band=int(attr.get("predicted_band", -1)),
             p_next_band=float(attr.get("p_next_band", 0.0)),
-            predicted_eta_us=float(attr.get("eta_us", -1.0)),
+            predicted_eta_us=float(attr.get("predicted_eta_us", -1.0)),
             spatial_confidence=float(attr.get("spatial_confidence", 0.0)),
             aoa_deg=float(attr.get("aoa_deg", -1.0)),
             agility_score=float(attr.get("agility_score", 0.0)),
@@ -348,6 +467,6 @@ class OperationalReceiverController:
             consecutive_empty_total=int(getattr(self.moe_scheduler, "_consecutive_empty_total", 0)),
         )
 
-        self.telemetry_history.append(frame)
+        self.telemetry_history.append(telemetry_frame)
         self.current_step += 1
-        return frame
+        return telemetry_frame

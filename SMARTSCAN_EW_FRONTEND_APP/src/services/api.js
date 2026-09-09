@@ -87,6 +87,36 @@ export const api = {
   getEmitterMemory() {
     return request("/memory/emitters");
   },
+
+  startMission(initialTimeUs = 0.0) {
+    return request("/mission/start", {
+      method: "POST",
+      body: JSON.stringify({ initial_time_us: initialTimeUs }),
+    });
+  },
+
+  stepMission(pdws = null, obs = null) {
+    return request("/mission/step", {
+      method: "POST",
+      body: JSON.stringify({ pdws, obs }),
+    });
+  },
+
+  stopMission() {
+    return request("/mission/stop", {
+      method: "POST",
+    });
+  },
+
+  getMissionStatus() {
+    return request("/mission/status");
+  },
+
+  resetMission() {
+    return request("/reset", {
+      method: "POST",
+    });
+  },
 };
 
 export { API_BASE_URL };

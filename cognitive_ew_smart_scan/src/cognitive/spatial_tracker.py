@@ -19,6 +19,10 @@ class SpatialTracker:
         self.sector_width_deg = 360.0 / n_sectors
         self.max_history = max_history
         self.beliefs: dict[int, SpatialBelief] = {}
+        self.sector_weights: dict[int, float] = {i: 1.0 for i in range(n_sectors)}
+
+    def set_sector_weight(self, sector_index: int, weight: float) -> None:
+        self.sector_weights[int(sector_index)] = float(weight)
 
     @staticmethod
     def compute_circular_mean_and_r(angles_deg: list[float]) -> tuple[float, float]:
@@ -66,7 +70,9 @@ class SpatialTracker:
             return 0.0
         dt = max(0.0, current_time_us - sb.last_update_us)
         decay = math.exp(-dt / 100000.0)
-        return float(min(1.0, max(0.0, sb.confidence * decay)))
+        base_prio = float(min(1.0, max(0.0, sb.confidence * decay)))
+        sec_w = self.sector_weights.get(sb.sector_index, 1.0)
+        return float(base_prio * sec_w)
 
     def prune_stale(self, max_age_us: float, current_time_us: float) -> None:
         stale = [tid for tid, sb in self.beliefs.items() if (current_time_us - sb.last_update_us) > max_age_us]
