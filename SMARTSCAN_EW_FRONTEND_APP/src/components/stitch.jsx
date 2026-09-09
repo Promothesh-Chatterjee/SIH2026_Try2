@@ -140,17 +140,6 @@ export function BandMatrix({ tuneBand = 16 }) {
             />
           ))}
         </div>
-        <div className="st-ibw">
-          <span className="st-badge" style={{ color: "#bdc2ff" }}>
-            IBW RX: 8.0-9.0G
-          </span>
-          <span className="st-mark" style={{ color: "#bdc2ff", textAlign: "center" }}>
-            1 GHz IBW LOCKED
-          </span>
-          <span className="st-badge" style={{ color: "#bdc2ff", justifyContent: "center" }}>
-            DWELL: 120µs
-          </span>
-        </div>
       </div>
       <div className="st-mark" style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px", color: "#908f9e" }}>
         {["B01", "B04", "B08", "B12", "B16", "B20", "B24", "B28", "B32", "B36"].map((t) => (
