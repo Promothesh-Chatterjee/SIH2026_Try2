@@ -1,4 +1,10 @@
 import { useMemo, useState } from "react";
+import {
+  CmdBadge,
+  PanelHead,
+  StitchTable,
+  TruthBanner,
+} from "../components/stitch";
 
 const MOCK_EMITTERS = [
   {
@@ -52,456 +58,336 @@ const MOCK_EMITTERS = [
 ];
 
 const FREQUENCY_TRACKS = [
-  {
-    id: "E-01",
-    points: [3250, 3250, 3250, 3250, 3250, 3250],
-  },
-  {
-    id: "E-02",
-    points: [5250, 5250, 5252, 5251, 5253, 5251],
-  },
-  {
-    id: "E-03",
-    points: [8250, 8250, 8750, 8250, 9000, 8250],
-  },
-  {
-    id: "E-04",
-    points: [14250, 14750, 14250, 15250, 14250, 15750],
-  },
+  { id: "E-01", points: [3250, 3250, 3250, 3250, 3250, 3250] },
+  { id: "E-02", points: [5250, 5250, 5252, 5251, 5253, 5251] },
+  { id: "E-03", points: [8250, 8250, 8750, 8250, 9000, 8250] },
+  { id: "E-04", points: [14250, 14750, 14250, 15250, 14250, 15750] },
 ];
 
-const TIME_POINTS = [
-  "T-500",
-  "T-400",
-  "T-300",
-  "T-200",
-  "T-100",
-  "NOW",
-];
+const TIME_POINTS = ["T-500", "T-400", "T-300", "T-200", "T-100", "NOW"];
+
+const TRACK_COLORS = ["#96ccff", "#49df9d", "#f59e0b", "#bdc2ff"];
 
 export default function Emitters() {
-  const [selectedEmitterId, setSelectedEmitterId] =
-    useState("E-03");
+  const [selectedEmitterId, setSelectedEmitterId] = useState("E-03");
 
   const selectedEmitter = useMemo(
     () =>
-      MOCK_EMITTERS.find(
-        (emitter) => emitter.id === selectedEmitterId
-      ) ?? MOCK_EMITTERS[0],
+      MOCK_EMITTERS.find((emitter) => emitter.id === selectedEmitterId) ??
+      MOCK_EMITTERS[0],
     [selectedEmitterId]
   );
 
+  const trackColor = (emitId) =>
+    TRACK_COLORS[MOCK_EMITTERS.findIndex((e) => e.id === emitId) % TRACK_COLORS.length];
+
   return (
-    <div className="emitters-page">
-      <div className="page-title-row">
-        <div>
-          <div className="page-kicker">
-            SIMULATION TRUTH // OPERATOR VIEW ONLY
-          </div>
-
-          <h1>Emitter Ground Truth Intelligence</h1>
-
-          <p>
-            Operator-facing simulation truth for understanding
-            the RF environment independently of scheduler
-            observations.
-          </p>
-        </div>
-
-        <div className="truth-warning">
-          SIMULATION TRUTH / OPERATOR VIEW
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div className="st-panel">
+        <PanelHead
+          icon="radar"
+          title="EMITTER GROUND TRUTH INTELLIGENCE"
+          badge="SIMULATION TRUTH // OPERATOR VIEW ONLY"
+          badgeColor="#f59e0b"
+        />
+        <div className="st-body" style={{ color: "#c6c5d5" }}>
+          Operator-facing simulation truth for understanding the RF
+          environment independently of scheduler observations. This
+          information is not supplied to the scheduler observation.
         </div>
       </div>
 
-      <div className="truth-banner">
-        <strong>IMPORTANT:</strong>
-        <span>
-          This information describes the simulated RF environment.
-          It is not supplied to the scheduler observation.
-        </span>
-      </div>
+      <TruthBanner />
 
-      <div className="st-grid-12" style={{ marginBottom: 4 }}>
-        <div className="st-span-4 st-panel" style={{ padding: 8 }}>
+      <section className="st-kpi-grid" aria-label="Truth metric strip">
+        <div className="st-kpi" style={{ gridColumn: "span 3" }}>
           <span className="st-tsm" style={{ color: "#908f9e" }}>
-            Mean Detection Latency
+            MEAN DETECTION LATENCY
           </span>
-          <strong className="st-tlg">42 µs</strong>
+          <span className="st-tlg" style={{ color: "#e2e2e8" }}>
+            42 µs
+          </span>
+          <span className="st-kpi-foot">
+            <span>TRACK-LOCK EDGE</span>
+          </span>
         </div>
-        <div className="st-span-4 st-panel" style={{ padding: 8 }}>
+        <div className="st-kpi" style={{ gridColumn: "span 3" }}>
           <span className="st-tsm" style={{ color: "#908f9e" }}>
-            Missed Revisit Deadlines
+            MISSED REVISIT DEADLINES
           </span>
-          <strong className="st-tlg">0</strong>
+          <span className="st-tlg" style={{ color: "#49df9d" }}>
+            0
+          </span>
+          <span className="st-kpi-foot">
+            <span>REVISIT ARMED</span>
+          </span>
         </div>
-        <div className="st-span-4 st-panel" style={{ padding: 8 }}>
+        <div className="st-kpi" style={{ gridColumn: "span 3" }}>
           <span className="st-tsm" style={{ color: "#908f9e" }}>
-            Scheduler Omniscience Leak
+            SCHEDULER OMNISCIENCE LEAK
           </span>
-          <strong className="st-tlg" style={{ color: "#49df9d" }}>
+          <span className="st-tlg" style={{ color: "#49df9d" }}>
             0 — ENFORCED
-          </strong>
+          </span>
+          <span className="st-kpi-foot">
+            <span>GT ISOLATION ACTIVE</span>
+          </span>
         </div>
-      </div>
-
-      <div className="emitter-kpis">
-        <div className="metric-card">
-          <div className="metric-label">
+        <div className="st-kpi" style={{ gridColumn: "span 3" }}>
+          <span className="st-tsm" style={{ color: "#908f9e" }}>
             TOTAL EMITTERS
-          </div>
-
-          <div className="metric-value">
+          </span>
+          <span className="st-tlg" style={{ color: "#bdc2ff" }}>
             {MOCK_EMITTERS.length}
-          </div>
-
-          <div className="metric-status">
-            Scenario configuration
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-label">
-            ACTIVE
-          </div>
-
-          <div className="metric-value">
-            {
-              MOCK_EMITTERS.filter(
-                (emitter) => emitter.activity === "ACTIVE"
-              ).length
-            }
-          </div>
-
-          <div className="metric-status">
-            Currently transmitting
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-label">
-            HIGH AGILITY
-          </div>
-
-          <div className="metric-value">
-            {
-              MOCK_EMITTERS.filter(
-                (emitter) => emitter.agility === "HIGH"
-              ).length
-            }
-          </div>
-
-          <div className="metric-status">
-            Frequency-agile emitters
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-label">
-            PERIODIC
-          </div>
-
-          <div className="metric-value">
-            {MOCK_EMITTERS.length}
-          </div>
-
-          <div className="metric-status">
-            PRI-defined scenarios
-          </div>
-        </div>
-      </div>
-
-      <section className="panel emitter-track-panel">
-        <div className="panel-header">
-          <div>
-              <div className="panel-kicker">
-                AGILE HOP TRAJECTORY
-              </div>
-
-              <h2>Agile Hop Trajectory: {selectedEmitterId} // Spatial Bearing (AoA) vs RF Bands</h2>
-          </div>
-
-          <div className="panel-badge">
-            SIMULATION TRUTH
-          </div>
-        </div>
-
-        <div className="track-chart">
-          <div className="track-y-axis">
-            <span>18 GHz</span>
-            <span>14 GHz</span>
-            <span>10 GHz</span>
-            <span>6 GHz</span>
-            <span>2 GHz</span>
-            <span>0 GHz</span>
-          </div>
-
-          <div className="track-chart-area">
-            <div className="track-grid-lines">
-              {[0, 1, 2, 3, 4].map((line) => (
-                <span
-                  key={line}
-                  style={{
-                    top: `${line * 25}%`,
-                  }}
-                />
-              ))}
-            </div>
-
-            {FREQUENCY_TRACKS.map((track, trackIndex) => {
-              const colorClass = `track-color-${trackIndex}`;
-
-              return (
-                <div
-                  className={`frequency-track ${colorClass}`}
-                  key={track.id}
-                >
-                  <span className="track-label">
-                    {track.id}
-                  </span>
-
-                  {track.points.map(
-                    (frequency, index) => {
-                      const left =
-                        (index /
-                          (track.points.length - 1)) *
-                        100;
-
-                      const bottom =
-                        (frequency / 18000) * 100;
-
-                      return (
-                        <span
-                          key={index}
-                          className="track-point"
-                          style={{
-                            left: `${left}%`,
-                            bottom: `${bottom}%`,
-                          }}
-                        />
-                      );
-                    }
-                  )}
-
-                  {track.points.slice(0, -1).map(
-                    (frequency, index) => {
-                      const next =
-                        track.points[index + 1];
-
-                      const x1 =
-                        (index /
-                          (track.points.length - 1)) *
-                        100;
-
-                      const x2 =
-                        ((index + 1) /
-                          (track.points.length - 1)) *
-                        100;
-
-                      const y1 =
-                        (frequency / 18000) * 100;
-
-                      const y2 =
-                        (next / 18000) * 100;
-
-                      const dx = x2 - x1;
-                      const dy = y2 - y1;
-
-                      const length =
-                        Math.sqrt(dx * dx + dy * dy);
-
-                      const angle =
-                        (Math.atan2(dy, dx) * 180) /
-                        Math.PI;
-
-                      return (
-                        <span
-                          key={`${track.id}-segment-${index}`}
-                          className="track-segment"
-                          style={{
-                            left: `${x1}%`,
-                            bottom: `${y1}%`,
-                            width: `${length}%`,
-                            transform: `rotate(${angle}deg)`,
-                          }}
-                        />
-                      );
-                    }
-                  )}
-                </div>
-              );
-            })}
-
-            <div className="track-x-axis">
-              {TIME_POINTS.map((time) => (
-                <span key={time}>{time} ms</span>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="track-legend">
-          {MOCK_EMITTERS.map((emitter) => (
-            <button
-              key={emitter.id}
-              className={
-                selectedEmitterId === emitter.id
-                  ? "track-legend-item selected"
-                  : "track-legend-item"
-              }
-              onClick={() =>
-                setSelectedEmitterId(emitter.id)
-              }
-            >
-              <span />
-              {emitter.id}
-            </button>
-          ))}
+          </span>
+          <span className="st-kpi-foot">
+            <span>SCENARIO CONFIG</span>
+          </span>
         </div>
       </section>
 
-      <div className="emitter-detail-grid">
-        <section className="panel emitter-table-panel">
-          <div className="panel-header">
-            <div>
-              <div className="panel-kicker">
-                GROUND TRUTH EMITTER REGISTRY & WAVEFORM PROFILES
+      <div className="st-grid-12">
+        <div className="st-span-8 st-panel">
+          <PanelHead
+            icon="multiline_chart"
+            title="AGILE HOP TRAJECTORY — SPATIAL BEARING (AoA) vs RF BANDS"
+            badge={`SEL: ${selectedEmitterId}`}
+            badgeColor="#96ccff"
+          />
+          <div className="st-spec">
+            <div
+              className="st-tsm"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                padding: "2px 4px",
+                color: "#908f9e",
+              }}
+            >
+              {TIME_POINTS.map((t) => (
+                <span key={t}>{t} ms</span>
+              ))}
+            </div>
+            <div style={{ position: "relative", height: 220, borderTop: "1px solid rgba(69,70,83,0.7)" }}>
+              {[0, 1, 2, 3, 4, 5].map((line) => (
+                <div
+                  key={line}
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    top: `${(line / 5) * 100}%`,
+                    borderTop: `1px solid rgba(69,70,83,${line === 0 || line === 5 ? 1 : 0.35})`,
+                  }}
+                />
+              ))}
+              {[
+                ["18 GHz", 18000],
+                ["14 GHz", 14000],
+                ["10 GHz", 10000],
+                ["6 GHz", 6000],
+                ["2 GHz", 2000],
+                ["0 GHz", 0],
+              ].map(([label, freq]) => (
+                <span
+                  key={label}
+                  className="st-mark"
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: `${(1 - freq / 18000) * 100}%`,
+                    transform: "translateY(-100%)",
+                    color: "#908f9e",
+                  }}
+                >
+                  {label}
+                </span>
+              ))}
+              {FREQUENCY_TRACKS.map((track, trackIndex) => {
+                const color = trackColor(track.id);
+                return (
+                  <div key={track.id} style={{ position: "absolute", inset: 0 }}>
+                    <span
+                      className="st-badge"
+                      style={{ position: "absolute", top: 0, right: 0, color }}
+                    >
+                      {track.id}
+                    </span>
+                    {track.points.map((frequency, index) => {
+                      const left = (index / (track.points.length - 1)) * 100;
+                      const bottom = (frequency / 18000) * 100;
+                      return (
+                        <span
+                          key={index}
+                          title={`${track.id} ${frequency} MHz`}
+                          style={{
+                            position: "absolute",
+                            left: `${left}%`,
+                            bottom: `${bottom}%`,
+                            width: 6,
+                            height: 6,
+                            background: color,
+                            transform: "translate(-50%, 50%)",
+                          }}
+                        />
+                      );
+                    })}
+                    {track.points.slice(0, -1).map((frequency, index) => {
+                      const next = track.points[index + 1];
+                      const x1 = (index / (track.points.length - 1)) * 100;
+                      const x2 = ((index + 1) / (track.points.length - 1)) * 100;
+                      const y1 = (frequency / 18000) * 100;
+                      const y2 = (next / 18000) * 100;
+                      const dx = x2 - x1;
+                      const dy = y2 - y1;
+                      const length = Math.sqrt(dx * dx + dy * dy);
+                      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+                      return (
+                        <span
+                          key={`${track.id}-segment-${index}`}
+                          style={{
+                            position: "absolute",
+                            left: `${x1}%`,
+                            bottom: `${y1}%`,
+                            width: `${length}%`,
+                            height: 1,
+                            background: color,
+                            transform: `rotate(${angle}deg)`,
+                            transformOrigin: "0 100%",
+                            opacity: trackIndex === 0 ? 1 : 0.6,
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+            <div
+              className="st-mark"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                padding: "2px 4px",
+                color: "#908f9e",
+              }}
+            >
+              {TIME_POINTS.map((t) => (
+                <span key={t}>{t.includes("NOW") ? "NOW" : ""}</span>
+              ))}
+            </div>
+          </div>
+          <div className="st-tsm" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {MOCK_EMITTERS.map((emitter) => (
+              <button
+                key={emitter.id}
+                className="st-badge"
+                style={{
+                  cursor: "pointer",
+                  color: selectedEmitterId === emitter.id ? "#0b1c93" : trackColor(emitter.id),
+                  background: selectedEmitterId === emitter.id ? "#bdc2ff" : "#1a1c20",
+                  borderColor: selectedEmitterId === emitter.id ? "#bdc2ff" : "#454653",
+                }}
+                onClick={() => setSelectedEmitterId(emitter.id)}
+              >
+                {emitter.id}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <aside className="st-span-4 st-panel">
+          <PanelHead title="SELECTED EMITTER" badge={selectedEmitter.id} badgeColor="#bdc2ff" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div className="st-tmd" style={{ color: "#49df9d" }}>
+              {selectedEmitter.activity}
+            </div>
+            {[
+              ["FREQUENCY", `${selectedEmitter.frequencyMHz.toFixed(1)} MHz`],
+              ["PRI", `${selectedEmitter.priUs} µs`],
+              ["PULSE WIDTH", `${selectedEmitter.pulseWidthUs} µs`],
+              ["AMPLITUDE", `${selectedEmitter.amplitudeDb.toFixed(1)} dB`],
+              ["AOA", `${selectedEmitter.aoaDeg}°`],
+              ["AGILITY", selectedEmitter.agility],
+              ["LAST SEEN", `${selectedEmitter.lastSeenUs} µs`],
+              ["NEXT EXPECTED", `${selectedEmitter.nextExpectedUs} µs`],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="st-tsm"
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  padding: "4px 6px",
+                  background: "#1a1c20",
+                  border: "1px solid #454653",
+                }}
+              >
+                <span style={{ color: "#908f9e" }}>{label}</span>
+                <strong style={{ color: "#e2e2e8" }}>{value}</strong>
               </div>
-
-              <h2>Scenario Emitters — Simulation Truth</h2>
-            </div>
-
-            <div className="panel-badge">
-              {MOCK_EMITTERS.length} EMITTERS
-            </div>
+            ))}
           </div>
-
-          <div className="emitter-table-wrapper">
-            <table className="emitter-table">
-              <thead>
-                <tr>
-                  <th>EMIT-ID</th>
-                  <th>TRACK TAG</th>
-                  <th>BAND / FREQUENCY</th>
-                  <th>PRI (PULSE INTERVAL)</th>
-                  <th>PW (WIDTH)</th>
-                  <th>AOA</th>
-                  <th>THREAT TIER</th>
-                  <th>REVISIT DEADLINE</th>
-                  <th>REAL-TIME STATUS</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {MOCK_EMITTERS.map((emitter) => (
-                  <tr
-                    key={emitter.id}
-                    className={
-                      selectedEmitterId === emitter.id
-                        ? "selected"
-                        : ""
-                    }
-                    onClick={() =>
-                      setSelectedEmitterId(emitter.id)
-                    }
-                  >
-                    <td>{emitter.id}</td>
-                    <td>TRK-{emitter.id.replace("E-", "").padStart(3, "0")}</td>
-                    <td>
-                      B{Math.floor(emitter.frequencyMHz / 500)} /{" "}
-                      {emitter.frequencyMHz.toFixed(1)} MHz
-                    </td>
-                    <td>{emitter.priUs} µs</td>
-                    <td>{emitter.pulseWidthUs} µs</td>
-                    <td>{emitter.aoaDeg}°</td>
-                    <td>
-                      {emitter.agility === "HIGH"
-                        ? "TIER-1"
-                        : emitter.agility === "MEDIUM"
-                          ? "TIER-2"
-                          : "TIER-3"}
-                    </td>
-                    <td>{emitter.nextExpectedUs} µs</td>
-                    <td>{emitter.activity}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <aside className="panel emitter-selected-panel">
-          <div className="panel-kicker">
-            SELECTED EMITTER
-          </div>
-
-          <div className="selected-emitter-heading">
-            <strong>{selectedEmitter.id}</strong>
-            <span>{selectedEmitter.activity}</span>
-          </div>
-
-          <div className="emitter-detail-list">
-            <div>
-              <span>FREQUENCY</span>
-              <strong>
-                {selectedEmitter.frequencyMHz.toFixed(1)} MHz
-              </strong>
-            </div>
-
-            <div>
-              <span>PRI</span>
-              <strong>{selectedEmitter.priUs} µs</strong>
-            </div>
-
-            <div>
-              <span>PULSE WIDTH</span>
-              <strong>
-                {selectedEmitter.pulseWidthUs} µs
-              </strong>
-            </div>
-
-            <div>
-              <span>AMPLITUDE</span>
-              <strong>
-                {selectedEmitter.amplitudeDb.toFixed(1)} dB
-              </strong>
-            </div>
-
-            <div>
-              <span>AOA</span>
-              <strong>{selectedEmitter.aoaDeg}°</strong>
-            </div>
-
-            <div>
-              <span>AGILITY</span>
-              <strong>{selectedEmitter.agility}</strong>
-            </div>
-
-            <div>
-              <span>LAST SEEN</span>
-              <strong>
-                {selectedEmitter.lastSeenUs} µs
-              </strong>
-            </div>
-
-            <div>
-              <span>NEXT EXPECTED</span>
-              <strong>
-                {selectedEmitter.nextExpectedUs} µs
-              </strong>
-            </div>
-          </div>
-
-          <div className="emitter-info-box">
-            <div className="panel-kicker">
-              SCHEDULER VISIBILITY
-            </div>
-
-            <p>
-              The scheduler does not receive this emitter identity
-              or ground-truth configuration directly.
-            </p>
+          <div className="st-truth" style={{ marginTop: 4 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14, color: "#f59e0b" }}>
+              security
+            </span>
+            <span className="st-body" style={{ color: "#c6c5d5" }}>
+              The scheduler does not receive this emitter identity or
+              ground-truth configuration directly.
+            </span>
           </div>
         </aside>
+      </div>
+
+      <div className="st-panel">
+        <PanelHead
+          icon="table_view"
+          title="GROUND TRUTH EMITTER REGISTRY & WAVEFORM PROFILES"
+          badge={`${MOCK_EMITTERS.length} EMITTERS`}
+          badgeColor="#f59e0b"
+        />
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            className="st-badge"
+            style={{ cursor: "pointer", color: "#f59e0b", background: "#1a1c20" }}
+            title="Static reference export (illustrative)"
+          >
+            EXPORT TRUTH CSV
+          </button>
+        </div>
+        <StitchTable
+          columns={[
+            "EMIT-ID",
+            "TRACK TAG",
+            "BAND / FREQUENCY",
+            "PRI (PULSE INTERVAL)",
+            "PW (WIDTH)",
+            "AOA",
+            "THREAT TIER",
+            "REVISIT DEADLINE",
+            "REAL-TIME STATUS",
+          ]}
+          rows={MOCK_EMITTERS.map((emitter) => [
+            <span
+              key="id"
+              style={{ color: selectedEmitterId === emitter.id ? "#bdc2ff" : "#e2e2e8", fontWeight: 700, cursor: "pointer" }}
+              onClick={() => setSelectedEmitterId(emitter.id)}
+            >
+              {emitter.id}
+            </span>,
+            `TRK-${emitter.id.replace("E-", "").padStart(3, "0")}`,
+            `B${Math.floor(emitter.frequencyMHz / 500)} / ${emitter.frequencyMHz.toFixed(1)} MHz`,
+            `${emitter.priUs} µs`,
+            `${emitter.pulseWidthUs} µs`,
+            `${emitter.aoaDeg}°`,
+            emitter.agility === "HIGH" ? "TIER-1" : emitter.agility === "MEDIUM" ? "TIER-2" : "TIER-3",
+            `${emitter.nextExpectedUs} µs`,
+            <strong key="act" style={{ color: emitter.activity === "ACTIVE" ? "#49df9d" : emitter.activity === "BURST" ? "#96ccff" : "#f59e0b" }}>
+              {emitter.activity}
+            </strong>,
+          ])}
+        />
       </div>
     </div>
   );

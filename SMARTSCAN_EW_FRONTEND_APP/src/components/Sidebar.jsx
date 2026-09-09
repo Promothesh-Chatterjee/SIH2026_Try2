@@ -130,68 +130,55 @@ export default function Sidebar({ activePage, setActivePage }) {
           </div>
         </div>
 
-        <nav className="st-side-scroll" style={{ padding: "4px 8px" }}>
-          {navigation.map((section) => (
-            <div key={section.section} style={{ marginBottom: 8 }}>
-              <div
-                className="st-tsm"
+        <nav
+          className="st-side-scroll"
+          style={{ padding: "4px 8px", display: "flex", flexDirection: "column", gap: 2 }}
+        >
+          {navigation.map((item) => {
+            const active = activePage === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActivePage(item.id)}
+                aria-current={active ? "page" : undefined}
                 style={{
-                  color: "#908f9e",
-                  padding: "4px",
-                  textTransform: "uppercase",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 6,
+                  padding: "4px 6px",
+                  borderRadius: 0,
+                  border: "1px solid transparent",
+                  background: active ? "#282a2e" : "transparent",
+                  color: active ? "#bdc2ff" : "#c6c5d5",
+                  fontWeight: active ? 700 : 400,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  width: "100%",
+                  font: "inherit",
                 }}
               >
-                {section.section}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                {section.items.map((item) => {
-                  const active = activePage === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setActivePage(item.id)}
-                      aria-current={active ? "page" : undefined}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 6,
-                        padding: "4px 6px",
-                        borderRadius: 0,
-                        border: "1px solid transparent",
-                        background: active ? "#282a2e" : "transparent",
-                        color: active ? "#bdc2ff" : "#c6c5d5",
-                        fontWeight: active ? 700 : 400,
-                        cursor: "pointer",
-                        textAlign: "left",
-                        width: "100%",
-                        font: "inherit",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                        }}
-                      >
-                        <span
-                          className="material-symbols-outlined"
-                          style={{ fontSize: 18 }}
-                        >
-                          {ICONS[item.id] ?? "chevron_right"}
-                        </span>
-                        <span className="st-body-bold">{item.label}</span>
-                      </span>
-                      {item.badge && (
-                        <span className="st-badge">{item.badge}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: 18 }}
+                  >
+                    {ICONS[item.id] ?? "chevron_right"}
+                  </span>
+                  <span className="st-body-bold">{item.label}</span>
+                </span>
+                {item.badge && (
+                  <span className="st-badge">{item.badge}</span>
+                )}
+              </button>
+            );
+          })}
         </nav>
       </div>
 
