@@ -2,27 +2,33 @@
 FastAPI REST microservice for Cognitive EW SmartScan.
 
 Endpoints:
-  POST /predict_bands  — single best time-frequency action + real aux/attribution
-  POST /deinterleave   — PDW batch deinterleaving (trained model required)
-  POST /update_memory  — write emitter profile
+  POST /predict_bands   — single best time-frequency action + real aux/attribution
+  POST /deinterleave    — PDW batch deinterleaving (trained model required)
+  POST /update_memory   — write emitter profile
   GET  /memory/emitters — list emitters
-  GET  /health          — liveness
-  GET  /metrics         — FoM stats
-  POST /reset           — reset LSTM hidden + episodic memory
+  GET  /health           — liveness & model / mission verification
+  GET  /metrics          — FoM stats
+  POST /reset            — reset LSTM hidden + episodic memory + operational controller
+  POST /mission/start    — start or re-initialize closed-loop scanning mission
+  POST /mission/step     — execute one closed-loop operational dwell cycle
+  POST /mission/stop     — stop mission and report cycle counts
+  GET  /mission/status   — live status, mission clock, and rolling FoM
 
-Fail-safe contract (Phase 16):
+Fail-safe contract (Phase 16 & Closed-Loop Demonstration):
   * no random-scheduler / raw-baseline fallbacks — missing trained models
     return HTTP 503;
   * /predict_bands accepts ONLY the canonical 36-band x 10-feature obs_dim=360;
-  * responses expose real model outputs only (no fabricated attribution/metrics).
+  * responses expose real model outputs only (no fabricated attribution/metrics);
+  * /mission routes operate closed-loop with authoritative MissionClock and physical PDWs.
 """
+from __future__ import annotations
 
 import logging
 import os
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 import asyncio
 import json
 from threading import Lock
@@ -55,6 +61,13 @@ from src.contracts import (
     REVISIT_AGE_IDX,
     band_of_action,
     mode_of_action,
+)
+from src.operational import (
+    MissionClock,
+    OperationalReceiverController,
+    OperationalStateBuilder,
+    ReceiverAdapter,
+    ReceiverTelemetryFrame,
 )
 from src.telemetry.publisher import TelemetryPublisher
 from src.telemetry.discovery import latest_telemetry_snapshot, latest_telemetry_history, find_latest_run
@@ -101,6 +114,10 @@ STATE: dict[str, Any] = {
     "normalization_hash_match": False,
     "dimension_check_passed": False,
     "hidden_state_ready": False,
+    "clock": None,
+    "receiver_adapter": None,
+    "state_builder": None,
+    "controller": None,
 }
 
 # P0-10: real telemetry broker. Deliberately no fabricated streaming keys: the
@@ -185,11 +202,56 @@ class HealthResponse(BaseModel):
     dimension_check_passed: bool
     normalization_hash_match: bool
     hidden_state_ready: bool
+    mission_controller_ready: bool = False
+
+
+class MissionStartRequest(BaseModel):
+    """Request to start a closed-loop scanning mission."""
+
+    initial_time_us: float = Field(0.0, description="Initial mission clock time in microseconds")
+
+
+class MissionStepRequest(BaseModel):
+    """Request to execute one closed-loop scanning step."""
+
+    pdws: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Optional batch of physical incident PDWs to feed receiver [toa_us/time_us, freq_mhz, pw_us, amp_db, aoa_deg]",
+    )
+    obs: Optional[List[float]] = Field(
+        default=None,
+        description="Optional pre-built 360-D observation vector (if omitted, state builder derives it)",
+    )
+
+
+class MissionStepResponse(BaseModel):
+    """Response from executing one closed-loop operational step."""
+
+    status: str = "ok"
+    frame: Dict[str, Any] = Field(..., description="Standardized telemetry frame")
+
+
+class MissionStatusResponse(BaseModel):
+    """Summary of operational receiver controller status."""
+
+    is_mission_active: bool
+    mission_clock_us: float
+    current_step: int
+    total_dwells: int
+    total_hits: int
+    rolling_pd: float
+    rolling_median_latency_us: float
+    receiver_connected: bool
+    controller_ready: bool
+
 
 
 def _checkpoint_state(path: Path) -> tuple[dict, dict]:
     """Return checkpoint state and embedded metadata without accepting junk."""
-    payload = torch.load(str(path), map_location="cpu")
+    try:
+        payload = torch.load(str(path), map_location="cpu")
+    except Exception:
+        payload = torch.load(str(path), map_location="cpu", weights_only=False)
     if isinstance(payload, dict) and "state_dict" in payload:
         return payload["state_dict"], dict(payload.get("metadata") or {})
     return payload, {}
@@ -359,7 +421,12 @@ async def lifespan(app: FastAPI):  # type: ignore
                 logger.warning("Failed to load deinterleaver %s: %s", ckpt, exc)
 
     # Scheduler / MoE
-    for ckpt in [Path("checkpoints/onnx/scheduler.onnx"), Path("checkpoints/scheduler/best.pt"), Path("checkpoints/scheduler/final.pt")]:
+    for ckpt in [
+        Path("checkpoints/onnx/scheduler.onnx"),
+        Path("checkpoints/scheduler/checkpoint_gate_110000.pt"),
+        Path("checkpoints/scheduler/best.pt"),
+        Path("checkpoints/scheduler/final.pt"),
+    ]:
         if ckpt.exists():
             try:
                 if ckpt.suffix == ".onnx":
@@ -465,6 +532,33 @@ async def lifespan(app: FastAPI):  # type: ignore
     except Exception as exc:
         logger.warning("Memory/FoM init failed: %s", exc)
 
+    # Initialize Closed-Loop Operational Receiver Controller
+    try:
+        clock = MissionClock(0.0)
+        receiver_adapter = ReceiverAdapter()
+        state_builder = OperationalStateBuilder(n_bands=CANONICAL_N_BANDS)
+        STATE["clock"] = clock
+        STATE["receiver_adapter"] = receiver_adapter
+        STATE["state_builder"] = state_builder
+
+        if STATE.get("moe") is not None:
+            controller = OperationalReceiverController(
+                moe_scheduler=STATE["moe"],
+                receiver_adapter=receiver_adapter,
+                clock=clock,
+                state_builder=state_builder,
+                n_bands=CANONICAL_N_BANDS,
+                n_modes=CANONICAL_N_MODES,
+            )
+            STATE["controller"] = controller
+            logger.info("OperationalReceiverController initialised with Gate-110k SmartScanMoE")
+        else:
+            STATE["controller"] = None
+            logger.warning("OperationalReceiverController not initialised: SmartScanMoE scheduler not loaded")
+    except Exception as exc:
+        logger.error("Failed to initialise OperationalReceiverController: %s", exc)
+        STATE["controller"] = None
+
     yield
     # Shutdown: close DB
     try:
@@ -507,6 +601,7 @@ def health() -> HealthResponse:
         dimension_check_passed=bool(STATE.get("dimension_check_passed")),
         normalization_hash_match=bool(STATE.get("normalization_hash_match")),
         hidden_state_ready=bool(STATE.get("hidden_state_ready")),
+        mission_controller_ready=STATE.get("controller") is not None,
     )
 
 
@@ -577,6 +672,8 @@ def reset(request: Request) -> dict[str, str]:
                 if STATE.get("moe"):
                     STATE["moe"].eager_agent.hidden = hidden  # type: ignore
                 STATE["hidden_state_ready"] = True
+            if STATE.get("controller") and hasattr(STATE["controller"], "reset"):
+                STATE["controller"].reset()
         return {"status": "reset ok"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -894,6 +991,124 @@ def list_emitters() -> list[dict[str, Any]]:
         return out
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+# ── Operational Mission Endpoints (Closed-Loop Demonstration) ────────────────
+
+@app.post("/mission/start", tags=["mission"])
+def mission_start(req: MissionStartRequest, request: Request) -> dict[str, Any]:
+    """Start or restart a closed-loop operational mission."""
+    if not _is_authorized(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    controller = STATE.get("controller")
+    if controller is None:
+        raise HTTPException(
+            status_code=503,
+            detail="OperationalReceiverController not initialised (trained Gate-110k scheduler required)",
+        )
+    try:
+        controller.start_mission(initial_time_us=req.initial_time_us)
+        return {
+            "status": "mission_started",
+            "initial_time_us": float(req.initial_time_us),
+            "mission_active": controller.is_mission_active,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/mission/step", response_model=MissionStepResponse, tags=["mission"])
+def mission_step(req: MissionStepRequest, request: Request) -> MissionStepResponse:
+    """Execute one closed-loop operational dwell cycle without simulation shortcuts."""
+    if not _is_authorized(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    controller = STATE.get("controller")
+    if controller is None:
+        raise HTTPException(
+            status_code=503,
+            detail="OperationalReceiverController not initialised (trained Gate-110k scheduler required)",
+        )
+    if not controller.is_mission_active:
+        controller.start_mission(initial_time_us=controller.clock_us)
+
+    try:
+        frame = controller.execute_operational_step(
+            obs=req.obs,
+            external_rf_stream=req.pdws,
+        )
+        # Stream live frame to telemetry publisher for dashboard and primary frontend
+        frame_dict = frame.to_dict()
+        try:
+            telemetry.update(
+                step=frame.step,
+                action=int(frame.selected_band * CANONICAL_N_MODES + frame.selected_mode),
+                band=frame.selected_band,
+                mode=frame.selected_mode,
+                hit=frame.hit,
+                dwell_time_us=frame.dwell_duration_us,
+                retune_latency_us=frame.retune_latency_us,
+                detections=frame.detections,
+                cognitive_explanation=frame_dict.get("cognitive_explanation", {}),
+                system_metrics=frame_dict.get("system_metrics", {}),
+                clock_us=frame.dwell_end_us,
+            )
+        except Exception as tel_err:
+            logger.debug("Failed to update telemetry publisher: %s", tel_err)
+
+        return MissionStepResponse(status="ok", frame=frame_dict)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/mission/stop", tags=["mission"])
+def mission_stop(request: Request) -> dict[str, Any]:
+    """Stop the current closed-loop operational mission."""
+    if not _is_authorized(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    controller = STATE.get("controller")
+    if controller is None:
+        raise HTTPException(status_code=503, detail="OperationalReceiverController not initialised")
+    controller.stop_mission()
+    return {
+        "status": "mission_stopped",
+        "mission_clock_us": float(controller.clock_us),
+        "total_dwells": int(controller.total_dwells),
+        "total_hits": int(controller.total_hits),
+    }
+
+
+@app.get("/mission/status", response_model=MissionStatusResponse, tags=["mission"])
+def mission_status() -> MissionStatusResponse:
+    """Query live operational receiver controller status, clock, and rolling FoM."""
+    controller = STATE.get("controller")
+    if controller is None:
+        return MissionStatusResponse(
+            is_mission_active=False,
+            mission_clock_us=0.0,
+            current_step=0,
+            total_dwells=0,
+            total_hits=0,
+            rolling_pd=0.0,
+            rolling_median_latency_us=0.0,
+            receiver_connected=False,
+            controller_ready=False,
+        )
+
+    pd = float(controller.total_hits / max(1, controller.total_dwells))
+    med_lat = float(np.median(controller.latencies)) if controller.latencies else 0.0
+
+    return MissionStatusResponse(
+        is_mission_active=bool(controller.is_mission_active),
+        mission_clock_us=float(controller.clock_us),
+        current_step=int(controller.current_step),
+        total_dwells=int(controller.total_dwells),
+        total_hits=int(controller.total_hits),
+        rolling_pd=pd,
+        rolling_median_latency_us=med_lat,
+        receiver_connected=bool(controller.receiver_adapter.is_connected),
+        controller_ready=True,
+    )
+
 
 
 

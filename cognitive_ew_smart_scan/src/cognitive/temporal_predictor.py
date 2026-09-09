@@ -17,6 +17,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from src.cognitive.behavior_manager import AdaptiveBehaviorManager, BehaviorProfile, EmitterBehavior
+from src.cognitive.reservation_manager import ReservationManager, TemporalReservation, ReservationStatus
+
 logger = logging.getLogger(__name__)
 
 CANONICAL_N_BANDS: int = 36
@@ -41,6 +44,7 @@ class TrackPrediction:
     prediction_confidence: float
     target_frequency_mhz: float
     backoff_level_used: int  # 3=tri-gram, 2=bi-gram, 1=uni-gram, 0=empirical prior
+    behavior_profile: Optional[BehaviorProfile] = None
 
 
 class TrackTemporalState:
@@ -314,9 +318,15 @@ class TemporalPredictor:
         self.tracks: Dict[int, TrackTemporalState] = {}
         self.current_time_us: float = 0.0
 
+        # Phase 7: Behavior and Reservation Managers
+        self.behavior_manager = AdaptiveBehaviorManager(n_bands=self.n_bands)
+        self.reservation_manager = ReservationManager(retune_latency_us=15.0)
+
     def reset(self) -> None:
         """Clear all internal predictor state."""
         self.tracks.clear()
+        self.behavior_manager.reset()
+        self.reservation_manager.reset()
         self.current_time_us = 0.0
 
     def update_from_pulse(self, track_id: int, toa_us: float, freq_mhz: float, band: int) -> None:
@@ -362,13 +372,26 @@ class TemporalPredictor:
         predictions: List[TrackPrediction] = []
 
         for t_id, t_state in self.tracks.items():
+            profile = self.behavior_manager.classify_track(t_state)
             next_toa, eta_us, arr_prob = t_state.predict_next_arrival(curr_t)
-            if eta_us > horizon_us:
-                continue
 
             probs, level, band_conf = t_state.predict_next_band_distribution(alpha_dirichlet=self.alpha_dirichlet)
             best_band = int(np.argmax(probs))
             overall_conf = float(arr_prob * band_conf)
+
+            # Manage temporal reservations for slow hoppers or periodic emitters
+            if profile.requires_reservation and t_state.pri_estimate >= 400.0:
+                self.reservation_manager.create_or_update_reservation(
+                    track_id=t_id,
+                    target_band=best_band,
+                    expected_toa_us=next_toa,
+                    confidence=overall_conf,
+                    priority=1.5 if profile.behavior == EmitterBehavior.SLOW_HOPPER else 1.0,
+                    target_mode=profile.recommended_mode,
+                )
+
+            if eta_us > horizon_us:
+                continue
 
             predictions.append(
                 TrackPrediction(
@@ -384,6 +407,7 @@ class TemporalPredictor:
                     prediction_confidence=overall_conf,
                     target_frequency_mhz=t_state.last_freq_mhz,
                     backoff_level_used=level,
+                    behavior_profile=profile,
                 )
             )
 
@@ -419,82 +443,83 @@ class TemporalPredictor:
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Compute action-conditioned predictive utility U(b, m).
 
-        U(b,m) = Q(b,m) + lambda_p * P_hit(b,m) - lambda_t * L(b,m) - lambda_d * C_dwell(m) + lambda_a * A_agility(b,m)
+        Evaluates true stochastic expected utility over next-state distributions:
+        E[U(a)] = sum_{b'} P(b'|h) * U(a, b')
 
-        Where:
-          - L(b, m) = ETA(b) / dwell(m) if ETA falls inside dwell window [0, dwell(m)]
-                      L_miss (1.0) otherwise.
-          - P_hit(b, m) = P(B=b) * arrival_prob if ETA falls inside dwell window.
-          - A_agility(b, m) = agility_score * P(B=b) if predicted inside dwell.
-
-        Args:
-            q_values: (n_bands * n_modes,) float32 unnormalized or normalized Q values.
-            current_time: current receiver time in µs.
-
-        Returns:
-            utility: (n_bands * n_modes,) float32 total utility for ranking.
-            telemetry: Dict with prediction metadata.
+        For slow hoppers and periodic emitters, checks active temporal reservations
+        whose execution deadline has arrived.
         """
         curr_t = float(current_time)
         preds = self.predict_all(curr_t, horizon_us=float(np.max(self.dwell_durations_us) * 2.0))
-
-        # Per-band predictive aggregation: map band -> best predictive arrival
-        band_best_pred: Dict[int, TrackPrediction] = {}
-        for p in preds:
-            b = p.target_band
-            if b not in band_best_pred or p.prediction_confidence > band_best_pred[b].prediction_confidence:
-                band_best_pred[b] = p
 
         n_actions = self.n_bands * self.n_modes
         u_scores = np.copy(q_values).astype(np.float32)
         p_hit_vec = np.zeros(n_actions, dtype=np.float32)
         latency_cost_vec = np.zeros(n_actions, dtype=np.float32)
-        agility_vec = np.zeros(n_actions, dtype=np.float32)
 
-        for b in range(self.n_bands):
-            pred = band_best_pred.get(b, None)
-            for m in range(self.n_modes):
-                idx = b * self.n_modes + m
-                dwell = self.dwell_durations_us[m]
+        # 1. Base Dwell Cost
+        for m in range(self.n_modes):
+            dwell = self.dwell_durations_us[m]
+            c_dwell = dwell / (self.base_dwell_us * 2.5)
+            u_scores[m::self.n_modes] -= lambda_d * c_dwell
 
-                # Dwell opportunity cost: C_dwell = dwell / max_dwell
-                c_dwell = dwell / (self.base_dwell_us * 2.5)
+        # 2. Stochastic Expected Utility Aggregation
+        active_pred_bands = set()
+        for p in preds:
+            eta = p.eta_us
+            arr_conf = p.prediction_confidence
+            agil = p.agility_score
+            rec_mode = p.behavior_profile.recommended_mode if p.behavior_profile else None
 
-                if pred is not None:
-                    eta = pred.eta_us
-                    p_band = float(pred.band_probabilities[b])
+            # Over all 36 bands, evaluate transition probability P(b' | h)
+            for b in range(self.n_bands):
+                p_b = float(p.band_probabilities[b])
+                if p_b <= 0.01:
+                    continue
+
+                active_pred_bands.add(b)
+                for m in range(self.n_modes):
+                    idx = b * self.n_modes + m
+                    dwell = self.dwell_durations_us[m]
+
                     if eta <= dwell:
-                        # Arrival projected inside dwell window!
-                        # Timing alignment: early arrival in dwell is optimal
-                        l_val = eta / max(1.0, dwell)  # in [0, 1]
-                        p_hit = p_band * pred.prediction_confidence
-                        a_score = pred.agility_score * p_band
+                        # Arrival inside dwell: positive expected interception utility
+                        lat_ratio = eta / max(1.0, dwell)
+                        hit_u = (
+                            lambda_p * p_b * arr_conf
+                            - lambda_t * lat_ratio * p_b
+                            + lambda_a * agil * p_b
+                        )
+                        u_scores[idx] += hit_u
+                        p_hit_vec[idx] = max(p_hit_vec[idx], p_b * arr_conf)
+                        latency_cost_vec[idx] = lat_ratio
                     else:
-                        # Arrival projected after dwell closes
-                        l_val = 1.0
-                        p_hit = 0.0
-                        a_score = 0.0
-                else:
-                    l_val = 1.0
-                    p_hit = 0.0
-                    a_score = 0.0
+                        # Arrival outside dwell window
+                        u_scores[idx] -= lambda_t * 0.15 * p_b
 
-                p_hit_vec[idx] = p_hit
-                latency_cost_vec[idx] = l_val
-                agility_vec[idx] = a_score
+                    # Behavior-specific dwell alignment bonus
+                    if rec_mode is not None and m == rec_mode and p.target_band == b:
+                        u_scores[idx] += 0.30 * arr_conf
 
-                # Combine action-conditioned utility
-                u_scores[idx] += (
-                    lambda_p * p_hit
-                    - lambda_t * l_val
-                    - lambda_d * c_dwell
-                    + lambda_a * a_score
-                )
+        # 3. Check Actionable Temporal Reservations (e.g. SLOW_HOPPER)
+        act_res = self.reservation_manager.get_actionable_reservation(curr_t, dwell_duration_us=self.base_dwell_us)
+        res_info = None
+        if act_res is not None:
+            res_idx = act_res.target_band * self.n_modes + act_res.target_mode
+            u_scores[res_idx] += 2.0 * act_res.confidence
+            res_info = {
+                "reservation_id": act_res.reservation_id,
+                "track_id": act_res.track_id,
+                "target_band": act_res.target_band,
+                "target_mode": act_res.target_mode,
+                "expected_toa_us": act_res.expected_toa_us,
+            }
 
         telemetry = {
             "n_predictions": len(preds),
-            "predicted_bands": list(band_best_pred.keys()),
+            "predicted_bands": list(active_pred_bands),
             "max_p_hit": float(np.max(p_hit_vec)) if len(p_hit_vec) > 0 else 0.0,
             "mean_latency_cost": float(np.mean(latency_cost_vec)) if len(latency_cost_vec) > 0 else 1.0,
+            "actionable_reservation": res_info,
         }
         return u_scores, telemetry
