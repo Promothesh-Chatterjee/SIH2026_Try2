@@ -59,7 +59,7 @@ const PIPE_NODES = [
   ["04", "360-D State", "Matrix (36\u00d710)", "#dfe0ff"],
   ["AI", "DRQN + MoE", "Recurrent Core", "#49df9d", true],
   ["06", "180 Actions", "36 Bands \u00d7 5 Modes", "#e2e2e8"],
-  ["07", "Band Decision", "Band 16 // Revisit", "#96ccff"],
+  ["07", "Band Decision", "", "#96ccff"],
   ["08", "T-F Intercept", "Coincidence Match", "#49df9d"],
   ["09", "Reward Opt", "Temporal Update", "#e2e2e8"],
 ];
@@ -118,9 +118,9 @@ export function BandMatrix({ tuneBand = 16 }) {
         }}
         className="st-tsm"
       >
-        {["0 GHz", "2.0 GHz", "4.0 GHz", "6.0 GHz", "8.0 GHz [TUNE CENTER]", "10.0 GHz", "12.0 GHz", "14.0 GHz", "16.0 GHz", "18.0 GHz"].map(
+        {["0 GHz", "2.0 GHz", "4.0 GHz", "6.0 GHz", "8.0 GHz", "10.0 GHz", "12.0 GHz", "14.0 GHz", "16.0 GHz", "18.0 GHz"].map(
           (t) => (
-            <span key={t} style={{ color: t.includes("TUNE") ? "#96ccff" : "#908f9e" }}>
+            <span key={t} style={{ color: "#908f9e" }}>
               {t}
             </span>
           )
@@ -136,7 +136,6 @@ export function BandMatrix({ tuneBand = 16 }) {
               style={{
                 height: `${h}%`,
                 background: BAND_COLORS[k],
-                boxShadow: i + 1 === tuneBand ? "0 0 8px rgba(189,194,255,0.45)" : "none",
               }}
             />
           ))}
@@ -154,8 +153,8 @@ export function BandMatrix({ tuneBand = 16 }) {
         </div>
       </div>
       <div className="st-mark" style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px", color: "#908f9e" }}>
-        {["B01", "B04", "B08", "B12", "B16 [8.0G]", "B20", "B24", "B28", "B32", "B36 [18G]"].map((t) => (
-          <span key={t} style={t.startsWith("B16") ? { color: "#bdc2ff", fontWeight: 700 } : undefined}>
+        {["B01", "B04", "B08", "B12", "B16", "B20", "B24", "B28", "B32", "B36"].map((t) => (
+          <span key={t} style={{ color: "#908f9e" }}>
             {t}
           </span>
         ))}
