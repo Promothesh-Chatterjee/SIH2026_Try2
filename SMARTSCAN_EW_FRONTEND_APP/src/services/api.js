@@ -117,6 +117,21 @@ export const api = {
       method: "POST",
     });
   },
+
+  evaluateBenchmark(params = {}) {
+    return request("/benchmark/evaluate", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  },
+
+  getLatestBenchmark() {
+    return request("/benchmark/latest");
+  },
+
+  getBenchmarkScenarios() {
+    return request("/benchmark/scenarios");
+  },
 };
 
 export { API_BASE_URL };
