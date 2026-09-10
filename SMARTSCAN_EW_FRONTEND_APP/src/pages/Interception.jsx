@@ -36,7 +36,6 @@ function eventClass(type) {
 
 export default function Interception() {
   const [selectedEventId, setSelectedEventId] = useState(3);
-  const [timeWindow, setTimeWindow] = useState("500 µs");
   const [missionStatus, setMissionStatus] = useState(null);
   const [liveTelemetry, setLiveTelemetry] = useState(null);
 
@@ -307,35 +306,6 @@ export default function Interception() {
             )}
           </div>
         </aside>
-      </div>
-
-      <div className="st-panel">
-        <PanelHead icon="question_mark" title="THE 2-D SEARCH CHALLENGE" badge="ANALYSIS" />
-        <div className="st-body" style={{ color: "#c6c5d5", lineHeight: 1.5 }}>
-          Interception demands coincidence in both time and frequency: the
-          receiver must dwell on the right band at the right instant. Hits
-          mark declared coincidence; misses mark lost timing; false alarms
-          mark energy without a valid target transmission.
-        </div>
-        <div className="st-grid-12" style={{ gap: 6 }}>
-          <div className="st-span-4" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label className="st-body-bold" style={{ color: "#908f9e" }}>TIME WINDOW</label>
-            <select className="st-select" value={timeWindow} onChange={(e) => setTimeWindow(e.target.value)}>
-              <option>100 µs</option>
-              <option>250 µs</option>
-              <option>500 µs</option>
-              <option>1 ms</option>
-              <option>5 ms</option>
-            </select>
-          </div>
-          <div className="st-span-8" style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
-            {["STEP BACK", "STEP FORWARD", "PLAY TIMELINE"].map((label) => (
-              <button key={label} className="st-badge" style={{ cursor: "pointer", color: label === "PLAY TIMELINE" ? "#0b1c93" : "#e2e2e8", background: label === "PLAY TIMELINE" ? "#bdc2ff" : "#1a1c20", padding: "4px 10px" }}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
