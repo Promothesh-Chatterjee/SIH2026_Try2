@@ -1,12 +1,15 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { loadLiveTelemetry } from "../services/liveService";
 import { startTelemetryStream } from "../services/liveSocket";
 import { startSyntheticStream } from "../services/syntheticStream";
 import { syntheticSystem } from "../data/mockSystem";
-import {
-  PanelHead,
-  DataSourceBadge,
-} from "../components/stitch";
+import { PanelHead, DataSourceBadge } from "../components/stitch";
+
+const NUM_BANDS = 36;
+const FREQ_START_MHZ = 0;
+const FREQ_END_MHZ = 18000;
+const BAND_WIDTH_MHZ = 500;
+const WATERFALL_ROWS = 120;
 
 const SYNTHETIC_EVENTS = [
   { time: "T-480 ms", band: 6, frequencyMHz: 3250, type: "SEARCH", mode: "NORMAL_DWELL" },
@@ -16,25 +19,289 @@ const SYNTHETIC_EVENTS = [
   { time: "NOW", band: 16, frequencyMHz: 8250, type: "ARMED", mode: "PREEMPTIVE_INTERCEPT" },
 ];
 
-const INITIAL_WATERFALL = Array.from({ length: 12 }, (_, row) =>
-  Array.from({ length: 36 }, (_, band) => {
-    const base = 12 + ((band * 19 + row * 13) % 38);
-    return [6, 10, 16, 28].includes(band) ? base + 28 : base;
-  })
-);
-
-function waterfallColor(value) {
+function waterfallSDRColor(value) {
   const t = Math.min(1, Math.max(0, value / 100));
-  if (t < 0.3) {
-    const s = t / 0.3;
-    return `rgba(6,${Math.round(20 + s * 60)},${Math.round(10 + s * 30)},0.9)`;
+  let r, g, b;
+  if (t < 0.15) {
+    r = 0; g = 0; b = Math.round(20 + t / 0.15 * 40);
+  } else if (t < 0.35) {
+    const s = (t - 0.15) / 0.2;
+    r = 0; g = Math.round(s * 80); b = Math.round(60 + s * 100);
+  } else if (t < 0.55) {
+    const s = (t - 0.35) / 0.2;
+    r = Math.round(s * 40); g = Math.round(80 + s * 140); b = Math.round(160 - s * 40);
+  } else if (t < 0.75) {
+    const s = (t - 0.55) / 0.2;
+    r = Math.round(40 + s * 200); g = Math.round(220 + s * 35); b = Math.round(120 - s * 100);
+  } else {
+    const s = (t - 0.75) / 0.25;
+    r = Math.round(240 + s * 15); g = Math.round(255 - s * 100); b = Math.round(20 - s * 20);
   }
-  if (t < 0.7) {
-    const s = (t - 0.3) / 0.4;
-    return `rgba(${Math.round(10 + s * 30)},${Math.round(80 + s * 100)},${Math.round(40 + s * 30)},0.92)`;
+  return `rgb(${r},${g},${b})`;
+}
+
+function smoothInterpolate(data, targetWidth) {
+  if (!data || data.length === 0) return new Float32Array(targetWidth);
+  const out = new Float32Array(targetWidth);
+  const srcLen = data.length;
+  for (let i = 0; i < targetWidth; i++) {
+    const srcPos = (i / targetWidth) * (srcLen - 1);
+    const lo = Math.floor(srcPos);
+    const hi = Math.min(lo + 1, srcLen - 1);
+    const frac = srcPos - lo;
+    out[i] = data[lo] * (1 - frac) + data[hi] * frac;
   }
-  const s = (t - 0.7) / 0.3;
-  return `rgba(${Math.round(40 + s * 10)},${Math.round(180 + s * 60)},${Math.round(70 + s * 40)},0.95)`;
+  return out;
+}
+
+function useCanvasResize(canvasRef, containerRef) {
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + "px";
+      canvas.style.height = rect.height + "px";
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.scale(dpr, dpr);
+    }
+
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [canvasRef, containerRef]);
+}
+
+function SpectrumCanvas({ bandHeights, currentBand, activeBands }) {
+  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+  useCanvasResize(canvasRef, containerRef);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.width / dpr;
+    const H = canvas.height / dpr;
+
+    ctx.clearRect(0, 0, W, H);
+
+    const marginLeft = 48;
+    const marginRight = 12;
+    const marginTop = 8;
+    const marginBottom = 28;
+    const plotW = W - marginLeft - marginRight;
+    const plotH = H - marginTop - marginBottom;
+
+    ctx.fillStyle = "#0a0c10";
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = "rgba(69,70,83,0.35)";
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 5; i++) {
+      const y = marginTop + (i / 5) * plotH;
+      ctx.beginPath();
+      ctx.moveTo(marginLeft, y);
+      ctx.lineTo(marginLeft + plotW, y);
+      ctx.stroke();
+    }
+
+    const freqTicks = [0, 2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000, 18000];
+    ctx.strokeStyle = "rgba(69,70,83,0.25)";
+    freqTicks.forEach((f) => {
+      const x = marginLeft + ((f - FREQ_START_MHZ) / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
+      ctx.beginPath();
+      ctx.moveTo(x, marginTop);
+      ctx.lineTo(x, marginTop + plotH);
+      ctx.stroke();
+    });
+
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#908f9e";
+    freqTicks.forEach((f) => {
+      const x = marginLeft + ((f - FREQ_START_MHZ) / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
+      const label = f >= 1000 ? (f / 1000).toFixed(1) + "G" : f + "M";
+      ctx.fillText(label, x, H - 8);
+    });
+
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    const dBLabels = [-20, -30, -40, -50, -60, -70];
+    dBLabels.forEach((dB, i) => {
+      const y = marginTop + (i / (dBLabels.length - 1)) * plotH;
+      ctx.fillStyle = "#908f9e";
+      ctx.fillText(dB + " dB", marginLeft - 4, y);
+    });
+
+    if (!bandHeights || bandHeights.length === 0) return;
+
+    const raw = new Float32Array(NUM_BANDS);
+    for (let i = 0; i < NUM_BANDS; i++) {
+      const h = bandHeights[i] ?? 0;
+      raw[i] = -70 + (h / 100) * 50;
+    }
+
+    const pts = smoothInterpolate(raw, Math.floor(plotW));
+
+    ctx.beginPath();
+    ctx.moveTo(marginLeft, marginTop + plotH);
+    for (let i = 0; i < pts.length; i++) {
+      const x = marginLeft + i;
+      const norm = (pts[i] - (-70)) / ((-20) - (-70));
+      const y = marginTop + (1 - norm) * plotH;
+      if (i === 0) ctx.lineTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.lineTo(marginLeft + pts.length, marginTop + plotH);
+    ctx.closePath();
+    const fillGrad = ctx.createLinearGradient(0, marginTop, 0, marginTop + plotH);
+    fillGrad.addColorStop(0, "rgba(73,223,157,0.35)");
+    fillGrad.addColorStop(0.6, "rgba(73,223,157,0.12)");
+    fillGrad.addColorStop(1, "rgba(73,223,157,0.02)");
+    ctx.fillStyle = fillGrad;
+    ctx.fill();
+
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const x = marginLeft + i;
+      const norm = (pts[i] - (-70)) / ((-20) - (-70));
+      const y = marginTop + (1 - norm) * plotH;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = "#e8eaee";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    if (currentBand !== undefined && currentBand !== null) {
+      const cx = marginLeft + ((currentBand * BAND_WIDTH_MHZ + BAND_WIDTH_MHZ / 2 - FREQ_START_MHZ) / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
+      const halfW = (BAND_WIDTH_MHZ / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
+      ctx.fillStyle = "rgba(189,194,255,0.1)";
+      ctx.fillRect(cx - halfW, marginTop, halfW * 2, plotH);
+      ctx.strokeStyle = "rgba(189,194,255,0.6)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(cx, marginTop);
+      ctx.lineTo(cx, marginTop + plotH);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#bdc2ff";
+      const tuneMHz = currentBand * BAND_WIDTH_MHZ + BAND_WIDTH_MHZ / 2;
+      ctx.fillText(`${(tuneMHz / 1000).toFixed(3)} GHz`, cx, marginTop + 12);
+    }
+
+    if (activeBands && activeBands.size > 0) {
+      ctx.fillStyle = "rgba(150,204,255,0.4)";
+      activeBands.forEach((band) => {
+        if (band === currentBand) return;
+        const cx = marginLeft + ((band * BAND_WIDTH_MHZ + BAND_WIDTH_MHZ / 2 - FREQ_START_MHZ) / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
+        ctx.beginPath();
+        ctx.arc(cx, marginTop + 6, 2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    ctx.strokeStyle = "rgba(189,194,255,0.5)";
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(marginLeft, marginTop, plotW, plotH);
+  }, [bandHeights, currentBand, activeBands]);
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", width: "100%", height: 220, background: "#0a0c10", border: "1px solid #454653" }}>
+      <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%" }} />
+    </div>
+  );
+}
+
+function WaterfallCanvas({ waterfall, currentBand }) {
+  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+  useCanvasResize(canvasRef, containerRef);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.width / dpr;
+    const H = canvas.height / dpr;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#060810";
+    ctx.fillRect(0, 0, W, H);
+
+    const marginLeft = 48;
+    const marginRight = 12;
+    const marginTop = 4;
+    const marginBottom = 4;
+    const plotW = W - marginLeft - marginRight;
+    const plotH = H - marginTop - marginBottom;
+
+    if (!waterfall || waterfall.length === 0) return;
+
+    const rows = waterfall.length;
+    const rowH = plotH / rows;
+
+    for (let row = 0; row < rows; row++) {
+      const rowData = waterfall[row];
+      const y = marginTop + row * rowH;
+      const pixelRow = Math.ceil(rowH);
+
+      for (let col = 0; col < NUM_BANDS; col++) {
+        const value = rowData[col] ?? 0;
+        const x = marginLeft + (col / NUM_BANDS) * plotW;
+        const cellW = plotW / NUM_BANDS + 0.5;
+
+        ctx.fillStyle = waterfallSDRColor(value);
+        ctx.fillRect(x, y, cellW, pixelRow + 0.5);
+      }
+    }
+
+    if (currentBand !== undefined && currentBand !== null) {
+      const cx = marginLeft + (currentBand / NUM_BANDS) * plotW;
+      const halfW = (1 / NUM_BANDS) * plotW;
+      ctx.strokeStyle = "rgba(189,194,255,0.5)";
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.moveTo(cx + halfW / 2, marginTop);
+      ctx.lineTo(cx + halfW / 2, marginTop + plotH);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    ctx.font = '8px "JetBrains Mono", monospace';
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#908f9e";
+    const freqLabels = [0, 3000, 6000, 9000, 12000, 15000, 18000];
+    freqLabels.forEach((f) => {
+      const x = marginLeft + ((f - FREQ_START_MHZ) / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
+      const label = f >= 1000 ? (f / 1000).toFixed(0) + "G" : f + "";
+      ctx.fillText(label, x, H - 2);
+    });
+  }, [waterfall, currentBand]);
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", width: "100%", height: 380, background: "#060810", border: "1px solid #454653" }}>
+      <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%" }} />
+    </div>
+  );
 }
 
 function TelemetryInspector({ telemetry }) {
@@ -43,8 +310,7 @@ function TelemetryInspector({ telemetry }) {
       <div className="st-panel">
         <PanelHead icon="inventory_2" title="TELEMETRY INSPECTOR" badge="NO BACKEND PACKET" badgeColor="#f59e0b" />
         <div className="st-body" style={{ color: "#c6c5d5" }}>
-          No backend telemetry packet has been received. Synthetic RF
-          telemetry remains active.
+          No backend telemetry packet has been received. Synthetic RF telemetry remains active.
         </div>
       </div>
     );
@@ -102,7 +368,14 @@ export default function LiveSpectrum() {
   const [streamStatus, setStreamStatus] = useState("SYNTHETIC");
   const [liveTelemetry, setLiveTelemetry] = useState(null);
   const [liveEvents, setLiveEvents] = useState([]);
-  const [waterfall, setWaterfall] = useState(INITIAL_WATERFALL);
+  const [waterfall, setWaterfall] = useState(() =>
+    Array.from({ length: WATERFALL_ROWS }, (_, row) =>
+      Array.from({ length: NUM_BANDS }, (_, band) => {
+        const base = 8 + ((band * 19 + row * 7) % 20);
+        return [6, 10, 16, 28].includes(band) ? base + 15 : base;
+      })
+    )
+  );
   const [userSelectedBand, setUserSelectedBand] = useState(false);
 
   useEffect(() => {
@@ -114,8 +387,7 @@ export default function LiveSpectrum() {
         setBackendData(data);
         if (data.telemetry && typeof data.telemetry === "object") {
           const raw = data.telemetry;
-          const isLive = raw.live === true;
-          if (isLive) {
+          if (raw.live === true) {
             setLiveTelemetry((prev) => ({
               valid: true,
               source: raw.source ?? "publisher",
@@ -140,10 +412,7 @@ export default function LiveSpectrum() {
     }
     loadTelemetry();
     const interval = setInterval(loadTelemetry, 1000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
+    return () => { active = false; clearInterval(interval); };
   }, []);
 
   useEffect(() => {
@@ -156,14 +425,8 @@ export default function LiveSpectrum() {
       syntheticConnection = startSyntheticStream({
         intervalMs: 1000,
         currentBand: selectedBand,
-        onStatus() {
-          if (!active) return;
-          setStreamStatus("SYNTHETIC");
-        },
-        onTelemetry(telemetry) {
-          if (!active) return;
-          setLiveTelemetry(telemetry);
-        },
+        onStatus() { if (active) setStreamStatus("SYNTHETIC"); },
+        onTelemetry(telemetry) { if (active) setLiveTelemetry(telemetry); },
       });
     }
 
@@ -179,74 +442,51 @@ export default function LiveSpectrum() {
           setLiveTelemetry(telemetry);
           if (telemetry.live) {
             setStreamStatus("CONNECTED");
-            if (syntheticConnection) {
-              syntheticConnection.close();
-              syntheticConnection = null;
-            }
+            if (syntheticConnection) { syntheticConnection.close(); syntheticConnection = null; }
 
             const liveBand = telemetry.band ?? telemetry.metrics?.band;
             if (liveBand !== undefined && liveBand !== null) {
-              if (!userSelectedBand) {
-                setSelectedBand(liveBand);
-              }
+              if (!userSelectedBand) setSelectedBand(liveBand);
               const isHit = telemetry.hit ?? telemetry.metrics?.hit ?? false;
               const modeNames = ["SHORT_DWELL", "NORMAL_DWELL", "LONG_DWELL", "REVISIT", "PREEMPTIVE"];
               const mName = telemetry.modeName ?? telemetry.metrics?.mode_name ?? modeNames[telemetry.mode ?? 1] ?? "NORMAL_DWELL";
               const clk = telemetry.clockUs ?? telemetry.metrics?.clock_us ?? 0;
 
-              const ev = {
-                time: `T+${(clk / 1000).toFixed(1)} ms`,
-                band: liveBand,
-                frequencyMHz: liveBand * 500 + 250,
-                type: isHit ? "HIT" : "SEARCH",
-                mode: mName,
-              };
-              setLiveEvents((prev) => [ev, ...prev.slice(0, 19)]);
+              setLiveEvents((prev) => [
+                { time: `T+${(clk / 1000).toFixed(1)} ms`, band: liveBand, frequencyMHz: liveBand * 500 + 250, type: isHit ? "HIT" : "SEARCH", mode: mName },
+                ...prev.slice(0, 19),
+              ]);
 
               setWaterfall((prev) => {
-                const newRow = Array.from({ length: 36 }, (_, col) => {
-                  if (col === liveBand) return isHit ? 95 : 65;
-                  const prior = prev[0]?.[col] ?? 20;
-                  return Math.max(12, prior * 0.9);
+                const newRow = Array.from({ length: NUM_BANDS }, (_, col) => {
+                  if (col === liveBand) return isHit ? 92 : 58;
+                  const prior = prev[0]?.[col] ?? 10;
+                  return Math.max(6, prior * 0.92);
                 });
-                return [newRow, ...prev.slice(0, 11)];
+                return [newRow, ...prev.slice(0, WATERFALL_ROWS - 1)];
               });
             }
           } else {
             setStreamStatus("CONNECTED_NO_LIVE_DATA");
           }
         },
-        onError() {
-          if (!active) return;
-          setStreamStatus("RECONNECTING");
-          startSyntheticFallback();
-        },
-        onClose() {
-          if (!active) return;
-          startSyntheticFallback();
-        },
+        onError() { if (active) { setStreamStatus("RECONNECTING"); startSyntheticFallback(); } },
+        onClose() { if (active) startSyntheticFallback(); },
       });
     } catch {
       startSyntheticFallback();
     }
 
-    return () => {
-      active = false;
-      backendConnection?.close();
-      syntheticConnection?.close();
-    };
-  }, [userSelectedBand]);
+    return () => { active = false; backendConnection?.close(); syntheticConnection?.close(); };
+  }, [userSelectedBand, selectedBand]);
 
   const usingBackend = backendData?.connected === true || streamStatus === "CONNECTED";
   const hasRealTelemetry =
-    (liveTelemetry?.source === "backend" ||
-      liveTelemetry?.source === "publisher" ||
-      liveTelemetry?.source?.startsWith("run:")) &&
+    (liveTelemetry?.source === "backend" || liveTelemetry?.source === "publisher" || liveTelemetry?.source?.startsWith("run:")) &&
     liveTelemetry?.live === true;
 
   const currentScheduledBand = hasRealTelemetry && liveTelemetry?.band !== undefined && liveTelemetry?.band !== null
-    ? liveTelemetry.band
-    : selectedBand;
+    ? liveTelemetry.band : selectedBand;
 
   const currentFrequencyMHz = useMemo(
     () => (userSelectedBand ? selectedBand : currentScheduledBand) * 500 + 250,
@@ -254,9 +494,7 @@ export default function LiveSpectrum() {
   );
 
   const activeBands = useMemo(() => {
-    if (hasRealTelemetry && liveEvents.length > 0) {
-      return new Set(liveEvents.map((e) => e.band));
-    }
+    if (hasRealTelemetry && liveEvents.length > 0) return new Set(liveEvents.map((e) => e.band));
     return new Set([6, 10, 16, 28]);
   }, [hasRealTelemetry, liveEvents]);
 
@@ -264,88 +502,63 @@ export default function LiveSpectrum() {
 
   const bandHeights = useMemo(
     () =>
-      Array.from({ length: 36 }, (_, band) => {
+      Array.from({ length: NUM_BANDS }, (_, band) => {
         if (hasRealTelemetry) {
           if (band === currentScheduledBand) return 92;
-          if (activeBands.has(band)) return 68;
-          return 20 + ((band * 13) % 25);
+          if (activeBands.has(band)) return 62;
+          return 12 + ((band * 13) % 20);
         }
-        const base = 25 + ((band * 17) % 60);
-        return activeBands.has(band) ? Math.min(base + 30, 95) : base;
+        const base = 18 + ((band * 17) % 50);
+        return activeBands.has(band) ? Math.min(base + 25, 92) : base;
       }),
     [hasRealTelemetry, currentScheduledBand, activeBands]
   );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <div className="st-panel">
-        <PanelHead icon="graphic_eq" title="0–18 GHz LIVE WIDEBAND SPECTRUM & INSTANTANEOUS RECEIVER APERTURE" badge="LIVE STREAM" badgeColor="#49df9d" />
-        <div className="st-body" style={{ color: "#c6c5d5", display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="st-panel" style={{ padding: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <PanelHead icon="graphic_eq" title="0–18 GHz LIVE WIDEBAND SPECTRUM & INSTANTANEOUS RECEIVER APERTURE" badge="LIVE STREAM" badgeColor="#49df9d" />
           <DataSourceBadge connected={hasRealTelemetry} />
         </div>
       </div>
 
       <div className="st-grid-12">
-        <div className="st-span-8 st-panel">
-          <PanelHead icon="show_chart" title="WIDEBAND RF ENVIRONMENT" badge="1 GHz IBW" badgeColor="#96ccff" />
-          <div className="st-spec">
-            <div style={{ position: "relative" }}>
-              <div className="st-bars" style={{ height: 220 }}>
-                {bandHeights.map((height, band) => (
-                  <div
-                    key={band}
-                    className="st-bar"
-                    title={`Band ${band} · ${band * 500}–${(band + 1) * 500} MHz`}
-                    style={{
-                      height: `${height}%`,
-                      background: activeBands.has(band)
-                        ? selectedBand === band
-                          ? "#bdc2ff"
-                          : "#96ccff"
-                        : "#282a2e",
-                      boxShadow: selectedBand === band ? "0 0 8px rgba(189,194,255,0.45)" : "none",
-                    }}
-                  />
-                ))}
-                <div className="st-ibw">
-                  <span className="st-badge" style={{ color: "#bdc2ff" }}>
-                    IBW RX: {(currentFrequencyMHz - 500).toLocaleString()}–{(currentFrequencyMHz + 500).toLocaleString()}
-                  </span>
-                  <span className="st-mark" style={{ color: "#bdc2ff", textAlign: "center" }}>
-                    1 GHz IBW · CENTER {currentFrequencyMHz.toLocaleString()} MHz
-                  </span>
-                </div>
-              </div>
+        <div className="st-span-8" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div className="st-panel" style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "4px 8px", background: "#1a1c20", borderBottom: "1px solid #454653", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span className="st-headline" style={{ color: "#bdc2ff" }}>REAL-TIME SPECTRUM TRACE</span>
+              <span className="st-badge" style={{ color: "#96ccff" }}>1 GHz IBW</span>
             </div>
-            <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px", color: "#908f9e" }}>
-              <span>0 GHz</span><span>4 GHz</span><span>8 GHz</span><span>12 GHz</span><span>16 GHz</span><span>18 GHz</span>
+            <SpectrumCanvas bandHeights={bandHeights} currentBand={currentScheduledBand} activeBands={activeBands} />
+          </div>
+
+          <div className="st-panel" style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "4px 8px", background: "#1a1c20", borderBottom: "1px solid #454653", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span className="st-headline" style={{ color: "#bdc2ff" }}>WATERFALL HISTORY</span>
+              <span className="st-badge" style={{ color: "#49df9d" }}>LIVE</span>
             </div>
+            <WaterfallCanvas waterfall={waterfall} currentBand={currentScheduledBand} />
           </div>
-          <div className="st-tsm" style={{ display: "flex", gap: 12, color: "#908f9e" }}>
-            <span><i style={{ display: "inline-block", width: 8, height: 8, background: "#282a2e", marginRight: 4 }} />QUIET</span>
-            <span><i style={{ display: "inline-block", width: 8, height: 8, background: "#96ccff", marginRight: 4 }} />RF ACTIVITY</span>
-            <span><i style={{ display: "inline-block", width: 8, height: 8, background: "#bdc2ff", marginRight: 4 }} />CURRENT BAND</span>
-            <span><i style={{ display: "inline-block", width: 8, height: 8, background: "#96ccff", marginRight: 4 }} />RECEIVER IBW</span>
-          </div>
-          <div>
-            <span className="st-headline" style={{ color: "#96ccff" }}>BAND SELECT</span>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(18, 1fr)", gap: 2, marginTop: 4 }}>
-              {Array.from({ length: 36 }, (_, band) => (
+
+          <div className="st-panel" style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "4px 8px", background: "#1a1c20", borderBottom: "1px solid #454653" }}>
+              <span className="st-headline" style={{ color: "#96ccff" }}>BAND SELECT</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(18, 1fr)", gap: 1, padding: 3 }}>
+              {Array.from({ length: NUM_BANDS }, (_, band) => (
                 <button
                   key={band}
                   style={{
                     cursor: "pointer",
                     padding: "1px 0",
-                    font: "600 10px/1.2 Inter, system-ui, sans-serif",
+                    font: '600 9px/1.2 "JetBrains Mono", monospace',
                     textAlign: "center",
                     background: selectedBand === band ? "#bdc2ff" : "#1a1c20",
-                    color: selectedBand === band ? "#0b1c93" : "#e2e2e8",
-                    border: `1px solid ${selectedBand === band ? "#bdc2ff" : "#454653"}`,
+                    color: selectedBand === band ? "#0b1c93" : activeBands.has(band) ? "#96ccff" : "#707180",
+                    border: `1px solid ${selectedBand === band ? "#bdc2ff" : "#2a2c32"}`,
                   }}
-                  onClick={() => {
-                    setSelectedBand(band);
-                    setUserSelectedBand(true);
-                  }}
+                  onClick={() => { setSelectedBand(band); setUserSelectedBand(true); }}
                 >
                   B{band}
                 </button>
@@ -371,8 +584,8 @@ export default function LiveSpectrum() {
                 ["BAND", `B${currentScheduledBand}`],
                 ["IBW", "500 MHz (Canonical)"],
                 ["THRESHOLD", "-140 dBm (Receiver)"],
-                ["INTERCEPT RATE (Pd)", hasRealTelemetry && liveTelemetry.rollingPd !== null && liveTelemetry.rollingPd !== undefined ? `${(liveTelemetry.rollingPd * 100).toFixed(1)}%` : (usingBackend ? "0.0%" : "74.0%")],
-                ["MEDIAN LATENCY", hasRealTelemetry && liveTelemetry.rollingMedianLatencyUs !== null && liveTelemetry.rollingMedianLatencyUs !== undefined ? `${liveTelemetry.rollingMedianLatencyUs.toFixed(1)} µs` : (usingBackend ? "0.0 µs" : "110 µs")],
+                ["INTERCEPT RATE (Pd)", hasRealTelemetry && liveTelemetry?.rollingPd != null ? `${(liveTelemetry.rollingPd * 100).toFixed(1)}%` : (usingBackend ? "0.0%" : "74.0%")],
+                ["MEDIAN LATENCY", hasRealTelemetry && liveTelemetry?.rollingMedianLatencyUs != null ? `${liveTelemetry.rollingMedianLatencyUs.toFixed(1)} µs` : (usingBackend ? "0.0 µs" : "110 µs")],
                 ["TELEMETRY STREAM", streamStatus],
                 ["REST BACKEND", usingBackend ? "AVAILABLE" : "OFFLINE"],
               ].map(([label, value]) => (
@@ -391,20 +604,16 @@ export default function LiveSpectrum() {
             <div className="st-grid-12" style={{ gap: 4 }}>
               <div style={{ gridColumn: "span 6 / span 6", display: "flex", flexDirection: "column", gap: 2 }}>
                 <span className="st-tsm" style={{ color: "#908f9e" }}>SELECTED</span>
-                <strong className="st-tmd" style={{ color: "#49df9d" }}>
-                  B{currentScheduledBand}
-                </strong>
-                <span className="st-mark" style={{ color: "#c6c5d5" }}>
-                  {currentFrequencyMHz.toLocaleString()} MHz
-                </span>
+                <strong className="st-tmd" style={{ color: "#49df9d" }}>B{currentScheduledBand}</strong>
+                <span className="st-mark" style={{ color: "#c6c5d5" }}>{currentFrequencyMHz.toLocaleString()} MHz</span>
               </div>
               <div style={{ gridColumn: "span 6 / span 6", display: "flex", flexDirection: "column", gap: 2 }}>
                 <span className="st-tsm" style={{ color: "#908f9e" }}>MODE</span>
                 <strong className="st-tmd" style={{ color: "#96ccff" }}>
-                  {hasRealTelemetry ? (liveTelemetry.modeName ?? "NORMAL_DWELL") : syntheticSystem.scheduler.selectedMode}
+                  {hasRealTelemetry ? (liveTelemetry?.modeName ?? "NORMAL_DWELL") : syntheticSystem.scheduler.selectedMode}
                 </strong>
                 <span className="st-mark" style={{ color: "#c6c5d5" }}>
-                  {hasRealTelemetry ? `${liveTelemetry.metrics?.dwell_time_us ?? 500} µs` : `${syntheticSystem.scheduler.dwellTimeUs} µs`}
+                  {hasRealTelemetry ? `${liveTelemetry?.metrics?.dwell_time_us ?? 500} µs` : `${syntheticSystem.scheduler.dwellTimeUs} µs`}
                 </span>
               </div>
             </div>
@@ -412,7 +621,7 @@ export default function LiveSpectrum() {
               <span style={{ color: "#908f9e" }}>PRIMARY DRIVER</span>
               <strong style={{ color: "#e2e2e8" }}>
                 {hasRealTelemetry
-                  ? (liveTelemetry.cognitiveExplanation?.decision_reason ?? liveTelemetry.metrics?.cognitive_explanation?.decision_reason ?? "DRQN Cognitive Policy")
+                  ? (liveTelemetry?.cognitiveExplanation?.decision_reason ?? liveTelemetry?.metrics?.cognitive_explanation?.decision_reason ?? "DRQN Cognitive Policy")
                   : "Recent pulse activity"}
               </strong>
             </div>
@@ -435,41 +644,6 @@ export default function LiveSpectrum() {
             </div>
           </div>
         </aside>
-      </div>
-
-      <div className="st-panel">
-        <PanelHead icon="view_agenda" title="SPECTRUM WATERFALL" badge="LIVE" badgeColor="#49df9d" />
-        <div style={{ display: "flex", gap: 4 }}>
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", color: "#908f9e", textAlign: "right", paddingRight: 4 }}>
-            {["NOW", "-100 ms", "-200 ms", "-300 ms", "-400 ms", "-500 ms"].map((t) => (
-              <span key={t} style={{ height: 18, fontSize: 10, lineHeight: "18px" }}>{t}</span>
-            ))}
-          </div>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 1, background: "#0a0c0f", border: "1px solid #454653", padding: 2 }}>
-            {waterfall.map((row, rowIndex) => (
-              <div key={rowIndex} style={{ display: "flex", gap: 1 }}>
-                {row.map((value, colIndex) => (
-                  <div
-                    key={colIndex}
-                    title={`Band ${colIndex}: ${value.toFixed(1)}`}
-                    style={{
-                      flex: 1,
-                      height: 18,
-                      background: waterfallColor(value),
-                      transition: "background 0.15s ease",
-                    }}
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="st-tsm" style={{ display: "flex", gap: 8, color: "#908f9e", marginTop: 4 }}>
-          <span><i style={{ display: "inline-block", width: 8, height: 8, background: "rgba(6,20,10,0.9)", marginRight: 4, border: "1px solid #454653" }} />QUIET</span>
-          <span><i style={{ display: "inline-block", width: 8, height: 8, background: "rgba(20,120,60,0.9)", marginRight: 4 }} />LOW ACTIVITY</span>
-          <span><i style={{ display: "inline-block", width: 8, height: 8, background: "rgba(40,200,100,0.9)", marginRight: 4 }} />HIGH ACTIVITY</span>
-          <span><i style={{ display: "inline-block", width: 8, height: 8, background: "rgba(50,240,110,0.95)", marginRight: 4 }} />HIT</span>
-        </div>
       </div>
 
       <TelemetryInspector telemetry={liveTelemetry} />
