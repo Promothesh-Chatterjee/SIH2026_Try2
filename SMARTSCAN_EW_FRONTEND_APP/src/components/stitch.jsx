@@ -285,7 +285,7 @@ export function CandidateActions() {
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span className="st-headline" style={{ color: "#908f9e" }}>
+      <span className="st-headline" style={{ color: "#e2e2e8" }}>
         ACTION USAGE
       </span>
       {rows.map(([n, act, q, u, sel]) => (
@@ -301,12 +301,12 @@ export function CandidateActions() {
           }}
         >
           <span style={{ display: "flex", gap: 6 }}>
-            <CmdBadge color={sel ? "#49df9d" : "#908f9e"}>{n}</CmdBadge>
-            <strong style={{ color: sel ? "#bdc2ff" : "#e2e2e8" }}>{act}</strong>
+            <CmdBadge color={sel ? "#49df9d" : "#e2e2e8"}>{n}</CmdBadge>
+            <strong style={{ color: "#e2e2e8" }}>{act}</strong>
           </span>
           <span style={{ display: "flex", gap: 8 }}>
-            <span style={{ color: "#908f9e" }}>{q}</span>
-            <strong style={{ color: sel ? "#49df9d" : "#c6c5d5" }}>{u}</strong>
+            <span style={{ color: "#e2e2e8" }}>{q}</span>
+            <strong style={{ color: "#e2e2e8" }}>{u}</strong>
           </span>
         </div>
       ))}
