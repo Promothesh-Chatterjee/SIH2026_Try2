@@ -346,6 +346,11 @@
   background: rgba(12, 14, 18, 0.6);
 }
 
+.st-table-wrap-compact .st-table td {
+  font-size: 9px;
+  padding: 6px;
+}
+
 .st-heat {
   display: grid;
   gap: 1px;

@@ -227,6 +227,7 @@ export default function Interception() {
               </button>
             ))}
           </div>
+          <div className="st-table-wrap st-table-wrap-compact">
           <StitchTable
             columns={["T-OFFSET", "RX CENTER FREQ", "BAND ID", "DWELL DURATION", "STATUS", "EMITTER ID", "TIMING DELTA"]}
             rows={MOCK_INTERCEPT_EVENTS.map((event) => [
@@ -255,6 +256,7 @@ export default function Interception() {
               event.errorUs === null ? "N/A" : `${event.errorUs > 0 ? "+" : ""}${event.errorUs} µs`,
             ])}
           />
+          </div>
         </div>
 
         <aside className="st-span-4 st-panel">
