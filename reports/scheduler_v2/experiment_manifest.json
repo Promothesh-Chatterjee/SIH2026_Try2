@@ -1,0 +1,186 @@
+{
+  "manifest_version": 2,
+  "experiment_name": "scheduler_v2",
+  "created_at": "2026-09-10T18:39:02.521875+00:00",
+  "timestamp": "2026-09-10T18:39:02.521875+00:00",
+  "git_commit_sha": "fd896a804882ed323b07967939205f0caa3436b5",
+  "git_revision": "fd896a804882ed323b07967939205f0caa3436b5",
+  "config_hash": "b980d565b727a5a39e80964be13e573404500af4ab344badf92e9cbd4a37f143",
+  "training_dataset_mode": "real_tsrd",
+  "dataset_mode": "stare",
+  "dataset_root": "D:/TSRD",
+  "split": "train",
+  "random_seed": 42,
+  "seed": 42,
+  "gpu_device": "cpu",
+  "device": "cpu",
+  "model_parameter_count": 1529249,
+  "validation_scenario_ids": [
+    "config_117",
+    "config_119",
+    "config_143",
+    "config_194",
+    "config_195",
+    "config_241",
+    "config_29",
+    "config_42",
+    "config_64",
+    "config_96"
+  ],
+  "validation_set_id": "val-30364f2e8ac0",
+  "training_configuration": {
+    "data_dir": "D:/TSRD",
+    "seed": 42,
+    "subset": "train",
+    "mode": "scan",
+    "world_mode": "stare",
+    "observation_mode": "scan",
+    "training_mode": "real_tsrd",
+    "deinterleaver_ckpt": "checkpoints/deinterleaver/best.pt",
+    "normalization_stats": "checkpoints/deinterleaver/normalization_stats.json",
+    "deinterleaver": {
+      "batch_size": 8,
+      "max_pulses_per_train": 512,
+      "epochs": 3,
+      "lr": "3e-4",
+      "weight_decay": "1e-5",
+      "scheduler": "cosine",
+      "warmup_steps": 500,
+      "save_every": 5,
+      "val_every": 2,
+      "mode": "scan",
+      "val_mode": "scan"
+    },
+    "scheduler": {
+      "total_timesteps": 500000,
+      "replay_buffer_size": 50000,
+      "batch_size": 32,
+      "seq_len": 16,
+      "burn_in": 8,
+      "update_freq": 4,
+      "target_update_freq": 1000,
+      "thompson_warmup_steps": 5000
+    },
+    "environment": {
+      "n_bands": 36,
+      "band_features": 10,
+      "obs_dim": 360,
+      "n_modes": 5,
+      "n_actions": 180,
+      "freq_min_mhz": 0.0,
+      "freq_max_mhz": 18000.0,
+      "ibw_mhz": 500.0,
+      "dwell_time_us": 500.0,
+      "detection_threshold_db": -140.0,
+      "frequency_step_mhz": 500.0,
+      "time_horizon_us": 30000000.0,
+      "max_pulses": 50000,
+      "max_steps_per_episode": 1000
+    },
+    "validation": {
+      "subset": "val",
+      "n_files": 10,
+      "seed": 42,
+      "allow_synthetic_fallback": false
+    },
+    "telemetry": {
+      "schema_version": "2.0"
+    }
+  },
+  "model_configuration": {
+    "deinterleaver": {
+      "pdw_dim": 6,
+      "d_model": 128,
+      "nhead": 8,
+      "num_layers": 4,
+      "dim_feedforward": 512,
+      "dropout": 0.1,
+      "embed_dim": 64,
+      "triplet_margin": 0.5
+    },
+    "drqn_scheduler": {
+      "n_bands": 36,
+      "n_modes": 5,
+      "n_actions": 180,
+      "lstm_hidden": 256,
+      "lstm_layers": 2,
+      "obs_dim": 360,
+      "gamma": 0.99,
+      "lr": "1e-4",
+      "eps_start": 1.0,
+      "eps_end": 0.05,
+      "eps_decay": 87837
+    },
+    "dwell_modes": {
+      "base_dwell_time_us": 500.0,
+      "mode_multipliers": [
+        {
+          "name": "SHORT_DWELL",
+          "multiplier": 0.25
+        },
+        {
+          "name": "NORMAL_DWELL",
+          "multiplier": 1.0
+        },
+        {
+          "name": "LONG_DWELL",
+          "multiplier": 2.5
+        },
+        {
+          "name": "REVISIT",
+          "multiplier": 1.0
+        },
+        {
+          "name": "PREEMPTIVE_INTERCEPT",
+          "multiplier": 1.0
+        }
+      ]
+    },
+    "smartscan_moe": {
+      "eager_weight": 0.6,
+      "revisit_weight": 0.3,
+      "preemptive_weight": 0.1,
+      "semantic_weight": 1.0,
+      "k_receivers": 1,
+      "decay_rate": 0.05,
+      "confidence_margin_threshold": 0.02,
+      "tau": 0.15
+    },
+    "reward": {
+      "penalize_empty_dwell": false,
+      "context_scaled_miss": true,
+      "w_hit": 5.0,
+      "w_novel": 5.0,
+      "w_miss": -0.5,
+      "w_timing": 0.001,
+      "w_priority": 1.0,
+      "w_information_gain": 0.2,
+      "w_false_alarm": -0.5,
+      "w_dwell_cost": -0.0002,
+      "w_redundant_scan": 0.0,
+      "w_delay": -0.5,
+      "w_staleness": 0.4,
+      "w_missed_coverage": -0.2,
+      "staleness_norm": 50.0,
+      "conditional_dwell_cost": true,
+      "w_active_track": 2.0,
+      "w_pulse_scale": 0.0,
+      "lull_tolerance": false,
+      "w_latency": 1.0,
+      "tau_latency": 100.0,
+      "w_prediction": 0.5,
+      "disable_latency_reward": false
+    },
+    "belief": {
+      "priority": {
+        "staleness_weight": 0.35,
+        "occupancy_weight": 0.25,
+        "uncertainty_weight": 0.2,
+        "periodic_weight": 0.1,
+        "semantic_weight": 0.1
+      }
+    },
+    "semantic_memory_enabled": false
+  },
+  "status": "initialized"
+}
