@@ -138,39 +138,15 @@ export default function SmartScan() {
                     </td>
                     {row.values.map((value, index) => (
                       <td key={index}>
-                        <div style={{ position: "relative", height: 16, background: "#0c0e12", border: "1px solid rgba(69,70,83,0.4)" }}>
-                          <span
-                            style={{
-                              position: "absolute",
-                              left: 0,
-                              top: 0,
-                              bottom: 0,
-                              width: `${value * 100}%`,
-                              background: selectedBand === row.band ? "#96ccff" : "#333539",
-                            }}
-                          />
-                          <span className="st-mark" style={{ position: "absolute", left: 4, top: 2 }}>
-                            {value.toFixed(2)}
-                          </span>
-                        </div>
+                        <span className="st-mark" style={{ color: "#e2e2e8" }}>
+                          {value.toFixed(2)}
+                        </span>
                       </td>
                     ))}
                     <td>
-                      <div style={{ position: "relative", height: 16, background: "#0c0e12", border: "1px solid rgba(69,70,83,0.4)" }}>
-                        <span
-                          style={{
-                            position: "absolute",
-                            left: 0,
-                            top: 0,
-                            bottom: 0,
-                            width: `${Math.max(row.values[3], row.values[4]) * 100}%`,
-                            background: "#ffb4ab",
-                          }}
-                        />
-                        <span className="st-mark" style={{ position: "absolute", left: 4, top: 2, color: "#c6c5d5" }}>
-                          {Math.max(row.values[3], row.values[4]).toFixed(2)}
-                        </span>
-                      </div>
+                      <span className="st-mark" style={{ color: "#c6c5d5" }}>
+                        {Math.max(row.values[3], row.values[4]).toFixed(2)}
+                      </span>
                     </td>
                     <td>
                       <strong style={{ color: "#49df9d" }}>{occupancyRank[row.band]}</strong>
