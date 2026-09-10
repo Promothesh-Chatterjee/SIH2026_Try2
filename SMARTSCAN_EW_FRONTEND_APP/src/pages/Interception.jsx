@@ -107,7 +107,13 @@ export default function Interception() {
         />
         <div className="st-body" style={{ color: "#c6c5d5" }}>
           Frequency and time are jointly evaluated to determine interception
-          success, misses, and false alarms. {hasLive && <span style={{ color: "#49df9d" }}>● Live Closed-Loop Mode Active</span>}
+          success, misses, and false alarms.{" "}
+          {selectedEvent.type === "HIT" && (
+            <span style={{ color: "#49df9d" }}>
+              Receiver dwell overlapped the transmission window and the signal was successfully intercepted.
+            </span>
+          )}
+          {hasLive && <span style={{ color: "#49df9d" }}>● Live Closed-Loop Mode Active</span>}
         </div>
       </div>
 
@@ -277,33 +283,6 @@ export default function Interception() {
                 <strong style={{ color: "#e2e2e8" }}>{value}</strong>
               </div>
             ))}
-          </div>
-          <div className="st-body" style={{ color: "#c6c5d5", lineHeight: 1.5 }}>
-            <span className="st-headline" style={{ color: "#bdc2ff" }}>INTERCEPT ANALYSIS</span>
-            {selectedEvent.type === "HIT" && (
-              <p style={{ margin: "4px 0 0" }}>
-                Receiver dwell overlapped the transmission window and the
-                signal was successfully intercepted.
-              </p>
-            )}
-            {selectedEvent.type === "MISS" && (
-              <p style={{ margin: "4px 0 0" }}>
-                A transmission opportunity existed, but the receiver did not
-                successfully intercept it.
-              </p>
-            )}
-            {selectedEvent.type === "FALSE_ALARM" && (
-              <p style={{ margin: "4px 0 0" }}>
-                The receiver reported activity without a valid target
-                transmission.
-              </p>
-            )}
-            {selectedEvent.type === "SEARCH" && (
-              <p style={{ margin: "4px 0 0" }}>
-                This event represents a scan/search action without a
-                confirmed interception.
-              </p>
-            )}
           </div>
         </aside>
       </div>
