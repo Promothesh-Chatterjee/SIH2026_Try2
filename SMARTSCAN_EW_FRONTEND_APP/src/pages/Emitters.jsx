@@ -1,90 +1,5 @@
 import { PanelHead, StitchTable, TruthBanner } from "../components/stitch";
 
-const EMITTER_REGISTRY = [
-  {
-    id: "EMIT-01",
-    tag: "Radar P-12",
-    archetype: "Periodic Pulsed",
-    band: "S-Band",
-    freq: "3,150.0 MHz",
-    pri: "800.0 µs",
-    pw: "2.50 µs",
-    aoa: "042°",
-    tier: "TIER-2",
-    tierColor: "#96ccff",
-    deadline: "T+4.8 ms",
-    status: "ACTIVE TRANSMIT",
-    statusColor: "#49df9d",
-    rowBg: "#1a1c20",
-  },
-  {
-    id: "EMIT-04",
-    tag: "Track TRK-084",
-    archetype: "Agile Frequency Hop",
-    band: "X-Band",
-    freq: "8,200 – 8,450 MHz",
-    pri: "45–60 µs (JIT)",
-    pw: "0.80 µs",
-    aoa: "142°",
-    tier: "TIER-1 HIGH",
-    tierColor: "#ffb4ab",
-    deadline: "T+0.2 ms [CRIT]",
-    status: "BURST IMMINENT",
-    statusColor: "#ffb4ab",
-    rowBg: "#0c0e12",
-    pulse: true,
-  },
-  {
-    id: "EMIT-07",
-    tag: "Fire Control FC-9",
-    archetype: "Staggered Periodic",
-    band: "X-Band",
-    freq: "9,400.0 MHz",
-    pri: "120.0 µs",
-    pw: "0.40 µs",
-    aoa: "285°",
-    tier: "TIER-1",
-    tierColor: "#ffb4ab",
-    deadline: "T+1,400 ms",
-    status: "DORMANT (T+1.4s)",
-    statusColor: "#908f9e",
-    rowBg: "#1a1c20",
-  },
-  {
-    id: "EMIT-09",
-    tag: "Airborne Surveillance",
-    archetype: "Rotary Radar",
-    band: "Ku-Band",
-    freq: "14,200.0 MHz",
-    pri: "450.0 µs",
-    pw: "1.60 µs",
-    aoa: "110°",
-    tier: "TIER-2",
-    tierColor: "#96ccff",
-    deadline: "T+8.2 ms",
-    status: "ACTIVE",
-    statusColor: "#49df9d",
-    rowBg: "#0c0e12",
-  },
-  {
-    id: "EMIT-12",
-    tag: "Frequency Hopper H-02",
-    archetype: "Pseudorandom Sequence",
-    band: "C-Band",
-    freq: "5,500 – 5,900 MHz",
-    pri: "1,200 hops/s",
-    pw: "0.65 µs",
-    aoa: "195°",
-    tier: "TIER-3",
-    tierColor: "#e2e2e8",
-    deadline: "T+0.8 ms",
-    status: "RAPID HOP",
-    statusColor: "#96ccff",
-    rowBg: "#1a1c20",
-    pulse: true,
-  },
-];
-
 const ARCHETYPE_COLS = [
   { label: "Periodic", count: "6", color: "#bdc2ff" },
   { label: "Agile Hop", count: "5", color: "#96ccff" },
@@ -418,7 +333,7 @@ export default function Emitters() {
             <span className="st-headline" style={{ color: "#e2e2e8" }}>
               GROUND TRUTH EMITTER REGISTRY & WAVEFORM PROFILES
             </span>
-            <span className="st-badge" style={{ color: "#908f9e" }}>5 OF 14 DISPLAYED</span>
+            <span className="st-badge" style={{ color: "#908f9e" }}>0 STATIC ENTRIES</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <div
@@ -462,95 +377,11 @@ export default function Emitters() {
               </tr>
             </thead>
             <tbody>
-              {EMITTER_REGISTRY.map((e) => (
-                <tr key={e.id} style={{ background: e.rowBg }}>
-                  <td style={{ fontWeight: 700, color: e.id === "EMIT-04" ? "#ffb4ab" : e.id === "EMIT-12" ? "#96ccff" : e.id === "EMIT-07" ? "#908f9e" : "#bdc2ff" }}>
-                    {e.id}
-                  </td>
-                  <td>
-                    <span style={{ color: "#e2e2e8", fontWeight: 600 }}>{e.tag}</span>
-                    <span
-                      style={{
-                        display: "block",
-                        color: e.id === "EMIT-04" ? "#ffb4ab" : e.id === "EMIT-12" ? "#96ccff" : e.id === "EMIT-07" ? "#908f9e" : "#908f9e",
-                        fontSize: 9,
-                        fontFamily: "JetBrains Mono",
-                      }}
-                    >
-                      {e.archetype}
-                    </span>
-                  </td>
-                  <td>
-                    <span style={{ color: "#96ccff", fontWeight: 700 }}>{e.band}</span>
-                    <span style={{ color: "#908f9e" }}> // {e.freq}</span>
-                  </td>
-                  <td style={{ textAlign: "right", fontWeight: 700, color: e.id === "EMIT-04" ? "#ffb4ab" : "#e2e2e8" }}>
-                    {e.pri}
-                  </td>
-                  <td style={{ textAlign: "right", color: "#bac9cc" }}>{e.pw}</td>
-                  <td style={{ textAlign: "center" }}>
-                    <span
-                      style={{
-                        background: e.id === "EMIT-04" ? "#282a2e" : "#0c0e12",
-                        padding: "2px 6px",
-                        borderRadius: 2,
-                        color: e.id === "EMIT-04" ? "#ffb4ab" : "#bdc2ff",
-                        fontWeight: e.id === "EMIT-04" ? 700 : 400,
-                      }}
-                    >
-                      {e.aoa}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className="st-badge"
-                      style={{
-                        background: "#282a2e",
-                        color: e.tierColor,
-                        fontWeight: e.tier === "TIER-1 HIGH" ? 700 : 400,
-                        border: `1px solid ${e.tierColor}33`,
-                      }}
-                    >
-                      {e.tier}
-                    </span>
-                  </td>
-                  <td
-                    style={{
-                      textAlign: "right",
-                      color: e.id === "EMIT-04" ? "#ffb4ab" : e.id === "EMIT-12" ? "#96ccff" : "#908f9e",
-                      fontWeight: e.id === "EMIT-04" ? 700 : 400,
-                      animation: e.pulse ? "pulse 2s infinite" : "none",
-                    }}
-                  >
-                    {e.deadline}
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    <span
-                      className="st-badge"
-                      style={{
-                        color: e.statusColor,
-                        background: "#0c0e12",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        fontWeight: e.status === "BURST IMMINENT" ? 700 : 400,
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 6,
-                          height: 6,
-                          background: e.statusColor,
-                          display: "inline-block",
-                          borderRadius: 3,
-                          animation: e.pulse ? "ping 1.5s infinite" : "none",
-                        }}
-                      />
-                      {e.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              <tr>
+                <td colSpan={9} style={{ textAlign: "center", color: "#908f9e", padding: "12px 8px" }}>
+                  NO STATIC ENTRIES — AWAITING LIVE TRUTH FEED
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -570,7 +401,7 @@ export default function Emitters() {
           }}
         >
           <div style={{ display: "flex", gap: 12 }}>
-            <span>SHOWING 5 ACTIVE EMITTERS (9 OMITTED IN MINIFIED VIEW)</span>
+            <span>NO STATIC EMITTER ROWS — LIVE FEED ONLY</span>
             <span style={{ color: "#96ccff", fontWeight: 700, cursor: "pointer" }}>
               EXPAND FULL 20 EMITTER POOL
             </span>
