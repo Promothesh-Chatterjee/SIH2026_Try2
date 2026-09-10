@@ -125,7 +125,9 @@ export default function Emitters() {
         >
           <span style={{ color: "#bdc2ff", fontWeight: 700 }}>TRUTH CHANNEL: ISOLATED</span>
           <span style={{ color: "#908f9e" }}>LATENCY INJECTION: 0.00ms</span>
-          <span style={{ color: "#49df9d" }}>SYNC: EPISODE FRAME #14,892</span>
+          <span style={{ color: backendOnline ? "#49df9d" : "#ffb4ab" }}>
+            {backendOnline ? "SYNC: EPISODE FRAME #14,892" : "SYNC: OFFLINE — NO LIVE FEED"}
+          </span>
         </div>
       </div>
 
@@ -148,14 +150,14 @@ export default function Emitters() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2, margin: "4px 0", textAlign: "center" }}>
             {ARCHETYPE_COLS.map((a) => (
               <div key={a.label} style={{ padding: 2, background: "#0c0e12", borderRadius: 2 }}>
-                <div className="st-tmd" style={{ color: a.color }}>{a.count}</div>
+                <div className="st-tmd" style={{ color: backendOnline ? a.color : "#908f9e" }}>{backendOnline ? a.count : na}</div>
                 <div className="st-badge" style={{ color: "#908f9e" }}>{a.label.toUpperCase()}</div>
               </div>
             ))}
           </div>
           <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", color: "#908f9e" }}>
             <span>TOTAL RF SPECIES</span>
-            <span style={{ color: "#e2e2e8" }}>3 CLASSES</span>
+            <span style={{ color: "#e2e2e8" }}>{backendOnline ? "3 CLASSES" : "BACKEND OFFLINE"}</span>
           </div>
         </div>
 
