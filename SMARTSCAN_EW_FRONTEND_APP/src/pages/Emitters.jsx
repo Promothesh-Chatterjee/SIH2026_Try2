@@ -212,23 +212,25 @@ export default function Emitters() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 4 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span className="st-headline" style={{ color: "#bdc2ff" }}>
-                AGILE HOP TRAJECTORY: TRK-084 [EMIT-04]
+                {backendOnline ? "AGILE HOP TRAJECTORY: TRK-084 [EMIT-04]" : "AGILE HOP TRAJECTORY: NO LIVE TRACK"}
               </span>
-              <span className="st-badge" style={{ color: "#003642", background: "#96ccff" }}>
-                X-BAND MULTI-CH
+              <span className="st-badge" style={{ color: backendOnline ? "#003642" : "#908f9e", background: backendOnline ? "#96ccff" : "#1a1c20" }}>
+                {backendOnline ? "X-BAND MULTI-CH" : "OFFLINE"}
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#908f9e" }} className="st-tsm">
-              <span style={{ width: 8, height: 8, background: "#96ccff", display: "inline-block", borderRadius: 4, animation: "ping 1.5s infinite" }} />
-              DWELL OVERLAY: ON
+              <span style={{ width: 8, height: 8, background: backendOnline ? "#96ccff" : "#454653", display: "inline-block", borderRadius: 4, animation: backendOnline ? "ping 1.5s infinite" : "none" }} />
+              {backendOnline ? "DWELL OVERLAY: ON" : "DWELL OVERLAY: OFF"}
             </div>
           </div>
           <div className="st-tsm" style={{ color: "#908f9e", paddingBottom: 4 }}>
-            Correlating ground truth pulse bursts vs. Deep Recurrent Q-Network (DRQN)
-            receiver dwell scheduling window.
+            {backendOnline
+              ? "Correlating ground truth pulse bursts vs. Deep Recurrent Q-Network (DRQN) receiver dwell scheduling window."
+              : "Backend unavailable — no live truth trajectory to display."}
           </div>
 
           {/* Tactical SVG Hop Plot */}
+          {backendOnline ? (
           <div style={{ position: "relative", background: "#0c0e12", borderRadius: 2, padding: 8, overflow: "hidden" }}>
             <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", color: "#908f9e", padding: "0 4px" }}>
               <span>B16 (8,200 MHz)</span>
@@ -287,13 +289,18 @@ export default function Emitters() {
               <span style={{ color: "#bdc2ff", fontWeight: 700 }}>SAMPLE: 100 µs/DIV</span>
             </div>
           </div>
+          ) : (
+          <div style={{ background: "#0c0e12", borderRadius: 2, padding: 24, textAlign: "center", color: "#908f9e" }} className="st-tsm">
+            BACKEND OFFLINE — NO LIVE HOP TRAJECTORY
+          </div>
+          )}
 
           {/* Quick Metrics Ribbon */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4, marginTop: 4, paddingTop: 4 }}>
             {METRIC_RIBBON.map(([label, value, color]) => (
               <div key={label} style={{ padding: "4px 8px", background: "#1e2024", borderRadius: 2 }}>
                 <div className="st-badge" style={{ color: "#908f9e" }}>{label}</div>
-                <div className="st-tmd" style={{ color }}>{value}</div>
+                <div className="st-tmd" style={{ color: backendOnline ? color : "#908f9e" }}>{backendOnline ? value : na}</div>
               </div>
             ))}
           </div>
@@ -342,12 +349,12 @@ export default function Emitters() {
                 color: "#908f9e",
               }}
             >
-              ANTENNA AZIMUTH: <span style={{ color: "#bdc2ff", fontWeight: 700 }}>065° CW</span>
+              ANTENNA AZIMUTH: <span style={{ color: backendOnline ? "#bdc2ff" : "#908f9e", fontWeight: 700 }}>{backendOnline ? "065° CW" : "— OFFLINE"}</span>
             </div>
           </div>
           <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", color: "#908f9e", paddingTop: 4 }}>
-            <span>SECTOR SCAN COVERAGE: 60°</span>
-            <span style={{ color: "#96ccff" }}>TRUTH VERIFIED VIA RF ORACLE</span>
+            <span>{backendOnline ? "SECTOR SCAN COVERAGE: 60°" : "SECTOR SCAN COVERAGE: —"}</span>
+            <span style={{ color: backendOnline ? "#96ccff" : "#908f9e" }}>{backendOnline ? "TRUTH VERIFIED VIA RF ORACLE" : "NO LIVE TRUTH FEED"}</span>
           </div>
         </div>
       </div>
@@ -435,7 +442,7 @@ export default function Emitters() {
           </div>
           <div style={{ display: "flex", gap: 4 }}>
             <span style={{ color: "#bdc2ff" }}>EMITTER DE-INTERLEAVING CONFIDENCE:</span>
-            <span style={{ color: "#49df9d", fontWeight: 700 }}>99.1% ORACLE MATCH</span>
+            <span style={{ color: backendOnline ? "#49df9d" : "#908f9e", fontWeight: 700 }}>{backendOnline ? "99.1% ORACLE MATCH" : "— OFFLINE"}</span>
           </div>
         </div>
       </div>
@@ -457,8 +464,8 @@ export default function Emitters() {
             </div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div className="st-tmd" style={{ color: "#bdc2ff" }}>1.42 ms</div>
-            <span className="st-badge" style={{ color: "#49df9d" }}>-0.18ms VS BASELINE</span>
+            <div className="st-tmd" style={{ color: backendOnline ? "#bdc2ff" : "#908f9e" }}>{backendOnline ? "1.42 ms" : na}</div>
+            <span className="st-badge" style={{ color: backendOnline ? "#49df9d" : "#908f9e" }}>{backendOnline ? "-0.18ms VS BASELINE" : "OFFLINE"}</span>
           </div>
         </div>
 
@@ -471,8 +478,8 @@ export default function Emitters() {
             </div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div className="st-tmd" style={{ color: "#ffb4ab" }}>2 / 410</div>
-            <span className="st-badge" style={{ color: "#49df9d" }}>0.48% (TOLERABLE)</span>
+            <div className="st-tmd" style={{ color: backendOnline ? "#ffb4ab" : "#908f9e" }}>{backendOnline ? "2 / 410" : na}</div>
+            <span className="st-badge" style={{ color: backendOnline ? "#49df9d" : "#908f9e" }}>{backendOnline ? "0.48% (TOLERABLE)" : "OFFLINE"}</span>
           </div>
         </div>
 
@@ -485,8 +492,8 @@ export default function Emitters() {
             </div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div className="st-tmd" style={{ color: "#49df9d" }}>0.000%</div>
-            <span className="st-badge" style={{ color: "#49df9d" }}>ZERO LEAK CONFIRMED</span>
+            <div className="st-tmd" style={{ color: backendOnline ? "#49df9d" : "#908f9e" }}>{backendOnline ? "0.000%" : na}</div>
+            <span className="st-badge" style={{ color: backendOnline ? "#49df9d" : "#908f9e" }}>{backendOnline ? "ZERO LEAK CONFIRMED" : "OFFLINE"}</span>
           </div>
         </div>
       </div>
