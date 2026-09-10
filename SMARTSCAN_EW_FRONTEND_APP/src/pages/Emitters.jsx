@@ -184,17 +184,17 @@ export default function Emitters() {
                   alignItems: "center",
                 }}
               >
-                <span className="st-badge" style={{ color: t.color, fontWeight: 700 }}>{t.label}</span>
-                <span className="st-tmd" style={{ color: t.color }}>{t.count}</span>
+                <span className="st-badge" style={{ color: backendOnline ? t.color : "#908f9e", fontWeight: 700 }}>{t.label}</span>
+                <span className="st-tmd" style={{ color: backendOnline ? t.color : "#908f9e" }}>{backendOnline ? t.count : na}</span>
               </div>
             ))}
           </div>
           <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", color: "#ffb4ab" }}>
             <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <span style={{ width: 6, height: 6, background: "#ffb4ab", display: "inline-block", borderRadius: 3, animation: "pulse 2s infinite" }} />
-              HIGH PRIORITY LOCK
+              <span style={{ width: 6, height: 6, background: backendOnline ? "#ffb4ab" : "#454653", display: "inline-block", borderRadius: 3, animation: backendOnline ? "pulse 2s infinite" : "none" }} />
+              {backendOnline ? "HIGH PRIORITY LOCK" : "NO LIVE TRACKS"}
             </span>
-            <span style={{ color: "#908f9e" }}>4 TRACKS CRITICAL</span>
+            <span style={{ color: "#908f9e" }}>{backendOnline ? "4 TRACKS CRITICAL" : na}</span>
           </div>
         </div>
       </div>
