@@ -631,11 +631,30 @@ def train_scheduler(
                     act_source = "greedy"
 
             # ---- Step env ----
+            dec_telem = getattr(online_drqn, "last_decision_telemetry", None)
+            if act_source in ("thompson", "random") or dec_telem is None:
+                dec_telem = {
+                    "raw_drqn_action": dec_telem.get("raw_drqn_action") if dec_telem else None,
+                    "raw_drqn_band": dec_telem.get("raw_drqn_band") if dec_telem else None,
+                    "raw_drqn_mode": dec_telem.get("raw_drqn_mode") if dec_telem else None,
+                    "final_action": int(action),
+                    "final_band": int(action // n_modes),
+                    "final_mode": int(action % n_modes),
+                    "action_was_overridden": True,
+                    "override_source": act_source,
+                    "exploration_source": act_source,
+                    "q_selected": dec_telem.get("q_selected") if dec_telem else None,
+                    "q_max": dec_telem.get("q_max") if dec_telem else None,
+                    "q_mean": dec_telem.get("q_mean") if dec_telem else None,
+                    "q_std": dec_telem.get("q_std") if dec_telem else None,
+                }
             mode_ctx = {
-                "action_score": float(moe_attr.get("action_score", 1.0)),
-                "reason": str(moe_attr.get("reason", "mode_preset")),
-            } if moe_attr else None
+                "action_score": float(moe_attr.get("action_score", 1.0)) if moe_attr else 1.0,
+                "reason": str(moe_attr.get("reason", "mode_preset")) if moe_attr else "mode_preset",
+                **dec_telem,
+            }
             next_obs, reward, terminated, truncated, info = env.step(action, mode_context=mode_ctx)
+
             done = bool(terminated or truncated)
 
             ep_steps += 1

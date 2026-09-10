@@ -268,4 +268,41 @@ class DRQNScheduler(nn.Module):
         else:
             action = int(torch.argmax(q[0, -1]).item())
 
+
+        raw_q_np = q[0, -1].detach().cpu().numpy().reshape(-1)
+        raw_drqn_action = int(np.argmax(raw_q_np))
+        raw_drqn_band = band_of_action(raw_drqn_action, self.n_modes)
+        raw_drqn_mode = mode_of_action(raw_drqn_action, self.n_modes)
+        final_action = int(action)
+        final_band = band_of_action(final_action, self.n_modes)
+        final_mode = mode_of_action(final_action, self.n_modes)
+        action_was_overridden = bool(final_action != raw_drqn_action)
+        override_source = mode_selection if action_was_overridden else None
+        exploration_source = (
+            "tau_boltzmann"
+            if (mode_selection == "band_first_decoupled" and tau > 0.0 and 'order_b' in locals() and best_b != int(order_b[0]))
+            else "none"
+        )
+        q_selected = float(raw_q_np[final_action]) if 0 <= final_action < len(raw_q_np) else 0.0
+        q_max = float(np.max(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+        q_mean = float(np.mean(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+        q_std = float(np.std(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+
+        self.last_decision_telemetry = {
+            "raw_drqn_action": raw_drqn_action,
+            "raw_drqn_band": raw_drqn_band,
+            "raw_drqn_mode": raw_drqn_mode,
+            "final_action": final_action,
+            "final_band": final_band,
+            "final_mode": final_mode,
+            "action_was_overridden": action_was_overridden,
+            "override_source": override_source,
+            "exploration_source": exploration_source,
+            "q_selected": q_selected,
+            "q_max": q_max,
+            "q_mean": q_mean,
+            "q_std": q_std,
+        }
+
         return action, h
+

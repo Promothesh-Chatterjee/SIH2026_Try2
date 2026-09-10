@@ -74,6 +74,24 @@ VAL_CORE_FIELDS = [
     "val_n_scenarios",
 ]
 
+# Canonical runtime decision telemetry fields (Phase 2 audit & decision traceability).
+DECISION_TELEMETRY_FIELDS = [
+    "raw_drqn_action",
+    "raw_drqn_band",
+    "raw_drqn_mode",
+    "final_action",
+    "final_band",
+    "final_mode",
+    "action_was_overridden",
+    "override_source",
+    "exploration_source",
+    "q_selected",
+    "q_max",
+    "q_mean",
+    "q_std",
+]
+
+
 
 def safe_float(value: Any) -> float | None:
     """Coerce a value to float, mapping NaN/Inf/None to ``None``."""
@@ -263,3 +281,37 @@ def make_val_record(
     # Legacy alias + prior schema: keep val_reward reachable both ways.
     rec["val_reward"] = rec.get("val_reward", rec.get("val_avg_reward"))
     return coerce(rec)
+
+
+def make_decision_telemetry(
+    *,
+    raw_drqn_action: Any = None,
+    raw_drqn_band: Any = None,
+    raw_drqn_mode: Any = None,
+    final_action: Any = None,
+    final_band: Any = None,
+    final_mode: Any = None,
+    action_was_overridden: Any = None,
+    override_source: Any = None,
+    exploration_source: Any = None,
+    q_selected: Any = None,
+    q_max: Any = None,
+    q_mean: Any = None,
+    q_std: Any = None,
+) -> dict[str, Any]:
+    """Build a canonical runtime decision telemetry record for single-step traceability."""
+    return coerce({
+        "raw_drqn_action": safe_int(raw_drqn_action),
+        "raw_drqn_band": safe_int(raw_drqn_band),
+        "raw_drqn_mode": safe_int(raw_drqn_mode),
+        "final_action": safe_int(final_action),
+        "final_band": safe_int(final_band),
+        "final_mode": safe_int(final_mode),
+        "action_was_overridden": bool(action_was_overridden) if action_was_overridden is not None else None,
+        "override_source": str(override_source) if override_source is not None else None,
+        "exploration_source": str(exploration_source) if exploration_source is not None else None,
+        "q_selected": safe_float(q_selected),
+        "q_max": safe_float(q_max),
+        "q_mean": safe_float(q_mean),
+        "q_std": safe_float(q_std),
+    })
