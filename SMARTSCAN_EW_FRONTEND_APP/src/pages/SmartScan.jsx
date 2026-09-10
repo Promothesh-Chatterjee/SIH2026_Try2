@@ -206,7 +206,7 @@ export default function SmartScan() {
                 <button
                   key={`${action.band}-${action.mode}`}
                   onClick={() => setSelectedBand(action.band)}
-                  className="st-tsm"
+                  className="st-mark"
                   style={{
                     display: "flex",
                     gap: 6,
