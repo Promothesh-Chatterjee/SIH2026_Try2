@@ -182,15 +182,15 @@ export default function SmartScan() {
           </div>
         </div>
 
-        <aside className="st-span-4" style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-          <div className="st-panel">
+        <aside className="st-span-4" style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0, overflowY: "auto", maxHeight: "calc(100vh - 140px)" }}>
+          <div className="st-panel" style={{ padding: 8 }}>
             <PanelHead title="SELECTED BAND" badge={`B${selectedBand}`} badgeColor="#bdc2ff" />
             <div className="st-tmd" style={{ color: "#e2e2e8" }}>
               {selectedBand * 500}–{(selectedBand + 1) * 500} MHz
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {FEATURES.map((feature, index) => (
-                <div key={feature} className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "3px 6px", background: "#1a1c20", border: "1px solid #454653" }}>
+                <div key={feature} className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px", background: "#1a1c20", border: "1px solid #454653" }}>
                   <span style={{ color: "#908f9e" }}>{feature}</span>
                   <strong style={{ color: "#e2e2e8" }}>{selected.values[index].toFixed(3)}</strong>
                 </div>
@@ -198,24 +198,21 @@ export default function SmartScan() {
             </div>
           </div>
 
-          <div className="st-panel">
-            <PanelHead title={`CHOSEN ACTION: BAND ${selectedAction.band} // ${selectedAction.mode}`} badge="INFERENCE" badgeColor="#49df9d" />
-            <span className="st-tsm" style={{ color: "#908f9e" }}>
-              DRQN LSTM RECURRENT CORE // MoE GATING ROUTER (SOFTMAX)
-            </span>
-            <div className="st-tlg" style={{ color: "#bdc2ff" }}>
+          <div className="st-panel" style={{ padding: 8 }}>
+            <PanelHead title={`CHOSEN ACTION: B${selectedAction.band} // ${selectedAction.mode}`} badge="INFERENCE" badgeColor="#49df9d" />
+            <div className="st-tlg" style={{ color: "#bdc2ff", fontSize: 14 }}>
               ACTION ID: {actionId}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {[
                 ["BAND", `B${selectedAction.band}`],
-                ["FREQUENCY", `${(selectedAction.band * 500 + 250).toLocaleString()} MHz`],
+                ["FREQ", `${(selectedAction.band * 500 + 250).toLocaleString()} MHz`],
                 ["MODE", selectedAction.mode],
                 ["SCORE", selectedAction.score.toFixed(3)],
-                ["INTERCEPT PROB.", `${(selectedAction.probability * 100).toFixed(1)}%`],
-                ["PREDICTED TIME", `${selectedAction.timeUs} µs`],
+                ["Pd", `${(selectedAction.probability * 100).toFixed(1)}%`],
+                ["TIME", `${selectedAction.timeUs} µs`],
               ].map(([label, value]) => (
-                <div key={label} className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "3px 6px", background: "#1a1c20", border: "1px solid #454653" }}>
+                <div key={label} className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px", background: "#1a1c20", border: "1px solid #454653" }}>
                   <span style={{ color: "#908f9e" }}>{label}</span>
                   <strong style={{ color: "#e2e2e8" }}>{value}</strong>
                 </div>
@@ -223,8 +220,8 @@ export default function SmartScan() {
             </div>
           </div>
 
-          <div className="st-panel">
-            <PanelHead title="ZONE C — TOP CANDIDATE ACTIONS & REASONING · TOP 5 OF 180" badge="CANDIDATES" badgeColor="#96ccff" />
+          <div className="st-panel" style={{ padding: 8 }}>
+            <PanelHead title="ZONE C — TOP CANDIDATE ACTIONS · TOP 5 OF 180" badge="CANDIDATES" badgeColor="#96ccff" />
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {MOCK_ACTIONS.map((action, index) => (
                 <button
@@ -233,17 +230,17 @@ export default function SmartScan() {
                   className="st-tsm"
                   style={{
                     display: "flex",
-                    gap: 6,
+                    gap: 4,
                     alignItems: "center",
                     cursor: "pointer",
                     font: "inherit",
-                    padding: "4px 6px",
+                    padding: "3px 4px",
                     justifyContent: "space-between",
                     background: action.band === selectedAction.band ? "#1e2024" : "#1a1c20",
                     border: `1px solid ${action.band === selectedAction.band ? "#454653" : "rgba(69,70,83,0.4)"}`,
                   }}
                 >
-                  <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ display: "flex", gap: 4, alignItems: "center" }}>
                     <CmdBadge color={action.band === selectedAction.band ? "#49df9d" : "#908f9e"}>
                       #{index + 1}
                     </CmdBadge>
