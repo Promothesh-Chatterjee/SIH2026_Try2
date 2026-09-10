@@ -114,9 +114,9 @@ export default function SmartScan() {
           <span className="st-tsm" style={{ color: "#908f9e" }}>
             360 FEATURES · SCHEDULER-VISIBLE STATE · GROUND TRUTH EXCLUDED
           </span>
-          <div className="st-table-wrap">
+          <div className="st-table-wrap" style={{ maxHeight: 230, overflowY: "auto" }}>
             <table className="st-table">
-              <thead>
+              <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "#282a2e" }}>
                 <tr>
                   <th>BAND (FREQ)</th>
                   {SHORT_FEATURES.map((feature) => (
