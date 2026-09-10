@@ -101,44 +101,6 @@ export default function Receiver() {
               <span key={g} style={{ flex: 1 }}>{g} GHz</span>
             ))}
           </div>
-
-          <div className="st-headline" style={{ color: "#96ccff", marginTop: 4 }}>
-            RF FRONT-END CONTROLS
-          </div>
-          <div className="st-grid-12" style={{ gap: 6 }}>
-            <div className="st-span-6 st-body-bold" style={{ color: "#908f9e", display: "flex", flexDirection: "column", gap: 4 }}>
-              CENTER FREQUENCY
-              <input
-                type="range"
-                min="500"
-                max="17500"
-                step="500"
-                value={centerFrequencyMHz}
-                onChange={(e) => setCenterFrequencyMHz(Number(e.target.value))}
-                style={{ width: "100%", accentColor: "#96ccff" }}
-              />
-              <strong style={{ color: "#bdc2ff" }}>{centerFrequencyMHz.toLocaleString()} MHz</strong>
-            </div>
-            <div className="st-span-3" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label className="st-body-bold" style={{ color: "#908f9e" }}>DWELL TIME</label>
-              <select className="st-select" value={dwellTimeUs} onChange={(e) => setDwellTimeUs(Number(e.target.value))}>
-                <option value="50">50 µs</option>
-                <option value="100">100 µs</option>
-                <option value="120">120 µs</option>
-                <option value="200">200 µs</option>
-                <option value="500">500 µs</option>
-              </select>
-            </div>
-            <div className="st-span-3" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label className="st-body-bold" style={{ color: "#908f9e" }}>DETECTION THRESHOLD</label>
-              <select className="st-select" value={thresholdDb} onChange={(e) => setThresholdDb(Number(e.target.value))}>
-                <option value="10">10 dB</option>
-                <option value="15">15 dB</option>
-                <option value="20">20 dB</option>
-                <option value="25">25 dB</option>
-              </select>
-            </div>
-          </div>
         </div>
 
         <aside className="st-span-4 st-panel">
