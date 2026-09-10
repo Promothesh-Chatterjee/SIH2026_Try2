@@ -1,4 +1,4 @@
-﻿/**
+/**
  * useOverviewTelemetry
  *
  * Single source-of-truth hook for the Mission Overview page.
@@ -64,6 +64,7 @@ function buildDefault() {
     dwellHistory: [],
     cognitiveExplanation: {},
     systemMetrics: {},
+    pdws: [],
   };
 }
 
@@ -159,6 +160,9 @@ function processTelemetry(raw, missionStat) {
   const activeCount = next.bandStates.filter((s) => s !== "quiet").length;
   next.activeBands = activeCount;
   next.quietBands = TOTAL_BANDS - activeCount;
+
+  const rawPdws = raw.pdws ?? m.pdws ?? [];
+  next.pdws = Array.isArray(rawPdws) ? rawPdws : [];
 
   return next;
 }
