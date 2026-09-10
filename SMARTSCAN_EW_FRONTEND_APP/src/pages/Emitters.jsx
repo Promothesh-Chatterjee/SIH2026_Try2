@@ -200,55 +200,10 @@ export default function Emitters() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
           gap: 4,
         }}
       >
-        {/* Card 1: Active Scenario */}
-        <div className="st-panel" style={{ padding: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span className="st-tsm" style={{ color: "#908f9e" }}>ACTIVE VECTOR</span>
-            <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#96ccff" }}>
-              satellite_alt
-            </span>
-          </div>
-          <div style={{ margin: "4px 0" }}>
-            <div className="st-tlg" style={{ color: "#bdc2ff", fontWeight: 700 }}>Tactical Alpha</div>
-            <div className="st-tsm" style={{ color: "#4cd6fb" }}>DENSE MULTI-EMITTER ARRAY</div>
-          </div>
-          <div
-            className="st-tsm"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              padding: "2px 4px",
-              background: "rgba(12,14,18,0.5)",
-              borderRadius: 2,
-            }}
-          >
-            <span style={{ color: "#908f9e" }}>RF DENSITY: HIGH</span>
-            <span style={{ color: "#49df9d", fontWeight: 700 }}>IBW CONSTRAINED</span>
-          </div>
-        </div>
-
-        {/* Card 2: Registry Occupancy */}
-        <div className="st-panel" style={{ padding: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span className="st-tsm" style={{ color: "#908f9e" }}>REGISTRY OCCUPANCY</span>
-            <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#bdc2ff" }}>
-              radar
-            </span>
-          </div>
-          <div style={{ margin: "4px 0", display: "flex", alignItems: "baseline", gap: 4 }}>
-            <span className="st-tlg" style={{ color: "#bdc2ff", fontWeight: 700 }}>14</span>
-            <span className="st-tmd" style={{ color: "#908f9e" }}>/ 20 DEFINED</span>
-          </div>
-          <div style={{ width: "100%", height: 6, background: "#333539", borderRadius: 3, overflow: "hidden", display: "flex" }}>
-            <div style={{ width: "70%", height: "100%", background: "#96ccff" }} />
-            <div style={{ width: "30%", height: "100%", background: "#3b494c" }} />
-          </div>
-        </div>
-
         {/* Card 3: Modulation Archetypes */}
         <div className="st-panel" style={{ padding: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
