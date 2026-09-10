@@ -1,4 +1,4 @@
-﻿"""Unit tests for Phase 2 Runtime Decision Path Telemetry."""
+"""Unit tests for Phase 2 Runtime Decision Path Telemetry."""
 
 import unittest
 import numpy as np
@@ -35,6 +35,7 @@ class TestDecisionTelemetry(unittest.TestCase):
             "action_was_overridden",
             "override_source",
             "exploration_source",
+            "decision_source",
             "q_selected",
             "q_max",
             "q_mean",
@@ -51,6 +52,7 @@ class TestDecisionTelemetry(unittest.TestCase):
             action_was_overridden=True,
             override_source="band_first_decoupled",
             exploration_source="none",
+            decision_source="legacy_override",
             q_selected=1.5,
             q_max=2.0,
             q_mean=0.5,
@@ -107,6 +109,7 @@ class TestDecisionTelemetry(unittest.TestCase):
             "action_was_overridden": False,
             "override_source": None,
             "exploration_source": "none",
+            "decision_source": "ml_exploitation",
             "q_selected": 0.8,
             "q_max": 0.8,
             "q_mean": 0.2,

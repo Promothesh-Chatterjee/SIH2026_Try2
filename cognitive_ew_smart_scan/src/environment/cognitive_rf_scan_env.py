@@ -832,6 +832,7 @@ class CognitiveRFScanEnv(gym.Env):
             "action_was_overridden": bool(mode_ctx.get("action_was_overridden", False)),
             "override_source": mode_ctx.get("override_source", None),
             "exploration_source": mode_ctx.get("exploration_source", "none"),
+            "decision_source": mode_ctx.get("decision_source", "ml_exploitation"),
             "q_selected": mode_ctx.get("q_selected", None),
             "q_max": mode_ctx.get("q_max", None),
             "q_mean": mode_ctx.get("q_mean", None),

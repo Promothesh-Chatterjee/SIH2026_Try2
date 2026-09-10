@@ -182,7 +182,7 @@ class DRQNBaseline:
     internally across ``act``/``step`` calls (episodic).
     """
 
-    def __init__(self, drqn: DRQNScheduler, device: str = "cpu", tau: float = 0.15, mode_selection_policy: str = "band_first_decoupled") -> None:
+    def __init__(self, drqn: DRQNScheduler, device: str = "cpu", tau: float = 0.0, mode_selection_policy: str = "flat_argmax") -> None:
         self.drqn = drqn
         self.device = device
         self.tau = float(tau)
@@ -299,6 +299,7 @@ class DRQNBaseline:
             "action_was_overridden": action_was_overridden,
             "override_source": override_source,
             "exploration_source": exploration_source,
+            "decision_source": "ml_exploitation" if not action_was_overridden else "legacy_override",
             "q_selected": q_selected,
             "q_max": q_max,
             "q_mean": q_mean,
@@ -488,8 +489,9 @@ def build_baseline(
 
     if key == "drqn":
         drqn.eval()
-        tau = float(cfg.get("tau", 0.15))
-        return DRQNBaseline(drqn, device=device, tau=tau)
+        tau = float(cfg.get("tau", 0.0))
+        mode_policy = str(cfg.get("mode_selection_policy", cfg.get("action_selection_mode", "flat_argmax")))
+        return DRQNBaseline(drqn, device=device, tau=tau, mode_selection_policy=mode_policy)
 
     # Fused variants: reuse SmartScanMoE with the fusion term toggled.
     moe_cfg: dict[str, Any] = {

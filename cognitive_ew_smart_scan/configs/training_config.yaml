@@ -26,6 +26,7 @@ deinterleaver:
   val_mode: "scan"
 
 scheduler:
+  action_selection_mode: "flat_argmax"
   total_timesteps: 500000
   replay_buffer_size: 50000
   batch_size: 32

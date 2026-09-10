@@ -785,6 +785,7 @@ class SmartScanMoE(nn.Module):
         attribution["action_was_overridden"] = action_was_overridden
         attribution["override_source"] = override_source
         attribution["exploration_source"] = exploration_source
+        attribution["decision_source"] = "moe_arbitration"
         attribution["q_selected"] = q_selected
         attribution["q_max"] = q_max
         attribution["q_mean"] = q_mean
