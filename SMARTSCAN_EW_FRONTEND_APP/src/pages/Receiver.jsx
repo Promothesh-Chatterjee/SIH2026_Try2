@@ -197,18 +197,6 @@ export default function Receiver() {
           assumed −30 dBm noise floor (illustrative).
         </div>
       </div>
-
-      <div className="st-panel">
-        <PanelHead icon="monitor_heart" title="ZOOMED 1.0 GHz IBW OSCILLOSCOPE // IN-PHASE & QUADRATURE DETECTION" badge="I/Q ENVELOPE" badgeColor="#49df9d" />
-        <svg viewBox="0 0 500 60" role="img" aria-label="Illustrative in-phase and quadrature envelope derived from listed PDW detections" style={{ height: 120, color: "#49df9d", background: "#0c0e12", border: "1px solid #454653" }}>
-          <path d="M0,30 L40,30 L45,12 L50,48 L55,30 L120,30 L125,8 L130,52 L135,30 L210,30 L215,10 L220,50 L225,30 L340,30 L345,6 L350,54 L355,30 L440,30 L445,4 L450,56 L455,30 L500,30" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
-        <div className="st-tsm" style={{ color: "#908f9e" }}>
-          Illustrative I/Q envelope derived from the listed PDW detections at{" "}
-          {centerFrequencyMHz.toLocaleString()} MHz. SNR floor shown is
-          illustrative, not a backend claim.
-        </div>
-      </div>
     </div>
   );
 }
