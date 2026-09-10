@@ -6,7 +6,7 @@
     "normalization_stats.json",
     "dataset_manifest.json"
   ],
-  "dataset_fingerprint": "27eca11016df104e4fceec5544ca2153a47b400558cebe4db76f6efab42bf321",
+  "dataset_fingerprint": "35ce5474a22bd80f418b5f85fda6e689b8dfdfd2f1a71242d2ec710e28427e11",
   "feature_order_per_band": [
     "occupancy",
     "det_rate",
@@ -19,16 +19,16 @@
     "agility",
     "priority"
   ],
-  "git_revision": "5dc0111",
+  "git_revision": "728a049",
   "metrics": {
-    "best_val_v_measure": 0.0864972243362852
+    "best_val_v_measure": 0.7986112445801693
   },
   "mode": "deinterleaver",
   "n_bands": 36,
-  "normalization_stats_hash": "bacee02ac1c29428",
+  "normalization_stats_hash": "a5a5fe5a9bf88b31",
   "normalization_stats_path": "checkpoints\\deinterleaver\\normalization_stats.json",
   "preproc_version": "v1",
   "seed": 42,
   "split": "train",
-  "timestamp": "2026-09-09T15:30:44.041212+00:00"
+  "timestamp": "2026-09-10T15:53:39.294280+00:00"
 }
