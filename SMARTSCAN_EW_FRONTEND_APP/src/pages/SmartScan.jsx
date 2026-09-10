@@ -76,16 +76,11 @@ export default function SmartScan() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <div className="st-panel">
+      <div className="st-panel" style={{ padding: "8px 12px" }}>
         <PanelHead icon="neurology" title="SMART SCAN DECISION ENGINE & OBSERVATION SPACE" badge="DRQN + MoE READY" badgeColor="#49df9d" />
-        <div className="st-body" style={{ color: "#c6c5d5" }}>
-          The scheduler converts receiver-derived spectrum state into
-          frequency and scan-strategy decisions. Scheduler-visible state
-          only; ground truth excluded.
-        </div>
       </div>
 
-      <div className="st-panel">
+      <div className="st-panel" style={{ padding: "6px 12px" }}>
         <PanelHead icon="account_tree" title="ZONE B — AI INFERENCE ARCHITECTURE PIPELINE DRQN + MoE" badge="OBSERVATION → POLICY → ACTION" badgeColor="#bdc2ff" />
         <div className="st-pipe">
           <div className="st-node"><CmdBadge>INPUT</CmdBadge><span className="st-tmd">360-D</span><span className="st-mark" style={{ color: "#908f9e" }}>36 bands × 10 features</span></div>
@@ -98,23 +93,17 @@ export default function SmartScan() {
           <span className="material-symbols-outlined st-arrow">arrow_forward</span>
           <div className="st-node st-node-ai"><CmdBadge color="#49df9d">SEL</CmdBadge><span className="st-tmd" style={{ color: "#49df9d" }}>B{selectedAction.band}</span><span className="st-mark" style={{ color: "#c6c5d5" }}>{selectedAction.mode}</span></div>
         </div>
-        <div className="st-tsm" style={{ display: "flex", gap: 8 }}>
-          <span style={{ color: "#908f9e" }}>ACTION SPACE: 180 · 36 BANDS × 5 MODES</span>
-        </div>
       </div>
 
       <div className="st-grid-12">
-        <div className="st-span-8 st-panel">
+        <div className="st-span-9 st-panel" style={{ padding: "6px 8px" }}>
           <PanelHead
             icon="grid_view"
             title={`ZONE A — 36-BAND OBSERVATION VECTOR HEATMAP 0.00 – 18.00 GHz`}
             badge={`INSPECTOR: BAND ${selectedBand} (${selectedBand * 500}–${(selectedBand + 1) * 500} MHz)`}
             badgeColor="#96ccff"
           />
-          <span className="st-tsm" style={{ color: "#908f9e" }}>
-            360 FEATURES · SCHEDULER-VISIBLE STATE · GROUND TRUTH EXCLUDED
-          </span>
-          <div className="st-table-wrap" style={{ maxHeight: 230, overflowY: "auto" }}>
+          <div className="st-table-wrap" style={{ maxHeight: 180, overflowY: "auto" }}>
             <table className="st-table">
               <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "#282a2e" }}>
                 <tr>
@@ -138,7 +127,7 @@ export default function SmartScan() {
                     </td>
                     {row.values.map((value, index) => (
                       <td key={index}>
-                        <div style={{ position: "relative", height: 16, background: "#0c0e12", border: "1px solid rgba(69,70,83,0.4)" }}>
+                        <div style={{ position: "relative", height: 14, background: "#0c0e12", border: "1px solid rgba(69,70,83,0.4)" }}>
                           <span
                             style={{
                               position: "absolute",
@@ -156,7 +145,7 @@ export default function SmartScan() {
                       </td>
                     ))}
                     <td>
-                      <div style={{ position: "relative", height: 16, background: "#0c0e12", border: "1px solid rgba(69,70,83,0.4)" }}>
+                      <div style={{ position: "relative", height: 14, background: "#0c0e12", border: "1px solid rgba(69,70,83,0.4)" }}>
                         <span
                           style={{
                             position: "absolute",
@@ -182,8 +171,8 @@ export default function SmartScan() {
           </div>
         </div>
 
-        <aside className="st-span-4" style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0, overflowY: "auto", maxHeight: "calc(100vh - 140px)" }}>
-          <div className="st-panel" style={{ padding: 8 }}>
+        <aside className="st-span-3" style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, overflowY: "auto", maxHeight: "calc(100vh - 140px)" }}>
+          <div className="st-panel" style={{ padding: 6 }}>
             <PanelHead title="SELECTED BAND" badge={`B${selectedBand}`} badgeColor="#bdc2ff" />
             <div className="st-tmd" style={{ color: "#e2e2e8" }}>
               {selectedBand * 500}–{(selectedBand + 1) * 500} MHz
@@ -198,7 +187,7 @@ export default function SmartScan() {
             </div>
           </div>
 
-          <div className="st-panel" style={{ padding: 8 }}>
+          <div className="st-panel" style={{ padding: 6 }}>
             <PanelHead title={`CHOSEN ACTION: B${selectedAction.band} // ${selectedAction.mode}`} badge="INFERENCE" badgeColor="#49df9d" />
             <div className="st-tlg" style={{ color: "#bdc2ff", fontSize: 14 }}>
               ACTION ID: {actionId}
@@ -220,7 +209,7 @@ export default function SmartScan() {
             </div>
           </div>
 
-          <div className="st-panel" style={{ padding: 8 }}>
+          <div className="st-panel" style={{ padding: 6 }}>
             <PanelHead title="ZONE C — TOP CANDIDATE ACTIONS · TOP 5 OF 180" badge="CANDIDATES" badgeColor="#96ccff" />
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {MOCK_ACTIONS.map((action, index) => (
@@ -257,9 +246,9 @@ export default function SmartScan() {
         </aside>
       </div>
 
-      <div className="st-panel">
+      <div className="st-panel" style={{ padding: "6px 12px" }}>
         <PanelHead icon="category" title="ACTION SPACE" badge="FIVE SCAN MODES" badgeColor="#96ccff" />
-        <div className="st-grid-12" style={{ gap: 4 }}>
+        <div className="st-grid-12" style={{ gap: 3 }}>
           {MODES.map((mode, index) => (
             <div
               key={mode}
@@ -267,13 +256,14 @@ export default function SmartScan() {
               style={{
                 gridColumn: "span 4 / span 4",
                 borderColor: mode === selectedAction.mode ? "#bdc2ff" : "#454653",
+                padding: "6px 8px",
               }}
             >
               <span className="st-tsm" style={{ color: "#908f9e" }}>MODE {index}</span>
               <strong className="st-tmd" style={{ color: mode === selectedAction.mode ? "#bdc2ff" : "#e2e2e8" }}>
                 {mode}
               </strong>
-              <span className="st-mark" style={{ color: "#908f9e", lineHeight: 1.5 }}>
+              <span className="st-mark" style={{ color: "#908f9e", lineHeight: 1.4 }}>
                 {mode === "SHORT_DWELL" && "Rapid confirmation / quick search"}
                 {mode === "NORMAL_DWELL" && "Standard surveillance dwell"}
                 {mode === "LONG_DWELL" && "Extended observation under uncertainty"}
