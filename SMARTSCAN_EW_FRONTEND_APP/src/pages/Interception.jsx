@@ -109,7 +109,7 @@ export default function Interception() {
           Frequency and time are jointly evaluated to determine interception
           success, misses, and false alarms.{" "}
           {selectedEvent.type === "HIT" && (
-            <span style={{ color: "#49df9d" }}>
+            <span style={{ color: "#e2e2e8" }}>
               Receiver dwell overlapped the transmission window and the signal was successfully intercepted.
             </span>
           )}
