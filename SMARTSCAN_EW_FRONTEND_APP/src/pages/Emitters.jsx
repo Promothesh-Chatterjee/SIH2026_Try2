@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { PanelHead, StitchTable, TruthBanner } from "../components/stitch";
+import { loadLiveTelemetry } from "../services/liveService";
 
 const ARCHETYPE_COLS = [
   { label: "Periodic", count: "6", color: "#bdc2ff" },
@@ -35,6 +37,29 @@ const METRIC_RIBBON = [
 ];
 
 export default function Emitters() {
+  const [backendOnline, setBackendOnline] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function checkBackend() {
+      try {
+        const data = await loadLiveTelemetry();
+        if (!active) return;
+        setBackendOnline(data?.connected === true);
+      } catch {
+        if (!active) return;
+        setBackendOnline(false);
+      }
+    }
+    checkBackend();
+    const interval = setInterval(checkBackend, 5000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const na = "—";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       {/* CRITICAL TOP SECURITY WARNING BANNER */}
