@@ -200,7 +200,7 @@ class DRQNScheduler(nn.Module):
         self,
         obs: torch.Tensor,
         hidden: tuple[torch.Tensor, torch.Tensor] | None = None,
-        mode_selection: str = "band_first_decoupled",
+        mode_selection: str = "flat_argmax",
         consecutive_empty: int = 0,
         tau: float = 0.0,
     ) -> tuple[int, tuple[torch.Tensor, torch.Tensor]]:
@@ -209,8 +209,8 @@ class DRQNScheduler(nn.Module):
         Args:
             obs: (obs_dim,) or (1, obs_dim) or (1,1,obs_dim).
             hidden: Current hidden state.
-            mode_selection: "band_first_decoupled" for decoupled band-first hierarchy,
-                or "flat_argmax" for classic flat argmax.
+            mode_selection: "flat_argmax" for classic flat argmax over all 180 actions,
+                or "band_first_decoupled" for legacy decoupled band-first hierarchy.
             consecutive_empty: consecutive non-detection count on current band.
             tau: Boltzmann temperature for band selection (0.0 = argmax).
 
@@ -283,10 +283,17 @@ class DRQNScheduler(nn.Module):
             if (mode_selection == "band_first_decoupled" and tau > 0.0 and 'order_b' in locals() and best_b != int(order_b[0]))
             else "none"
         )
+        decision_source = "ml_exploitation" if not action_was_overridden else "legacy_override"
         q_selected = float(raw_q_np[final_action]) if 0 <= final_action < len(raw_q_np) else 0.0
         q_max = float(np.max(raw_q_np)) if len(raw_q_np) > 0 else 0.0
         q_mean = float(np.mean(raw_q_np)) if len(raw_q_np) > 0 else 0.0
         q_std = float(np.std(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+
+        if mode_selection == "flat_argmax":
+            assert final_action == raw_drqn_action, (
+                f"Discrepancy in flat_argmax: final={final_action} != raw={raw_drqn_action}"
+            )
+            assert not action_was_overridden, "Action was marked overridden in flat_argmax"
 
         self.last_decision_telemetry = {
             "raw_drqn_action": raw_drqn_action,
@@ -298,6 +305,7 @@ class DRQNScheduler(nn.Module):
             "action_was_overridden": action_was_overridden,
             "override_source": override_source,
             "exploration_source": exploration_source,
+            "decision_source": decision_source,
             "q_selected": q_selected,
             "q_max": q_max,
             "q_mean": q_mean,

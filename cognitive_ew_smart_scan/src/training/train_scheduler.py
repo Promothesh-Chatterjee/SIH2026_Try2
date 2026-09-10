@@ -405,7 +405,9 @@ def train_scheduler(
     except Exception as exc:
         logger.info("WandB not available: %s", exc)
 
-    ts_sampler = ThompsonSamplingExplorer(n_bands=n_bands, n_modes=n_modes, seed=seed)
+    action_selection_mode = str(drqn_cfg.get("action_selection_mode", sched_cfg.get("action_selection_mode", "flat_argmax")))
+    ts_explore_modes = bool(sched_cfg.get("thompson_explore_modes", False))
+    ts_sampler = ThompsonSamplingExplorer(n_bands=n_bands, n_modes=n_modes, seed=seed, explore_modes=ts_explore_modes)
     ts_warmup = int(sched_cfg.get("thompson_warmup_steps", 5000))
     eps_start = float(drqn_cfg.get("eps_start", 1.0))
     eps_end = float(drqn_cfg.get("eps_end", 0.05))
@@ -600,15 +602,21 @@ def train_scheduler(
                 action = ts_sampler.select_action()
                 moe_attr = None
                 act_source = "thompson"
+                decision_source = "thompson_exploration"
             else:
                 use_ts = False
                 if random.random() < eps:
-                    b_rand = random.randint(0, n_bands - 1)
-                    m_rand = int(np.random.choice([0, 1, 2], p=[0.10, 0.70, 0.20]))
-                    action = b_rand * n_modes + m_rand
+                    if action_selection_mode == "flat_argmax":
+                        action = random.randrange(n_actions)
+                        m_rand = int(action % n_modes)
+                    else:
+                        b_rand = random.randint(0, n_bands - 1)
+                        m_rand = int(np.random.choice([0, 1, 2], p=[0.10, 0.70, 0.20]))
+                        action = b_rand * n_modes + m_rand
                     ep_explore_mode_counts[m_rand] += 1
                     moe_attr = None
                     act_source = "random"
+                    decision_source = "epsilon_exploration"
                 else:
                     online_drqn.eval()
                     with torch.inference_mode():
@@ -617,9 +625,9 @@ def train_scheduler(
                         action, hidden = online_drqn.act(
                             obs_t,
                             hidden,
-                            mode_selection="band_first_decoupled",
+                            mode_selection=action_selection_mode,
                             consecutive_empty=consecutive_empty,
-                            tau=0.15,
+                            tau=0.15 if action_selection_mode == "band_first_decoupled" else 0.0,
                         )
                         ep_greedy_mode_counts[int(action % n_modes)] += 1
                         # Diagnostic MoE query for passive telemetry only (MoE quarantined from action selection)
@@ -629,25 +637,35 @@ def train_scheduler(
                             moe_attr = None
                     online_drqn.train()
                     act_source = "greedy"
+                    decision_source = "ml_exploitation"
 
             # ---- Step env ----
             dec_telem = getattr(online_drqn, "last_decision_telemetry", None)
             if act_source in ("thompson", "random") or dec_telem is None:
                 dec_telem = {
-                    "raw_drqn_action": dec_telem.get("raw_drqn_action") if dec_telem else None,
-                    "raw_drqn_band": dec_telem.get("raw_drqn_band") if dec_telem else None,
-                    "raw_drqn_mode": dec_telem.get("raw_drqn_mode") if dec_telem else None,
+                    "raw_drqn_action": int(action),
+                    "raw_drqn_band": int(action // n_modes),
+                    "raw_drqn_mode": int(action % n_modes),
                     "final_action": int(action),
                     "final_band": int(action // n_modes),
                     "final_mode": int(action % n_modes),
-                    "action_was_overridden": True,
-                    "override_source": act_source,
-                    "exploration_source": act_source,
+                    "action_was_overridden": False,
+                    "override_source": None,
+                    "exploration_source": "epsilon" if act_source == "random" else "thompson",
+                    "decision_source": decision_source,
                     "q_selected": dec_telem.get("q_selected") if dec_telem else None,
                     "q_max": dec_telem.get("q_max") if dec_telem else None,
                     "q_mean": dec_telem.get("q_mean") if dec_telem else None,
                     "q_std": dec_telem.get("q_std") if dec_telem else None,
                 }
+            else:
+                if action_selection_mode == "flat_argmax":
+                    assert dec_telem["final_action"] == dec_telem["raw_drqn_action"], (
+                        f"Action override detected in flat_argmax: "
+                        f"final={dec_telem['final_action']} != raw={dec_telem['raw_drqn_action']}"
+                    )
+                    assert not dec_telem["action_was_overridden"], "action_was_overridden is True in flat_argmax"
+                dec_telem["decision_source"] = decision_source
             mode_ctx = {
                 "action_score": float(moe_attr.get("action_score", 1.0)) if moe_attr else 1.0,
                 "reason": str(moe_attr.get("reason", "mode_preset")) if moe_attr else "mode_preset",
@@ -885,6 +903,8 @@ def train_scheduler(
             "mode_selection_counts": {DWELL_MODES[i]: int(ep_mode_counts[i]) for i in range(n_modes)},
             "mode_selection_frequencies": ({DWELL_MODES[i]: float(ep_mode_counts[i] / n_steps_ep) for i in range(n_modes)}
                                            if n_steps_ep else None),
+            "action_selection_counts": [int(c) for c in ep_action_counts],
+            "top_action_fraction": float(np.max(ep_action_counts) / n_steps_ep) if n_steps_ep else None,
             "action_entropy": shannon_entropy(ep_action_counts),
             "band_entropy": shannon_entropy(ep_band_counts),
             "mode_entropy": shannon_entropy(ep_mode_counts),
@@ -995,12 +1015,23 @@ def train_scheduler(
                     mode_c = np.zeros(n_modes, dtype=np.float64)
                     while not done_v:
                         with torch.inference_mode():
-                            a_v, hidden_v, _ = moe.select_action(obs_v, hidden_v)
+                            if action_selection_mode == "flat_argmax":
+                                obs_np_v = np.asarray(obs_v, dtype=np.float32)
+                                obs_t_v = torch.from_numpy(obs_np_v).to(device)
+                                a_v, hidden_v = online_drqn.act(
+                                    obs_t_v,
+                                    hidden_v,
+                                    mode_selection="flat_argmax",
+                                    tau=0.0,
+                                )
+                            else:
+                                a_v, hidden_v, _ = moe.select_action(obs_v, hidden_v)
                         obs_v, rew_v, term_v, trunc_v, _ = val_env.step(a_v)
                         r_sum += float(rew_v)
                         band_c[int(a_v // n_modes)] += 1
                         mode_c[int(a_v % n_modes)] += 1
-                        moe.update(a_v)
+                        if action_selection_mode != "flat_argmax":
+                            moe.update(a_v)
                         s_sum += 1
                         done_v = bool(term_v or trunc_v)
                     fs = val_env.get_fom()
