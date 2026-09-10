@@ -247,12 +247,12 @@ export default function SmartScan() {
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span className="st-tsm" style={{ color: "#908f9e" }}>MODE {index}</span>
-                    <strong className="st-tsm" style={{ color: mode === selectedAction.mode ? "#bdc2ff" : "#e2e2e8" }}>
+                    <span className="st-tsm" style={{ color: "#e2e2e8" }}>MODE {index}</span>
+                    <strong className="st-tsm" style={{ color: "#e2e2e8" }}>
                       {mode}
                     </strong>
                   </div>
-                  <span className="st-tsm" style={{ color: "#908f9e", lineHeight: 1.4 }}>
+                  <span className="st-tsm" style={{ color: "#e2e2e8", lineHeight: 1.4 }}>
                     {mode === "SHORT_DWELL" && "Rapid confirmation / quick search"}
                     {mode === "NORMAL_DWELL" && "Standard surveillance dwell"}
                     {mode === "LONG_DWELL" && "Extended observation under uncertainty"}
