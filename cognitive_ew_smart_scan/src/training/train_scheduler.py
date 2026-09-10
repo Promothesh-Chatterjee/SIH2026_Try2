@@ -854,6 +854,30 @@ def train_scheduler(
             "pct_correct": fom.get("pct_correct_predictions"),
             "selected_active": fom.get("selected_active_opportunities"),
             "spectrum_active": fom.get("spectrum_active_opportunities"),
+            # Phase 4 reward-alignment & learning-signal metrics
+            "total_reward": float(ep_reward),
+            "interception_reward": float(fom.get("avg_reward_hit_term", 0.0) * ep_steps),
+            "latency_reward": float(fom.get("avg_reward_latency_bonus", 0.0) * ep_steps),
+            "miss_penalty": float(fom.get("avg_reward_miss_penalty", 0.0) * ep_steps),
+            "false_alarm_penalty": float(fom.get("avg_reward_false_alarm_penalty", 0.0) * ep_steps),
+            "redundant_penalty": float(fom.get("avg_reward_redundant_penalty", 0.0) * ep_steps),
+            "dwell_penalty": float(fom.get("avg_reward_dwell_cost", 0.0) * ep_steps),
+            "frequency_agility_bonus": float(fom.get("avg_reward_prediction_bonus", 0.0) * ep_steps),
+            "reward_component_dominance": bool(
+                ep_hits > 0 and (
+                    abs(fom.get("avg_reward_latency_bonus", 0.0) * ep_steps)
+                    + abs(fom.get("avg_reward_prediction_bonus", 0.0) * ep_steps)
+                    + abs(fom.get("avg_reward_redundant_penalty", 0.0) * ep_steps)
+                    + abs(fom.get("avg_reward_dwell_cost", 0.0) * ep_steps)
+                ) > abs(fom.get("avg_reward_hit_term", 0.0) * ep_steps)
+            ),
+            "cumulative_interceptions": int(ep_hits),
+            "average_intercept_latency_us": avg_intercept,
+            "number_of_unique_emitters_intercepted": int(len(getattr(env, "intercepted_emitters", set()))),
+            "interception_rate": fom.get("avg_intercept_rate"),
+            "average_interception_time_error": avg_intercept,
+            "average_interception_latency": avg_intercept,
+            "cumulative_reward": float(ep_reward),
         }
         # --- RC-2 reward decomposition totals (avg/step * steps) ---
         _avg_to_total = {

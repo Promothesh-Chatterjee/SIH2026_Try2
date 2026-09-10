@@ -50,17 +50,25 @@ smartscan_moe:
   tau: 0.15                           # calibrated Boltzmann temperature
 
 reward:
+  version: "v2"  # "v2" clean hierarchical reward signal; set to "legacy" for ablation
+  # Reward v2 clean weights:
+  w_hit_novel: 10.0            # primary dominant signal for discovering/intercepting new emitter
+  w_hit_repeat: 8.0            # primary dominant signal for intercepting known emitter
+  w_latency: 5.0               # bounded linear latency bonus: 5.0 * max(0.0, 1.0 - t_hit / T_dwell)
+  w_agile_bonus: 2.0           # shaping bonus for intercepting frequency-agile emitter
+  w_miss: -4.0                 # penalty for missing an active emitter in spectrum
+  w_false_alarm: -1.0          # penalty for tuning an empty/inactive band
+  w_redundant_scan: -0.25      # penalty for immediate redundant revisit of empty band
+  w_dwell_cost: -0.01          # normalized dwell cost: -0.01 * (dwell_us / 500.0)
+
+  # Legacy reward parameters (preserved for ablation when version: "legacy"):
   penalize_empty_dwell: false  # clean empty dwells (TN) receive 0.0 false alarm penalty
   context_scaled_miss: true    # miss penalty scaled by belief occupancy probability
   w_hit: 5.0                   # per-intercept primary incentive
   w_novel: 5.0                 # novel-emitter discovery bonus
-  w_miss: -0.5                 # miss penalty
   w_timing: 0.001              # per-µs timing penalty on hits
   w_priority: 1.0              # bonus scaled by priority of intercepted emitters
   w_information_gain: 0.2      # belief-entropy/novelty gain bonus
-  w_false_alarm: -0.5          # penalty for spurious receiver false alarm (FP)
-  w_dwell_cost: -0.0002        # per-µs cost of receiver dwell (0.100 for 500µs normal dwell)
-  w_redundant_scan: 0.0        # zero redundant scan penalty (no artificial penalty on active tracks)
   w_delay: -0.5                # penalty for late preemptive intercept of overdue periodic emitters
   w_staleness: 0.4             # intrinsic staleness bonus (balanced against interception)
   w_missed_coverage: -0.2      # operational coverage opportunity loss when other bands active
@@ -69,7 +77,6 @@ reward:
   w_active_track: 2.0          # productive tracking bonus on confirmed detection on active track
   w_pulse_scale: 0.0           # pulse-count aware hit scaling
   lull_tolerance: false        # zero miss penalty on 1-dwell gaps for confirmed active tracks
-  w_latency: 1.0               # early-interception bonus: w_latency * exp(-t_hit / tau_latency) on hits
   tau_latency: 100.0           # exponential decay constant in µs
   w_prediction: 0.5            # bonus for correctly intercepting a predicted agile arrival
   disable_latency_reward: false # ablation switch for zero-latency-reward diagnostic runs

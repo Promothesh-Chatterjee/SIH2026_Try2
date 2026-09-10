@@ -92,6 +92,26 @@ DECISION_TELEMETRY_FIELDS = [
     "q_std",
 ]
 
+# Canonical Phase 4 reward-alignment & learning-signal telemetry fields
+REWARD_V2_TELEMETRY_FIELDS = [
+    "total_reward",
+    "interception_reward",
+    "latency_reward",
+    "miss_penalty",
+    "false_alarm_penalty",
+    "redundant_penalty",
+    "dwell_penalty",
+    "frequency_agility_bonus",
+    "reward_component_dominance",
+    "cumulative_interceptions",
+    "average_intercept_latency_us",
+    "number_of_unique_emitters_intercepted",
+    "interception_rate",
+    "average_interception_time_error",
+    "average_interception_latency",
+    "cumulative_reward",
+]
+
 
 
 def safe_float(value: Any) -> float | None:
@@ -237,6 +257,9 @@ def make_episode_record(
     }
     for k in EPISODE_CORE_FIELDS:
         rec[k] = coerce(core.get(k))
+    for k in REWARD_V2_TELEMETRY_FIELDS:
+        if k in core:
+            rec[k] = coerce(core[k])
     # Legacy aliases preserved for existing readers.
     rec["ep_reward"] = rec.get("episode_reward")
     rec.update(coerce(reward_components))
