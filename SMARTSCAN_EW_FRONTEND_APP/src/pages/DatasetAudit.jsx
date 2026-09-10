@@ -1,4 +1,5 @@
-import { KpiCard, PanelHead, StitchTable } from "../components/stitch";
+import { PanelHead, StitchTable } from "../components/stitch";
+import { useOverviewTelemetry } from "../services/useOverviewTelemetry";
 
 const INVARIANTS = [
   ["Observation dimension", "360 (36 bands × 10 features)", "ENFORCED"],
@@ -61,6 +62,50 @@ const PDW_DESCRIPTORS = [
 ];
 
 export default function DatasetAudit() {
+  const telemetry = useOverviewTelemetry();
+  const isOnline = telemetry.live && telemetry.wsStatus === "ONLINE";
+  const livePdws = isOnline && Array.isArray(telemetry.pdws) ? telemetry.pdws : [];
+
+  const pdwRows =
+    isOnline && livePdws.length > 0
+      ? livePdws.map((pdw, idx) => [
+          pdw.id ?? `P-${idx + 1}`,
+          pdw.toaUs != null
+            ? pdw.toaUs.toFixed(1)
+            : pdw.toa_us != null
+            ? pdw.toa_us.toFixed(1)
+            : "-",
+          pdw.frequencyMHz != null
+            ? pdw.frequencyMHz.toFixed(1)
+            : pdw.frequency_mhz != null
+            ? pdw.frequency_mhz.toFixed(1)
+            : "-",
+          pdw.pulseWidthUs != null
+            ? pdw.pulseWidthUs.toFixed(1)
+            : pdw.pw_us != null
+            ? pdw.pw_us.toFixed(1)
+            : "-",
+          pdw.amplitudeDb != null
+            ? pdw.amplitudeDb.toFixed(1)
+            : pdw.amplitude_db != null
+            ? pdw.amplitude_db.toFixed(1)
+            : "-",
+          pdw.snrDb != null
+            ? pdw.snrDb.toFixed(1)
+            : pdw.amplitudeDb != null
+            ? (pdw.amplitudeDb + 30).toFixed(1)
+            : "-",
+          pdw.aoaDeg != null
+            ? pdw.aoaDeg.toFixed(1)
+            : pdw.aoa_deg != null
+            ? pdw.aoa_deg.toFixed(1)
+            : "-",
+          <span key={idx} style={{ color: "#49df9d", fontWeight: 700 }}>
+            {pdw.status ?? "DETECTED"}
+          </span>,
+        ])
+      : [["-", "-", "-", "-", "-", "-", "-", "-"]];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div className="st-panel">
@@ -91,50 +136,11 @@ export default function DatasetAudit() {
           badgeColor="#96ccff"
         />
         <div className="st-body" style={{ color: "#c6c5d5" }}>
-          Canonical Pulse Descriptor Word (PDW) specification for the entire 50,000-pulse RF corpus (<code>p3ac_50k</code>).
+          Canonical Pulse Descriptor Word (PDW) specification for the entire RF corpus (<code>p3ac_50k</code>).
           Every intercepted RF burst across the 36 bands (0–18 GHz) is parameterized into a 5D raw observable vector,
           transformed via leakage-safe statistics into a 6D tensor (<code>[ToA_norm, CF_norm, PW_norm, AoA_sin, AoA_cos, Amp_norm]</code>),
           and streamed directly into the Receiver Model & Transformer Deinterleaver.
         </div>
-
-        <section className="st-kpi-grid" aria-label="Dataset Pulse Descriptor KPI strip" style={{ marginTop: 8, marginBottom: 8 }}>
-          <KpiCard
-            label="DATASET PULSE VOLUME"
-            icon="stream"
-            value="50,000"
-            unit="PDWs"
-            footLeft="p3ac_50k CORPUS"
-            footRight="100 EPISODES"
-            valueColor="#96ccff"
-          />
-          <KpiCard
-            label="INPUT TENSOR DIM"
-            icon="view_column"
-            value="5D → 6D"
-            unit="VECTOR"
-            footLeft="RAW 5D"
-            footRight="NORM 6D"
-            valueColor="#49df9d"
-          />
-          <KpiCard
-            label="RF TUNING SPECTRUM"
-            icon="tune"
-            value="18.00"
-            unit="GHz"
-            footLeft="36 BANDS"
-            footRight="500 MHz IBW"
-            valueColor="#bdc2ff"
-          />
-          <KpiCard
-            label="BATCH & WINDOW"
-            icon="layers"
-            value="64 × 32"
-            unit="ROLLOUT"
-            footLeft="2,048 TRANSITIONS"
-            footRight="DRQN CORE"
-            valueColor="#e2e2e8"
-          />
-        </section>
 
         <StitchTable
           columns={[
@@ -151,6 +157,31 @@ export default function DatasetAudit() {
           Zero Data Leakage Invariant: Normalization statistics are pre-fitted strictly on training partitions
           (<code>cf_median=9000 MHz, cf_iqr=6000 MHz, pw_mean=2.5, pw_std=1.5, amp_mean=−80 dBm, amp_std=20 dBm</code>).
           Simulation truth emitter IDs remain strictly isolated from this observable PDW tensor.
+        </div>
+      </div>
+
+      <div className="st-panel">
+        <PanelHead
+          icon="stream"
+          title="LIVE PULSE DESCRIPTOR (RF ENVIRONMENT)"
+          badge={isOnline && livePdws.length > 0 ? `${livePdws.length} RECORDS` : "OFFLINE"}
+          badgeColor={isOnline && livePdws.length > 0 ? "#49df9d" : "#908f9e"}
+        />
+        <StitchTable
+          columns={[
+            "PULSE ID",
+            "TIME OF ARRIVAL (TOA UTC)",
+            "FREQUENCY (MHZ)",
+            "PW (µS)",
+            "AMP (DBM)",
+            "SNR (DB)",
+            "AOA (DEG)",
+            "STATUS",
+          ]}
+          rows={pdwRows}
+        />
+        <div className="st-tsm" style={{ color: "#908f9e" }}>
+          Observable receiver fields shown above. Simulation truth is intentionally excluded from this table. SNR is shown against an assumed −30 dBm noise floor (illustrative).
         </div>
       </div>
 
