@@ -204,34 +204,6 @@ export default function Interception() {
       <div className="st-grid-12">
         <div className="st-span-8 st-panel">
           <PanelHead icon="view_timeline" title="CHRONOLOGICAL DWELL INTERCEPTION STREAM" badge={`${MOCK_INTERCEPT_EVENTS.length} EVENTS`} badgeColor="#bdc2ff" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {MOCK_INTERCEPT_EVENTS.map((event) => (
-              <button
-                key={event.id}
-                onClick={() => setSelectedEventId(event.id)}
-                className="st-tsm"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  textAlign: "left",
-                  cursor: "pointer",
-                  font: "inherit",
-                  padding: "4px 6px",
-                  background: selectedEventId === event.id ? "#1e2024" : "#1a1c20",
-                  border: `1px solid ${selectedEventId === event.id ? "#454653" : "rgba(69,70,83,0.4)"}`,
-                }}
-              >
-                <span style={{ color: "#908f9e" }}>#{String(event.id).padStart(2, "0")}</span>
-                <span style={{ color: "#e2e2e8" }}>{event.timeUs} µs</span>
-                <span className="st-badge" style={{ color: "#bdc2ff" }}>B{event.band}</span>
-                <span style={{ color: "#c6c5d5" }}>{event.mode}</span>
-                <strong style={{ color: TYPE_COLORS[event.type], marginLeft: "auto" }}>
-                  {TYPE_LABELS[event.type]}
-                </strong>
-              </button>
-            ))}
-          </div>
           <div className="st-table-wrap st-table-wrap-compact">
           <StitchTable
             columns={["T-OFFSET", "RX CENTER FREQ", "BAND ID", "DWELL DURATION", "STATUS", "EMITTER ID", "TIMING DELTA"]}
