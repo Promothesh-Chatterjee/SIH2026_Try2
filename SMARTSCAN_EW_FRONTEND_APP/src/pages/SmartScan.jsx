@@ -223,12 +223,12 @@ export default function SmartScan() {
                     <CmdBadge color={action.band === selectedAction.band ? "#49df9d" : "#908f9e"}>
                       #{index + 1}
                     </CmdBadge>
-                    <strong style={{ color: action.band === selectedAction.band ? "#bdc2ff" : "#e2e2e8" }}>
+                    <strong style={{ color: action.band === selectedAction.band ? "#bdc2ff" : "#e2e2e8", fontSize: 9 }}>
                       B{action.band}
                     </strong>
-                    <span style={{ color: "#c6c5d5" }}>{action.mode}</span>
+                    <span style={{ color: "#c6c5d5", fontSize: 9 }}>{action.mode}</span>
                   </span>
-                  <em style={{ color: "#49df9d", fontStyle: "normal" }}>{action.score.toFixed(3)}</em>
+                  <em style={{ color: "#49df9d", fontStyle: "normal", fontSize: 9 }}>{action.score.toFixed(3)}</em>
                 </button>
               ))}
             </div>
