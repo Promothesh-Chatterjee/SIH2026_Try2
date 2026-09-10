@@ -822,7 +822,22 @@ class CognitiveRFScanEnv(gym.Env):
             "is_predicted": bool(is_predicted_band),
             "active_bands": [b for b, v in enumerate(active_bands_vec) if v > 0],
             "reward_components": reward_components,
+            # Phase 2 runtime decision telemetry fields
+            "raw_drqn_action": mode_ctx.get("raw_drqn_action", action),
+            "raw_drqn_band": mode_ctx.get("raw_drqn_band", band),
+            "raw_drqn_mode": mode_ctx.get("raw_drqn_mode", mode),
+            "final_action": int(action),
+            "final_band": int(band),
+            "final_mode": int(mode),
+            "action_was_overridden": bool(mode_ctx.get("action_was_overridden", False)),
+            "override_source": mode_ctx.get("override_source", None),
+            "exploration_source": mode_ctx.get("exploration_source", "none"),
+            "q_selected": mode_ctx.get("q_selected", None),
+            "q_max": mode_ctx.get("q_max", None),
+            "q_mean": mode_ctx.get("q_mean", None),
+            "q_std": mode_ctx.get("q_std", None),
         }
+
 
         next_obs = self._build_observation()
         return next_obs, float(reward), terminated, truncated, info

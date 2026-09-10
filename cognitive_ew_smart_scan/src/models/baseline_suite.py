@@ -271,16 +271,44 @@ class DRQNBaseline:
                 else:
                     action = int(order[0])
 
+        raw_drqn_action = int(np.argmax(q_vals))
+        raw_drqn_band = band_of_action(raw_drqn_action, self.n_modes)
+        raw_drqn_mode = mode_of_action(raw_drqn_action, self.n_modes)
+        final_action = int(action)
+        final_band = band_of_action(final_action, self.n_modes)
+        final_mode = mode_of_action(final_action, self.n_modes)
+        action_was_overridden = bool(final_action != raw_drqn_action)
+        override_source = "band_first_decoupled" if (getattr(self, "mode_selection_policy", None) == "band_first_decoupled" and action_was_overridden) else ("tau_sampling" if action_was_overridden else None)
+        exploration_source = "tau_sampling" if (self.tau > 0.0 and action_was_overridden) else "none"
+        q_selected = float(q_vals[final_action]) if 0 <= final_action < len(q_vals) else 0.0
+        q_max = float(np.max(q_vals)) if len(q_vals) > 0 else 0.0
+        q_mean = float(np.mean(q_vals)) if len(q_vals) > 0 else 0.0
+        q_std = float(np.std(q_vals)) if len(q_vals) > 0 else 0.0
+
         return action, {
             "source": "drqn",
             "band": band_of_action(action, self.n_modes),
             "mode": mode_of_action(action, self.n_modes),
             "mode_name": DWELL_MODES[mode_of_action(action, self.n_modes)],
+            "raw_drqn_action": raw_drqn_action,
+            "raw_drqn_band": raw_drqn_band,
+            "raw_drqn_mode": raw_drqn_mode,
+            "final_action": final_action,
+            "final_band": final_band,
+            "final_mode": final_mode,
+            "action_was_overridden": action_was_overridden,
+            "override_source": override_source,
+            "exploration_source": exploration_source,
+            "q_selected": q_selected,
+            "q_max": q_max,
+            "q_mean": q_mean,
+            "q_std": q_std,
             "q_top1": q_top1,
             "q_top2": q_top2,
             "q_margin": q_margin,
             "raw_q": q_vals,
         }
+
 
     def step(self, observation: Any) -> int:
         return self.act(observation)[0]
