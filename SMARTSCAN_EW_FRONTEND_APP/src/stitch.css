@@ -400,6 +400,21 @@
   min-height: 0;
 }
 
+@keyframes st-radar-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.st-radar-sweep {
+  position: absolute;
+  width: 224px;
+  height: 224px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(from 0deg, rgba(150,204,255,0.35) 0deg, rgba(150,204,255,0.12) 40deg, transparent 70deg);
+  animation: st-radar-spin 4s linear infinite;
+}
+
 @media (max-width: 1100px) {
   .st-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .st-span-8, .st-span-4, .st-span-6 { grid-column: span 12 / span 12; }

@@ -381,6 +381,7 @@ export default function Emitters() {
 
           {/* Polar Radar SVG */}
           <div style={{ background: "#0c0e12", borderRadius: 2, padding: 8, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+            <div className="st-radar-sweep" />
             <svg viewBox="0 0 200 200" style={{ width: 224, height: 224, color: "#333539" }}>
               <circle cx="100" cy="100" fill="none" r="90" stroke="currentColor" strokeDasharray="2,2" strokeWidth="1" />
               <circle cx="100" cy="100" fill="none" r="60" stroke="currentColor" strokeWidth="1" />
@@ -388,7 +389,7 @@ export default function Emitters() {
               <circle cx="100" cy="100" fill="#bdc2ff" r="3" />
               <line stroke="currentColor" strokeWidth="1" x1="100" x2="100" y1="10" y2="190" />
               <line stroke="currentColor" strokeWidth="1" x1="10" x2="190" y1="100" y2="100" />
-              <path d="M 100,100 L 165,35 A 90 90 0 0 1 185,115 Z" fill="rgba(150,204,255,0.15)" stroke="none" />
+              <path d="M 100,100 L 165,35 A 90 90 0 0 1 185,115 Z" fill="rgba(150,204,255,0.15)" stroke="none" style={{ animation: "st-radar-spin 4s linear infinite", transformOrigin: "100px 100px" }} />
               {EMITTERS_RADAR.map((e) => (
                 <g key={e.id} transform={`translate(${e.tx}, ${e.ty})`}>
                   <circle
