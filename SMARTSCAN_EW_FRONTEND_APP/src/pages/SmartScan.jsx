@@ -234,25 +234,25 @@ export default function SmartScan() {
             </div>
           </div>
 
-          <div className="st-panel" style={{ padding: 6 }}>
+          <div className="st-panel" style={{ padding: 8 }}>
             <PanelHead icon="category" title="ACTION SPACE" badge="5 MODES" badgeColor="#96ccff" />
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               {MODES.map((mode, index) => (
                 <div
                   key={mode}
                   style={{
-                    padding: "3px 6px",
+                    padding: "4px 6px",
                     background: "#1a1c20",
                     border: `1px solid ${mode === selectedAction.mode ? "#bdc2ff" : "#454653"}`,
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span className="st-mark" style={{ color: "#908f9e" }}>MODE {index}</span>
-                    <strong className="st-mark" style={{ color: mode === selectedAction.mode ? "#bdc2ff" : "#e2e2e8" }}>
+                    <span className="st-tsm" style={{ color: "#908f9e" }}>MODE {index}</span>
+                    <strong className="st-tsm" style={{ color: mode === selectedAction.mode ? "#bdc2ff" : "#e2e2e8" }}>
                       {mode}
                     </strong>
                   </div>
-                  <span className="st-mark" style={{ color: "#908f9e", lineHeight: 1.4 }}>
+                  <span className="st-tsm" style={{ color: "#908f9e", lineHeight: 1.4 }}>
                     {mode === "SHORT_DWELL" && "Rapid confirmation / quick search"}
                     {mode === "NORMAL_DWELL" && "Standard surveillance dwell"}
                     {mode === "LONG_DWELL" && "Extended observation under uncertainty"}
