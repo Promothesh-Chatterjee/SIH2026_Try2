@@ -1161,3 +1161,59 @@ async def ws_state(ws: WebSocket):
             await ws.send_text(json.dumps(payload))
     except WebSocketDisconnect:
         _ws_clients.remove(ws)
+
+
+# ── Dynamic Benchmark Evaluation Endpoints ─────────────────────────────────
+
+class BenchmarkEvaluateRequest(BaseModel):
+    scenario: str = Field(default="AG-04", description="Agile benchmark scenario identifier (AG-01 through AG-10)")
+    n_steps: int = Field(default=100, ge=20, le=500, description="Number of dwell cycles to evaluate")
+    snr_db: float = Field(default=15.0, ge=5.0, le=30.0, description="Receiver SNR threshold (dB)")
+    seed: int = Field(default=42, description="RNG seed for deterministic evaluation")
+
+
+@app.post("/benchmark/evaluate", tags=["benchmark"])
+def benchmark_evaluate(req: BenchmarkEvaluateRequest) -> dict[str, Any]:
+    """Execute dynamic multi-scheduler evaluation on specified scenario inputs.
+
+    Simulates Open-Loop Baseline, Round Robin, Random, Highest Uncertainty,
+    and Smart Scan DRQN+MoE Policy across identical pulse streams, computing
+    real comparative figures of merit dynamically.
+    """
+    from ..evaluation.dynamic_benchmark import run_dynamic_benchmark
+
+    scheduler = STATE.get("scheduler")
+    drqn_model = scheduler if (scheduler is not None and not isinstance(scheduler, str)) else None
+
+    result = run_dynamic_benchmark(
+        scenario=req.scenario,
+        n_steps=req.n_steps,
+        snr_db=req.snr_db,
+        seed=req.seed,
+        loaded_drqn=drqn_model,
+    )
+    STATE["latest_benchmark"] = result
+    return result
+
+
+@app.get("/benchmark/latest", tags=["benchmark"])
+def benchmark_latest() -> dict[str, Any]:
+    """Return the most recently computed dynamic benchmark, or default evaluation."""
+    if "latest_benchmark" in STATE and STATE["latest_benchmark"]:
+        return STATE["latest_benchmark"]
+
+    from ..evaluation.dynamic_benchmark import run_dynamic_benchmark
+
+    scheduler = STATE.get("scheduler")
+    drqn_model = scheduler if (scheduler is not None and not isinstance(scheduler, str)) else None
+    result = run_dynamic_benchmark("AG-04", n_steps=100, snr_db=15.0, seed=42, loaded_drqn=drqn_model)
+    STATE["latest_benchmark"] = result
+    return result
+
+
+@app.get("/benchmark/scenarios", tags=["benchmark"])
+def benchmark_scenarios() -> list[dict[str, Any]]:
+    """List available threat scenarios for dynamic benchmark evaluation."""
+    from ..evaluation.dynamic_benchmark import SCENARIO_CATALOG
+
+    return list(SCENARIO_CATALOG.values())
