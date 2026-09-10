@@ -112,13 +112,6 @@ const MISSED_DOTS = [
   { cx: 680, cy: 110 },
 ];
 
-const EMITTERS_RADAR = [
-  { id: "E-01", deg: "042°", tx: 155, ty: 45, color: "#49df9d", labelSide: "right" },
-  { id: "E-04", deg: "142°", tx: 155, ty: 150, color: "#ffb4ab", danger: true },
-  { id: "E-07", deg: "285°", tx: 25, ty: 75, color: "#96ccff", labelSide: "left" },
-  { id: "E-09", deg: "110°", tx: 175, ty: 125, color: "#bdc2ff", labelSide: "right" },
-];
-
 const METRIC_RIBBON = [
   ["PRI JITTER", "45.2 – 59.8 µs", "#bdc2ff"],
   ["PULSE DURATION", "0.82 µs", "#bdc2ff"],
@@ -390,28 +383,6 @@ export default function Emitters() {
               <line stroke="currentColor" strokeWidth="1" x1="100" x2="100" y1="10" y2="190" />
               <line stroke="currentColor" strokeWidth="1" x1="10" x2="190" y1="100" y2="100" />
               <path d="M 100,100 L 165,35 A 90 90 0 0 1 185,115 Z" fill="rgba(150,204,255,0.15)" stroke="none" style={{ animation: "st-radar-spin 4s linear infinite", transformOrigin: "100px 100px" }} />
-              {EMITTERS_RADAR.map((e) => (
-                <g key={e.id} transform={`translate(${e.tx}, ${e.ty})`}>
-                  <circle
-                    cx="0"
-                    cy="0"
-                    fill={e.danger ? "none" : e.color}
-                    stroke={e.color}
-                    r={e.danger ? 5 : 4}
-                    strokeWidth={e.danger ? 2 : 0}
-                    style={e.danger ? {} : { animation: "pulse 2s infinite" }}
-                  />
-                  <text
-                    fill={e.color}
-                    fontSize="8"
-                    fontFamily="JetBrains Mono"
-                    x={e.labelSide === "left" ? -35 : 7}
-                    y="3"
-                  >
-                    {e.id} ({e.deg})
-                  </text>
-                </g>
-              ))}
               <text fill="#908f9e" fontSize="8" fontFamily="JetBrains Mono" x="102" y="16">000° N</text>
               <text fill="#908f9e" fontSize="8" fontFamily="JetBrains Mono" x="175" y="98">090°</text>
               <text fill="#908f9e" fontSize="8" fontFamily="JetBrains Mono" x="102" y="196">180°</text>
