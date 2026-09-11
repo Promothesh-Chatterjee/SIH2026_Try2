@@ -118,21 +118,18 @@ def stream_live_feed(
             except Exception:
                 clock_us = float(step_count * 1000.0)
 
-            # Extract pulses in current causal lookahead window (current clock + 3500 us)
-            dwell_lookahead_us = clock_us + 3500.0
-            window_pulses = [p for p in pulses if p["toa_us"] <= dwell_lookahead_us]
-
-            # If horizon reached in pulse buffer, advance or regenerate
-            if not window_pulses or dwell_lookahead_us > horizon_us:
-                if not infinite and max_steps > 0 and step_count >= max_steps:
-                    break
-                # Loop scenario by resetting mission or advancing horizon
-                loop_count += 1
-                client.post("/mission/start", json={"initial_time_us": 0.0})
-                clock_us = 0.0
-                dwell_lookahead_us = 3500.0
-                window_pulses = [p for p in pulses if p["toa_us"] <= dwell_lookahead_us]
-                print(f"  --- Scenario Loop #{loop_count} Re-synchronized ---")
+            # Lightweight causal lookahead window: modulo scenario duration
+            t_mod = clock_us % horizon_us
+            offset = (clock_us // horizon_us) * horizon_us
+            window_pulses = [
+                {
+                    **p,
+                    "toa_us": float(p["toa_us"] + offset),
+                    "time_us": float(p["toa_us"] + offset),
+                }
+                for p in pulses
+                if t_mod - 500.0 <= p["toa_us"] <= t_mod + 3500.0
+            ]
 
             # Post operational dwell step
             step_count += 1
@@ -176,15 +173,24 @@ def stream_live_feed(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Live RF Data Feeder for Cognitive EW SmartScan")
     parser.add_argument("--scenario", default="AG-04", help="Agile threat scenario (AG-01 to AG-10) or path to .h5")
-    parser.add_argument("--delay", type=float, default=0.20, help="Cadence delay between dwell cycles (seconds)")
+    parser.add_argument("--delay", type=float, default=0.15, help="Cadence delay between dwell cycles (seconds)")
     parser.add_argument("--steps", type=int, default=0, help="Max steps (0 for continuous stream)")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="FastAPI backend URL")
+    parser.add_argument("--backend-worker", action="store_true", help="Start continuous live stream inside backend process")
     args = parser.parse_args()
 
-    stream_live_feed(
-        scenario_id=args.scenario,
-        base_url=args.base_url,
-        delay_s=args.delay,
-        max_steps=args.steps,
-        infinite=(args.steps == 0),
-    )
+    if args.backend_worker:
+        import httpx
+        try:
+            r = httpx.post(f"{args.base_url}/mission/stream/start", json={"scenario": args.scenario, "speed_hz": 1.0 / args.delay}, timeout=5.0)
+            print("Backend Live Worker Started:", r.json())
+        except Exception as e:
+            print("Failed to trigger backend worker:", e)
+    else:
+        stream_live_feed(
+            scenario_id=args.scenario,
+            base_url=args.base_url,
+            delay_s=args.delay,
+            max_steps=args.steps,
+            infinite=(args.steps == 0),
+        )
