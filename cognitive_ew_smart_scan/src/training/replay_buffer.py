@@ -82,7 +82,7 @@ class SequenceReplayBuffer:
         self._current: dict | None = None
         self._current_len: int = 0
 
-    def _make_episode(self) -> dict:
+    def _make_episode(self, scenario_id: str | None = None) -> dict:
         return {
             "obs": [],
             "actions": [],
@@ -92,6 +92,7 @@ class SequenceReplayBuffer:
             "hit_probs": [],
             "intercept_times_us": [],
             "time_target_valid": [],
+            "scenario_id": scenario_id,
         }
 
     def add(
@@ -103,6 +104,7 @@ class SequenceReplayBuffer:
         done: bool,
         hit_prob: float | None = None,
         intercept_time_us: float | None = None,
+        scenario_id: str | None = None,
     ) -> None:
         """Append transition; close episode on done.
 
@@ -117,9 +119,12 @@ class SequenceReplayBuffer:
             intercept_time_us: Dwell-relative time-to-interception (µs), or
                 None/nan when there was no interception (then no valid time
                 target is recorded).
+            scenario_id: Optional identifier of the scenario for scenario-balanced sampling.
         """
         if self._current is None:
-            self._current = self._make_episode()
+            self._current = self._make_episode(scenario_id=scenario_id)
+        elif scenario_id is not None and self._current.get("scenario_id") is None:
+            self._current["scenario_id"] = scenario_id
 
         hit_binary = 1.0 if (hit_prob is None or float(hit_prob) > 0.5) else 0.0
         intercept_time = float("nan") if intercept_time_us is None else float(intercept_time_us)
@@ -139,21 +144,33 @@ class SequenceReplayBuffer:
         if done:
             self._archive_current()
 
+    def _convert_current_to_usable(self) -> dict | None:
+        """Convert current buffered lists to numpy arrays representation without clearing."""
+        ep = self._current
+        if ep is None or self._current_len < 1:
+            return None
+        hit_probs_arr = np.asarray(ep["hit_probs"], dtype=np.float32)
+        has_any_hits = bool(np.any(hit_probs_arr > 0.5))
+        scen_id = ep.get("scenario_id") or "unknown"
+
+        return {
+            "obs": np.vstack(ep["obs"]),
+            "actions": np.asarray(ep["actions"], dtype=np.int64),
+            "rewards": np.asarray(ep["rewards"], dtype=np.float32),
+            "next_obs": np.vstack(ep["next_obs"]),
+            "dones": np.asarray(ep["dones"], dtype=np.float32),
+            "hit_probs": hit_probs_arr,
+            "intercept_times_us": np.asarray(ep["intercept_times_us"], dtype=np.float32),
+            "time_target_valid": np.asarray(ep["time_target_valid"], dtype=np.float32),
+            "length": int(self._current_len),
+            "has_hits": has_any_hits,
+            "scenario_id": str(scen_id),
+        }
+
     def _archive_current(self) -> None:
         """Convert current buffered lists to numpy arrays and store."""
-        ep = self._current
-        if ep is not None and self._current_len >= 1:
-            arrays = {
-                "obs": np.vstack(ep["obs"]),
-                "actions": np.asarray(ep["actions"], dtype=np.int64),
-                "rewards": np.asarray(ep["rewards"], dtype=np.float32),
-                "next_obs": np.vstack(ep["next_obs"]),
-                "dones": np.asarray(ep["dones"], dtype=np.float32),
-                "hit_probs": np.asarray(ep["hit_probs"], dtype=np.float32),
-                "intercept_times_us": np.asarray(ep["intercept_times_us"], dtype=np.float32),
-                "time_target_valid": np.asarray(ep["time_target_valid"], dtype=np.float32),
-                "length": int(self._current_len),
-            }
+        arrays = self._convert_current_to_usable()
+        if arrays is not None:
             self._episodes.append(arrays)
 
         self._current = None
@@ -166,13 +183,21 @@ class SequenceReplayBuffer:
             oldest = self._episodes.pop(0)
             self._total -= int(oldest["length"])
 
-    def sample(self, batch_size: int) -> dict[str, np.ndarray]:
-        """Sample batched windows (B, seq_len, ...) within single episodes.
+    def sample(
+        self,
+        batch_size: int,
+        target_hit_seq_fraction: float = 0.40,
+    ) -> dict[str, np.ndarray]:
+        """Sample batched windows (B, seq_len, ...) within single episodes with sequence balancing.
 
         Each window is a contiguous slice of one episode. For episodes at least
-        ``seq_len`` long the window is fully real data and the start index is
-        uniform over valid placements. Shorter episodes are zero-padded: their
-        real transitions fill the leading columns and the remainder is padding.
+        ``seq_len`` long the window is fully real data. Shorter episodes are zero-padded.
+
+        Phase 9B Mandatory Balancing:
+          - Balance hit-containing sequences (~40% containing >= 1 genuine hit, ~60% non-hit).
+          - Scenario balancing: scenarios contribute approximately equally within the positive
+            and negative pools, preventing any single scenario (e.g. config_195) from dominating.
+          - Never duplicate a sequence just to satisfy quota; fallback cleanly to available data.
 
         Masks (all (B, seq_len)):
           * ``valid_mask``    — 1 for real (non-padded) transitions.
@@ -184,6 +209,7 @@ class SequenceReplayBuffer:
 
         Args:
             batch_size: Number of windows.
+            target_hit_seq_fraction: Desired proportion of sequences with >= 1 hit (default 0.40).
 
         Returns:
             Dict keys obs (B,seq_len,obs_dim) plus per-step actions, rewards,
@@ -195,8 +221,26 @@ class SequenceReplayBuffer:
         """
         assert self.can_sample(batch_size), f"Not enough data: total={self._total} need >= {batch_size}"
         usable = [e for e in self._episodes if int(e["length"]) >= 1]
+        # If current episode has transitions, make it temporarily usable for sampling
+        if self._current is not None and self._current_len >= 1:
+            curr_ep = self._convert_current_to_usable()
+            if curr_ep is not None:
+                usable.append(curr_ep)
+
         if not usable:
-            raise AssertionError("No complete episodes in buffer yet")
+            raise AssertionError("No complete or in-progress episodes in buffer yet")
+
+        # Partition episodes by scenario
+        pos_episodes_by_scen: dict[str, list[dict]] = {}
+        all_episodes_by_scen: dict[str, list[dict]] = {}
+        for ep in usable:
+            scen = ep.get("scenario_id", "unknown")
+            all_episodes_by_scen.setdefault(scen, []).append(ep)
+            if ep.get("has_hits", False):
+                pos_episodes_by_scen.setdefault(scen, []).append(ep)
+
+        n_hit_desired = int(round(batch_size * target_hit_seq_fraction))
+        has_pos_data = bool(pos_episodes_by_scen)
 
         obs_batch = np.zeros((batch_size, self.seq_len, self.obs_dim), dtype=np.float32)
         act_batch = np.zeros((batch_size, self.seq_len), dtype=np.int64)
@@ -204,26 +248,82 @@ class SequenceReplayBuffer:
         next_obs_batch = np.zeros((batch_size, self.seq_len, self.obs_dim), dtype=np.float32)
         done_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
         hit_prob_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
-        # Misses and padding keep NaN (never a fabricated 500µs target).
         intercept_time_batch = np.full((batch_size, self.seq_len), np.nan, dtype=np.float32)
         time_valid_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
         valid_mask = np.zeros((batch_size, self.seq_len), dtype=np.float32)
         burn_in_mask = np.zeros((batch_size, self.seq_len), dtype=np.float32)
 
         burn = self.burn_in
-        for b in range(batch_size):
-            ep = usable[int(self.rng.integers(0, len(usable)))]
-            ep_len = int(ep["length"])
+        pos_scen_keys = list(pos_episodes_by_scen.keys())
+        all_scen_keys = list(all_episodes_by_scen.keys())
+        sampled_pos_scens: list[str] = []
 
-            if ep_len >= self.seq_len:
-                # Fully real window; start uniform over valid placements.
-                max_start = ep_len - self.seq_len
-                start = int(self.rng.integers(0, max_start + 1))
-                steps = self.seq_len
-            else:
-                # Short episode: real data fills the leading columns.
-                start = 0
-                steps = ep_len
+        for b in range(batch_size):
+            want_hit = (b < n_hit_desired) and has_pos_data
+            sampled_window = False
+
+            if want_hit and pos_scen_keys:
+                # Scenario-balanced selection from positive pool:
+                # Pick a scenario uniformly, then pick an episode within that scenario
+                scen = pos_scen_keys[int(self.rng.integers(0, len(pos_scen_keys)))]
+                candidate_eps = pos_episodes_by_scen[scen]
+                ep = candidate_eps[int(self.rng.integers(0, len(candidate_eps)))]
+                ep_len = int(ep["length"])
+                hit_indices = np.where(ep["hit_probs"] > 0.5)[0]
+
+                if len(hit_indices) > 0 and ep_len >= self.seq_len:
+                    # Choose a hit index and anchor the window so the hit falls inside [start, start + seq_len)
+                    hit_idx = int(self.rng.choice(hit_indices))
+                    min_start = max(0, hit_idx - self.seq_len + 1)
+                    max_start = min(hit_idx, ep_len - self.seq_len)
+                    if min_start <= max_start:
+                        start = int(self.rng.integers(min_start, max_start + 1))
+                        steps = self.seq_len
+                        sampled_window = True
+                        sampled_pos_scens.append(scen)
+                elif len(hit_indices) > 0 and ep_len < self.seq_len:
+                    start = 0
+                    steps = ep_len
+                    sampled_window = True
+                    sampled_pos_scens.append(scen)
+
+            if not sampled_window:
+                # Scenario-balanced selection from negative / non-hit pool:
+                # First check if there are explicit non-hit episodes available
+                neg_scen_keys = [s for s, eps in all_episodes_by_scen.items() if any(not ep.get("has_hits", False) for ep in eps)]
+                if neg_scen_keys:
+                    scen = neg_scen_keys[int(self.rng.integers(0, len(neg_scen_keys)))]
+                    non_hit_eps = [ep for ep in all_episodes_by_scen[scen] if not ep.get("has_hits", False)]
+                    ep = non_hit_eps[int(self.rng.integers(0, len(non_hit_eps)))]
+                    ep_len = int(ep["length"])
+                    if ep_len >= self.seq_len:
+                        start = int(self.rng.integers(0, ep_len - self.seq_len + 1))
+                        steps = self.seq_len
+                    else:
+                        start = 0
+                        steps = ep_len
+                else:
+                    # All episodes have some hits; try to sample a window avoiding hits
+                    scen = all_scen_keys[int(self.rng.integers(0, len(all_scen_keys)))]
+                    candidate_eps = all_episodes_by_scen[scen]
+                    ep = candidate_eps[int(self.rng.integers(0, len(candidate_eps)))]
+                    ep_len = int(ep["length"])
+
+                    if ep_len >= self.seq_len:
+                        # Attempt to find a window without hits
+                        hit_indices = set(np.where(ep["hit_probs"] > 0.5)[0])
+                        candidate_starts = [
+                            s for s in range(ep_len - self.seq_len + 1)
+                            if not any((s + t) in hit_indices for t in range(self.seq_len))
+                        ]
+                        if candidate_starts:
+                            start = int(self.rng.choice(candidate_starts))
+                        else:
+                            start = int(self.rng.integers(0, ep_len - self.seq_len + 1))
+                        steps = self.seq_len
+                    else:
+                        start = 0
+                        steps = ep_len
 
             for t in range(steps):
                 idx = start + t
@@ -238,7 +338,18 @@ class SequenceReplayBuffer:
                 valid_mask[b, t] = 1.0
                 if t < burn:
                     burn_in_mask[b, t] = 1.0
-            # Remaining columns stay zero/NaN padding (marked invalid).
+
+        seq_has_hit = [bool(np.any(hit_prob_batch[b] > 0.5)) for b in range(batch_size)]
+        seq_hit_fraction = float(np.mean(seq_has_hit))
+
+        # Scenario-wise positive hit concentration: max fraction of positive windows from a single scenario
+        if sampled_pos_scens:
+            scen_counts = {}
+            for s in sampled_pos_scens:
+                scen_counts[s] = scen_counts.get(s, 0) + 1
+            pos_scen_concentration = float(max(scen_counts.values()) / len(sampled_pos_scens))
+        else:
+            pos_scen_concentration = 0.0
 
         return {
             "obs": obs_batch,
@@ -251,6 +362,10 @@ class SequenceReplayBuffer:
             "time_target_valid": time_valid_batch,
             "valid_mask": valid_mask,
             "burn_in_mask": burn_in_mask,
+            "sequence_hit_fraction": seq_hit_fraction,
+            "n_hit_sequences": int(np.sum(seq_has_hit)),
+            "pos_scen_concentration": pos_scen_concentration,
+            "sampled_pos_scenarios": sampled_pos_scens,
         }
 
     def can_sample(self, batch_size: int) -> bool:
