@@ -127,6 +127,42 @@ STATE: dict[str, Any] = {
 telemetry = TelemetryPublisher(run=None)
 TELEMETRY_ROOT = os.getenv("TELEMETRY_ROOT", "runs")
 
+_rolling_pdws: list[dict[str, Any]] = []
+_rolling_pdws_lock = Lock()
+
+
+def record_intercepted_pdws(detections: list[dict[str, Any]]) -> None:
+    """Record intercepted receiver PDWs into rolling FIFO buffer (last 30 hits)."""
+    global _rolling_pdws
+    if not detections:
+        return
+    with _rolling_pdws_lock:
+        existing_uids = {
+            f"{p.get('pulse_id')}-{float(p.get('time_us', 0.0)):.1f}"
+            for p in _rolling_pdws
+        }
+        new_records = []
+        for det in detections:
+            p_id = det.get("pulse_id")
+            t_us = float(det.get("time_us", det.get("toa_us", 0.0)))
+            uid = f"{p_id}-{t_us:.1f}"
+            if uid not in existing_uids:
+                existing_uids.add(uid)
+                amp = float(det.get("amplitude_db", -65.0))
+                snr = float(det.get("snr_db", amp + 95.0))
+                new_records.append({
+                    "pulse_id": int(p_id) if p_id is not None else int(t_us),
+                    "time_us": t_us,
+                    "frequency_mhz": float(det.get("frequency_mhz", 0.0)),
+                    "pulse_width_us": float(det.get("pulse_width_us", 1.0)),
+                    "amplitude_db": amp,
+                    "snr_db": snr,
+                    "aoa_deg": float(det.get("aoa_deg", 0.0)),
+                    "status": "DETECTED",
+                })
+        if new_records:
+            _rolling_pdws = (new_records + _rolling_pdws)[:30]
+
 
 # ── Pydantic Schemas (Pydantic v2) ──────────────────────────────────────────
 
@@ -669,9 +705,7 @@ def telemetry_latest() -> dict[str, Any]:
 
     Never fabricates values; returns ``{"live": false}`` if no real data exists.
     """
-    if telemetry.live:
-        return telemetry.latest()
-    return latest_telemetry_snapshot(TELEMETRY_ROOT)
+    return _telemetry_payload()
 
 
 @app.get("/telemetry/history", tags=["telemetry"])
@@ -1082,6 +1116,8 @@ def mission_step(req: MissionStepRequest, request: Request) -> MissionStepRespon
             obs=req.obs,
             external_rf_stream=req.pdws,
         )
+        if frame.detections:
+            record_intercepted_pdws(frame.detections)
         # Stream live frame to telemetry publisher for dashboard and primary frontend
         frame_dict = frame.to_dict()
         band_priors = getattr(controller.state_builder, "ema_activity", np.zeros(CANONICAL_N_BANDS)).tolist()
@@ -1187,15 +1223,15 @@ def _telemetry_payload() -> dict[str, Any]:
         latest = telemetry.latest()
         controller = STATE.get("controller")
         active_emitters = []
-        if controller and controller.emitter_tracker and controller.emitter_tracker.tracks:
+        if controller and getattr(controller, "emitter_tracker", None) and getattr(controller.emitter_tracker, "tracks", None):
             for tid, trk in list(controller.emitter_tracker.tracks.items())[:10]:
                 active_emitters.append({
                     "track_id": int(tid),
-                    "band": int(trk.band),
-                    "freq_mhz": float(trk.center_freq_mhz),
-                    "pulse_count": int(trk.pulse_count),
-                    "pri_us": float(trk.pri_estimate_us or 0.0),
-                    "state": str(trk.state),
+                    "band": int(getattr(trk, "last_band", 0) if getattr(trk, "last_band", None) is not None else 0),
+                    "freq_mhz": float(getattr(trk, "current_frequency_mhz", 0.0) or 0.0),
+                    "pulse_count": int(getattr(trk, "observation_count", 0) or 0),
+                    "pri_us": float(getattr(trk, "pri_estimate_us", 0.0) or 0.0),
+                    "state": "ACTIVE" if getattr(trk, "is_active", True) else "INACTIVE",
                 })
         band_priors = latest.get("band_priorities", [])
         if not band_priors and controller and controller.state_builder:
@@ -1214,11 +1250,22 @@ def _telemetry_payload() -> dict[str, Any]:
         q_mrg = float(ce.get("q_margin", 0.0) or 0.0)
         dec_reason = str(ce.get("decision_reason", ce.get("reason", "DRQN Cognitive Policy")))
 
+        with _rolling_pdws_lock:
+            active_pdws = list(_rolling_pdws[:15])
+
+        if not active_pdws:
+            raw_dets = latest.get("detections", latest.get("pdws", []))
+            if raw_dets:
+                record_intercepted_pdws(raw_dets)
+                with _rolling_pdws_lock:
+                    active_pdws = list(_rolling_pdws[:15])
+
         return {
             "live": True,
             "source": "publisher",
             "step": latest.get("step", 0),
             "band": latest.get("band", 0),
+            "center_frequency_mhz": float(latest.get("center_frequency_mhz", 500.0 * latest.get("band", 0) + 250.0)),
             "mode": latest.get("mode", 1),
             "mode_name": latest.get("mode_name", "NORMAL_DWELL"),
             "hit": bool(latest.get("hit", False)),
@@ -1233,8 +1280,18 @@ def _telemetry_payload() -> dict[str, Any]:
             "q_margin": q_mrg,
             "decision_reason": dec_reason,
             "bandPriorities": band_priors,
-            "pdws": latest.get("detections", latest.get("pdws", [])),
+            "pdws": active_pdws,
+            "detections": active_pdws,
+            "recent_pdws": active_pdws,
             "emitters": active_emitters if active_emitters else latest.get("emitters", []),
+            "receiver_status": {
+                "total_bandwidth_mhz": 18000.0,
+                "ibw_mhz": 1000.0,
+                "frequency_step_mhz": 500.0,
+                "sensitivity_dbm": -140.0,
+                "threshold_dbm": -140.0,
+                "status": "ACTIVE",
+            },
             "cognitive_explanation": {
                 **ce,
                 "drqn_score": drqn_sc,
@@ -1259,9 +1316,20 @@ def _telemetry_payload() -> dict[str, Any]:
             "source": f"run:{disk.get('run_id')}",
             "metrics": disk,
             "bandPriorities": disk.get("band_priorities", []),
-            "pdws": disk.get("pdws", []),
+            "pdws": disk.get("pdws", disk.get("detections", [])),
+            "detections": disk.get("pdws", disk.get("detections", [])),
+            "recent_pdws": disk.get("pdws", disk.get("detections", [])),
             "emitters": disk.get("emitters", []),
+            "receiver_status": {
+                "total_bandwidth_mhz": 18000.0,
+                "ibw_mhz": 1000.0,
+                "frequency_step_mhz": 500.0,
+                "sensitivity_dbm": -140.0,
+                "threshold_dbm": -140.0,
+                "status": "ACTIVE",
+            },
             "dwell_time_us": float(disk.get("dwell_time_us", 500.0) or 500.0),
+            "center_frequency_mhz": float(disk.get("center_frequency_mhz", 500.0 * disk.get("band", 0) + 250.0)),
             "rolling_pd": float(disk.get("rolling_pd", 0.0) or 0.0),
             "rolling_median_latency_us": float(disk.get("rolling_median_latency_us", 0.0) or 0.0),
         }
@@ -1270,6 +1338,7 @@ def _telemetry_payload() -> dict[str, Any]:
         "source": "none",
         "message": disk.get("live_message", "no live telemetry yet"),
         "dwell_time_us": 0.0,
+        "center_frequency_mhz": 0.0,
         "rolling_pd": 0.0,
         "rolling_median_latency_us": 0.0,
         "drqn_score": 0.0,
@@ -1278,6 +1347,17 @@ def _telemetry_payload() -> dict[str, Any]:
         "exploration_pressure": 0.0,
         "q_margin": 0.0,
         "bandPriorities": [0.0] * CANONICAL_N_BANDS,
+        "pdws": [],
+        "detections": [],
+        "recent_pdws": [],
+        "receiver_status": {
+            "total_bandwidth_mhz": 18000.0,
+            "ibw_mhz": 1000.0,
+            "frequency_step_mhz": 500.0,
+            "sensitivity_dbm": -140.0,
+            "threshold_dbm": -140.0,
+            "status": "OFFLINE",
+        },
     }
 
 
@@ -1427,6 +1507,9 @@ async def _run_live_mission_stream(scenario_name: str, speed_hz: float, max_dwel
                 external_rf_stream=feed_window,
             )
             dwell_idx += 1
+
+            if frame.detections:
+                record_intercepted_pdws(frame.detections)
 
             frame_dict = frame.to_dict()
             band_priors = getattr(controller.state_builder, "ema_activity", np.zeros(CANONICAL_N_BANDS)).tolist()
