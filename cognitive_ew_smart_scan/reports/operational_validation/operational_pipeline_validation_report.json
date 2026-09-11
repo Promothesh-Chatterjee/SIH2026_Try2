@@ -1,0 +1,67 @@
+{
+  "candidate": "Gate-25k-R4.2-alpha020",
+  "checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\scheduler_v2_operational_candidate\\checkpoint_gate_25000_frozen.pt",
+  "overall_validation_status": "PASSED",
+  "scenarios": [
+    {
+      "scenario_id": "config_117",
+      "steps_executed": 1000,
+      "mission_clock_us": 1265000.0,
+      "total_dwells": 1000,
+      "total_hits": 981,
+      "hit_rate_pct": 98.1,
+      "distinct_bands_visited": 17,
+      "active_unsupervised_tracks": 1,
+      "median_intercept_latency_us": 155.078125,
+      "timing_profile_ms": {
+        "mean_step_ms": 7.446210400019481,
+        "p95_step_ms": 11.418624998441372,
+        "max_step_ms": 18.749900002148934,
+        "throughput_steps_per_sec": 134.2965006733336
+      },
+      "invariants_audit": {
+        "clock_monotonicity_violations": 0,
+        "dwell_window_geometry_violations": 0,
+        "ground_truth_leakage_violations": 0,
+        "real_time_budget_satisfied": true
+      },
+      "dwell_modes_distribution": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 0,
+        "LONG_DWELL": 1000,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      }
+    },
+    {
+      "scenario_id": "config_29",
+      "steps_executed": 1000,
+      "mission_clock_us": 1265000.0,
+      "total_dwells": 1000,
+      "total_hits": 602,
+      "hit_rate_pct": 60.199999999999996,
+      "distinct_bands_visited": 36,
+      "active_unsupervised_tracks": 1,
+      "median_intercept_latency_us": 129.9140625,
+      "timing_profile_ms": {
+        "mean_step_ms": 8.094862400055717,
+        "p95_step_ms": 27.1321700000044,
+        "max_step_ms": 107.8854000006686,
+        "throughput_steps_per_sec": 123.53514495726536
+      },
+      "invariants_audit": {
+        "clock_monotonicity_violations": 0,
+        "dwell_window_geometry_violations": 0,
+        "ground_truth_leakage_violations": 0,
+        "real_time_budget_satisfied": true
+      },
+      "dwell_modes_distribution": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 0,
+        "LONG_DWELL": 1000,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      }
+    }
+  ]
+}
