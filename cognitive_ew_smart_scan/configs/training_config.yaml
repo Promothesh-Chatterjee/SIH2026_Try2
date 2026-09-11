@@ -51,6 +51,9 @@ environment:
   time_horizon_us: 30000000.0  # cap scenario ToA; ~30 s spans TSRD scan files
   max_pulses: 50000
   max_steps_per_episode: 1000
+  belief:
+    ema_alpha: 0.30
+    ema_alpha_miss_confirmed: 0.20
 
 # RC-2.9: fixed, reproducible validation scenario set (10 unseen scenarios for generalization gating).
 validation:

@@ -146,7 +146,8 @@ class OperationalReceiverController:
 
     def __init__(
         self,
-        moe_scheduler: SmartScanMoE,
+        scheduler: Any = None,
+        moe_scheduler: Optional[Any] = None,
         receiver_adapter: Optional[ReceiverAdapter] = None,
         clock: Optional[MissionClock] = None,
         state_builder: Optional[OperationalStateBuilder] = None,
@@ -155,7 +156,8 @@ class OperationalReceiverController:
         n_bands: int = CANONICAL_N_BANDS,
         n_modes: int = CANONICAL_N_MODES,
     ) -> None:
-        self.moe_scheduler = moe_scheduler
+        self.scheduler = scheduler if scheduler is not None else moe_scheduler
+        self.moe_scheduler = self.scheduler  # Backward compatibility alias
         self.n_bands = int(n_bands)
         self.n_modes = int(n_modes)
         self.retune_latency_us = float(retune_latency_us)
@@ -200,7 +202,8 @@ class OperationalReceiverController:
         self.receiver_adapter.reset()
         self.state_builder.reset()
         self.emitter_tracker.reset()
-        self.moe_scheduler.reset()
+        if hasattr(self.scheduler, "reset"):
+            self.scheduler.reset()
 
     def start_mission(self, initial_time_us: float = 0.0) -> None:
         """Commence operational closed-loop mission."""
@@ -352,12 +355,20 @@ class OperationalReceiverController:
             effective_obs = self.state_builder.build_state(
                 current_time_us=t_now,
                 active_tracks=self.emitter_tracker.tracks,
-                spatial_tracker=self.moe_scheduler.spatial_tracker,
+                spatial_tracker=getattr(self.scheduler, "spatial_tracker", None),
             )
 
-        # 3. Schedule action via Gate-110k MoE scheduler
-        self.moe_scheduler._simulated_clock_us = t_now
-        action, _, attr = self.moe_scheduler.select_action(effective_obs)
+        # 3. Schedule action via scheduler (DRQN or MoE)
+        if hasattr(self.scheduler, "_simulated_clock_us"):
+            self.scheduler._simulated_clock_us = t_now
+        if hasattr(self.scheduler, "select_action"):
+            action, _, attr = self.scheduler.select_action(effective_obs)
+        elif hasattr(self.scheduler, "act"):
+            action, attr = self.scheduler.act(effective_obs)
+        else:
+            action = self.scheduler.step(effective_obs)
+            attr = {}
+        attr = attr or {}
         action = int(action)
         selected_band = band_of_action(action, self.n_modes)
         selected_mode = mode_of_action(action, self.n_modes)
@@ -392,40 +403,41 @@ class OperationalReceiverController:
                 aoa = p["aoa_deg"]
                 tid = self._associate_pulse_to_track(p)
 
-                # Feed into causal predictors
-                self.moe_scheduler.temporal_predictor.update_from_pulse(
-                    track_id=tid,
-                    toa_us=t_arr,
-                    freq_mhz=f_pulse,
-                    band=selected_band,
-                )
-                if math.isfinite(aoa):
-                    self.moe_scheduler.spatial_tracker.update_from_track(
+                # Feed into causal predictors if present
+                if hasattr(self.scheduler, "temporal_predictor"):
+                    self.scheduler.temporal_predictor.update_from_pulse(
+                        track_id=tid,
+                        toa_us=t_arr,
+                        freq_mhz=f_pulse,
+                        band=selected_band,
+                    )
+                if math.isfinite(aoa) and hasattr(self.scheduler, "spatial_tracker"):
+                    self.scheduler.spatial_tracker.update_from_track(
                         track_id=tid,
                         new_aoa_deg=aoa,
                         current_time_us=t_arr,
                     )
 
-        # Feedback dwell outcome to state builder and MoE scheduler
+        # Feedback dwell outcome to state builder and scheduler
         self.state_builder.record_dwell_outcome(
             band=selected_band,
             hit=hit,
             current_time_us=dwell_end,
             num_pulses=len(detected_pdws),
         )
-        if hasattr(self.moe_scheduler, "update_result"):
+        if hasattr(self.scheduler, "update_result"):
             try:
-                self.moe_scheduler.update_result(
+                self.scheduler.update_result(
                     hit=hit,
                     band=selected_band,
                     detections=detected_pdws,
                     current_time=dwell_end,
                 )
             except TypeError:
-                self.moe_scheduler.update_result(hit=hit, band=selected_band)
+                self.scheduler.update_result(hit=hit, band=selected_band)
 
-        if hasattr(self.moe_scheduler, "update"):
-            self.moe_scheduler.update(action)
+        if hasattr(self.scheduler, "update"):
+            self.scheduler.update(action)
 
         # 7. Construct Standardized Telemetry Frame
         rolling_pd = float(self.total_hits / self.total_dwells) if self.total_dwells > 0 else 0.0

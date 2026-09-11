@@ -39,7 +39,9 @@ from ..models.baseline_suite import build_baseline
 from ..models.drqn_scheduler import DRQNScheduler
 from ..models.smartscan_moe import SmartScanMoE
 from ..telemetry.schema import coerce, shannon_entropy
+from ..training.policy_collapse_detector import PolicyCollapseDetector, CollapseThresholds
 from ..utils.checkpoint_meta import build_train_metadata, current_git_revision, save_state
+from ..evaluation.canonical_metrics import EvaluationManifest, compute_canonical_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -91,9 +93,19 @@ class StagedGateEvaluator:
         self._q_maxs: list[float] = []
         self._grad_norms: list[float] = []
         self._action_sources: list[str] = []  # "thompson", "random", "greedy"
+        self._replay_hit_fractions: list[float] = []
+        self._replay_seq_hit_fractions: list[float] = []
+        self._q_margins: list[float] = []
+        self._q_reg_losses: list[float] = []
+        self._pos_scen_concentrations: list[float] = []
+        self._targeted_exp_fractions: list[float] = []
+        self._underexplored_band_fractions: list[float] = []
         self._optimizer_step_count: int = 0
         self._last_obs_finite: bool = True
         self._last_reward_finite: bool = True
+
+        # Phase 7 Policy-Collapse Detector
+        self.collapse_detector = PolicyCollapseDetector()
 
         # Preload records for validation scenarios to guarantee reproducible evaluation
         self._preloaded_val_records: list[tuple[str, list[dict[str, Any]]]] = []
@@ -136,8 +148,41 @@ class StagedGateEvaluator:
         action_source: str | None = None,
         obs_finite: bool = True,
         reward_finite: bool = True,
+        replay_hit_fraction: float | None = None,
+        replay_seq_hit_fraction: float | None = None,
+        q_margin: float | None = None,
+        q_reg_loss: float | None = None,
+        pos_scen_concentration: float | None = None,
+        targeted_exp_fraction: float | None = None,
+        underexplored_band_fraction: float | None = None,
     ) -> None:
         """Record per-step training signals for machine-checkable gate validation."""
+        if targeted_exp_fraction is not None and float(targeted_exp_fraction) == float(targeted_exp_fraction):
+            if not hasattr(self, "_targeted_exp_fractions"):
+                self._targeted_exp_fractions = []
+            self._targeted_exp_fractions.append(float(targeted_exp_fraction))
+        if underexplored_band_fraction is not None and float(underexplored_band_fraction) == float(underexplored_band_fraction):
+            if not hasattr(self, "_underexplored_band_fractions"):
+                self._underexplored_band_fractions = []
+            self._underexplored_band_fractions.append(float(underexplored_band_fraction))
+        if replay_hit_fraction is not None and float(replay_hit_fraction) == float(replay_hit_fraction):
+            self._replay_hit_fractions.append(float(replay_hit_fraction))
+        if replay_seq_hit_fraction is not None and float(replay_seq_hit_fraction) == float(replay_seq_hit_fraction):
+            if not hasattr(self, "_replay_seq_hit_fractions"):
+                self._replay_seq_hit_fractions = []
+            self._replay_seq_hit_fractions.append(float(replay_seq_hit_fraction))
+        if q_margin is not None and float(q_margin) == float(q_margin):
+            if not hasattr(self, "_q_margins"):
+                self._q_margins = []
+            self._q_margins.append(float(q_margin))
+        if q_reg_loss is not None and float(q_reg_loss) == float(q_reg_loss):
+            if not hasattr(self, "_q_reg_losses"):
+                self._q_reg_losses = []
+            self._q_reg_losses.append(float(q_reg_loss))
+        if pos_scen_concentration is not None and float(pos_scen_concentration) == float(pos_scen_concentration):
+            if not hasattr(self, "_pos_scen_concentrations"):
+                self._pos_scen_concentrations = []
+            self._pos_scen_concentrations.append(float(pos_scen_concentration))
         if td_loss is not None and float(td_loss) == float(td_loss):
             self._td_losses.append(float(td_loss))
             self._optimizer_step_count += 1
@@ -229,11 +274,15 @@ class StagedGateEvaluator:
             for policy_name in target_policies:
                 logger.info("Evaluating %s on scenario %s [%d/%d] (%d steps)...", policy_name, scen_id, scen_idx + 1, len(val_scenarios), n_steps)
                 # Fresh env per policy on identical records with identical seed
-                # Semantic memory explicitly disabled during validation for clean ablation baseline
+                # Reset global RNG seeds per evaluation to guarantee complete policy isolation
+                import random as _py_random
+                _py_random.seed(self.seed)
+                np.random.seed(self.seed)
+                torch.manual_seed(self.seed)
                 val_env_cfg = copy.deepcopy(self.env_config)
                 val_env_cfg["semantic_memory_enabled"] = False
                 env = CognitiveRFScanEnv(val_env_cfg, records=records, seed=self.seed, semantic_memory_path=":memory:")
-                obs, _ = env.reset()
+                obs, _ = env.reset(seed=self.seed)
 
                 agent = build_baseline(
                     policy_name,
@@ -339,33 +388,66 @@ class StagedGateEvaluator:
 
                 fom = env.get_fom()
                 steps_done = max(1, step + 1)
-                intercept_rate = ep_hits / float(steps_done)
-                distinct_bands = int(np.count_nonzero(band_counts))
-
                 empty_escape_rate = float(empty_escapes / max(1, empty_escape_opps)) if empty_escape_opps > 0 else 1.0
                 stale_escape_rate = float(stale_escapes / max(1, stale_escape_opps)) if stale_escape_opps > 0 else 1.0
                 mean_q_margin = float(np.mean(q_margins)) if q_margins else None
 
+                manifest = EvaluationManifest(
+                    scenario_id=scen_id,
+                    seed=self.seed,
+                    episode_steps=steps_done,
+                    checkpoint_file=str(self.parent_checkpoint) if self.parent_checkpoint else None,
+                    total_pulses=len(records),
+                    active_emitters=len(getattr(env.fom, "all_active_emitters", set())),
+                    discovered_emitters=len(getattr(env.fom, "discovered_emitters", set())),
+                    total_interceptions=ep_hits,
+                    total_opportunities=int(fom.get("tp", 0) + fom.get("fn", 0)),
+                    false_alarms=int(fom.get("fp", 0)),
+                    latency_samples_count=len(env.fom.intercept_time_errors),
+                )
+
+                canon = compute_canonical_metrics(
+                    steps_done=steps_done,
+                    ep_hits=ep_hits,
+                    tp=int(fom.get("tp", 0)),
+                    fn=int(fom.get("fn", 0)),
+                    fp=int(fom.get("fp", 0)),
+                    tn=int(fom.get("tn", 0)),
+                    band_counts=band_counts,
+                    action_counts=action_counts,
+                    mode_counts=mode_counts,
+                    time_errors_us=env.fom.intercept_time_errors,
+                    discovered_emitters=list(getattr(env.fom, "discovered_emitters", set())),
+                    all_active_emitters=list(getattr(env.fom, "all_active_emitters", set())),
+                    selected_active_opportunities=int(fom.get("selected_active_opportunities", 0)),
+                    spectrum_active_opportunities=int(fom.get("spectrum_active_opportunities", 0)),
+                    total_reward=float(ep_reward),
+                    manifest=manifest,
+                )
+
                 res = {
                     "scenario_id": scen_id,
                     "policy": policy_name,
-                    "intercept_rate": intercept_rate,
-                    "hits": ep_hits,
-                    "steps": steps_done,
-                    "coverage": float(fom.get("band_selection_coverage", 0.0) or 0.0),
-                    "discovery_rate": float(fom.get("discovery_rate", 0.0) or 0.0),
-                    "distinct_bands": distinct_bands,
+                    "intercept_rate": canon.interception_rate,
+                    "hits": canon.hits,
+                    "steps": canon.steps,
+                    "coverage": canon.operational_coverage,
+                    "discovery_rate": canon.discovery_rate,
+                    "distinct_bands": canon.distinct_bands,
                     "empty_band_escape_rate": empty_escape_rate,
                     "stale_band_escape_rate": stale_escape_rate,
                     "q_margin": mean_q_margin,
-                    "action_entropy": shannon_entropy(action_counts),
-                    "avg_intercept_time_us": fom.get("avg_intercept_time_error_us"),
-                    "decision_level_pd": fom.get("Pd"),
-                    "pfa": fom.get("Pfa"),
-                    "avg_reward": float(ep_reward / steps_done),
-                    "total_reward": float(ep_reward),
-                    "band_entropy": shannon_entropy(band_counts),
-                    "mode_entropy": shannon_entropy(mode_counts),
+                    "action_entropy": canon.action_entropy,
+                    "avg_intercept_time_us": canon.avg_intercept_time_error_us,
+                    "decision_level_pd": canon.pd,
+                    "pfa": canon.pfa,
+                    "avg_reward": canon.avg_reward,
+                    "total_reward": canon.total_reward,
+                    "band_entropy": canon.band_entropy,
+                    "mode_entropy": canon.mode_entropy,
+                    "top_band_fraction": canon.top_band_fraction,
+                    "top_action_fraction": canon.top_action_fraction,
+                    "manifest": manifest.to_dict(),
                 }
                 all_policy_results[policy_name].append(res)
 
@@ -547,7 +629,7 @@ class StagedGateEvaluator:
             else:
                 verdict = "PASS"
                 notes = f"Gate 10k PASS. Autonomous DRQN cognitive behavior confirmed: empty escape {empty_escape_val*100:.1f}%, distinct bands {drqn_p.get('distinct_bands', 0):.1f}/36. Ready for Phase 5 scaling."
-        elif gate == 25000:
+        elif gate in (20000, 20500):
             drqn_p = policies_agg.get("drqn", {})
             moe_p = policies_agg.get("full_moe", {})
             no_band_lock = bool(moe_p.get("distinct_bands", 0) >= 18)
@@ -557,73 +639,49 @@ class StagedGateEvaluator:
 
             if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward", "no_band_locking"))):
                 verdict = "STOP"
-                notes = "Integrity or band-locking failure at Gate 25k."
+                notes = f"Integrity or band-locking failure at Gate {gate}."
             elif drqn_p.get("distinct_bands", 0) <= 2:
                 verdict = "INVESTIGATE"
-                notes = "Integrity passed. DRQN policy shows initial value differentiation but standalone band expansion remains narrow (<= 2 bands); MoE maintains 36/36 band coverage."
+                notes = f"Gate {gate}: DRQN policy shows initial value differentiation but standalone band expansion remains narrow (<= 2 bands); MoE maintains 36/36 band coverage."
             else:
                 verdict = "PASS"
-                notes = f"Gate 25k PASS. DRQN expanded distinct bands to {drqn_p.get('distinct_bands', 0):.1f}/36 with intercept rate {drqn_p.get('intercept_rate', 0)*100:.2f}%. Ready for promotion to 50k."
-        elif gate == 50000:
+                notes = f"Gate {gate} PASS. DRQN expanded distinct bands to {drqn_p.get('distinct_bands', 0):.1f}/36 with intercept rate {drqn_p.get('intercept_rate', 0)*100:.2f}%."
+        elif gate in (25000, 25500, 30000, 35000, 50000, 75000, 100000):
             drqn_p = policies_agg.get("drqn", {})
             moe_p = policies_agg.get("full_moe", {})
             rand_p = policies_agg.get("random", {})
-            pass_conditions["no_band_locking"] = bool(moe_p.get("distinct_bands", 0) >= 18)
-            pass_conditions["baseline_eval_completed"] = bool(policies_agg)
-            # Primary KPI checks for Gate 50k: Intercept rate progression and escape rates
             ir_drqn = float(drqn_p.get("intercept_rate", 0.0))
             ir_rand = float(rand_p.get("intercept_rate", 0.0))
-            empty_esc = float(drqn_p.get("empty_band_escape_rate", 0.0))
-            pass_conditions["drqn_improving"] = bool(ir_drqn >= 0.02)
-            pass_conditions["escape_rates_healthy"] = bool(empty_esc >= 0.70)
+            distinct_b = float(drqn_p.get("distinct_bands", 0.0))
+            pd_val = float(drqn_p.get("decision_level_pd", 0.0) or 0.0)
+            pfa_val = float(drqn_p.get("pfa", 0.0) or 0.0)
 
-            if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward", "no_band_locking"))):
-                verdict = "STOP"
-                notes = "Integrity or band-locking failure at Gate 50k."
-            elif ir_drqn < ir_rand:
-                verdict = "INVESTIGATE"
-                notes = f"Gate 50k: DRQN intercept rate ({ir_drqn*100:.2f}%) remains below Random ({ir_rand*100:.2f}%)."
-            else:
-                verdict = "PASS"
-                notes = f"Gate 50k PASS: DRQN intercept rate {ir_drqn*100:.2f}% (vs Random {ir_rand*100:.2f}%), empty escape {empty_esc*100:.1f}%. Ready for 100k."
-        elif gate == 75000:
-            drqn_p = policies_agg.get("drqn", {})
-            moe_p = policies_agg.get("full_moe", {})
-            rand_p = policies_agg.get("random", {})
-            pass_conditions["no_band_locking"] = bool(moe_p.get("distinct_bands", 0) >= 18)
+            # Strict Operational Criteria (Phase 9B-R4 Gate 25k/30k):
+            # distinct bands >= 12 (>= 12 for 35k), IR > 20%, Pd >= 0.70, Pfa <= 0.10
+            min_bands_required = 12.0
+            pass_conditions["no_band_locking"] = bool(distinct_b >= min_bands_required)
             pass_conditions["baseline_eval_completed"] = bool(policies_agg)
-            ir_moe = float(moe_p.get("intercept_rate", 0.0))
-            ir_drqn = float(drqn_p.get("intercept_rate", 0.0))
-            fb_rate = float(autonomy_agg.get("fallback_rate_pct", 100.0))
-            pass_conditions["moe_improving"] = bool(ir_moe >= 0.0998)
-            pass_conditions["drqn_improving"] = bool(ir_drqn > 0.0073)
+            pass_conditions["drqn_ir_operational"] = bool(ir_drqn >= 0.20)
+            pass_conditions["pd_operational"] = bool(pd_val >= 0.70)
+            pass_conditions["pfa_operational"] = bool(pfa_val <= 0.10)
 
-            if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward", "no_band_locking"))):
+            if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward"))):
                 verdict = "STOP"
-                notes = "Integrity or band-locking failure at Gate 75k."
-            elif ir_moe < 0.0998 or ir_drqn <= 0.0073:
+                notes = f"Numerical or training integrity failure at Gate {gate}."
+            elif not (pass_conditions["no_band_locking"] and pass_conditions["drqn_ir_operational"] and pass_conditions["pd_operational"] and pass_conditions["pfa_operational"]):
                 verdict = "INVESTIGATE"
-                notes = f"Gate 75k: MoE intercept rate ({ir_moe*100:.2f}%) or DRQN ({ir_drqn*100:.2f}%) below promotion threshold."
+                notes = (
+                    f"Gate {gate} Operational Check: IR={ir_drqn*100:.2f}% (target >=20%), "
+                    f"Bands={distinct_b:.1f}/36 (target >={min_bands_required:.0f}), Pd={pd_val*100:.1f}% (target >=70%), "
+                    f"Pfa={pfa_val*100:.1f}% (target <=10%)."
+                )
             else:
                 verdict = "PASS"
-                notes = f"Gate 75k PASS: MoE intercept {ir_moe*100:.2f}% (>9.98%), DRQN {ir_drqn*100:.2f}% (>0.73%), Fallback {fb_rate:.1f}%. Ready for 100k review."
-        elif gate == 100000:
-            drqn_p = policies_agg.get("drqn", {})
-            moe_p = policies_agg.get("full_moe", {})
-            rand_p = policies_agg.get("random", {})
-            pass_conditions["no_band_locking"] = bool(moe_p.get("distinct_bands", 0) >= 18)
-            pass_conditions["baseline_eval_completed"] = bool(policies_agg)
-            pass_conditions["drqn_beats_random"] = bool(drqn_p.get("intercept_rate", 0) >= rand_p.get("intercept_rate", 0))
+                notes = (
+                    f"Gate {gate} PASS: Strict operational gate satisfied (IR={ir_drqn*100:.2f}%, "
+                    f"Bands={distinct_b:.1f}/36, Pd={pd_val*100:.1f}%, Pfa={pfa_val*100:.1f}%)."
+                )
 
-            if not (all(pass_conditions[k] for k in ("loss_finite", "q_values_finite", "gradients_finite", "no_nan_inf_obs", "no_nan_inf_reward", "no_band_locking"))):
-                verdict = "STOP"
-                notes = "Integrity or band-locking failure at Gate 100k."
-            elif not pass_conditions["drqn_beats_random"]:
-                verdict = "INVESTIGATE"
-                notes = "DRQN intercept rate does not exceed Random baseline at 100k exploitation onset."
-            else:
-                verdict = "PASS"
-                notes = f"Gate 100k PASS. DRQN exceeds Random baseline ({drqn_p.get('intercept_rate', 0)*100:.2f}% vs {rand_p.get('intercept_rate', 0)*100:.2f}%). Ready for promotion to 300k."
         elif gate == 200000:
             drqn_p = policies_agg.get("drqn", {})
             rand_p = policies_agg.get("random", {})
@@ -662,9 +720,67 @@ class StagedGateEvaluator:
             verdict = "PASS" if all(pass_conditions.values()) else "STOP"
             notes = f"Gate {gate} evaluated."
 
-        # 4. Save Checkpoint
+        # Phase 7 Policy-Collapse Detector Evaluation on Gate Results
+        drqn_p = policies_agg.get("drqn", {})
+        scen_breakdown = drqn_p.get("scenario_breakdown", [])
+        scen_irs = {s.get("scenario_id", f"scen_{i}"): float(s.get("intercept_rate", 0.0)) for i, s in enumerate(scen_breakdown)}
+        agile_scen_ids = ("config_119", "config_241", "config_29", "config_195")
+        sparse_scen_ids = ("config_143", "config_119")
+        agile_irs = [v for k, v in scen_irs.items() if any(k.startswith(aid) for aid in agile_scen_ids)]
+        sparse_irs = [v for k, v in scen_irs.items() if any(k.startswith(sid) for sid in sparse_scen_ids)]
+
+        collapse_diag = self.collapse_detector.evaluate_eval_run(
+            step=global_step,
+            distinct_bands=float(drqn_p.get("distinct_bands", 0.0)),
+            top_band_fraction=float(max([s.get("top_band_fraction", 0.0) for s in scen_breakdown]) if scen_breakdown and "top_band_fraction" in scen_breakdown[0] else 0.0),
+            top_action_fraction=0.0,
+            action_entropy=float(drqn_p.get("action_entropy", 0.0)),
+            scenario_irs=scen_irs,
+            agile_ir=float(np.mean(agile_irs)) if agile_irs else None,
+            sparse_ir=float(np.mean(sparse_irs)) if sparse_irs else None,
+            q_max=max_q_val if np.isfinite(max_q_val) else None,
+            q_std=mean_q_std if np.isfinite(mean_q_std) else None,
+            td_error_p90=float(np.percentile(td_loss_recent, 90)) if td_loss_recent else None,
+            pd=float(drqn_p.get("decision_level_pd", 0.0) or 0.0),
+            pfa=float(drqn_p.get("pfa", 0.0) or 0.0),
+            latency_us=float(drqn_p.get("avg_intercept_time_us", 0.0) or 0.0),
+        )
+
+        checkpoint_tag = collapse_diag.tag
+        if collapse_diag.severity == "CRITICAL":
+            logger.warning("POLICY COLLAPSE DETECTED at step %d: %s", global_step, collapse_diag.reasons)
+            if verdict == "PASS":
+                verdict = "INVESTIGATE"
+                notes = f"Integrity ok, but Policy-Collapse Detector flagged CRITICAL: {'; '.join(collapse_diag.reasons[:3])}"
+        elif collapse_diag.severity == "WARNING":
+            logger.info("POLICY COLLAPSE WARNING at step %d: %s", global_step, collapse_diag.reasons)
+
+        # Compute Phase 9B Composite Generalization Score
+        # Score = IR_overall + 0.5*IR_agile + 0.5*IR_sparse + 0.25*IR_worst + 0.1*DR - 0.0005*Latency_us
+        # All IR and DR values are strictly in fractions [0, 1]
+        ir_overall_f = float(drqn_p.get("intercept_rate", 0.0))
+        ir_agile_f = float(np.mean(agile_irs)) if agile_irs else ir_overall_f
+        ir_sparse_f = float(np.mean(sparse_irs)) if sparse_irs else ir_overall_f
+        ir_worst_f = float(min(scen_irs.values())) if scen_irs else 0.0
+        dr_f = float(drqn_p.get("discovery_rate", 0.0))
+        lat_us_val = float(drqn_p.get("avg_intercept_time_us", 0.0) or 0.0)
+
+        composite_score = (
+            ir_overall_f
+            + 0.5 * ir_agile_f
+            + 0.5 * ir_sparse_f
+            + 0.25 * ir_worst_f
+            + 0.10 * dr_f
+            - 0.0005 * lat_us_val
+        )
+
+        # 4. Save Checkpoint (Ensuring frozen reference baseline is never overwritten)
         ckpt_name = f"checkpoint_gate_{gate}.pt"
         ckpt_path = self.output_dir / ckpt_name
+        if "scheduler_v2_gate20k" in str(ckpt_path).replace("\\", "/") and gate == 20000:
+            # Strictly protect immutable frozen baseline reference
+            ckpt_path = self.output_dir / "checkpoint_gate_20000_rescue_branch.pt"
+
         n_bands = int(self.env_config.get("n_bands", CANONICAL_N_BANDS))
 
         drqn_cfg = self.model_config.get("drqn_scheduler", {})
@@ -678,7 +794,13 @@ class StagedGateEvaluator:
             n_bands=n_bands,
             arch="DRQNScheduler+SmartScanMoE",
             seed=self.seed,
-            metrics={"gate": gate, "global_step": global_step, "mean_td_loss": mean_td_loss, "q_std": mean_q_std},
+            metrics={
+                "gate": gate,
+                "global_step": global_step,
+                "mean_td_loss": mean_td_loss,
+                "q_std": mean_q_std,
+                "composite_score": float(composite_score),
+            },
             extra={
                 "gate": gate,
                 "global_step": global_step,
@@ -692,6 +814,10 @@ class StagedGateEvaluator:
                 "semantic_memory_reset": self.semantic_memory_reset,
                 "git_revision": git_rev,
                 "verdict": verdict,
+                "checkpoint_tag": checkpoint_tag,
+                "collapse_severity": collapse_diag.severity.value,
+                "collapse_reasons": collapse_diag.reasons,
+                "composite_generalization_score": float(composite_score),
             },
         )
         torch.save({
@@ -707,6 +833,8 @@ class StagedGateEvaluator:
             "reward_baseline": float(reward_baseline),
             "replay_buffer_size": replay_size,
             "optimizer_step_count": opt_steps,
+            "checkpoint_tag": checkpoint_tag,
+            "collapse_diagnostics": collapse_diag.to_dict(),
             "configuration_snapshot": {
                 "model_config": self.model_config,
                 "training_config": self.train_config,
@@ -781,6 +909,17 @@ class StagedGateEvaluator:
             "semantic_memory_reset": self.semantic_memory_reset,
             "verdict": verdict,
             "verdict_notes": notes,
+            "checkpoint_tag": checkpoint_tag,
+            "collapse_diagnostics": collapse_diag.to_dict(),
+            "composite_generalization_score_10scen": float(composite_score),
+            "composite_generalization_components_10scen": {
+                "overall_ir": ir_overall_f,
+                "agile_ir": ir_agile_f,
+                "sparse_ir": ir_sparse_f,
+                "worst_case_ir": ir_worst_f,
+                "discovery_rate": dr_f,
+                "latency_us": lat_us_val,
+            },
             "pass_conditions": pass_conditions,
             "training_diagnostics": {
                 "mean_td_loss": mean_td_loss,
@@ -797,6 +936,14 @@ class StagedGateEvaluator:
                 "thompson_action_fraction": thompson_frac,
                 "random_action_fraction": random_frac,
                 "greedy_action_fraction": greedy_frac,
+                "replay_hit_fraction_recent": float(np.mean(self._replay_hit_fractions[-200:])) if self._replay_hit_fractions else 0.0,
+                "replay_sequence_hit_fraction_recent": float(np.mean(self._replay_seq_hit_fractions[-200:])) if getattr(self, "_replay_seq_hit_fractions", None) else 0.0,
+                "max_q_margin_recent": float(np.max(self._q_margins[-200:])) if getattr(self, "_q_margins", None) and self._q_margins else 0.0,
+                "mean_q_margin_recent": float(np.mean(self._q_margins[-200:])) if getattr(self, "_q_margins", None) and self._q_margins else 0.0,
+                "q_reg_loss_recent": float(np.mean(self._q_reg_losses[-200:])) if getattr(self, "_q_reg_losses", None) and self._q_reg_losses else 0.0,
+                "pos_scen_concentration_recent": float(np.mean(self._pos_scen_concentrations[-200:])) if getattr(self, "_pos_scen_concentrations", None) and self._pos_scen_concentrations else 0.0,
+                "targeted_exploration_fraction_recent": float(np.mean(self._targeted_exp_fractions[-200:])) if getattr(self, "_targeted_exp_fractions", None) and self._targeted_exp_fractions else 0.0,
+                "underexplored_band_fraction_recent": float(np.mean(self._underexplored_band_fractions[-200:])) if getattr(self, "_underexplored_band_fractions", None) and self._underexplored_band_fractions else 0.0,
             },
             "autonomy_telemetry": autonomy_agg,
             "baseline_hierarchy": policies_agg,

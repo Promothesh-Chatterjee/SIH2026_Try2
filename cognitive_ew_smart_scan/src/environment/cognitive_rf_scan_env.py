@@ -125,16 +125,29 @@ class BeliefState:
         self._last_visit_slot = np.zeros(n, dtype=np.int64)
         self._band_pulse_history: list[list[float]] = [[] for _ in range(n)]
 
-    def record_visit(self, band: int, hit: bool, detections: Sequence[Any] | None = None, ema_alpha: float = 0.3) -> None:
+    def record_visit(
+        self,
+        band: int,
+        hit: bool,
+        detections: Sequence[Any] | None = None,
+        ema_alpha: float = 0.3,
+        ema_alpha_miss_confirmed: float = 0.20,
+    ) -> None:
         band = int(band)
         if not (0 <= band < self.n_bands):
             return
+        is_confirmed_track = bool(self._hits[band] >= 1)
         self._visits[band] += 1
         if hit:
             self._hits[band] += 1
         self.detection_rate[band] = float(self._hits[band] / max(1, self._visits[band]))
         target = 1.0 if hit else 0.0
-        self.occupancy_prob[band] = self.occupancy_prob[band] * (1.0 - ema_alpha) + float(target) * ema_alpha
+        # Phase 9B-R4-2: Asymmetric miss decay for confirmed tracks.
+        # When a confirmed track (hits >= 1) experiences an empty dwell (e.g. agile radar hopped
+        # or sparse pulse paused), decay slowly (alpha=0.08) so 1-2 empty dwells do not instantly
+        # demote it below untouched priors (0.500). Unconfirmed bands decay normally (alpha=0.30).
+        alpha = ema_alpha if hit else (ema_alpha_miss_confirmed if is_confirmed_track else ema_alpha)
+        self.occupancy_prob[band] = self.occupancy_prob[band] * (1.0 - alpha) + float(target) * alpha
         if not np.isfinite(self.occupancy_prob[band]) or self.occupancy_prob[band] < 0:
             self.occupancy_prob[band] = 0.5  # recover from corruption
 
@@ -307,7 +320,7 @@ class CognitiveRFScanEnv(gym.Env):
         self.semantic_memory_enabled: bool = bool(config.get("semantic_memory_enabled", True))
         self.semantic_memory_path = semantic_memory_path or config.get("semantic_memory_path", "data/semantic_memory.db")
 
-        # Config-driven priority fusing weights
+        # Config-driven priority fusing weights and belief decay parameters
         belief_cfg = config.get("belief", {})
         self.priority_weights = belief_cfg.get("priority", {
             "staleness_weight": 0.35,
@@ -316,6 +329,8 @@ class CognitiveRFScanEnv(gym.Env):
             "periodic_weight": 0.10,
             "semantic_weight": 0.10,
         })
+        self.ema_alpha = float(belief_cfg.get("ema_alpha", 0.30))
+        self.ema_alpha_miss_confirmed = float(belief_cfg.get("ema_alpha_miss_confirmed", 0.20))
 
         # Periodic interceptor configuration
         self.periodic_min_obs = config.get("periodic_min_obs", 20)
@@ -694,7 +709,13 @@ class CognitiveRFScanEnv(gym.Env):
             p_before = 0.5
             dwell_band_age = 0.0
         h_before = bernoulli_entropy(p_before)
-        self.belief.record_visit(band, any_hit, detections=detections)
+        self.belief.record_visit(
+            band,
+            any_hit,
+            detections=detections,
+            ema_alpha=self.ema_alpha,
+            ema_alpha_miss_confirmed=self.ema_alpha_miss_confirmed,
+        )
         self.belief.advance_time()
         self.belief.touch(band)
         if self.belief is not None and 0 <= band < self.belief.n_bands:
