@@ -71,6 +71,7 @@ class ReceiverTelemetryFrame:
     num_detections: int
     intercept_time_us: Optional[float]
     detections: List[Dict[str, Any]] = field(default_factory=list)
+    band_priorities: List[float] = field(default_factory=list)
 
     # Cognitive Explanation ("WHY THIS BAND?")
     decision_reason: str = "unknown"
@@ -113,6 +114,7 @@ class ReceiverTelemetryFrame:
             "num_detections": self.num_detections,
             "intercept_time_us": self.intercept_time_us,
             "detections": self.detections,
+            "band_priorities": self.band_priorities,
             "cognitive_explanation": {
                 "decision_reason": self.decision_reason,
                 "predicted_track_id": self.predicted_track_id,
@@ -431,6 +433,12 @@ class OperationalReceiverController:
         rolling_pd = float(self.total_hits / self.total_dwells) if self.total_dwells > 0 else 0.0
         rolling_med_lat = float(np.median(self.latencies)) if self.latencies else 0.0
 
+        eff_flat = np.asarray(effective_obs, dtype=np.float32).flatten() if effective_obs is not None else np.zeros(0, dtype=np.float32)
+        if len(eff_flat) >= self.n_bands * 10:
+            band_priorities = [float(eff_flat[b * 10]) for b in range(self.n_bands)]
+        else:
+            band_priorities = [0.0] * self.n_bands
+
         telemetry_frame = ReceiverTelemetryFrame(
             step=self.current_step,
             timestamp_us=dwell_end,
@@ -447,6 +455,7 @@ class OperationalReceiverController:
             num_detections=len(detected_pdws),
             intercept_time_us=intercept_time_us,
             detections=detected_pdws,
+            band_priorities=band_priorities,
             decision_reason=str(attr.get("reason", "DRQN_active")),
             predicted_track_id=str(attr.get("predicted_track_id", "None")),
             predicted_band=int(attr.get("predicted_band", -1)),
