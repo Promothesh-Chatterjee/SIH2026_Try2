@@ -54,7 +54,6 @@ export default function SystemConfig() {
             rows={[
               ["Total spectrum", "0–18,000 MHz", "NOMINAL"],
               ["Bands", "36 × 500 MHz", "NOMINAL"],
-              ["Scenario", "Tactical Alpha (dense multi-emitter)", "LOADED"],
             ]}
           />
         </div>
@@ -78,7 +77,6 @@ export default function SystemConfig() {
               ["Observation", "360-D (36×10)", "READY"],
               ["Actions", "180 (36×5)", "READY"],
               ["Core", "DRQN LSTM-256 ×2 + MoE", "READY"],
-              ["Checkpoint", "scheduler_smoke/best.pt (read-only)", "LOADED"],
             ]}
           />
         </div>
@@ -87,7 +85,6 @@ export default function SystemConfig() {
           <StitchTable
             columns={["Parameter", "Value", "Status"]}
             rows={[
-              ["Corpus", "p3ac_50k Schema 3Y.1", "VALID"],
               ["Dwell buffer", "Last 500 ms", "READY"],
               ["GT isolation", "Strict separation", "ENFORCED"],
             ]}

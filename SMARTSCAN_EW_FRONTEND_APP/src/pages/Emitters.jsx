@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { PanelHead, StitchTable, TruthBanner } from "../components/stitch";
 import { loadLiveTelemetry } from "../services/liveService";
 
 const ARCHETYPE_COLS = [
@@ -72,7 +71,7 @@ export default function Emitters() {
           display: "flex",
           alignItems: "flex-start",
           gap: 8,
-          border: "1px solid #454653",
+          border: "1px solid var(--border, #454653)",
         }}
       >
         <div
@@ -82,31 +81,38 @@ export default function Emitters() {
             top: 0,
             bottom: 0,
             width: 6,
-            background: "#ffb4ab",
+            background: "var(--danger, #ffb4ab)",
             animation: "pulse 2s infinite",
           }}
         />
         <span
           className="material-symbols-outlined"
-          style={{ fontSize: 24, color: "#ffb4ab", flexShrink: 0, marginTop: 2 }}
+          style={{ fontSize: 24, color: "var(--danger, #ffb4ab)", flexShrink: 0, marginTop: 2 }}
         >
           warning
         </span>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span className="st-headline" style={{ color: "#ffb4ab" }}>
+            <span className="st-headline" style={{ color: "var(--danger, #ffb4ab)" }}>
               SIMULATION TRUTH // OPERATOR VIEW ONLY
             </span>
             <span
               className="st-badge"
-              style={{ color: "#690005", background: "#ffb4ab", border: "1px solid #ffb4ab" }}
+              style={{
+                color: "var(--danger-deep, #690005)",
+                background: "var(--danger, #ffb4ab)",
+                border: "1px solid var(--danger, #ffb4ab)",
+                fontWeight: 700,
+              }}
             >
               CLASSIFIED GROUND TRUTH
             </span>
-            <span className="st-tsm" style={{ color: "#908f9e" }}>ORACLE_VER: 5.12.0</span>
+            <span className="st-tsm" style={{ color: "var(--muted, #908f9e)" }}>ORACLE_VER: 5.12.0</span>
           </div>
-          <p className="st-body" style={{ color: "#bac9cc", lineHeight: 1.6 }}>
-            GROUND TRUTH IS STRICTLY OMITTED FROM SCHEDULER OBSERVATION SPACE.
+          <p className="st-body" style={{ color: "var(--text, #e2e2e8)", lineHeight: 1.6 }}>
+            <strong style={{ color: "var(--text-bright, #ffffff)" }}>
+              GROUND TRUTH IS STRICTLY OMITTED FROM SCHEDULER OBSERVATION SPACE.
+            </strong>{" "}
             This console view provides EW directors and telemetry evaluators omniscient
             ground truth telemetry to audit detection latency, de-interleaving precision,
             and track maintenance against active reinforcement-learning dwell agents.
@@ -123,9 +129,9 @@ export default function Emitters() {
           }}
           className="st-tsm"
         >
-          <span style={{ color: "#bdc2ff", fontWeight: 700 }}>TRUTH CHANNEL: ISOLATED</span>
-          <span style={{ color: "#908f9e" }}>LATENCY INJECTION: 0.00ms</span>
-          <span style={{ color: backendOnline ? "#49df9d" : "#ffb4ab" }}>
+          <span style={{ color: "var(--accent, #bdc2ff)", fontWeight: 700 }}>TRUTH CHANNEL: ISOLATED</span>
+          <span style={{ color: "var(--muted, #908f9e)" }}>LATENCY INJECTION: 0.00ms</span>
+          <span style={{ color: backendOnline ? "var(--success, #49df9d)" : "var(--danger, #ffb4ab)" }}>
             {backendOnline ? "SYNC: EPISODE FRAME #14,892" : "SYNC: OFFLINE — NO LIVE FEED"}
           </span>
         </div>
@@ -338,18 +344,22 @@ export default function Emitters() {
               <text fill="#908f9e" fontSize="8" fontFamily="JetBrains Mono" x="12" y="98">270°</text>
             </svg>
             <div
-              className="st-tsm"
+              className="st-tsm st-azimuth-badge"
               style={{
                 position: "absolute",
                 bottom: 8,
                 right: 8,
                 padding: "2px 6px",
-                background: "rgba(30,32,36,0.9)",
+                background: "var(--panel, rgba(30,32,36,0.9))",
+                border: "1px solid var(--border, #454653)",
                 borderRadius: 2,
-                color: "#908f9e",
+                color: "var(--text, #e2e2e8)",
               }}
             >
-              ANTENNA AZIMUTH: <span style={{ color: backendOnline ? "#bdc2ff" : "#908f9e", fontWeight: 700 }}>{backendOnline ? "065° CW" : "— OFFLINE"}</span>
+              ANTENNA AZIMUTH:{" "}
+              <span style={{ color: backendOnline ? "var(--accent, #bdc2ff)" : "var(--muted, #908f9e)", fontWeight: 700 }}>
+                {backendOnline ? "065° CW" : "— OFFLINE"}
+              </span>
             </div>
           </div>
           <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", color: "#908f9e", paddingTop: 4 }}>
