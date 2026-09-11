@@ -26,6 +26,11 @@ function bandToFreqMHz(band) {
   return band * BAND_WIDTH_MHZ + BAND_WIDTH_MHZ / 2;
 }
 
+function floatOr(val, fallback = 0.0) {
+  const n = Number(val);
+  return !isNaN(n) && isFinite(n) ? n : fallback;
+}
+
 function buildDefault() {
   return {
     wsStatus: "OFFLINE",
@@ -35,31 +40,31 @@ function buildDefault() {
     ibwMHz: IBW_MHZ,
     activeBands: 0,
     quietBands: TOTAL_BANDS,
-    currentBand: 16,
-    currentFreqMHz: 8250,
-    currentMode: "—",
-    currentDwellUs: 0,
+    currentBand: 0,
+    currentFreqMHz: 250,
+    currentMode: "0.0",
+    currentDwellUs: 0.0,
     totalHits: 0,
     totalDwells: 0,
-    rollingPd: 0,
-    rollingMedianLatencyUs: 0,
-    missionClockUs: 0,
+    rollingPd: 0.0,
+    rollingMedianLatencyUs: 0.0,
+    missionClockUs: 0.0,
     missionActive: false,
-    bandHeights: Array(TOTAL_BANDS).fill(0).map((_, i) => (i === 16 ? 0.94 : 0.03)),
-    bandStates: Array(TOTAL_BANDS).fill("quiet").map((_, i) => (i === 16 ? "active" : "quiet")),
+    bandHeights: Array(TOTAL_BANDS).fill(0).map((_, i) => (i === 0 ? 0.94 : 0.03)),
+    bandStates: Array(TOTAL_BANDS).fill("quiet").map((_, i) => (i === 0 ? "active" : "quiet")),
     scheduler: {
-      chosenBand: 16,
-      chosenFreqMHz: 8250,
-      scanMode: "—",
-      dwellUs: 0,
-      drqnScore: 0,
-      interceptProbability: 0,
-      predictedEtaUs: 0,
+      chosenBand: 0,
+      chosenFreqMHz: 250,
+      scanMode: "0.0",
+      dwellUs: 0.0,
+      drqnScore: 0.0,
+      interceptProbability: 0.0,
+      predictedEtaUs: 0.0,
       actionSpace: 180,
-      decisionReason: "—",
-      explorationPressure: 0,
-      qMargin: 0,
-      moeGating: 0,
+      decisionReason: "0.0",
+      explorationPressure: 0.0,
+      qMargin: 0.0,
+      moeGating: 0.0,
     },
     dwellHistory: [],
     cognitiveExplanation: {},
@@ -94,8 +99,8 @@ function processTelemetry(raw, missionStat) {
   const band = m.band ?? 0;
   const modeIdx = m.mode ?? 1;
   const modeName = m.mode_name ?? MODE_LABELS[modeIdx] ?? "NORMAL_DWELL";
-  const dwellUs = m.dwell_time_us ?? 0;
-  const clockUs = m.clock_us ?? 0;
+  const dwellUs = floatOr(m.dwell_time_us, floatOr(raw.dwell_time_us, 500.0));
+  const clockUs = m.clock_us ?? raw.clock_us ?? 0;
 
   next.currentBand = band;
   next.currentFreqMHz = bandToFreqMHz(band);
@@ -103,22 +108,22 @@ function processTelemetry(raw, missionStat) {
   next.currentDwellUs = dwellUs;
   if (!missionStat) next.missionClockUs = clockUs;
 
-  const ce = m.cognitive_explanation ?? {};
+  const ce = m.cognitive_explanation ?? raw.cognitive_explanation ?? {};
   next.cognitiveExplanation = ce;
 
-  const sm = m.system_metrics ?? {};
+  const sm = m.system_metrics ?? raw.system_metrics ?? {};
   next.systemMetrics = sm;
   if (!missionStat) {
-    next.rollingPd = sm.rolling_pd ?? 0;
-    next.rollingMedianLatencyUs = sm.rolling_median_latency_us ?? 0;
+    next.rollingPd = sm.rolling_pd ?? raw.rolling_pd ?? m.rolling_pd ?? 0.0;
+    next.rollingMedianLatencyUs = sm.rolling_median_latency_us ?? raw.rolling_median_latency_us ?? m.rolling_median_latency_us ?? 0.0;
   }
 
-  const drqnScore = ce.drqn_score ?? 0;
-  const interceptProb = ce.prediction_confidence ?? 0;
-  const etaUs = ce.predicted_eta_us ?? 0;
-  const reason = ce.decision_reason ?? "—";
-  const explorationPressure = ce.exploration_pressure ?? 0;
-  const qMargin = ce.q_margin ?? 0;
+  const drqnScore = ce.drqn_score ?? m.drqn_score ?? raw.drqn_score ?? ce.action_score ?? 0.0;
+  const interceptProb = ce.prediction_confidence ?? m.prediction_confidence ?? raw.prediction_confidence ?? 0.0;
+  const etaUs = ce.predicted_eta_us ?? m.predicted_eta_us ?? raw.predicted_eta_us ?? ce.eta_us ?? 0.0;
+  const reason = ce.decision_reason ?? m.decision_reason ?? raw.decision_reason ?? ce.reason ?? "DRQN Cognitive Policy";
+  const explorationPressure = ce.exploration_pressure ?? m.exploration_pressure ?? raw.exploration_pressure ?? 0.0;
+  const qMargin = ce.q_margin ?? m.q_margin ?? raw.q_margin ?? 0.0;
 
   next.scheduler = {
     chosenBand: band,
@@ -132,7 +137,7 @@ function processTelemetry(raw, missionStat) {
     decisionReason: reason,
     explorationPressure: explorationPressure,
     qMargin: qMargin,
-    moeGating: 1 - explorationPressure,
+    moeGating: Math.max(0.0, 1.0 - explorationPressure),
   };
 
   // Each time show only the band the receiver is tuned into

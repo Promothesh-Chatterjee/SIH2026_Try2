@@ -12,15 +12,18 @@ import { useOverviewTelemetry } from "../services/useOverviewTelemetry";
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function pct(v) {
-  return `${(Number(v) * 100).toFixed(1)}%`;
+  const n = Number(v);
+  return !isNaN(n) && isFinite(n) ? `${(n * 100).toFixed(1)}%` : "0.0%";
 }
 
 function fmtUs(us) {
-  return Number(us) > 0 ? `${Number(us).toFixed(0)} µs` : "—";
+  const n = Number(us);
+  return !isNaN(n) && isFinite(n) ? `${n.toFixed(0)} µs` : "0.0 µs";
 }
 
 function fmtScore(v) {
-  return Number(v) > 0 ? Number(v).toFixed(3) : "—";
+  const n = Number(v);
+  return !isNaN(n) && isFinite(n) ? n.toFixed(3) : "0.000";
 }
 
 // Connection status pill
@@ -70,12 +73,12 @@ function SchedulerPanel({ scheduler, live, decisionReason, moeGating }) {
   const rows = [
     [
       "CHOSEN TARGET",
-      `BAND ${Number(scheduler.chosenBand) + 1} (${scheduler.chosenFreqMHz.toLocaleString()} MHz)`,
+      live ? `BAND ${Number(scheduler.chosenBand) + 1} (${scheduler.chosenFreqMHz.toLocaleString()} MHz)` : "BAND 0.0",
       "#bdc2ff",
     ],
     [
       "SCAN MODE",
-      `${scheduler.scanMode} (${Number(scheduler.dwellUs).toFixed(0)} µs)`,
+      live ? `${scheduler.scanMode} (${Number(scheduler.dwellUs).toFixed(0)} µs)` : "0.0 (0.0 µs)",
       "#96ccff",
       true,
     ],
@@ -83,10 +86,10 @@ function SchedulerPanel({ scheduler, live, decisionReason, moeGating }) {
     ["INTERCEPT PROBABILITY", pct(scheduler.interceptProbability), "#e2e2e8"],
     [
       "PREDICTED ETA",
-      scheduler.predictedEtaUs > 0 ? fmtUs(scheduler.predictedEtaUs) : "—",
+      scheduler.predictedEtaUs > 0 ? fmtUs(scheduler.predictedEtaUs) : "0.0 µs",
       "#e2e2e8",
     ],
-    ["ACTION SPACE", String(scheduler.actionSpace), "#e2e2e8"],
+    ["ACTION SPACE", String(scheduler.actionSpace ?? 180), "#e2e2e8"],
   ];
 
   return (
@@ -129,7 +132,7 @@ function SchedulerPanel({ scheduler, live, decisionReason, moeGating }) {
         style={{ display: "flex", justifyContent: "space-between", color: "#908f9e" }}
       >
         <span className="st-headline">REASONING & UTILITY DECOMPOSITION</span>
-        <span>MoE GATING {live ? (Number(moeGating) * 100).toFixed(0) : "—"}%</span>
+        <span>MoE GATING {live ? (Number(moeGating) * 100).toFixed(0) : "0.0"}%</span>
       </div>
       <div
         style={{
@@ -143,12 +146,12 @@ function SchedulerPanel({ scheduler, live, decisionReason, moeGating }) {
       >
         <div className="st-body" style={{ color: "#c6c5d5" }}>
           <strong style={{ color: "#e2e2e8" }}>Decision Reason: </strong>
-          <CmdBadge color="#bdc2ff">{live ? decisionReason : "—"}</CmdBadge>
+          <CmdBadge color="#bdc2ff">{live && decisionReason && decisionReason !== "—" ? decisionReason : "0.0"}</CmdBadge>
         </div>
         <div className="st-body" style={{ color: "#c6c5d5" }}>
           <strong style={{ color: "#e2e2e8" }}>Exploration Pressure: </strong>
           <strong style={{ color: "#96ccff" }}>
-            {live ? `${(Number(scheduler.explorationPressure) * 100).toFixed(1)}%` : "—"}
+            {live ? `${(Number(scheduler.explorationPressure) * 100).toFixed(1)}%` : "0.0%"}
           </strong>
           {live && (
             <div
@@ -169,7 +172,7 @@ function SchedulerPanel({ scheduler, live, decisionReason, moeGating }) {
         <div className="st-body" style={{ color: "#c6c5d5" }}>
           <strong style={{ color: "#e2e2e8" }}>Q Margin: </strong>
           <strong style={{ color: "#49df9d" }}>
-            {live ? Number(scheduler.qMargin).toFixed(4) : "—"}
+            {live ? Number(scheduler.qMargin).toFixed(4) : "0.0000"}
           </strong>
         </div>
       </div>
@@ -188,7 +191,7 @@ function SchedulerPanel({ scheduler, live, decisionReason, moeGating }) {
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
           <span>MoE ACTIVE WEIGHT</span>
           <strong style={{ color: "#bdc2ff" }}>
-            {live ? `W: ${Number(moeGating).toFixed(2)}` : "—"}
+            {live ? `W: ${Number(moeGating).toFixed(2)}` : "0.00"}
           </strong>
         </div>
         <div style={{ height: 6, background: "#333539", marginTop: 2 }}>
@@ -204,7 +207,7 @@ function SchedulerPanel({ scheduler, live, decisionReason, moeGating }) {
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
           <span>EXPLORATION WEIGHT</span>
           <strong style={{ color: "#96ccff" }}>
-            {live ? `W: ${Number(scheduler.explorationPressure).toFixed(2)}` : "—"}
+            {live ? `W: ${Number(scheduler.explorationPressure).toFixed(2)}` : "0.00"}
           </strong>
         </div>
         <div style={{ height: 6, background: "#333539", marginTop: 2 }}>
@@ -352,27 +355,27 @@ export default function MissionOverview() {
         <KpiCard
           label="ACTIVE BANDS"
           icon="sensors"
-          value={live ? String(activeBands) : "—"}
+          value={live ? String(activeBands) : "0.0"}
           unit="/ 36"
-          footLeft={live ? `${Math.round((activeBands / 36) * 100)}% OCCUPIED` : "AWAITING DATA"}
-          footRight={live ? `${quietBands} QUIET` : "—"}
+          footLeft={live ? `${Math.round((activeBands / 36) * 100)}% OCCUPIED` : "0.0% OCCUPIED"}
+          footRight={live ? `${quietBands} QUIET` : "0.0"}
           valueColor="#49df9d"
         />
         <KpiCard
           label="CURRENT TUNE"
           icon="file_download_done"
-          value={live ? freqLabel : "—"}
+          value={live ? freqLabel : "0.0 MHz"}
           unit=""
-          footLeft={live ? bandLabel : "—"}
-          footRight={live ? ibwRange : "—"}
+          footLeft={live ? bandLabel : "B0"}
+          footRight={live ? ibwRange : "0.0 MHz"}
           valueColor="#bdc2ff"
         />
         <KpiCard
           label="TOTAL HITS"
           icon="grain"
-          value={live ? totalHits.toLocaleString() : "—"}
+          value={live ? totalHits.toLocaleString() : "0.0"}
           unit="PULSES"
-          footLeft={live ? `DWELLS: ${totalDwells}` : "—"}
+          footLeft={live ? `DWELLS: ${totalDwells}` : "DWELLS: 0.0"}
           footRight="CONFIRMED"
           valueColor="#e2e2e8"
         />
@@ -380,9 +383,9 @@ export default function MissionOverview() {
         <KpiCard
           label="INTERCEPT RATE (Pd)"
           icon="verified"
-          value={live ? pct(rollingPd) : "—"}
+          value={live ? pct(rollingPd) : "0.0%"}
           unit="INSTANT"
-          footLeft={live ? `LAT: ${Number(rollingMedianLatencyUs).toFixed(0)} µs` : "—"}
+          footLeft={live ? `LAT: ${Number(rollingMedianLatencyUs).toFixed(0)} µs` : "LAT: 0.0 µs"}
           footRight="ROLLING WINDOW"
           valueColor="#6afcb8"
         />
@@ -390,17 +393,17 @@ export default function MissionOverview() {
         <KpiCard
           label="SESSION AVG Pd"
           icon="analytics"
-          value={totalDwells > 0 ? pct(sessionAvgPd) : "—"}
+          value={totalDwells > 0 ? pct(sessionAvgPd) : "0.0%"}
           unit="AVG"
-          footLeft={totalDwells > 0 ? `${totalHits} HITS / ${totalDwells}` : "NO SESSION YET"}
-          footRight={sessionEnded ? "FINAL ✓" : missionActive ? "LIVE ●" : "—"}
+          footLeft={totalDwells > 0 ? `${totalHits} HITS / ${totalDwells}` : "0.0 HITS / 0.0"}
+          footRight={sessionEnded ? "FINAL ✓" : missionActive ? "LIVE ●" : "0.0"}
           valueColor={sessionEnded ? "#49df9d" : "#f59e0b"}
         />
         <KpiCard
           label="CURRENT MODE"
           icon="neurology"
-          value={live ? currentMode : "—"}
-          unit={live ? `${Number(currentDwellUs).toFixed(0)} µs` : ""}
+          value={live ? currentMode : "0.0"}
+          unit={live ? `${Number(currentDwellUs).toFixed(0)} µs` : "0.0 µs"}
           footLeft="SCHED: DRQN"
           footRight="PRIO: TIER-1"
           valueColor="#96ccff"

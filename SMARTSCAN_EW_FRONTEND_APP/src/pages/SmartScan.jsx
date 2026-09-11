@@ -114,9 +114,9 @@ export default function SmartScan() {
       return {
         band: liveTelemetry.band,
         mode: liveTelemetry.modeName ?? "NORMAL_DWELL",
-        score: liveTelemetry.cognitiveExplanation?.drqn_score ?? 0.89,
-        probability: liveTelemetry.cognitiveExplanation?.prediction_confidence ?? 0.85,
-        timeUs: liveTelemetry.cognitiveExplanation?.predicted_eta_us > 0 ? liveTelemetry.cognitiveExplanation.predicted_eta_us : 50,
+        score: Number(liveTelemetry.cognitiveExplanation?.drqn_score ?? liveTelemetry.drqn_score ?? 0.0),
+        probability: Number(liveTelemetry.cognitiveExplanation?.prediction_confidence ?? liveTelemetry.prediction_confidence ?? 0.0),
+        timeUs: Math.max(0, Number(liveTelemetry.cognitiveExplanation?.predicted_eta_us ?? liveTelemetry.predicted_eta_us ?? 0.0)),
       };
     }
     return MOCK_ACTIONS.find((item) => item.band === selectedBand) ?? MOCK_ACTIONS[0];
