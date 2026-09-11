@@ -52,24 +52,28 @@ class OperationalStateBuilder:
         self,
         n_bands: int = CANONICAL_N_BANDS,
         max_revisit_age_us: float = 50_000.0,
-        ema_alpha: float = 0.25,
+        ema_alpha: float = 0.30,
+        ema_alpha_miss_confirmed: float = 0.20,
     ) -> None:
         self.n_bands = int(n_bands)
         self.n_features = CANONICAL_BAND_FEATURES
         self.expected_dim = self.n_bands * self.n_features  # 360
         self.max_revisit_age_us = float(max_revisit_age_us)
         self.ema_alpha = float(ema_alpha)
+        self.ema_alpha_miss_confirmed = float(ema_alpha_miss_confirmed)
 
-        # Internal channel history
-        self.ema_occupancy = np.zeros(self.n_bands, dtype=np.float32)
+        # Per-band rolling channel statistics (initialized to max-entropy prior p=0.5)
+        self.ema_occupancy = np.full(self.n_bands, 0.5, dtype=np.float32)
+        self.revisit_age = np.ones(self.n_bands, dtype=np.int64)
         self.dwell_counts = np.zeros(self.n_bands, dtype=np.int64)
         self.hit_counts = np.zeros(self.n_bands, dtype=np.int64)
         self.miss_counts = np.zeros(self.n_bands, dtype=np.int64)
         self.last_visit_time_us = np.zeros(self.n_bands, dtype=np.float64)
 
     def reset(self) -> None:
-        """Reset internal channel tracking statistics."""
-        self.ema_occupancy.fill(0.0)
+        """Reset internal channel tracking statistics to canonical max-entropy priors."""
+        self.ema_occupancy.fill(0.5)
+        self.revisit_age.fill(1)
         self.dwell_counts.fill(0)
         self.hit_counts.fill(0)
         self.miss_counts.fill(0)
@@ -86,6 +90,7 @@ class OperationalStateBuilder:
         if not (0 <= band < self.n_bands):
             return
 
+        is_confirmed = bool(self.hit_counts[band] >= 1)
         self.dwell_counts[band] += 1
         if hit:
             self.hit_counts[band] += 1
@@ -93,9 +98,12 @@ class OperationalStateBuilder:
             self.ema_occupancy[band] = (1.0 - self.ema_alpha) * self.ema_occupancy[band] + self.ema_alpha * 1.0
         else:
             self.miss_counts[band] += 1
-            # Decay EMA occupancy toward 0.0
-            self.ema_occupancy[band] = (1.0 - self.ema_alpha) * self.ema_occupancy[band]
+            # Asymmetric miss decay: confirmed tracks decay with ema_alpha_miss_confirmed (0.20)
+            eff_alpha = self.ema_alpha_miss_confirmed if is_confirmed else self.ema_alpha
+            self.ema_occupancy[band] = (1.0 - eff_alpha) * self.ema_occupancy[band]
 
+        self.revisit_age += 1
+        self.revisit_age[band] = 0
         self.last_visit_time_us[band] = float(current_time_us)
 
     def build_state(
@@ -116,33 +124,41 @@ class OperationalStateBuilder:
         """
         obs = np.zeros((self.n_bands, self.n_features), dtype=np.float32)
 
-        # 1. Base channel statistics
+        # 1. Base channel statistics (strictly mirroring BeliefState contract)
+        w_st = 0.35
+        w_occ = 0.25
+        w_unc = 0.20
+
         for b in range(self.n_bands):
             dwells = self.dwell_counts[b]
             hits = self.hit_counts[b]
-            misses = self.miss_counts[b]
 
             # [0] Occupancy
-            obs[b, 0] = np.clip(self.ema_occupancy[b], 0.0, 1.0)
+            p = float(np.clip(self.ema_occupancy[b], 0.0, 1.0))
+            obs[b, 0] = p
 
             # [1] Detection rate
-            obs[b, 1] = float(hits / dwells) if dwells > 0 else 0.0
+            det_rate = float(hits / dwells) if dwells > 0 else 0.0
+            obs[b, 1] = det_rate
 
             # [2] Miss rate
-            obs[b, 2] = float(misses / dwells) if dwells > 0 else 1.0
+            obs[b, 2] = 1.0 - det_rate
 
-            # [3] Uncertainty: high if never visited or visited long ago
-            obs[b, 3] = float(np.exp(-0.2 * dwells))
-
-            # [4] Revisit age: normalized time since last tuned
-            if dwells > 0:
-                age = max(0.0, current_time_us - self.last_visit_time_us[b])
-                obs[b, 4] = float(np.clip(age / self.max_revisit_age_us, 0.0, 1.0))
+            # [3] Uncertainty: max-entropy 1.0 initially, evidence-weighted posterior
+            if dwells == 0:
+                unc = 1.0
             else:
-                obs[b, 4] = 1.0
+                raw_unc = 1.0 - abs(2.0 * p - 1.0)
+                ev_factor = 1.0 - float(np.exp(-dwells / 4.0))
+                unc = float((1.0 - ev_factor) * 1.0 + ev_factor * raw_unc)
+            obs[b, 3] = float(np.clip(unc, 0.0, 1.0))
 
-            # [9] Priority baseline (neutral 0.5)
-            obs[b, 9] = 0.5
+            # [4] Revisit age: normalized time/steps since last tuned (cap at 50)
+            norm_age = float(min(float(self.revisit_age[b]), 50.0) / 50.0)
+            obs[b, 4] = norm_age
+
+            # [9] Composite cognitive priority
+            obs[b, 9] = float(np.clip(w_st * norm_age + w_occ * p + w_unc * unc, 0.0, 1.0))
 
         # 2. Track-derived perception features
         if active_tracks:
@@ -196,7 +212,7 @@ class OperationalStateBuilder:
                             sp = spatial_tracker.get_spatial_priority(tid, current_time_us)
                             prios.append(float(sp))
                     if prios:
-                        obs[b, 9] = float(np.clip(np.max(prios), 0.0, 1.0))
+                        obs[b, 9] = float(np.clip(obs[b, 9] + 0.10 * float(np.max(prios)), 0.0, 1.0))
 
         flat_obs = obs.reshape(-1)
         self.validate_state(flat_obs)

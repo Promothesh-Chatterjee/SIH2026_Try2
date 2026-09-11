@@ -14,6 +14,7 @@ import logging
 import os
 import random
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import torch
@@ -69,6 +70,61 @@ _SCORE_KEYS = {
 }
 
 
+class BandDiscoveryTracker:
+    """Per-episode band discovery tracker with quota safeguard for Phase 9B-R3.
+
+    Exploration operates at the 36-band level:
+      - Tracks per-band visit counts N_visits[b] within the current episode.
+      - If any band is below discovery_quota:
+          P(b) proportional to 1 / sqrt(1 + N_visits[b]) among under-quota bands.
+      - Once all bands reach discovery_quota, returns None so exploration falls
+        back cleanly to normal 180-action exploration.
+    """
+
+    def __init__(self, n_bands: int = 36, discovery_quota: int = 2) -> None:
+        self.n_bands = int(n_bands)
+        self.discovery_quota = int(discovery_quota)
+        self.visits = np.zeros(self.n_bands, dtype=np.int64)
+
+    def reset(self) -> None:
+        self.visits.fill(0)
+
+    def record_visit(self, band: int) -> None:
+        if 0 <= band < self.n_bands:
+            self.visits[band] += 1
+
+    def sample_targeted_band(self) -> int | None:
+        """Sample an under-visited band with P(b) ~ 1/sqrt(1 + N_b) if any < quota."""
+        under_quota = np.where(self.visits < self.discovery_quota)[0]
+        if len(under_quota) == 0:
+            return None
+        weights = 1.0 / np.sqrt(1.0 + self.visits[under_quota].astype(np.float64))
+        probs = weights / np.sum(weights)
+        chosen_band = int(np.random.choice(under_quota, p=probs))
+        return chosen_band
+
+    def get_diagnostics(self) -> dict[str, Any]:
+        """Compute band visit statistics for episode/gate telemetry."""
+        unique_bands = int(np.count_nonzero(self.visits))
+        min_v = int(np.min(self.visits))
+        med_v = float(np.median(self.visits))
+        max_v = int(np.max(self.visits))
+        std_v = float(np.std(self.visits))
+        underexplored_count = int(np.sum(self.visits < self.discovery_quota))
+        underexplored_frac = float(underexplored_count / self.n_bands)
+        return {
+            "unique_bands": unique_bands,
+            "min_band_visits": min_v,
+            "median_band_visits": med_v,
+            "max_band_visits": max_v,
+            "band_visit_std": std_v,
+            "underexplored_band_count": underexplored_count,
+            "underexplored_band_fraction": underexplored_frac,
+            "band_visit_counts": self.visits.tolist(),
+        }
+
+
+
 def _do_drqn_update(
     online_drqn: DRQNScheduler,
     target_drqn: DRQNScheduler,
@@ -81,24 +137,23 @@ def _do_drqn_update(
     stats: dict | None = None,
     reward_baseline: float = -0.39,
     baseline_momentum: float = 0.99,
+    target_q_max: float = 100.0,
+    target_q_min: float = -50.0,
+    q_reg_coef: float = 1e-4,
 ) -> float:
     """One Double-DQN BPTT update on a sampled batch. Returns loss value.
+
+    Phase 9B-R2 Q-Value Stabilization:
+      * Target-Q clipping applied strictly after Double-DQN action selection:
+        online(next_state) -> argmax action -> target(next_state)[action] -> clamp -> Bellman target.
+      * Explicit Q^2 regularization: lambda_Q * mean(Q(s, a)^2) across graded transitions
+        to directly discourage online logit runaway.
+      * Telemetry logging: td_loss, q_reg_loss, q_reg_fraction, max_q_margin, pos_scen_concentration.
 
     When ``stats`` (a dict) is provided it is filled with RC-2 learning
     telemetry: TD losses, Q statistics (online vs target network), the gradient
     norm after clipping and the number of graded transitions. The return value
     stays a scalar float so existing callers/tests are unaffected.
-
-    Phase 7/8 target-and-mask semantics:
-      * ``hit_probs`` are binary (1.0 = the action intercepted).
-      * ``intercept_times_us`` are genuine dwell-relative times, NaN for misses
-        and padding — never a fabricated 500µs target.
-      * ``valid_mask`` excludes padded transitions from every loss.
-      * ``burn_in_mask`` marks leading window steps that only warm the LSTM
-        hidden state and are excluded from every loss.
-      * Time Huber is applied only where ``valid_mask & ~burn_in_mask &
-        time_target_valid``; probability BCE and Q loss only where
-        ``valid_mask & ~burn_in_mask``.
     """
     valid = torch.tensor(batch["valid_mask"], dtype=torch.bool, device=device)
     burn_in = torch.tensor(batch["burn_in_mask"], dtype=torch.bool, device=device)
@@ -124,6 +179,11 @@ def _do_drqn_update(
         best_actions = next_q_online.argmax(dim=-1, keepdim=True)
         next_q_target, _, _ = target_drqn(next_obs_b)
         next_q = next_q_target.gather(-1, best_actions).squeeze(-1)
+        # Phase 9B-R2: Target-Q clipping applied after Double-DQN action selection
+        if target_q_max is not None or target_q_min is not None:
+            c_min = -50.0 if target_q_min is None else float(target_q_min)
+            c_max = 100.0 if target_q_max is None else float(target_q_max)
+            next_q = torch.clamp(next_q, min=c_min, max=c_max)
 
     # Track D: reward centering strictly applied to TD target computation
     if loss_mask.any():
@@ -136,7 +196,13 @@ def _do_drqn_update(
     targets = centered_rew_b + gamma * next_q * (1.0 - done_b)
     q_loss = loss_fn(q_chosen[loss_mask], targets[loss_mask].detach())
 
-    loss: torch.Tensor = q_loss
+    # Phase 9B-R2: Q^2 regularization across all actions on graded steps
+    if q_reg_coef > 0.0:
+        q_reg_loss = q_reg_coef * (q_all[loss_mask] ** 2).mean()
+    else:
+        q_reg_loss = torch.zeros((), device=device)
+
+    loss: torch.Tensor = q_loss + q_reg_loss
     aux_loss: torch.Tensor = torch.zeros((), device=device)
     if aux_coef > 0:
         hit_probs = torch.tensor(batch["hit_probs"], dtype=torch.float32, device=device)
@@ -170,17 +236,32 @@ def _do_drqn_update(
         # Double-DQN target values: target-network Q at online-argmax next actions.
         best_next = next_q[loss_mask_t]
         target_table = next_q_target[loss_mask_t]
+
+        # Compute batch Q-margin: top1 - top2 across 180 actions
+        with torch.no_grad():
+            top2_vals = qm.topk(2, dim=-1).values
+            q_margins = top2_vals[:, 0] - top2_vals[:, 1]
+            max_q_margin_val = float(q_margins.max().item())
+            mean_q_margin_val = float(q_margins.mean().item())
+
+        total_loss_f = float(loss.item())
+        q_reg_loss_f = float(q_reg_loss.item())
         # stats["td_loss"] tracks the genuine Bellman Q loss
         stats["td_loss"] = float(q_loss.item())
-        stats["total_loss"] = float(loss.item())
+        stats["q_reg_loss"] = q_reg_loss_f
+        stats["q_reg_ratio"] = (q_reg_loss_f / max(1e-8, total_loss_f))
+        stats["total_loss"] = total_loss_f
         stats["q_loss"] = float(q_loss.item())
         stats["aux_loss"] = float(aux_loss.item())
         stats["mean_td_error"] = float(td_err.mean().item())
         stats["max_td_error"] = float(td_err.max().item())
+        stats["td_error_p90"] = float(np.percentile(td_err.cpu().numpy(), 90))
         stats["mean_q"] = float(qm.mean().item())
         stats["max_q"] = float(qm.max().item())
         stats["min_q"] = float(qm.min().item())
         stats["q_std"] = float(qm.std().item())
+        stats["max_q_margin"] = max_q_margin_val
+        stats["mean_q_margin"] = mean_q_margin_val
         stats["mean_online_q"] = float(qm.mean().item())
         stats["mean_target_q"] = float(best_next.mean().item())
         stats["max_target_q"] = float(target_table.max().item())
@@ -192,6 +273,10 @@ def _do_drqn_update(
         stats["reward_baseline"] = float(updated_baseline)
         stats["centered_reward_mean"] = float(centered_rew_b[loss_mask_t].mean().item())
         stats["raw_reward_mean"] = float(batch_mean)
+        if aux_coef > 0:
+            stats["replay_hit_fraction"] = float(hit_probs[loss_mask_t].mean().item())
+        stats["replay_sequence_hit_fraction"] = float(batch.get("sequence_hit_fraction", 0.0))
+        stats["pos_scen_concentration"] = float(batch.get("pos_scen_concentration", 0.0))
     return float(loss.item())
 
 
@@ -206,6 +291,12 @@ def train_scheduler(
     resume_checkpoint: str | None = None,
     override_epsilon: float | None = None,
     disable_latency_reward: bool = False,
+    exploration_schedule: str = "exponential",
+    target_q_max: float = 100.0,
+    target_q_min: float = -50.0,
+    q_reg_coef: float = 1e-4,
+    targeted_exploration: bool = True,
+    band_discovery_quota: int = 2,
 ) -> None:
     """Full DRQN training with Thompson warmup, BPTT, target network, and MoE eval.
 
@@ -221,6 +312,12 @@ def train_scheduler(
         resume_checkpoint: Path to checkpoint .pt to resume training from.
         override_epsilon: Optional exploration floor override for diagnostic retraining.
         disable_latency_reward: Optional ablation switch to zero out latency bonus.
+        exploration_schedule: Decay schedule for epsilon.
+        target_q_max: Conservative ceiling for target-Q clipping (default 100.0).
+        target_q_min: Floor for target-Q clipping (default -50.0).
+        q_reg_coef: Weight of Q^2 regularization loss (default 1e-4).
+        targeted_exploration: Enable Phase 9B-R3 36-band targeted discovery exploration.
+        band_discovery_quota: Discovery visit quota per band per episode (default 2).
     """
     with open(model_cfg_path) as f:
         full_cfg = yaml.safe_load(f)
@@ -405,7 +502,9 @@ def train_scheduler(
     except Exception as exc:
         logger.info("WandB not available: %s", exc)
 
-    ts_sampler = ThompsonSamplingExplorer(n_bands=n_bands, n_modes=n_modes, seed=seed)
+    action_selection_mode = str(drqn_cfg.get("action_selection_mode", sched_cfg.get("action_selection_mode", "flat_argmax")))
+    ts_explore_modes = bool(sched_cfg.get("thompson_explore_modes", False))
+    ts_sampler = ThompsonSamplingExplorer(n_bands=n_bands, n_modes=n_modes, seed=seed, explore_modes=ts_explore_modes)
     ts_warmup = int(sched_cfg.get("thompson_warmup_steps", 5000))
     eps_start = float(drqn_cfg.get("eps_start", 1.0))
     eps_end = float(drqn_cfg.get("eps_end", 0.05))
@@ -544,8 +643,13 @@ def train_scheduler(
     from .eval_batch import get_or_create_fixed_eval_batch, evaluate_q_diagnostics
     fixed_eval_batch = get_or_create_fixed_eval_batch(data_dir=str(canonical_root), device=device)
 
+    # Phase 9B-R3: Band discovery tracker for targeted exploration
+    band_tracker = BandDiscoveryTracker(n_bands=n_bands, discovery_quota=band_discovery_quota) if targeted_exploration else None
+
     while global_step < total_steps:
         obs, _ = env.reset()
+        if band_tracker is not None:
+            band_tracker.reset()
         obs_arr = np.asarray(obs)
         assert np.all(np.isfinite(obs_arr)), f"Non-finite obs at ep start: {obs_arr[~np.isfinite(obs_arr)]}"
         assert np.all(obs_arr >= 0), f"Negative obs at ep start: band indices {np.where(obs_arr < 0)}"
@@ -571,15 +675,21 @@ def train_scheduler(
             "drqn_rank": 0.0,
         }}
         ep_q_argmax_band_counts = np.zeros(n_bands, dtype=np.float64)
-        ep_learn = {"n_updates": 0, "td_loss": 0.0, "mean_td_error": 0.0, "max_td_error": -1e9,
-                    "mean_q": 0.0, "max_q": -1e9, "min_q": 1e9, "q_std": 0.0,
+        ep_learn = {"n_updates": 0, "td_loss": 0.0, "q_reg_loss": 0.0, "mean_td_error": 0.0, "max_td_error": -1e9,
+                    "mean_q": 0.0, "max_q": -1e9, "min_q": 1e9, "q_std": 0.0, "max_q_margin": 0.0,
                     "mean_online_q": 0.0, "mean_target_q": 0.0, "max_target_q": -1e9,
-                    "target_online_gap": 0.0, "gradient_norm": 0.0}
+                    "target_online_gap": 0.0, "gradient_norm": 0.0,
+                    "replay_hit_frac": 0.0, "replay_seq_hit_frac": 0.0, "pos_scen_concentration": 0.0}
 
         consecutive_empty = 0
         last_band = -1
+        first_interception_step = None
+        empty_transitions = 0
+        positive_transitions = 0
         ep_explore_mode_counts = np.zeros(n_modes, dtype=np.float64)
         ep_greedy_mode_counts = np.zeros(n_modes, dtype=np.float64)
+        ep_targeted_exp_steps = 0
+        ep_uniform_exp_steps = 0
 
         while not done and global_step < total_steps:
             # ---- Action selection ----
@@ -593,6 +703,29 @@ def train_scheduler(
                     pass
             if override_epsilon is not None:
                 eps = float(override_epsilon)
+            elif exploration_schedule == "c_rescue":
+                # Schedule C-Rescue: gentle decay from eps=0.50 at step 20k to eps=0.30 at step 50k, holding floor at 0.30
+                if global_step <= 20000:
+                    eps = 0.50
+                elif global_step <= 50000:
+                    frac = (global_step - 20000) / 30000.0
+                    eps = 0.50 - frac * 0.20
+                else:
+                    eps = 0.30
+            elif exploration_schedule == "slower":
+                eps = eps_end + (eps_start - eps_end) * float(np.exp(-global_step / (eps_decay * 2.0)))
+            elif exploration_schedule == "staged":
+                if global_step < ts_warmup:
+                    eps = eps_start
+                elif global_step <= 25000:
+                    frac = (global_step - ts_warmup) / max(1, 25000 - ts_warmup)
+                    eps = 0.80 - frac * 0.40
+                elif global_step <= 50000:
+                    frac = (global_step - 25000) / 25000.0
+                    eps = 0.40 - frac * 0.25
+                else:
+                    frac = min(1.0, (global_step - 50000) / 50000.0)
+                    eps = 0.15 - frac * (0.15 - eps_end)
             else:
                 eps = eps_end + (eps_start - eps_end) * float(np.exp(-global_step / eps_decay))
             if global_step < ts_warmup:
@@ -600,15 +733,31 @@ def train_scheduler(
                 action = ts_sampler.select_action()
                 moe_attr = None
                 act_source = "thompson"
+                decision_source = "thompson_exploration"
             else:
                 use_ts = False
                 if random.random() < eps:
-                    b_rand = random.randint(0, n_bands - 1)
-                    m_rand = int(np.random.choice([0, 1, 2], p=[0.10, 0.70, 0.20]))
-                    action = b_rand * n_modes + m_rand
+                    targeted_b = band_tracker.sample_targeted_band() if band_tracker is not None else None
+                    if targeted_b is not None:
+                        # Correction 3: Band discovery only — sample mode uniformly from valid exploratory modes (0=SHORT, 1=NORMAL, 2=LONG)
+                        m_rand = random.randrange(min(3, n_modes))
+                        action = int(targeted_b * n_modes + m_rand)
+                        act_source = "targeted_random"
+                        decision_source = "targeted_band_exploration"
+                        ep_targeted_exp_steps += 1
+                    else:
+                        if action_selection_mode == "flat_argmax":
+                            action = random.randrange(n_actions)
+                            m_rand = int(action % n_modes)
+                        else:
+                            b_rand = random.randint(0, n_bands - 1)
+                            m_rand = random.randrange(min(3, n_modes))
+                            action = b_rand * n_modes + m_rand
+                        act_source = "random"
+                        decision_source = "epsilon_exploration"
+                        ep_uniform_exp_steps += 1
                     ep_explore_mode_counts[m_rand] += 1
                     moe_attr = None
-                    act_source = "random"
                 else:
                     online_drqn.eval()
                     with torch.inference_mode():
@@ -617,9 +766,9 @@ def train_scheduler(
                         action, hidden = online_drqn.act(
                             obs_t,
                             hidden,
-                            mode_selection="band_first_decoupled",
+                            mode_selection=action_selection_mode,
                             consecutive_empty=consecutive_empty,
-                            tau=0.15,
+                            tau=0.15 if action_selection_mode == "band_first_decoupled" else 0.0,
                         )
                         ep_greedy_mode_counts[int(action % n_modes)] += 1
                         # Diagnostic MoE query for passive telemetry only (MoE quarantined from action selection)
@@ -629,17 +778,49 @@ def train_scheduler(
                             moe_attr = None
                     online_drqn.train()
                     act_source = "greedy"
+                    decision_source = "ml_exploitation"
 
             # ---- Step env ----
+            dec_telem = getattr(online_drqn, "last_decision_telemetry", None)
+            if act_source in ("thompson", "random", "targeted_random") or dec_telem is None:
+                dec_telem = {
+                    "raw_drqn_action": int(action),
+                    "raw_drqn_band": int(action // n_modes),
+                    "raw_drqn_mode": int(action % n_modes),
+                    "final_action": int(action),
+                    "final_band": int(action // n_modes),
+                    "final_mode": int(action % n_modes),
+                    "action_was_overridden": False,
+                    "override_source": None,
+                    "exploration_source": "targeted_band" if act_source == "targeted_random" else ("epsilon" if act_source == "random" else "thompson"),
+                    "decision_source": decision_source,
+                    "q_selected": dec_telem.get("q_selected") if dec_telem else None,
+                    "q_max": dec_telem.get("q_max") if dec_telem else None,
+                    "q_mean": dec_telem.get("q_mean") if dec_telem else None,
+                    "q_std": dec_telem.get("q_std") if dec_telem else None,
+                }
+            else:
+                if action_selection_mode == "flat_argmax":
+                    assert dec_telem["final_action"] == dec_telem["raw_drqn_action"], (
+                        f"Action override detected in flat_argmax: "
+                        f"final={dec_telem['final_action']} != raw={dec_telem['raw_drqn_action']}"
+                    )
+                    assert not dec_telem["action_was_overridden"], "action_was_overridden is True in flat_argmax"
+                dec_telem["decision_source"] = decision_source
             mode_ctx = {
-                "action_score": float(moe_attr.get("action_score", 1.0)),
-                "reason": str(moe_attr.get("reason", "mode_preset")),
-            } if moe_attr else None
+                "action_score": float(moe_attr.get("action_score", 1.0)) if moe_attr else 1.0,
+                "reason": str(moe_attr.get("reason", "mode_preset")) if moe_attr else "mode_preset",
+                **dec_telem,
+            }
             next_obs, reward, terminated, truncated, info = env.step(action, mode_context=mode_ctx)
+
             done = bool(terminated or truncated)
 
             ep_steps += 1
-            ep_band_counts[int(action // n_modes)] += 1
+            band_idx = int(action // n_modes)
+            ep_band_counts[band_idx] += 1
+            if band_tracker is not None:
+                band_tracker.record_visit(band_idx)
             ep_mode_counts[int(action % n_modes)] += 1
             ep_action_counts[int(action)] += 1
             if moe_attr is not None:
@@ -656,7 +837,11 @@ def train_scheduler(
             hit = bool(info.get("hit", False))
             if hit:
                 consecutive_empty = 0
+                positive_transitions += 1
+                if first_interception_step is None:
+                    first_interception_step = int(ep_steps)
             else:
+                empty_transitions += 1
                 if last_band == band or last_band == -1:
                     consecutive_empty += 1
                 else:
@@ -664,6 +849,11 @@ def train_scheduler(
             last_band = band
 
             ts_sampler.update(action, hit)
+            ep_scen_id = "unknown"
+            if getattr(env, "records", None) and len(env.records) > 0:
+                first_src = getattr(env.records[0], "source_id", "unknown")
+                ep_scen_id = str(first_src).split(":")[-1] if first_src else "unknown"
+
             buffer.add(
                 np.asarray(obs, dtype=np.float32),
                 action,
@@ -672,6 +862,7 @@ def train_scheduler(
                 done,
                 hit_prob=float(info.get("hit_prob", 1.0 if info["hit"] else 0.0)),
                 intercept_time_us=float(info.get("intercept_time_us", float("nan"))),
+                scenario_id=ep_scen_id,
             )
             obs = next_obs
             ep_reward += float(reward)
@@ -682,7 +873,7 @@ def train_scheduler(
             # ---- Learning update ----
             if global_step % update_freq == 0 and buffer.can_sample(batch_size):
                 try:
-                    batch = buffer.sample(batch_size)
+                    batch = buffer.sample(batch_size, target_hit_seq_fraction=0.40)
                     upd_stats: dict = {}
                     loss_val = _do_drqn_update(
                         online_drqn,
@@ -695,23 +886,33 @@ def train_scheduler(
                         stats=upd_stats,
                         reward_baseline=reward_baseline,
                         baseline_momentum=0.99,
+                        target_q_max=target_q_max,
+                        target_q_min=target_q_min,
+                        q_reg_coef=q_reg_coef,
                     )
                     if upd_stats:
                         if "reward_baseline" in upd_stats:
                             reward_baseline = float(upd_stats["reward_baseline"])
                         ep_learn["n_updates"] += 1
                         ep_learn["td_loss"] += float(upd_stats["td_loss"])
+                        ep_learn["q_reg_loss"] += float(upd_stats.get("q_reg_loss", 0.0))
                         ep_learn["mean_td_error"] += float(upd_stats["mean_td_error"])
                         ep_learn["max_td_error"] = max(ep_learn["max_td_error"], float(upd_stats["max_td_error"]))
                         ep_learn["mean_q"] += float(upd_stats["mean_q"])
                         ep_learn["max_q"] = max(ep_learn["max_q"], float(upd_stats["max_q"]))
                         ep_learn["min_q"] = min(ep_learn["min_q"], float(upd_stats["min_q"]))
                         ep_learn["q_std"] += float(upd_stats["q_std"])
+                        ep_learn["max_q_margin"] = max(ep_learn["max_q_margin"], float(upd_stats.get("max_q_margin", 0.0)))
                         ep_learn["mean_online_q"] += float(upd_stats["mean_online_q"])
                         ep_learn["mean_target_q"] += float(upd_stats["mean_target_q"])
                         ep_learn["max_target_q"] = max(ep_learn["max_target_q"], float(upd_stats["max_target_q"]))
                         ep_learn["target_online_gap"] += float(upd_stats["target_online_gap"])
                         ep_learn["gradient_norm"] += float(upd_stats["gradient_norm"])
+                        ep_learn["replay_hit_frac"] += float(upd_stats.get("replay_hit_fraction", 0.0))
+                        ep_learn["replay_seq_hit_frac"] += float(upd_stats.get("replay_sequence_hit_fraction", 0.0))
+                        ep_learn["pos_scen_concentration"] += float(upd_stats.get("pos_scen_concentration", 0.0))
+                        b_diag_step = band_tracker.get_diagnostics() if band_tracker is not None else {}
+                        tot_exp_step = ep_targeted_exp_steps + ep_uniform_exp_steps
                         gate_evaluator.record_step_diagnostics(
                             td_loss=float(upd_stats["td_loss"]),
                             q_mean=float(upd_stats["mean_q"]),
@@ -722,7 +923,15 @@ def train_scheduler(
                             action_source=act_source,
                             obs_finite=bool(np.all(np.isfinite(next_obs))),
                             reward_finite=bool(np.isfinite(reward)),
+                            replay_hit_fraction=float(upd_stats.get("replay_hit_fraction", 0.0)),
+                            replay_seq_hit_fraction=float(upd_stats.get("replay_sequence_hit_fraction", 0.0)),
+                            q_margin=float(upd_stats.get("max_q_margin", 0.0)),
+                            q_reg_loss=float(upd_stats.get("q_reg_loss", 0.0)),
+                            pos_scen_concentration=float(upd_stats.get("pos_scen_concentration", 0.0)),
+                            targeted_exp_fraction=float(ep_targeted_exp_steps / max(1, tot_exp_step)) if tot_exp_step > 0 else 0.0,
+                            underexplored_band_fraction=float(b_diag_step.get("underexplored_band_fraction", 0.0)),
                         )
+
                     if use_wandb and global_step % 100 == 0:
                         try:
                             import wandb
@@ -783,12 +992,32 @@ def train_scheduler(
         intercept_rate = ep_hits / max(1, getattr(env, "current_step", ep_steps))
         exp_tot = max(1e-5, float(np.sum(ep_explore_mode_counts)))
         grd_tot = max(1e-5, float(np.sum(ep_greedy_mode_counts)))
+        n_upd = ep_learn["n_updates"]
+        seq_hit_pct = (ep_learn["replay_seq_hit_frac"] / max(1, n_upd)) * 100.0 if n_upd > 0 else 0.0
+        avg_td_loss = (ep_learn["td_loss"] / max(1, n_upd)) if n_upd > 0 else 0.0
+        avg_q_reg = (ep_learn["q_reg_loss"] / max(1, n_upd)) if n_upd > 0 else 0.0
+        avg_pos_scen = (ep_learn["pos_scen_concentration"] / max(1, n_upd)) * 100.0 if n_upd > 0 else 0.0
+        
+        # Phase 9B-R3 band diagnostics
+        band_diag = band_tracker.get_diagnostics() if band_tracker is not None else {}
+        u_bands = band_diag.get("unique_bands", int(np.count_nonzero(ep_band_counts)))
+        min_bv = band_diag.get("min_band_visits", int(np.min(ep_band_counts)))
+        med_bv = band_diag.get("median_band_visits", float(np.median(ep_band_counts)))
+        max_bv = band_diag.get("max_band_visits", int(np.max(ep_band_counts)))
+        under_cnt = band_diag.get("underexplored_band_count", 0)
+        tot_exp_steps = ep_targeted_exp_steps + ep_uniform_exp_steps
+        target_exp_pct = (ep_targeted_exp_steps / max(1, tot_exp_steps)) * 100.0 if tot_exp_steps > 0 else 0.0
+
         logger.info(
-            "Ep %d | step %d/%d | rew %.2f hits %d ir %.3f eps %.3f | Q-Modes: N=%.1f%% L=%.1f%% S=%.1f%% | Exp-Modes: N=%.1f%% L=%.1f%% S=%.1f%%",
+            "Ep %d | step %d/%d | rew %.2f hits %d ir %.3f eps %.3f | Bands: %d/36 (min=%d, med=%.1f, max=%d, under=%d) | Exp: Target=%.1f%% (%d/%d) | ReplaySeqHit: %.1f%% (PosScenMax: %.1f%%, %d upds) | TD: %.4f QReg: %.4f | QMarginMax: %.3f QMax: %.1f | Q-Modes: N=%.1f%% L=%.1f%% S=%.1f%%",
             episode, global_step, total_steps, ep_reward, ep_hits, intercept_rate, eps,
+            u_bands, min_bv, med_bv, max_bv, under_cnt,
+            target_exp_pct, ep_targeted_exp_steps, tot_exp_steps,
+            seq_hit_pct, avg_pos_scen, n_upd,
+            avg_td_loss, avg_q_reg, ep_learn["max_q_margin"], ep_learn["max_q"],
             (ep_greedy_mode_counts[1] / grd_tot) * 100, (ep_greedy_mode_counts[2] / grd_tot) * 100, (ep_greedy_mode_counts[0] / grd_tot) * 100,
-            (ep_explore_mode_counts[1] / exp_tot) * 100, (ep_explore_mode_counts[2] / exp_tot) * 100, (ep_explore_mode_counts[0] / exp_tot) * 100,
         )
+
         if use_wandb:
             try:
                 import wandb
@@ -817,6 +1046,37 @@ def train_scheduler(
             "pct_correct": fom.get("pct_correct_predictions"),
             "selected_active": fom.get("selected_active_opportunities"),
             "spectrum_active": fom.get("spectrum_active_opportunities"),
+            # Phase 5 environment, agility & sparse-emitter telemetry
+            "unique_bands_visited": int(np.count_nonzero(ep_band_counts)),
+            "unique_actions_visited": int(np.count_nonzero(ep_action_counts)),
+            "unique_modes_visited": int(np.count_nonzero(ep_mode_counts)),
+            "first_interception_step": first_interception_step,
+            "empty_band_transitions": int(empty_transitions),
+            "positive_interception_transitions": int(positive_transitions),
+            # Phase 4 reward-alignment & learning-signal metrics
+            "total_reward": float(ep_reward),
+            "interception_reward": float(fom.get("avg_reward_hit_term", 0.0) * ep_steps),
+            "latency_reward": float(fom.get("avg_reward_latency_bonus", 0.0) * ep_steps),
+            "miss_penalty": float(fom.get("avg_reward_miss_penalty", 0.0) * ep_steps),
+            "false_alarm_penalty": float(fom.get("avg_reward_false_alarm_penalty", 0.0) * ep_steps),
+            "redundant_penalty": float(fom.get("avg_reward_redundant_penalty", 0.0) * ep_steps),
+            "dwell_penalty": float(fom.get("avg_reward_dwell_cost", 0.0) * ep_steps),
+            "frequency_agility_bonus": float(fom.get("avg_reward_prediction_bonus", 0.0) * ep_steps),
+            "reward_component_dominance": bool(
+                ep_hits > 0 and (
+                    abs(fom.get("avg_reward_latency_bonus", 0.0) * ep_steps)
+                    + abs(fom.get("avg_reward_prediction_bonus", 0.0) * ep_steps)
+                    + abs(fom.get("avg_reward_redundant_penalty", 0.0) * ep_steps)
+                    + abs(fom.get("avg_reward_dwell_cost", 0.0) * ep_steps)
+                ) > abs(fom.get("avg_reward_hit_term", 0.0) * ep_steps)
+            ),
+            "cumulative_interceptions": int(ep_hits),
+            "average_intercept_latency_us": avg_intercept,
+            "number_of_unique_emitters_intercepted": int(len(getattr(env, "intercepted_emitters", set()))),
+            "interception_rate": fom.get("avg_intercept_rate"),
+            "average_interception_time_error": avg_intercept,
+            "average_interception_latency": avg_intercept,
+            "cumulative_reward": float(ep_reward),
         }
         # --- RC-2 reward decomposition totals (avg/step * steps) ---
         _avg_to_total = {
@@ -866,9 +1126,20 @@ def train_scheduler(
             "mode_selection_counts": {DWELL_MODES[i]: int(ep_mode_counts[i]) for i in range(n_modes)},
             "mode_selection_frequencies": ({DWELL_MODES[i]: float(ep_mode_counts[i] / n_steps_ep) for i in range(n_modes)}
                                            if n_steps_ep else None),
+            "action_selection_counts": [int(c) for c in ep_action_counts],
+            "top_action_fraction": float(np.max(ep_action_counts) / n_steps_ep) if n_steps_ep else None,
             "action_entropy": shannon_entropy(ep_action_counts),
             "band_entropy": shannon_entropy(ep_band_counts),
             "mode_entropy": shannon_entropy(ep_mode_counts),
+            # Phase 9B-R3 Targeted Discovery Telemetry
+            "min_band_visits": min_bv,
+            "median_band_visits": med_bv,
+            "max_band_visits": max_bv,
+            "band_visit_std": float(np.std(ep_band_counts)),
+            "underexplored_band_count": under_cnt,
+            "targeted_exploration_steps": int(ep_targeted_exp_steps),
+            "uniform_exploration_steps": int(ep_uniform_exp_steps),
+            "targeted_exploration_fraction": float(ep_targeted_exp_steps / max(1, tot_exp_steps)) if tot_exp_steps > 0 else 0.0,
         }
 
         # --- RC-2 learning statistics (averaged over the episode's updates) ---
@@ -891,6 +1162,8 @@ def train_scheduler(
                 "learning_rate": float(optimizer.param_groups[0].get("lr", 0.0)),
                 "replay_size": int(len(buffer)),
                 "epsilon": float(eps),
+                "replay_hit_fraction": float(ep_learn["replay_hit_frac"] / n_upd),
+                "replay_sequence_hit_fraction": float(ep_learn["replay_seq_hit_frac"] / n_upd),
             }
         else:
             learning = {"n_updates": 0, "learning_rate": float(optimizer.param_groups[0].get("lr", 0.0)),
@@ -976,12 +1249,23 @@ def train_scheduler(
                     mode_c = np.zeros(n_modes, dtype=np.float64)
                     while not done_v:
                         with torch.inference_mode():
-                            a_v, hidden_v, _ = moe.select_action(obs_v, hidden_v)
+                            if action_selection_mode == "flat_argmax":
+                                obs_np_v = np.asarray(obs_v, dtype=np.float32)
+                                obs_t_v = torch.from_numpy(obs_np_v).to(device)
+                                a_v, hidden_v = online_drqn.act(
+                                    obs_t_v,
+                                    hidden_v,
+                                    mode_selection="flat_argmax",
+                                    tau=0.0,
+                                )
+                            else:
+                                a_v, hidden_v, _ = moe.select_action(obs_v, hidden_v)
                         obs_v, rew_v, term_v, trunc_v, _ = val_env.step(a_v)
                         r_sum += float(rew_v)
                         band_c[int(a_v // n_modes)] += 1
                         mode_c[int(a_v % n_modes)] += 1
-                        moe.update(a_v)
+                        if action_selection_mode != "flat_argmax":
+                            moe.update(a_v)
                         s_sum += 1
                         done_v = bool(term_v or trunc_v)
                     fs = val_env.get_fom()
@@ -1149,6 +1433,14 @@ if __name__ == "__main__":
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint .pt to resume from.")
     parser.add_argument("--override-epsilon", type=float, default=None, help="Hold exploration epsilon at a fixed floor.")
     parser.add_argument("--disable-latency-reward", action="store_true", help="Ablate latency reward bonus.")
+    parser.add_argument("--exploration-schedule", type=str, default="exponential", choices=["exponential", "slower", "staged", "c_rescue"], help="Exploration decay schedule (exponential, slower, staged, c_rescue).")
+    parser.add_argument("--target-q-max", type=float, default=100.0, help="Target-Q clipping maximum ceiling.")
+    parser.add_argument("--target-q-min", type=float, default=-50.0, help="Target-Q clipping minimum floor.")
+    parser.add_argument("--q-reg-coef", type=float, default=1e-4, help="Coefficient for Q^2 regularization loss.")
+    parser.add_argument("--targeted-exploration", action="store_true", default=True, help="Enable 36-band targeted discovery exploration during epsilon exploration.")
+    parser.add_argument("--disable-targeted-exploration", action="store_false", dest="targeted_exploration", help="Disable targeted exploration (revert to pure uniform).")
+    parser.add_argument("--band-discovery-quota", type=int, default=2, help="Discovery visit quota per band per episode (Phase 9B-R3 default=2).")
+    parser.add_argument("--targeted-mode-strategy", type=str, default="balanced_modes", choices=["balanced_modes", "uniform"], help="Mode sampling strategy during targeted band exploration.")
     args = parser.parse_args()
     if args.device:
         os.environ["DEVICE"] = args.device
@@ -1164,4 +1456,11 @@ if __name__ == "__main__":
         resume_checkpoint=args.resume,
         override_epsilon=args.override_epsilon,
         disable_latency_reward=args.disable_latency_reward,
+        exploration_schedule=args.exploration_schedule,
+        target_q_max=args.target_q_max,
+        target_q_min=args.target_q_min,
+        q_reg_coef=args.q_reg_coef,
+        targeted_exploration=args.targeted_exploration,
+        band_discovery_quota=args.band_discovery_quota,
     )
+

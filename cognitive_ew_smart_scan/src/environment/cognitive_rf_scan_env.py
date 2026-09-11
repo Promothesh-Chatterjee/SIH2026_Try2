@@ -31,6 +31,7 @@ the ReceiverObservation + belief fields.
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
@@ -66,7 +67,7 @@ from src.perception import EmitterTracker, build_band_belief_from_tracks
 from src.cognitive.memory import SemanticMemory, EmitterProfile
 from src.cognitive.periodic_interceptor import PeriodicScanInterceptor
 from src.cognitive.temporal_predictor import TemporalPredictor
-from src.training.reward import bernoulli_entropy, receiver_reward_components
+from src.training.reward import bernoulli_entropy, receiver_reward_components, receiver_reward_components_v2
 
 logger = logging.getLogger(__name__)
 
@@ -124,16 +125,29 @@ class BeliefState:
         self._last_visit_slot = np.zeros(n, dtype=np.int64)
         self._band_pulse_history: list[list[float]] = [[] for _ in range(n)]
 
-    def record_visit(self, band: int, hit: bool, detections: Sequence[Any] | None = None, ema_alpha: float = 0.3) -> None:
+    def record_visit(
+        self,
+        band: int,
+        hit: bool,
+        detections: Sequence[Any] | None = None,
+        ema_alpha: float = 0.3,
+        ema_alpha_miss_confirmed: float = 0.20,
+    ) -> None:
         band = int(band)
         if not (0 <= band < self.n_bands):
             return
+        is_confirmed_track = bool(self._hits[band] >= 1)
         self._visits[band] += 1
         if hit:
             self._hits[band] += 1
         self.detection_rate[band] = float(self._hits[band] / max(1, self._visits[band]))
         target = 1.0 if hit else 0.0
-        self.occupancy_prob[band] = self.occupancy_prob[band] * (1.0 - ema_alpha) + float(target) * ema_alpha
+        # Phase 9B-R4-2: Asymmetric miss decay for confirmed tracks.
+        # When a confirmed track (hits >= 1) experiences an empty dwell (e.g. agile radar hopped
+        # or sparse pulse paused), decay slowly (alpha=0.08) so 1-2 empty dwells do not instantly
+        # demote it below untouched priors (0.500). Unconfirmed bands decay normally (alpha=0.30).
+        alpha = ema_alpha if hit else (ema_alpha_miss_confirmed if is_confirmed_track else ema_alpha)
+        self.occupancy_prob[band] = self.occupancy_prob[band] * (1.0 - alpha) + float(target) * alpha
         if not np.isfinite(self.occupancy_prob[band]) or self.occupancy_prob[band] < 0:
             self.occupancy_prob[band] = 0.5  # recover from corruption
 
@@ -306,7 +320,7 @@ class CognitiveRFScanEnv(gym.Env):
         self.semantic_memory_enabled: bool = bool(config.get("semantic_memory_enabled", True))
         self.semantic_memory_path = semantic_memory_path or config.get("semantic_memory_path", "data/semantic_memory.db")
 
-        # Config-driven priority fusing weights
+        # Config-driven priority fusing weights and belief decay parameters
         belief_cfg = config.get("belief", {})
         self.priority_weights = belief_cfg.get("priority", {
             "staleness_weight": 0.35,
@@ -315,6 +329,8 @@ class CognitiveRFScanEnv(gym.Env):
             "periodic_weight": 0.10,
             "semantic_weight": 0.10,
         })
+        self.ema_alpha = float(belief_cfg.get("ema_alpha", 0.30))
+        self.ema_alpha_miss_confirmed = float(belief_cfg.get("ema_alpha_miss_confirmed", 0.20))
 
         # Periodic interceptor configuration
         self.periodic_min_obs = config.get("periodic_min_obs", 20)
@@ -342,6 +358,17 @@ class CognitiveRFScanEnv(gym.Env):
 
         # Complete config-driven reward component weights.
         reward_cfg = config.get("reward", {})
+        self.reward_version = str(reward_cfg.get("version", config.get("reward_version", "v2")))
+        self.w_hit_novel_v2 = float(reward_cfg.get("w_hit_novel", 10.0))
+        self.w_hit_repeat_v2 = float(reward_cfg.get("w_hit_repeat", 8.0))
+        self.w_latency_v2 = float(reward_cfg.get("w_latency_v2", reward_cfg.get("w_latency", 5.0)))
+        self.w_agile_bonus_v2 = float(reward_cfg.get("w_agile_bonus", 2.0))
+        self.w_miss_v2 = float(reward_cfg.get("w_miss_v2", reward_cfg.get("w_miss", -4.0)))
+        self.w_false_alarm_v2 = float(reward_cfg.get("w_false_alarm_v2", reward_cfg.get("w_false_alarm", -1.0)))
+        self.w_redundant_v2 = float(reward_cfg.get("w_redundant_v2", reward_cfg.get("w_redundant_scan", -0.25)))
+        self.w_dwell_cost_v2 = float(reward_cfg.get("w_dwell_cost_v2", -0.01))
+
+        # Legacy reward weights
         self.w_hit = reward_cfg.get("w_hit", config.get("w_hit", 1.0))
         self.w_novel = reward_cfg.get("w_novel", config.get("w_novel", 2.0))
         self.w_miss = reward_cfg.get("w_miss", config.get("w_miss", -1.0))
@@ -405,6 +432,9 @@ class CognitiveRFScanEnv(gym.Env):
         self.current_step = 0
         self.intercepted_emitters: set[int] = set()
         self._gt_active_ever: set[int] = set()
+        self._emitter_frequencies: dict[int, set[float]] = defaultdict(set)
+        self._cumulative_interceptions: int = 0
+        self._intercept_latencies_us: list[float] = []
         self._last_dwell_start: float = 0.0
 
         # Perception: accumulate PDWs for windowed deinterleaving
@@ -469,6 +499,9 @@ class CognitiveRFScanEnv(gym.Env):
         self.current_step = 0
         self.intercepted_emitters = set()
         self._gt_active_ever = set()
+        self._emitter_frequencies = defaultdict(set)
+        self._cumulative_interceptions = 0
+        self._intercept_latencies_us = []
         self.fom.reset()
 
         # Perception buffer
@@ -676,7 +709,13 @@ class CognitiveRFScanEnv(gym.Env):
             p_before = 0.5
             dwell_band_age = 0.0
         h_before = bernoulli_entropy(p_before)
-        self.belief.record_visit(band, any_hit, detections=detections)
+        self.belief.record_visit(
+            band,
+            any_hit,
+            detections=detections,
+            ema_alpha=self.ema_alpha,
+            ema_alpha_miss_confirmed=self.ema_alpha_miss_confirmed,
+        )
         self.belief.advance_time()
         self.belief.touch(band)
         if self.belief is not None and 0 <= band < self.belief.n_bands:
@@ -714,50 +753,92 @@ class CognitiveRFScanEnv(gym.Env):
         other_bands_active = bool(int(active_bands_vec.sum()) - int(selected_band_active) > 0)
         false_detection = bool(not selected_band_active and any_hit)
 
-        reward_components = receiver_reward_components(
-            observation=observation,
-            ground_truth_active=selected_band_active,
-            novel_emitter=bool(newly),
-            had_any_opportunity=other_bands_active,
-            selected_active=selected_band_active,
-            detected=any_hit,
-            other_bands_active=other_bands_active,
-            false_detection=false_detection,
-            w_hit=self.w_hit,
-            w_novel=self.w_novel,
-            w_miss=self.w_miss,
-            w_missed_coverage=self.w_missed_coverage,
-            w_timing=self.w_timing,
-            w_priority=self.w_priority,
-            w_information_gain=self.w_information_gain,
-            w_false_alarm=self.w_false_alarm,
-            w_dwell_cost=self.w_dwell_cost,
-            w_redundant_scan=self.w_redundant_scan,
-            w_delay=self.w_delay,
-            w_staleness=self.w_staleness,
-            staleness_norm=self.staleness_norm,
-            band=band,
-            belief=self.belief,
-            intercepted_emitters=self.intercepted_emitters,
-            novel_ids=newly,
-            priority_weight_reference=self._intercepted_priority_reference(),
-            information_gain=information_gain,
-            entropy_before=h_before,
-            entropy_after=h_after,
-            band_age=dwell_band_age,
-            penalize_empty_dwell=self.penalize_empty_dwell,
-            context_scaled_miss=self.context_scaled_miss,
-            conditional_dwell_cost=self.conditional_dwell_cost,
-            w_active_track=self.w_active_track,
-            w_pulse_scale=self.w_pulse_scale,
-            lull_tolerance=self.lull_tolerance,
-            w_latency=self.w_latency,
-            tau_latency=self.tau_latency,
-            w_prediction=self.w_prediction,
-            is_predicted=is_predicted_band,
-            intercept_time_us=intercept_time_error_us,
-            disable_latency_reward=self.disable_latency_reward,
-        )
+        # Track pulse frequencies for frequency-agility detection
+        for d in detections:
+            eid = getattr(d, "emitter_id", None)
+            freq = getattr(d, "frequency_mhz", getattr(d, "carrier_frequency_mhz", None))
+            if eid is not None and freq is not None:
+                self._emitter_frequencies[int(eid)].add(round(float(freq), 1))
+
+        # Determine if any intercepted emitter is frequency-agile
+        is_agile = False
+        for eid in new_ids:
+            if len(self._emitter_frequencies.get(int(eid), set())) > 1:
+                is_agile = True
+                break
+        if not is_agile and self.belief is not None:
+            if is_predicted_band or (hasattr(self.belief, "get_band_agility") and self.belief.get_band_agility(band) > 0.25):
+                is_agile = True
+
+        if self.reward_version == "v2":
+            reward_components = receiver_reward_components_v2(
+                observation=observation,
+                ground_truth_active=selected_band_active,
+                novel_emitter=bool(newly),
+                had_any_opportunity=other_bands_active,
+                selected_active=selected_band_active,
+                detected=any_hit,
+                other_bands_active=other_bands_active,
+                false_detection=false_detection,
+                intercept_time_us=intercept_time_error_us,
+                is_agile=is_agile,
+                band_age=dwell_band_age,
+                band=band,
+                belief=self.belief,
+                w_hit_novel=self.w_hit_novel_v2,
+                w_hit_repeat=self.w_hit_repeat_v2,
+                w_latency=self.w_latency_v2,
+                w_agile_bonus=self.w_agile_bonus_v2,
+                w_miss=self.w_miss_v2,
+                w_false_alarm=self.w_false_alarm_v2,
+                w_redundant=self.w_redundant_v2,
+                w_dwell_cost=self.w_dwell_cost_v2,
+            )
+        else:
+            reward_components = receiver_reward_components(
+                observation=observation,
+                ground_truth_active=selected_band_active,
+                novel_emitter=bool(newly),
+                had_any_opportunity=other_bands_active,
+                selected_active=selected_band_active,
+                detected=any_hit,
+                other_bands_active=other_bands_active,
+                false_detection=false_detection,
+                w_hit=self.w_hit,
+                w_novel=self.w_novel,
+                w_miss=self.w_miss,
+                w_missed_coverage=self.w_missed_coverage,
+                w_timing=self.w_timing,
+                w_priority=self.w_priority,
+                w_information_gain=self.w_information_gain,
+                w_false_alarm=self.w_false_alarm,
+                w_dwell_cost=self.w_dwell_cost,
+                w_redundant_scan=self.w_redundant_scan,
+                w_delay=self.w_delay,
+                w_staleness=self.w_staleness,
+                staleness_norm=self.staleness_norm,
+                band=band,
+                belief=self.belief,
+                intercepted_emitters=self.intercepted_emitters,
+                novel_ids=newly,
+                priority_weight_reference=self._intercepted_priority_reference(),
+                information_gain=information_gain,
+                entropy_before=h_before,
+                entropy_after=h_after,
+                band_age=dwell_band_age,
+                penalize_empty_dwell=self.penalize_empty_dwell,
+                context_scaled_miss=self.context_scaled_miss,
+                conditional_dwell_cost=self.conditional_dwell_cost,
+                w_active_track=self.w_active_track,
+                w_pulse_scale=self.w_pulse_scale,
+                lull_tolerance=self.lull_tolerance,
+                w_latency=self.w_latency,
+                tau_latency=self.tau_latency,
+                w_prediction=self.w_prediction,
+                is_predicted=is_predicted_band,
+                intercept_time_us=intercept_time_error_us,
+                disable_latency_reward=self.disable_latency_reward,
+            )
         reward = reward_components["reward"]
         self.fom.record_reward_components(reward_components)
 
@@ -770,6 +851,12 @@ class CognitiveRFScanEnv(gym.Env):
             intercept_time_error_us=intercept_time_error_us,
             reward=float(reward),
         )
+
+        if any_hit:
+            self._cumulative_interceptions += 1
+            if intercept_time_error_us == intercept_time_error_us and np.isfinite(intercept_time_error_us):
+                self._intercept_latencies_us.append(float(intercept_time_error_us))
+        avg_lat_us = float(np.mean(self._intercept_latencies_us)) if self._intercept_latencies_us else 0.0
 
         # 8. Termination
         self.current_step += 1
@@ -807,8 +894,6 @@ class CognitiveRFScanEnv(gym.Env):
             "entropy_after": float(h_after),
             "information_gain": float(information_gain),
             # AUX targets for the DRQN prediction heads (still scheduler-observable):
-            # "hit_prob": 1.0 if any interception this dwell, else 0.0
-            # "intercept_time_us": earliest detected ToA within dwell (or nan if none)
             "hit_prob": 1.0 if any_hit else 0.0,
             "intercept_time_us": float(intercept_time_error_us),
             "novel_emitter": bool(newly),
@@ -817,12 +902,48 @@ class CognitiveRFScanEnv(gym.Env):
             "band_center_mhz": observation.center_frequency_mhz if observation is not None else 0.0,
             "receiver_time_us": self.receiver.current_time_us,
             "preemptive_band": getattr(self, "_preemptive_band", None),
-            "latency_bonus": float(reward_components.get("latency_bonus", 0.0)),
-            "prediction_bonus": float(reward_components.get("prediction_bonus", 0.0)),
+            "latency_bonus": float(reward_components.get("latency_bonus", reward_components.get("latency_reward", 0.0))),
+            "prediction_bonus": float(reward_components.get("prediction_bonus", reward_components.get("agility_bonus", 0.0))),
             "is_predicted": bool(is_predicted_band),
             "active_bands": [b for b, v in enumerate(active_bands_vec) if v > 0],
             "reward_components": reward_components,
+            # Phase 4 reward-alignment & learning-signal telemetry fields
+            "total_reward": float(reward),
+            "interception_reward": float(reward_components.get("interception_reward", reward_components.get("hit_term", 0.0))),
+            "latency_reward": float(reward_components.get("latency_reward", reward_components.get("latency_bonus", 0.0))),
+            "miss_penalty": float(reward_components.get("miss_penalty", 0.0)),
+            "false_alarm_penalty": float(reward_components.get("false_alarm_penalty", 0.0)),
+            "redundant_penalty": float(reward_components.get("redundant_penalty", 0.0)),
+            "dwell_penalty": float(reward_components.get("dwell_cost", 0.0)),
+            "frequency_agility_bonus": float(reward_components.get("agility_bonus", reward_components.get("prediction_bonus", 0.0))),
+            "reward_component_dominance": bool(reward_components.get("dominance_warning", False)),
+            "cumulative_interceptions": int(self._cumulative_interceptions),
+            "average_intercept_latency_us": float(avg_lat_us),
+            "number_of_unique_emitters_intercepted": int(len(self.intercepted_emitters)),
+            "interception_rate": float(self.fom.avg_intercept_rate),
+            "Pd": float(self.fom.pd),
+            "Pfa": float(self.fom.pfa),
+            "average_interception_time_error": float(self.fom.avg_intercept_time_error),
+            "average_interception_latency": float(avg_lat_us),
+            "cumulative_reward": float(sum(self.fom.rewards)),
+            "episode_reward": float(sum(self.fom.rewards)),
+            # Phase 2 runtime decision telemetry fields
+            "raw_drqn_action": mode_ctx.get("raw_drqn_action", action),
+            "raw_drqn_band": mode_ctx.get("raw_drqn_band", band),
+            "raw_drqn_mode": mode_ctx.get("raw_drqn_mode", mode),
+            "final_action": int(action),
+            "final_band": int(band),
+            "final_mode": int(mode),
+            "action_was_overridden": bool(mode_ctx.get("action_was_overridden", False)),
+            "override_source": mode_ctx.get("override_source", None),
+            "exploration_source": mode_ctx.get("exploration_source", "none"),
+            "decision_source": mode_ctx.get("decision_source", "ml_exploitation"),
+            "q_selected": mode_ctx.get("q_selected", None),
+            "q_max": mode_ctx.get("q_max", None),
+            "q_mean": mode_ctx.get("q_mean", None),
+            "q_std": mode_ctx.get("q_std", None),
         }
+
 
         next_obs = self._build_observation()
         return next_obs, float(reward), terminated, truncated, info
