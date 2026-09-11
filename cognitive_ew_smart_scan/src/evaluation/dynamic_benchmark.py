@@ -122,6 +122,8 @@ def get_or_load_eval_drqn(custom_drqn: Optional[DRQNScheduler] = None) -> Option
         return _CACHED_DRQN
 
     for p in [
+        Path("checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"),
+        Path("cognitive_ew_smart_scan/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"),
         Path("checkpoints/scheduler/checkpoint_gate_100000.pt"),
         Path("checkpoints/scheduler/checkpoint_gate_110000.pt"),
         Path("checkpoints/scheduler/best.pt"),
@@ -209,7 +211,7 @@ def run_dynamic_benchmark(
         ("round_robin", "round_robin"),
         ("random", "random"),
         ("highest_uncertainty", "highest_uncertainty"),
-        ("smart_scan", "full_moe" if drqn is not None else "highest_uncertainty"),
+        ("smart_scan", "drqn" if drqn is not None else "highest_uncertainty"),
     ]
 
     metrics: Dict[str, Dict[str, float]] = {}
