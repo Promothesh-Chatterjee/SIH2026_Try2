@@ -89,13 +89,6 @@ export function PipelineFlow() {
   );
 }
 
-const BAND_STATE_COLORS = {
-  quiet:       "#1e2126",
-  stable:      "#96ccff",
-  intercepted: "#49df9d",
-  agile:       "#3097e0",
-  active:      "#bdc2ff",
-};
 
 export function BandMatrix({
   tuneBand = 16,
@@ -151,11 +144,10 @@ export function BandMatrix({
             return (
               <div
                 key={i}
-                className="st-bar"
+                className={`st-bar st-bar-${state}`}
                 title={`B${String(i + 1).padStart(2, "0")} ${i * 500}–${(i + 1) * 500} MHz [${state.toUpperCase()}]`}
                 style={{
                   height: `${h}%`,
-                  background: BAND_STATE_COLORS[state] ?? "#333539",
                   boxShadow: isActive
                     ? "0 0 10px rgba(189,194,255,0.7)"
                     : isIBW
