@@ -364,3 +364,142 @@ def receiver_reward_components(
         "entropy_after": float(entropy_after) if entropy_after is not None else 0.0,
         "information_gain": ig,
     }
+
+
+def receiver_reward_components_v2(
+    observation=None,
+    ground_truth_active: bool = False,
+    novel_emitter: bool = False,
+    had_any_opportunity: bool = False,
+    selected_active: bool | None = None,
+    detected: bool | None = None,
+    other_bands_active: bool | None = None,
+    false_detection: bool | None = None,
+    intercept_time_us: float | None = None,
+    is_agile: bool = False,
+    band_age: float | None = None,
+    band: int | None = None,
+    belief=None,
+    # Clean v2 hierarchical weights
+    w_hit_novel: float = 10.0,
+    w_hit_repeat: float = 8.0,
+    w_latency: float = 5.0,
+    w_agile_bonus: float = 2.0,
+    w_miss: float = -4.0,
+    w_false_alarm: float = -1.0,
+    w_redundant: float = -0.25,
+    w_dwell_cost: float = -0.01,
+    **_extra,
+) -> dict[str, float | bool]:
+    """Phase 4 Clean Rescue Reward (reward_v2).
+
+    Hierarchical design aligned directly with operational EW smart scan objectives:
+      1. Primary: Successful Interception (+10.0 novel, +8.0 repeat)
+      2. Secondary: Early Interception latency bonus (0.0 to +5.0)
+      3. Agile bonus: +2.0 for intercepting agile/hopping emitters
+      4. Miss penalty: -4.0 for failing to intercept active emitter
+      5. False alarm penalty: -1.0 for tuning inactive spectrum
+      6. Redundant revisit: -0.25 for immediate re-visit of empty spectrum
+      7. Dwell cost: -0.01 * (dwell_us / 500.0)
+
+    Zero unconditional staleness bonuses. Zero ungrounded information-gain bonuses.
+    Zero unnormalized timing subtractions on valid hits.
+    """
+    is_sel_active = bool(selected_active if selected_active is not None else ground_truth_active)
+    detections = getattr(observation, "detections", []) if observation is not None else []
+    is_detected = bool(detected if detected is not None else (len(detections) > 0))
+    dwell_us = max(0.0, float(getattr(observation, "dwell_time_us", 500.0))) if observation is not None else 500.0
+    dwell_norm = dwell_us / 500.0 if dwell_us > 0.0 else 1.0
+
+    interception_reward = 0.0
+    latency_reward = 0.0
+    agility_bonus = 0.0
+    miss_penalty = 0.0
+    false_alarm_pen = 0.0
+    redundant_pen = 0.0
+    dwell_cost = 0.0
+
+    if is_sel_active and is_detected:
+        # 1. Successful Interception (Primary Dominant Signal)
+        interception_reward = float(w_hit_novel if novel_emitter else w_hit_repeat)
+
+        # 2. Earlier Interception Latency Bonus (Secondary Signal in [0, w_latency])
+        if intercept_time_us is not None and np.isfinite(intercept_time_us):
+            t_hit = max(0.0, float(intercept_time_us))
+        else:
+            dwell = getattr(observation, "dwell_interval_us", [0.0, 0.0]) if observation is not None else [0.0, 0.0]
+            start = float(dwell[0]) if len(dwell) >= 1 else 0.0
+            first_time = float(getattr(detections[0], "time_us", start)) if detections else start
+            t_hit = max(0.0, first_time - start)
+        latency_fraction = max(0.0, 1.0 - (t_hit / max(1.0, dwell_us)))
+        latency_reward = float(w_latency * latency_fraction)
+
+        # 3. Frequency-Agile Interception Bonus
+        if is_agile:
+            agility_bonus = float(w_agile_bonus)
+
+        # Dwell cost on confirmed hit is 0 (hits are productive; dwell cost never penalizes detection)
+        dwell_cost = 0.0
+
+    elif is_sel_active and not is_detected:
+        # 4. Missed Active Emitter
+        miss_penalty = float(w_miss)
+        dwell_cost = float(w_dwell_cost * dwell_norm)
+
+    else:
+        # 5. Inactive Band (False Alarm / Empty Dwell)
+        false_alarm_pen = float(w_false_alarm)
+        effective_age = float(band_age) if band_age is not None else (
+            float(belief.revisit_age[band]) if (band is not None and belief is not None and hasattr(belief, "revisit_age")) else 10.0
+        )
+        if effective_age <= 1.0:
+            redundant_pen = float(w_redundant)
+        dwell_cost = float(w_dwell_cost * dwell_norm)
+
+    total = (
+        interception_reward
+        + latency_reward
+        + agility_bonus
+        + miss_penalty
+        + false_alarm_pen
+        + redundant_pen
+        + dwell_cost
+    )
+
+    # Dominance Check: detect if secondary shaping exceeds primary interception signal
+    shaping_mag = abs(latency_reward) + abs(agility_bonus) + abs(redundant_pen) + abs(dwell_cost)
+    dominance_warning = bool(is_sel_active and is_detected and (shaping_mag > abs(interception_reward)))
+    if dominance_warning:
+        logger.warning(
+            "REWARD_OBJECTIVE_DOMINANCE_WARNING: shaping terms (%.2f) exceed primary interception reward (%.2f)",
+            shaping_mag,
+            interception_reward,
+        )
+
+    return {
+        "reward": float(total),
+        "interception_reward": float(interception_reward),
+        "latency_reward": float(latency_reward),
+        "agility_bonus": float(agility_bonus),
+        "miss_penalty": float(miss_penalty),
+        "false_alarm_penalty": float(false_alarm_pen),
+        "redundant_penalty": float(redundant_pen),
+        "dwell_cost": float(dwell_cost),
+        "dominance_warning": dominance_warning,
+        # Backward-compatible aliases for legacy FiguresOfMerit accumulators
+        "hit_term": float(interception_reward),
+        "novel_term": float(w_hit_novel - w_hit_repeat if novel_emitter else 0.0),
+        "timing_penalty": 0.0,
+        "missed_coverage_penalty": 0.0,
+        "priority_term": 0.0,
+        "info_gain_term": 0.0,
+        "staleness_bonus": 0.0,
+        "active_track_bonus": 0.0,
+        "pulse_bonus": 0.0,
+        "latency_bonus": float(latency_reward),
+        "prediction_bonus": float(agility_bonus),
+        "delay_penalty": 0.0,
+        "entropy_before": 0.0,
+        "entropy_after": 0.0,
+        "information_gain": 0.0,
+    }

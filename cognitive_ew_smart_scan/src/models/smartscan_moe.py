@@ -760,6 +760,38 @@ class SmartScanMoE(nn.Module):
         attribution["consecutive_empty_band"] = int(self._consecutive_empty_band)
         attribution["reason"] = reason
 
+        # Phase 2 runtime decision telemetry fields
+        raw_q_np = np.asarray(q_values, dtype=np.float32).reshape(-1)
+        raw_drqn_action = int(np.argmax(raw_q_np))
+        raw_drqn_band = int(band_of_action(raw_drqn_action, self.n_modes))
+        raw_drqn_mode = int(mode_of_action(raw_drqn_action, self.n_modes))
+        final_action = int(action)
+        final_band = int(band_of_action(final_action, self.n_modes))
+        final_mode = int(mode_of_action(final_action, self.n_modes))
+        action_was_overridden = bool(final_action != raw_drqn_action)
+        override_source = str(reason) if action_was_overridden else None
+        exploration_source = "cognitive_exploration" if reason == "Cognitive_exploration" else ("force_exploration" if force_exploration else "none")
+        q_selected = float(raw_q_np[final_action]) if 0 <= final_action < len(raw_q_np) else 0.0
+        q_max = float(np.max(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+        q_mean = float(np.mean(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+        q_std = float(np.std(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+
+        attribution["raw_drqn_action"] = raw_drqn_action
+        attribution["raw_drqn_band"] = raw_drqn_band
+        attribution["raw_drqn_mode"] = raw_drqn_mode
+        attribution["final_action"] = final_action
+        attribution["final_band"] = final_band
+        attribution["final_mode"] = final_mode
+        attribution["action_was_overridden"] = action_was_overridden
+        attribution["override_source"] = override_source
+        attribution["exploration_source"] = exploration_source
+        attribution["decision_source"] = "moe_arbitration"
+        attribution["q_selected"] = q_selected
+        attribution["q_max"] = q_max
+        attribution["q_mean"] = q_mean
+        attribution["q_std"] = q_std
+
+
         # Cognitive Decision Explanation fields for telemetry & dashboard
         attribution["guarded_arrival_active"] = float(has_guarded_arrival)
         attribution["dirichlet_alpha"] = float(self.alpha_dirichlet)

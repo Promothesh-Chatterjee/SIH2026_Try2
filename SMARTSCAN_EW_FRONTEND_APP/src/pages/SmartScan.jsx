@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CmdBadge,
   PanelHead,
 } from "../components/stitch";
+import { startTelemetryStream } from "../services/liveSocket";
 
 const FEATURES = [
   "Occupancy",
@@ -57,12 +58,69 @@ const MOCK_ACTIONS = [
 const SHORT_FEATURES = ["OCC", "DET", "MISS", "UNC", "AGE", "CNT", "CONF", "PRI", "AGIL", "RISK", "RANK"];
 
 export default function SmartScan() {
-  const observation = useMemo(() => buildMockObservation(), []);
+  const [liveTelemetry, setLiveTelemetry] = useState(null);
   const [selectedBand, setSelectedBand] = useState(16);
 
+  useEffect(() => {
+    let active = true;
+    let stream = null;
+    try {
+      stream = startTelemetryStream({
+        onTelemetry(t) {
+          if (active && t?.valid && t?.live) {
+            setLiveTelemetry(t);
+            if (t.band != null) setSelectedBand(t.band);
+          }
+        },
+      });
+    } catch {
+      // Ignored
+    }
+    return () => {
+      active = false;
+      stream?.close();
+    };
+  }, []);
+
+  const observation = useMemo(() => {
+    const bp = liveTelemetry?.bandPriorities;
+    if (Array.isArray(bp) && bp.length === 36) {
+      const maxVal = Math.max(...bp, 1e-4);
+      return Array.from({ length: 36 }, (_, band) => {
+        const occ = Math.min(1, Math.max(0.04, bp[band] / maxVal));
+        return {
+          band,
+          values: [
+            occ,
+            occ * 0.85,
+            (1 - occ) * 0.2,
+            1 - occ,
+            band === liveTelemetry.band ? 0.05 : 0.45,
+            occ > 0.3 ? 1 : 0,
+            occ * 0.9,
+            occ > 0.5 ? 0.8 : 0.3,
+            occ > 0.4 ? 0.7 : 0.2,
+            occ * 0.95,
+          ],
+        };
+      });
+    }
+    return buildMockObservation();
+  }, [liveTelemetry]);
+
   const selected = observation.find((item) => item.band === selectedBand);
-  const selectedAction =
-    MOCK_ACTIONS.find((item) => item.band === selectedBand) ?? MOCK_ACTIONS[0];
+  const selectedAction = useMemo(() => {
+    if (liveTelemetry && liveTelemetry.band != null) {
+      return {
+        band: liveTelemetry.band,
+        mode: liveTelemetry.modeName ?? "NORMAL_DWELL",
+        score: liveTelemetry.cognitiveExplanation?.drqn_score ?? 0.89,
+        probability: liveTelemetry.cognitiveExplanation?.prediction_confidence ?? 0.85,
+        timeUs: liveTelemetry.cognitiveExplanation?.predicted_eta_us > 0 ? liveTelemetry.cognitiveExplanation.predicted_eta_us : 50,
+      };
+    }
+    return MOCK_ACTIONS.find((item) => item.band === selectedBand) ?? MOCK_ACTIONS[0];
+  }, [liveTelemetry, selectedBand]);
   const actionId = selectedAction.band * 5 + MODES.indexOf(selectedAction.mode);
 
   const occupancyRank = useMemo(() => {
