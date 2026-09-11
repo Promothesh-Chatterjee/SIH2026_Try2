@@ -344,18 +344,22 @@ export default function Emitters() {
               <text fill="#908f9e" fontSize="8" fontFamily="JetBrains Mono" x="12" y="98">270°</text>
             </svg>
             <div
-              className="st-tsm"
+              className="st-tsm st-azimuth-badge"
               style={{
                 position: "absolute",
                 bottom: 8,
                 right: 8,
                 padding: "2px 6px",
-                background: "rgba(30,32,36,0.9)",
+                background: "var(--panel, rgba(30,32,36,0.9))",
+                border: "1px solid var(--border, #454653)",
                 borderRadius: 2,
-                color: "#908f9e",
+                color: "var(--text, #e2e2e8)",
               }}
             >
-              ANTENNA AZIMUTH: <span style={{ color: backendOnline ? "#bdc2ff" : "#908f9e", fontWeight: 700 }}>{backendOnline ? "065° CW" : "— OFFLINE"}</span>
+              ANTENNA AZIMUTH:{" "}
+              <span style={{ color: backendOnline ? "var(--accent, #bdc2ff)" : "var(--muted, #908f9e)", fontWeight: 700 }}>
+                {backendOnline ? "065° CW" : "— OFFLINE"}
+              </span>
             </div>
           </div>
           <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", color: "#908f9e", paddingTop: 4 }}>
