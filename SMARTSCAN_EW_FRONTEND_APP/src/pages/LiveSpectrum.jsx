@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadLiveTelemetry } from "../services/liveService";
 import { startTelemetryStream } from "../services/liveSocket";
 import { startSyntheticStream } from "../services/syntheticStream";
 import { syntheticSystem } from "../data/mockSystem";
 import { PanelHead, DataSourceBadge } from "../components/stitch";
+import { useTheme } from "../context/ThemeContext";
 
 const NUM_BANDS = 36;
 const FREQ_START_MHZ = 0;
@@ -19,23 +20,55 @@ const SYNTHETIC_EVENTS = [
   { time: "NOW", band: 16, frequencyMHz: 8250, type: "ARMED", mode: "PREEMPTIVE_INTERCEPT" },
 ];
 
-function waterfallSDRColor(value) {
+function waterfallSDRColor(value, isDark = true) {
   const t = Math.min(1, Math.max(0, value / 100));
   let r, g, b;
-  if (t < 0.15) {
-    r = 0; g = 0; b = Math.round(20 + t / 0.15 * 40);
-  } else if (t < 0.35) {
-    const s = (t - 0.15) / 0.2;
-    r = 0; g = Math.round(s * 80); b = Math.round(60 + s * 100);
-  } else if (t < 0.55) {
-    const s = (t - 0.35) / 0.2;
-    r = Math.round(s * 40); g = Math.round(80 + s * 140); b = Math.round(160 - s * 40);
-  } else if (t < 0.75) {
-    const s = (t - 0.55) / 0.2;
-    r = Math.round(40 + s * 200); g = Math.round(220 + s * 35); b = Math.round(120 - s * 100);
+
+  if (isDark) {
+    if (t < 0.15) {
+      r = 0; g = 0; b = Math.round(20 + (t / 0.15) * 40);
+    } else if (t < 0.35) {
+      const s = (t - 0.15) / 0.2;
+      r = 0; g = Math.round(s * 80); b = Math.round(60 + s * 100);
+    } else if (t < 0.55) {
+      const s = (t - 0.35) / 0.2;
+      r = Math.round(s * 40); g = Math.round(80 + s * 140); b = Math.round(160 - s * 40);
+    } else if (t < 0.75) {
+      const s = (t - 0.55) / 0.2;
+      r = Math.round(40 + s * 200); g = Math.round(220 + s * 35); b = Math.round(120 - s * 100);
+    } else {
+      const s = (t - 0.75) / 0.25;
+      r = Math.round(240 + s * 15); g = Math.round(255 - s * 100); b = Math.round(20 - s * 20);
+    }
   } else {
-    const s = (t - 0.75) / 0.25;
-    r = Math.round(240 + s * 15); g = Math.round(255 - s * 100); b = Math.round(20 - s * 20);
+    // Light Mode Tactical SDR Waterfall:
+    // Quiet floor blends with light background; RF energy is sharply visible
+    if (t < 0.12) {
+      const s = t / 0.12;
+      r = Math.round(248 - s * 16);
+      g = Math.round(250 - s * 16);
+      b = Math.round(252 - s * 16);
+    } else if (t < 0.35) {
+      const s = (t - 0.12) / 0.23;
+      r = Math.round(186 - s * 130);
+      g = Math.round(230 - s * 41);
+      b = Math.round(253 - s * 5);
+    } else if (t < 0.60) {
+      const s = (t - 0.35) / 0.25;
+      r = Math.round(16 + s * 30);
+      g = Math.round(185 + s * 40);
+      b = Math.round(129 - s * 60);
+    } else if (t < 0.80) {
+      const s = (t - 0.60) / 0.20;
+      r = Math.round(245 + s * 5);
+      g = Math.round(158 - s * 60);
+      b = Math.round(11 - s * 5);
+    } else {
+      const s = (t - 0.80) / 0.20;
+      r = Math.round(220 + s * 25);
+      g = Math.round(38 - s * 20);
+      b = Math.round(38 - s * 20);
+    }
   }
   return `rgb(${r},${g},${b})`;
 }
@@ -79,6 +112,7 @@ function useCanvasResize(canvasRef, containerRef) {
 }
 
 function SpectrumCanvas({ bandHeights, currentBand, activeBands }) {
+  const { isDark } = useTheme();
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   useCanvasResize(canvasRef, containerRef);
@@ -102,10 +136,12 @@ function SpectrumCanvas({ bandHeights, currentBand, activeBands }) {
     const plotW = W - marginLeft - marginRight;
     const plotH = H - marginTop - marginBottom;
 
-    ctx.fillStyle = "#0a0c10";
+    // Background fill
+    ctx.fillStyle = isDark ? "#0a0c10" : "#ffffff";
     ctx.fillRect(0, 0, W, H);
 
-    ctx.strokeStyle = "rgba(69,70,83,0.35)";
+    // Horizontal dB grid lines
+    ctx.strokeStyle = isDark ? "rgba(69,70,83,0.35)" : "rgba(203,213,225,0.85)";
     ctx.lineWidth = 0.5;
     for (let i = 0; i <= 5; i++) {
       const y = marginTop + (i / 5) * plotH;
@@ -115,8 +151,9 @@ function SpectrumCanvas({ bandHeights, currentBand, activeBands }) {
       ctx.stroke();
     }
 
+    // Vertical Frequency grid lines
     const freqTicks = [0, 2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000, 18000];
-    ctx.strokeStyle = "rgba(69,70,83,0.25)";
+    ctx.strokeStyle = isDark ? "rgba(69,70,83,0.25)" : "rgba(203,213,225,0.6)";
     freqTicks.forEach((f) => {
       const x = marginLeft + ((f - FREQ_START_MHZ) / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
       ctx.beginPath();
@@ -125,21 +162,23 @@ function SpectrumCanvas({ bandHeights, currentBand, activeBands }) {
       ctx.stroke();
     });
 
+    // Frequency labels along bottom
     ctx.font = '9px "JetBrains Mono", monospace';
     ctx.textAlign = "center";
-    ctx.fillStyle = "#908f9e";
+    ctx.fillStyle = isDark ? "#908f9e" : "#475569";
     freqTicks.forEach((f) => {
       const x = marginLeft + ((f - FREQ_START_MHZ) / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
       const label = f >= 1000 ? (f / 1000).toFixed(1) + "G" : f + "M";
       ctx.fillText(label, x, H - 8);
     });
 
+    // dB labels along left
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     const dBLabels = [-20, -30, -40, -50, -60, -70];
     dBLabels.forEach((dB, i) => {
       const y = marginTop + (i / (dBLabels.length - 1)) * plotH;
-      ctx.fillStyle = "#908f9e";
+      ctx.fillStyle = isDark ? "#908f9e" : "#475569";
       ctx.fillText(dB + " dB", marginLeft - 4, y);
     });
 
@@ -153,6 +192,7 @@ function SpectrumCanvas({ bandHeights, currentBand, activeBands }) {
 
     const pts = smoothInterpolate(raw, Math.floor(plotW));
 
+    // Area fill gradient under curve
     ctx.beginPath();
     ctx.moveTo(marginLeft, marginTop + plotH);
     for (let i = 0; i < pts.length; i++) {
@@ -164,13 +204,21 @@ function SpectrumCanvas({ bandHeights, currentBand, activeBands }) {
     }
     ctx.lineTo(marginLeft + pts.length, marginTop + plotH);
     ctx.closePath();
+
     const fillGrad = ctx.createLinearGradient(0, marginTop, 0, marginTop + plotH);
-    fillGrad.addColorStop(0, "rgba(73,223,157,0.35)");
-    fillGrad.addColorStop(0.6, "rgba(73,223,157,0.12)");
-    fillGrad.addColorStop(1, "rgba(73,223,157,0.02)");
+    if (isDark) {
+      fillGrad.addColorStop(0, "rgba(73,223,157,0.35)");
+      fillGrad.addColorStop(0.6, "rgba(73,223,157,0.12)");
+      fillGrad.addColorStop(1, "rgba(73,223,157,0.02)");
+    } else {
+      fillGrad.addColorStop(0, "rgba(2,132,199,0.32)");
+      fillGrad.addColorStop(0.6, "rgba(2,132,199,0.10)");
+      fillGrad.addColorStop(1, "rgba(2,132,199,0.01)");
+    }
     ctx.fillStyle = fillGrad;
     ctx.fill();
 
+    // Signal envelope stroke line
     ctx.beginPath();
     for (let i = 0; i < pts.length; i++) {
       const x = marginLeft + i;
@@ -179,16 +227,17 @@ function SpectrumCanvas({ bandHeights, currentBand, activeBands }) {
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
-    ctx.strokeStyle = "#e8eaee";
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = isDark ? "#e8eaee" : "#0284c7";
+    ctx.lineWidth = isDark ? 1.2 : 1.6;
     ctx.stroke();
 
+    // Current tuned band highlight
     if (currentBand !== undefined && currentBand !== null) {
       const cx = marginLeft + ((currentBand * BAND_WIDTH_MHZ + BAND_WIDTH_MHZ / 2 - FREQ_START_MHZ) / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
       const halfW = (BAND_WIDTH_MHZ / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
-      ctx.fillStyle = "rgba(189,194,255,0.1)";
+      ctx.fillStyle = isDark ? "rgba(189,194,255,0.1)" : "rgba(37,99,235,0.08)";
       ctx.fillRect(cx - halfW, marginTop, halfW * 2, plotH);
-      ctx.strokeStyle = "rgba(189,194,255,0.6)";
+      ctx.strokeStyle = isDark ? "rgba(189,194,255,0.6)" : "rgba(37,99,235,0.75)";
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
@@ -199,13 +248,14 @@ function SpectrumCanvas({ bandHeights, currentBand, activeBands }) {
 
       ctx.font = '9px "JetBrains Mono", monospace';
       ctx.textAlign = "center";
-      ctx.fillStyle = "#bdc2ff";
+      ctx.fillStyle = isDark ? "#bdc2ff" : "#1d4ed8";
       const tuneMHz = currentBand * BAND_WIDTH_MHZ + BAND_WIDTH_MHZ / 2;
       ctx.fillText(`${(tuneMHz / 1000).toFixed(3)} GHz`, cx, marginTop + 12);
     }
 
+    // Active band dots
     if (activeBands && activeBands.size > 0) {
-      ctx.fillStyle = "rgba(150,204,255,0.4)";
+      ctx.fillStyle = isDark ? "rgba(150,204,255,0.4)" : "rgba(2,132,199,0.75)";
       activeBands.forEach((band) => {
         if (band === currentBand) return;
         const cx = marginLeft + ((band * BAND_WIDTH_MHZ + BAND_WIDTH_MHZ / 2 - FREQ_START_MHZ) / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
@@ -215,19 +265,31 @@ function SpectrumCanvas({ bandHeights, currentBand, activeBands }) {
       });
     }
 
-    ctx.strokeStyle = "rgba(189,194,255,0.5)";
+    // Outer plot border
+    ctx.strokeStyle = isDark ? "rgba(189,194,255,0.5)" : "rgba(203,213,225,0.9)";
     ctx.lineWidth = 0.5;
     ctx.strokeRect(marginLeft, marginTop, plotW, plotH);
-  }, [bandHeights, currentBand, activeBands]);
+  }, [bandHeights, currentBand, activeBands, isDark]);
 
   return (
-    <div ref={containerRef} style={{ position: "relative", width: "100%", height: 220, background: "#0a0c10", border: "1px solid #454653" }}>
+    <div
+      ref={containerRef}
+      style={{
+        position: "relative",
+        width: "100%",
+        height: 220,
+        background: isDark ? "#0a0c10" : "#ffffff",
+        border: isDark ? "1px solid #454653" : "1px solid #cbd5e1",
+        transition: "background 0.15s ease, border-color 0.15s ease",
+      }}
+    >
       <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%" }} />
     </div>
   );
 }
 
 function WaterfallCanvas({ waterfall, currentBand }) {
+  const { isDark } = useTheme();
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   useCanvasResize(canvasRef, containerRef);
@@ -243,17 +305,33 @@ function WaterfallCanvas({ waterfall, currentBand }) {
     const H = canvas.height / dpr;
 
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = "#060810";
+    ctx.fillStyle = isDark ? "#060810" : "#f8fafc";
     ctx.fillRect(0, 0, W, H);
 
     const marginLeft = 48;
     const marginRight = 12;
     const marginTop = 4;
-    const marginBottom = 4;
+    const marginBottom = 14;
     const plotW = W - marginLeft - marginRight;
     const plotH = H - marginTop - marginBottom;
 
-    if (!waterfall || waterfall.length === 0) return;
+    if (!waterfall || waterfall.length === 0) {
+      // Subtle tactical grid and placeholder in empty state
+      ctx.strokeStyle = isDark ? "rgba(69,70,83,0.3)" : "rgba(203,213,225,0.6)";
+      ctx.lineWidth = 0.5;
+      for (let i = 1; i < 4; i++) {
+        const y = marginTop + (i / 4) * plotH;
+        ctx.beginPath();
+        ctx.moveTo(marginLeft, y);
+        ctx.lineTo(marginLeft + plotW, y);
+        ctx.stroke();
+      }
+      ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.textAlign = "center";
+      ctx.fillStyle = isDark ? "#908f9e" : "#64748b";
+      ctx.fillText("WAITING FOR WATERFALL STREAM // NOMINAL", marginLeft + plotW / 2, marginTop + plotH / 2);
+      return;
+    }
 
     const rows = waterfall.length;
     const rowH = plotH / rows;
@@ -268,7 +346,7 @@ function WaterfallCanvas({ waterfall, currentBand }) {
         const x = marginLeft + (col / NUM_BANDS) * plotW;
         const cellW = plotW / NUM_BANDS + 0.5;
 
-        ctx.fillStyle = waterfallSDRColor(value);
+        ctx.fillStyle = waterfallSDRColor(value, isDark);
         ctx.fillRect(x, y, cellW, pixelRow + 0.5);
       }
     }
@@ -276,7 +354,7 @@ function WaterfallCanvas({ waterfall, currentBand }) {
     if (currentBand !== undefined && currentBand !== null) {
       const cx = marginLeft + (currentBand / NUM_BANDS) * plotW;
       const halfW = (1 / NUM_BANDS) * plotW;
-      ctx.strokeStyle = "rgba(189,194,255,0.5)";
+      ctx.strokeStyle = isDark ? "rgba(189,194,255,0.5)" : "rgba(37,99,235,0.7)";
       ctx.lineWidth = 0.8;
       ctx.setLineDash([2, 2]);
       ctx.beginPath();
@@ -288,17 +366,27 @@ function WaterfallCanvas({ waterfall, currentBand }) {
 
     ctx.font = '8px "JetBrains Mono", monospace';
     ctx.textAlign = "center";
-    ctx.fillStyle = "#908f9e";
+    ctx.fillStyle = isDark ? "#908f9e" : "#475569";
     const freqLabels = [0, 3000, 6000, 9000, 12000, 15000, 18000];
     freqLabels.forEach((f) => {
       const x = marginLeft + ((f - FREQ_START_MHZ) / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
       const label = f >= 1000 ? (f / 1000).toFixed(0) + "G" : f + "";
       ctx.fillText(label, x, H - 2);
     });
-  }, [waterfall, currentBand]);
+  }, [waterfall, currentBand, isDark]);
 
   return (
-    <div ref={containerRef} style={{ position: "relative", width: "100%", height: 380, background: "#060810", border: "1px solid #454653" }}>
+    <div
+      ref={containerRef}
+      style={{
+        position: "relative",
+        width: "100%",
+        height: 380,
+        background: isDark ? "#060810" : "#f8fafc",
+        border: isDark ? "1px solid #454653" : "1px solid #cbd5e1",
+        transition: "background 0.15s ease, border-color 0.15s ease",
+      }}
+    >
       <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%" }} />
     </div>
   );
@@ -347,12 +435,12 @@ function TelemetryInspector({ telemetry }) {
               flexDirection: "column",
               gap: 2,
               padding: "4px 6px",
-              background: "#1a1c20",
-              border: "1px solid #454653",
+              background: "var(--panel)",
+              border: "1px solid var(--border)",
             }}
           >
-            <span style={{ color: "#908f9e" }}>{label}</span>
-            <strong style={{ color: "#e2e2e8" }}>{value}</strong>
+            <span style={{ color: "var(--muted)" }}>{label}</span>
+            <strong style={{ color: "var(--text)" }}>{value}</strong>
           </div>
         ))}
       </div>
@@ -526,24 +614,24 @@ export default function LiveSpectrum() {
       <div className="st-grid-12">
         <div className="st-span-8" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div className="st-panel" style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ padding: "4px 8px", background: "#1a1c20", borderBottom: "1px solid #454653", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span className="st-headline" style={{ color: "#bdc2ff" }}>REAL-TIME SPECTRUM TRACE</span>
-              <span className="st-badge" style={{ color: "#96ccff" }}>1 GHz IBW</span>
+            <div style={{ padding: "4px 8px", background: "var(--panel-2)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span className="st-headline" style={{ color: "var(--accent)" }}>REAL-TIME SPECTRUM TRACE</span>
+              <span className="st-badge" style={{ color: "var(--secondary)" }}>1 GHz IBW</span>
             </div>
             <SpectrumCanvas bandHeights={bandHeights} currentBand={currentScheduledBand} activeBands={activeBands} />
           </div>
 
           <div className="st-panel" style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ padding: "4px 8px", background: "#1a1c20", borderBottom: "1px solid #454653", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span className="st-headline" style={{ color: "#bdc2ff" }}>WATERFALL HISTORY</span>
-              <span className="st-badge" style={{ color: "#49df9d" }}>LIVE</span>
+            <div style={{ padding: "4px 8px", background: "var(--panel-2)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span className="st-headline" style={{ color: "var(--accent)" }}>WATERFALL HISTORY</span>
+              <span className="st-badge" style={{ color: "var(--success)" }}>LIVE</span>
             </div>
             <WaterfallCanvas waterfall={waterfall} currentBand={currentScheduledBand} />
           </div>
 
           <div className="st-panel" style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ padding: "4px 8px", background: "#1a1c20", borderBottom: "1px solid #454653" }}>
-              <span className="st-headline" style={{ color: "#96ccff" }}>BAND SELECT</span>
+            <div style={{ padding: "4px 8px", background: "var(--panel-2)", borderBottom: "1px solid var(--border)" }}>
+              <span className="st-headline" style={{ color: "var(--secondary)" }}>BAND SELECT</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(18, 1fr)", gap: 1, padding: 3 }}>
               {Array.from({ length: NUM_BANDS }, (_, band) => (
@@ -554,9 +642,9 @@ export default function LiveSpectrum() {
                     padding: "1px 0",
                     font: '600 9px/1.2 "JetBrains Mono", monospace',
                     textAlign: "center",
-                    background: selectedBand === band ? "#bdc2ff" : "#1a1c20",
-                    color: selectedBand === band ? "#0b1c93" : activeBands.has(band) ? "#96ccff" : "#707180",
-                    border: `1px solid ${selectedBand === band ? "#bdc2ff" : "#2a2c32"}`,
+                    background: selectedBand === band ? "var(--accent)" : "var(--panel)",
+                    color: selectedBand === band ? "#ffffff" : activeBands.has(band) ? "var(--secondary)" : "var(--muted)",
+                    border: `1px solid ${selectedBand === band ? "var(--accent)" : "var(--border)"}`,
                   }}
                   onClick={() => { setSelectedBand(band); setUserSelectedBand(true); }}
                 >
@@ -589,9 +677,9 @@ export default function LiveSpectrum() {
                 ["TELEMETRY STREAM", streamStatus],
                 ["REST BACKEND", usingBackend ? "AVAILABLE" : "OFFLINE"],
               ].map(([label, value]) => (
-                <div key={label} className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "3px 6px", background: "#1a1c20", border: "1px solid #454653" }}>
-                  <span style={{ color: "#908f9e" }}>{label}</span>
-                  <strong style={{ color: label === "TELEMETRY STREAM" && (streamStatus === "CONNECTED" || hasRealTelemetry) ? "#49df9d" : label === "INTERCEPT RATE (Pd)" ? "#49df9d" : "#e2e2e8" }}>
+                <div key={label} className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "3px 6px", background: "var(--panel)", border: "1px solid var(--border)" }}>
+                  <span style={{ color: "var(--muted)" }}>{label}</span>
+                  <strong style={{ color: label === "TELEMETRY STREAM" && (streamStatus === "CONNECTED" || hasRealTelemetry) ? "var(--success)" : label === "INTERCEPT RATE (Pd)" ? "var(--success)" : "var(--text)" }}>
                     {value}
                   </strong>
                 </div>
@@ -603,23 +691,23 @@ export default function LiveSpectrum() {
             <PanelHead icon="neurology" title="SMART SCHEDULER" badge="NEXT DECISION" badgeColor="#49df9d" />
             <div className="st-grid-12" style={{ gap: 4 }}>
               <div style={{ gridColumn: "span 6 / span 6", display: "flex", flexDirection: "column", gap: 2 }}>
-                <span className="st-tsm" style={{ color: "#908f9e" }}>SELECTED</span>
-                <strong className="st-tmd" style={{ color: "#49df9d" }}>B{currentScheduledBand}</strong>
-                <span className="st-mark" style={{ color: "#c6c5d5" }}>{currentFrequencyMHz.toLocaleString()} MHz</span>
+                <span className="st-tsm" style={{ color: "var(--muted)" }}>SELECTED</span>
+                <strong className="st-tmd" style={{ color: "var(--success)" }}>B{currentScheduledBand}</strong>
+                <span className="st-mark" style={{ color: "var(--text-muted)" }}>{currentFrequencyMHz.toLocaleString()} MHz</span>
               </div>
               <div style={{ gridColumn: "span 6 / span 6", display: "flex", flexDirection: "column", gap: 2 }}>
-                <span className="st-tsm" style={{ color: "#908f9e" }}>MODE</span>
-                <strong className="st-tmd" style={{ color: "#96ccff" }}>
+                <span className="st-tsm" style={{ color: "var(--muted)" }}>MODE</span>
+                <strong className="st-tmd" style={{ color: "var(--secondary)" }}>
                   {hasRealTelemetry ? (liveTelemetry?.modeName ?? "NORMAL_DWELL") : syntheticSystem.scheduler.selectedMode}
                 </strong>
-                <span className="st-mark" style={{ color: "#c6c5d5" }}>
+                <span className="st-mark" style={{ color: "var(--text-muted)" }}>
                   {hasRealTelemetry ? `${liveTelemetry?.metrics?.dwell_time_us ?? 500} µs` : `${syntheticSystem.scheduler.dwellTimeUs} µs`}
                 </span>
               </div>
             </div>
-            <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "3px 6px", background: "#1a1c20", border: "1px solid #454653" }}>
-              <span style={{ color: "#908f9e" }}>PRIMARY DRIVER</span>
-              <strong style={{ color: "#e2e2e8" }}>
+            <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "3px 6px", background: "var(--panel)", border: "1px solid var(--border)" }}>
+              <span style={{ color: "var(--muted)" }}>PRIMARY DRIVER</span>
+              <strong style={{ color: "var(--text)" }}>
                 {hasRealTelemetry
                   ? (liveTelemetry?.cognitiveExplanation?.decision_reason ?? liveTelemetry?.metrics?.cognitive_explanation?.decision_reason ?? "DRQN Cognitive Policy")
                   : "Recent pulse activity"}
@@ -631,12 +719,12 @@ export default function LiveSpectrum() {
             <PanelHead icon="view_timeline" title="RECENT EVENTS" badge="SCAN TIMELINE" badgeColor="#96ccff" />
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {events.map((event, index) => (
-                <div key={`${event.time}-${event.band}-${index}`} className="st-tsm" style={{ display: "flex", gap: 6, padding: "2px 6px", background: "#1a1c20", border: "1px solid rgba(69,70,83,0.4)" }}>
-                  <span style={{ color: "#908f9e" }}>{event.time}</span>
-                  <span style={{ color: "#bdc2ff" }}>B{event.band}</span>
-                  <span style={{ color: "#e2e2e8" }}>{event.frequencyMHz.toLocaleString()}</span>
-                  <span style={{ color: "#c6c5d5" }}>{event.mode}</span>
-                  <strong style={{ color: event.type === "HIT" ? "#49df9d" : event.type === "DETECTION" ? "#96ccff" : event.type === "ARMED" ? "#bdc2ff" : "#908f9e", marginLeft: "auto" }}>
+                <div key={`${event.time}-${event.band}-${index}`} className="st-tsm" style={{ display: "flex", gap: 6, padding: "2px 6px", background: "var(--panel)", border: "1px solid var(--border-subtle)" }}>
+                  <span style={{ color: "var(--muted)" }}>{event.time}</span>
+                  <span style={{ color: "var(--accent)" }}>B{event.band}</span>
+                  <span style={{ color: "var(--text)" }}>{event.frequencyMHz.toLocaleString()}</span>
+                  <span style={{ color: "var(--text-muted)" }}>{event.mode}</span>
+                  <strong style={{ color: event.type === "HIT" ? "var(--success)" : event.type === "DETECTION" ? "var(--secondary)" : event.type === "ARMED" ? "var(--accent)" : "var(--muted)", marginLeft: "auto" }}>
                     {event.type}
                   </strong>
                 </div>
