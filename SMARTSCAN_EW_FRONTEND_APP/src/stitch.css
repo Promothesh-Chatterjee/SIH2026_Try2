@@ -684,6 +684,13 @@ html.light .st-heat-cell {
   color: #334155;
 }
 
+html.light .st-azimuth-badge {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
 html.light .st-bar-quiet { background: #cbd5e1 !important; }
 html.light .st-bar-stable { background: #0284c7 !important; }
 html.light .st-bar-intercepted { background: #16a34a !important; }
