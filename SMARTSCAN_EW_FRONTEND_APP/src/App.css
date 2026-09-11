@@ -1,5 +1,7 @@
-:root {
-  /* Stitch canonical palette (DESIGN.md) mapped onto existing tokens */
+:root,
+html.dark,
+[data-theme="dark"] {
+  /* Stitch canonical palette (DESIGN.md) - Tactical Dark Mode */
   --bg: #111317;
   --panel: #1a1c20;
   --panel-2: #1e2024;
@@ -8,7 +10,9 @@
   --panel-highest: #333539;
   --border: #454653;
   --border-dim: #1e293b;
+  --border-subtle: rgba(69, 70, 83, 0.4);
   --text: #e2e2e8;
+  --text-bright: #ffffff;
   --muted: #908f9e;
   --text-muted: #c6c5d5;
   --accent: #bdc2ff;
@@ -21,6 +25,39 @@
   --warning: #f59e0b;
   --danger: #ffb4ab;
   --danger-deep: #93000a;
+  --topbar-bg: rgba(12, 14, 18, 0.92);
+  --sidebar-bg: #0c0e12;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html.light,
+[data-theme="light"] {
+  /* Tactical Light Mode - Crisp white background & high contrast elements */
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #f8fafc;
+  --panel-3: #f1f5f9;
+  --panel-lowest: #f8fafc;
+  --panel-highest: #e2e8f0;
+  --border: #cbd5e1;
+  --border-dim: #e2e8f0;
+  --border-subtle: rgba(203, 213, 225, 0.7);
+  --text: #0f172a;
+  --text-bright: #020617;
+  --muted: #64748b;
+  --text-muted: #334155;
+  --accent: #273bc2;
+  --accent-deep: #1e1b4b;
+  --accent-bright: #3730a3;
+  --secondary: #0284c7;
+  --secondary-deep: #0369a1;
+  --success: #16a34a;
+  --success-deep: #dcfce7;
+  --warning: #b45309;
+  --danger: #dc2626;
+  --danger-deep: #fee2e2;
+  --topbar-bg: rgba(255, 255, 255, 0.96);
+  --sidebar-bg: #f8fafc;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -35,4 +72,14 @@ button {
 .material-symbols-outlined {
   font-family: "Material Symbols Outlined";
   font-size: inherit;
+}
+
+.st-theme-toggle:hover {
+  border-color: var(--accent) !important;
+  background: var(--panel-2) !important;
+}
+
+.st-theme-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

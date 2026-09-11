@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en" class="dark" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -9,6 +9,16 @@
       content="SMARTSCAN EW — Tactical Spectrum Operations: AI-assisted electronic warfare spectrum surveillance"
     />
     <title>SMARTSCAN EW — Tactical Spectrum Operations</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("smartscan_theme");
+          var theme = saved === "light" ? "light" : "dark";
+          document.documentElement.className = theme;
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -20,7 +30,7 @@
       rel="stylesheet"
     />
   </head>
-  <body style="background: #111317">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

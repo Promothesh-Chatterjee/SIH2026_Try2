@@ -1,4 +1,4 @@
-import React, {
+import {
   useEffect,
   useState,
 } from "react";
@@ -63,8 +63,8 @@ export default function SystemConnection() {
         alignItems: "center",
         gap: 6,
         padding: "2px 6px",
-        background: "#1a1c20",
-        border: "1px solid #454653",
+        background: "var(--panel)",
+        border: "1px solid var(--border)",
         borderRadius: 0,
       }}
     >
@@ -72,15 +72,15 @@ export default function SystemConnection() {
         style={{
           width: 6,
           height: 6,
-          background: connected ? "#49df9d" : "#f59e0b",
+          background: connected ? "var(--success)" : "var(--warning)",
           display: "inline-block",
         }}
       />
       <div>
-        <strong style={{ color: "#e2e2e8" }}>
+        <strong style={{ color: "var(--text)" }}>
           {status}
         </strong>
-        <span style={{ color: "#908f9e" }}>
+        <span style={{ color: "var(--muted)" }}>
           {" "}
           {detail}
         </span>
