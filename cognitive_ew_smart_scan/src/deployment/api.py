@@ -471,7 +471,7 @@ async def lifespan(app: FastAPI):  # type: ignore
                     drqn.eval()
                     moe = SmartScanMoE(
                         drqn,
-                        {**moe_cfg, "n_bands": n_bands_api, "n_modes": n_modes_api, "n_actions": n_actions_api, "device": STATE["device"]},
+                        {**moe_cfg, "n_bands": n_bands_api, "n_modes": n_modes_api, "n_actions": n_actions_api, "device": STATE["device"], "enable_t0": True, "tau": 0.05},
                     )
                     STATE["scheduler"] = drqn
                     STATE["moe"] = moe
@@ -552,7 +552,7 @@ async def lifespan(app: FastAPI):  # type: ignore
         STATE["receiver_adapter"] = receiver_adapter
         STATE["state_builder"] = state_builder
 
-        sched = STATE.get("scheduler") or STATE.get("moe")
+        sched = STATE.get("moe") or STATE.get("scheduler")
         if sched is not None:
             # Wrap standalone DRQN in DRQNBaseline for uniform inference interface if needed
             from ..models.baseline_suite import build_baseline
@@ -1201,22 +1201,54 @@ def _telemetry_payload() -> dict[str, Any]:
         if not band_priors and controller and controller.state_builder:
             band_priors = getattr(controller.state_builder, "ema_activity", np.zeros(CANONICAL_N_BANDS)).tolist()
 
+        ce = latest.get("cognitive_explanation", {})
+        sm = latest.get("system_metrics", {})
+        dwell_us = float(latest.get("dwell_time_us", 500.0) or 500.0)
+        retune_us = float(latest.get("retune_latency_us", 15.0) or 15.0)
+        pd_val = float(latest.get("rolling_pd", sm.get("rolling_pd", 0.0)) or 0.0)
+        lat_val = float(latest.get("rolling_median_latency_us", sm.get("rolling_median_latency_us", 0.0)) or 0.0)
+        drqn_sc = float(ce.get("drqn_score", latest.get("action_score", 0.0)) or 0.0)
+        eta_us = float(max(0.0, float(ce.get("predicted_eta_us", ce.get("eta_us", 0.0)) or 0.0)))
+        pred_conf = float(ce.get("prediction_confidence", 0.0) or 0.0)
+        expl_press = float(ce.get("exploration_pressure", ce.get("revisit_pct", 0.0)) or 0.0)
+        q_mrg = float(ce.get("q_margin", 0.0) or 0.0)
+        dec_reason = str(ce.get("decision_reason", ce.get("reason", "DRQN Cognitive Policy")))
+
         return {
             "live": True,
             "source": "publisher",
-            "step": latest.get("step"),
-            "band": latest.get("band"),
-            "mode": latest.get("mode"),
-            "mode_name": latest.get("mode_name"),
+            "step": latest.get("step", 0),
+            "band": latest.get("band", 0),
+            "mode": latest.get("mode", 1),
+            "mode_name": latest.get("mode_name", "NORMAL_DWELL"),
             "hit": bool(latest.get("hit", False)),
-            "dwell_time_us": latest.get("dwell_time_us"),
-            "rolling_pd": latest.get("rolling_pd"),
-            "rolling_median_latency_us": latest.get("rolling_median_latency_us"),
+            "dwell_time_us": dwell_us,
+            "retune_latency_us": retune_us,
+            "rolling_pd": pd_val,
+            "rolling_median_latency_us": lat_val,
+            "drqn_score": drqn_sc,
+            "predicted_eta_us": eta_us,
+            "prediction_confidence": pred_conf,
+            "exploration_pressure": expl_press,
+            "q_margin": q_mrg,
+            "decision_reason": dec_reason,
             "bandPriorities": band_priors,
             "pdws": latest.get("detections", latest.get("pdws", [])),
             "emitters": active_emitters if active_emitters else latest.get("emitters", []),
-            "cognitive_explanation": latest.get("cognitive_explanation", {}),
-            "system_metrics": latest.get("system_metrics", {}),
+            "cognitive_explanation": {
+                **ce,
+                "drqn_score": drqn_sc,
+                "predicted_eta_us": eta_us,
+                "prediction_confidence": pred_conf,
+                "exploration_pressure": expl_press,
+                "q_margin": q_mrg,
+                "decision_reason": dec_reason,
+            },
+            "system_metrics": {
+                **sm,
+                "rolling_pd": pd_val,
+                "rolling_median_latency_us": lat_val,
+            },
             "clock_us": latest.get("clock_us", 0),
             "metrics": latest,
         }
@@ -1229,8 +1261,24 @@ def _telemetry_payload() -> dict[str, Any]:
             "bandPriorities": disk.get("band_priorities", []),
             "pdws": disk.get("pdws", []),
             "emitters": disk.get("emitters", []),
+            "dwell_time_us": float(disk.get("dwell_time_us", 500.0) or 500.0),
+            "rolling_pd": float(disk.get("rolling_pd", 0.0) or 0.0),
+            "rolling_median_latency_us": float(disk.get("rolling_median_latency_us", 0.0) or 0.0),
         }
-    return {"live": False, "source": "none", "message": disk.get("live_message", "no live telemetry yet")}
+    return {
+        "live": False,
+        "source": "none",
+        "message": disk.get("live_message", "no live telemetry yet"),
+        "dwell_time_us": 0.0,
+        "rolling_pd": 0.0,
+        "rolling_median_latency_us": 0.0,
+        "drqn_score": 0.0,
+        "predicted_eta_us": 0.0,
+        "prediction_confidence": 0.0,
+        "exploration_pressure": 0.0,
+        "q_margin": 0.0,
+        "bandPriorities": [0.0] * CANONICAL_N_BANDS,
+    }
 
 
 @app.websocket("/ws/state")
@@ -1362,8 +1410,18 @@ async def _run_live_mission_stream(scenario_name: str, speed_hz: float, max_dwel
             if max_dwells is not None and dwell_idx >= max_dwells:
                 break
 
-            t_now = controller.clock.current_time_us
-            feed_window = [p for p in scenario_pulses if t_now <= p["time_us"] <= t_now + 2500.0]
+            t_now = float(controller.clock.current_time_us)
+            scenario_duration_us = float(scenario_pulses[-1]["time_us"]) if scenario_pulses else 1_000_000.0
+            t_mod = t_now % max(10_000.0, scenario_duration_us)
+            feed_window = [
+                {
+                    **p,
+                    "time_us": float(t_now + (p["time_us"] - t_mod)),
+                    "toa_us": float(t_now + (p["time_us"] - t_mod)),
+                }
+                for p in scenario_pulses
+                if t_mod - 500.0 <= p["time_us"] <= t_mod + 3500.0
+            ]
             frame = await asyncio.to_thread(
                 controller.execute_operational_step,
                 external_rf_stream=feed_window,

@@ -224,6 +224,7 @@ class SmartScanMoE(nn.Module):
         self.default_tau: float = float(config.get("tau", 0.0))
         self._consecutive_empty_band: int = 0
         self._consecutive_empty_total: int = 0
+        self._consecutive_dwells_same_band: int = 0
         self._last_band: int = -1
         self._historical_hits = np.zeros(self.n_bands, dtype=np.int32)
 
@@ -310,6 +311,7 @@ class SmartScanMoE(nn.Module):
         self.temporal_predictor.reset()
         self._consecutive_empty_band = 0
         self._consecutive_empty_total = 0
+        self._consecutive_dwells_same_band = 0
         self._last_band = -1
         self._historical_hits.fill(0)
         self._preemptive_urgency.fill(0.0)
@@ -319,6 +321,11 @@ class SmartScanMoE(nn.Module):
         """Update revisit tracking and simulated clock when an action is executed."""
         band = band_of_action(int(action), self.n_modes)
         mode = mode_of_action(int(action), self.n_modes)
+        if band == self._last_band:
+            self._consecutive_dwells_same_band += 1
+        else:
+            self._consecutive_dwells_same_band = 1
+        self._last_band = band
         self.revisit_agent.update(band)
         dwell_mult = DEFAULT_DWELL_MULTIPLIERS[mode] if mode < len(DEFAULT_DWELL_MULTIPLIERS) else 1.0
         self._simulated_clock_us += 500.0 * dwell_mult
@@ -644,6 +651,13 @@ class SmartScanMoE(nn.Module):
                 if b_cand in pred_b_set or pred_probs[b_cand] >= 0.4:
                     u_action = best_cand_act
 
+        cand_pred = None
+        if self.enable_t0 and pred_candidates and not force_exploration and (self._consecutive_empty_band < 2):
+            for p_cand in pred_candidates:
+                if (p_cand != self._last_band or self._consecutive_dwells_same_band < 1) and (pred_probs[p_cand] >= 0.4):
+                    cand_pred = p_cand
+                    break
+
         mode = None
         if self.eager_weight == 0.0 and self.revisit_weight == 0.0 and self.semantic_weight > 0.0 and not force_exploration:
             action = int(np.argmax(fused_scores))
@@ -660,8 +674,8 @@ class SmartScanMoE(nn.Module):
                     self.temporal_predictor.reservation_manager.mark_executed(act_res["reservation_id"])
             else:
                 reason = "Predictive_utility_active"
-        elif self.enable_t0 and pred_candidates and (pred_probs[pred_candidates[0]] >= 0.5) and not force_exploration and (self._consecutive_empty_band < 2):
-            best_b = pred_candidates[0]
+        elif cand_pred is not None:
+            best_b = cand_pred
             reason = "Predictive_hop_intercept"
             eta = pred_etas.get(best_b, 500.0)
             if eta <= 125.0:
@@ -674,11 +688,13 @@ class SmartScanMoE(nn.Module):
             best_b = int(np.argmax(per_vec))
             reason = "Preemptive_intercept"
         elif is_confident and all_candidates and not force_exploration and (self._consecutive_empty_band < 2):
+            dwell_penalty = 10.0 * float(self._consecutive_dwells_same_band)
             cand_scores = np.array([
                 self.eager_weight * (band_max[b] - q_median)
                 + 0.5 * occ_vec[b]
                 + 2.0 * self.preemptive_weight * per_vec[b]
                 + (1.5 * pred_probs[b] if self.enable_t0 else 0.0)
+                - (dwell_penalty if b == self._last_band else 0.0)
                 for b in all_candidates
             ])
             if self.enable_spatial:
@@ -696,21 +712,22 @@ class SmartScanMoE(nn.Module):
                 best_b = int(all_candidates[int(np.argmax(cand_scores))])
             reason = "DRQN_topk_active"
         elif occ_candidates and not force_exploration and (self._consecutive_empty_band < 2):
-            # Cognitive fallback: occupied bands
-            occ_vals = np.array([occ_vec[b] for b in occ_candidates])
+            # Cognitive fallback: prefer another occupied band if already dwelled here
+            active_cands = [b for b in occ_candidates if b != self._last_band] if (self._consecutive_dwells_same_band >= 1 and len(occ_candidates) > 1) else occ_candidates
+            occ_vals = np.array([occ_vec[b] for b in active_cands])
             if eff_tau > 0.0:
                 probs = np.exp(occ_vals / max(1e-5, eff_tau))
                 probs = probs / np.sum(probs)
-                best_b = int(np.random.choice(occ_candidates, p=probs))
+                best_b = int(np.random.choice(active_cands, p=probs))
             else:
-                best_b = int(occ_candidates[int(np.argmax(occ_vals))])
+                best_b = int(active_cands[int(np.argmax(occ_vals))])
             reason = "Occupancy_fallback"
         else:
             # Cognitive exploration: revisit + uncertainty + historical hits + preemptive urgency
             max_hist = float(np.max(self._historical_hits)) if len(self._historical_hits) > 0 else 0.0
             hist_norm = (self._historical_hits / max(1.0, max_hist)).astype(np.float32)
             explor_scores = 0.40 * revisit_norm + 0.35 * unc_vec + 0.15 * hist_norm + 0.10 * per_vec
-            if self._consecutive_empty_band >= 1 and 0 <= self._last_band < self.n_bands:
+            if (self._consecutive_empty_band >= 1 or self._consecutive_dwells_same_band >= 1) and 0 <= self._last_band < self.n_bands:
                 explor_scores[self._last_band] = -1e9
             best_b = int(np.argmax(explor_scores))
             reason = "Cognitive_exploration"

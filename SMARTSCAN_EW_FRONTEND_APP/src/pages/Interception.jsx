@@ -104,15 +104,16 @@ export default function Interception() {
     [displayEvents, selectedEventId]
   );
 
+  const backendConnected = Boolean(missionStatus);
   const hasLive = missionStatus && missionStatus.total_dwells > 0;
-  const hitCount = hasLive ? missionStatus.total_hits : MOCK_INTERCEPT_EVENTS.filter((event) => event.type === "HIT").length;
-  const totalCount = hasLive ? missionStatus.total_dwells : MOCK_INTERCEPT_EVENTS.length;
-  const missCount = hasLive ? (missionStatus.total_dwells - missionStatus.total_hits) : MOCK_INTERCEPT_EVENTS.filter((event) => event.type === "MISS").length;
-  const pdPct = hasLive ? (missionStatus.rolling_pd * 100).toFixed(1) + "%" : "74.0%";
-  const latencyUs = hasLive ? missionStatus.rolling_median_latency_us.toFixed(1) + " µs" : "110 µs";
+  const hitCount = hasLive ? missionStatus.total_hits : (backendConnected ? 0 : MOCK_INTERCEPT_EVENTS.filter((event) => event.type === "HIT").length);
+  const totalCount = hasLive ? missionStatus.total_dwells : (backendConnected ? 0 : MOCK_INTERCEPT_EVENTS.length);
+  const missCount = hasLive ? (missionStatus.total_dwells - missionStatus.total_hits) : (backendConnected ? 0 : MOCK_INTERCEPT_EVENTS.filter((event) => event.type === "MISS").length);
+  const pdPct = hasLive ? (missionStatus.rolling_pd * 100).toFixed(1) + "%" : (backendConnected ? "0.0%" : "74.0%");
+  const latencyUs = hasLive ? missionStatus.rolling_median_latency_us.toFixed(1) + " µs" : (backendConnected ? "0.0 µs" : "110 µs");
   const currentAperture = liveTelemetry
-    ? `B${liveTelemetry.band ?? 5} · ${liveTelemetry.modeName ?? "NORMAL_DWELL"}`
-    : "B5 · NORMAL_DWELL";
+    ? `B${liveTelemetry.band ?? 0} · ${liveTelemetry.modeName ?? "NORMAL_DWELL"}`
+    : (backendConnected ? "B0 · 0.0" : "B5 · NORMAL_DWELL");
 
   const bandActivity = (liveTelemetry && Array.isArray(liveTelemetry.bandPriorities) && liveTelemetry.bandPriorities.length === 36)
     ? liveTelemetry.bandPriorities
