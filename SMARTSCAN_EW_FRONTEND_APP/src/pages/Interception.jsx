@@ -35,9 +35,10 @@ function eventClass(type) {
 }
 
 export default function Interception() {
-  const [selectedEventId, setSelectedEventId] = useState(3);
+  const [selectedEventId, setSelectedEventId] = useState(null);
   const [missionStatus, setMissionStatus] = useState(null);
   const [liveTelemetry, setLiveTelemetry] = useState(null);
+  const [liveEvents, setLiveEvents] = useState([]);
 
   useEffect(() => {
     let active = true;
@@ -65,6 +66,23 @@ export default function Interception() {
         onTelemetry(t) {
           if (active && t?.valid && t?.live) {
             setLiveTelemetry(t);
+            const evtId = t.step ?? Date.now();
+            const newEvt = {
+              id: evtId,
+              timeUs: Math.round(t.clockUs ?? 0),
+              band: t.band ?? 0,
+              frequencyMHz: (t.band ?? 0) * 500 + 250,
+              mode: t.modeName ?? "NORMAL_DWELL",
+              type: t.hit ? "HIT" : "MISS",
+              expectedUs: t.cognitiveExplanation?.predicted_eta_us > 0 ? Math.round(t.cognitiveExplanation.predicted_eta_us) : null,
+              actualUs: t.hit ? Math.round(t.clockUs ?? 0) : null,
+              errorUs: t.cognitiveExplanation?.predicted_eta_us > 0 ? Math.round((t.clockUs ?? 0) - t.cognitiveExplanation.predicted_eta_us) : null,
+              trackId: t.cognitiveExplanation?.predicted_track_id !== "None" ? t.cognitiveExplanation?.predicted_track_id : null,
+            };
+            setLiveEvents((prev) => {
+              if (prev.length > 0 && prev[0].id === newEvt.id) return prev;
+              return [newEvt, ...prev.slice(0, 49)];
+            });
           }
         },
       });
@@ -77,11 +95,13 @@ export default function Interception() {
     };
   }, []);
 
+  const displayEvents = liveEvents.length > 0 ? liveEvents : MOCK_INTERCEPT_EVENTS;
+
   const selectedEvent = useMemo(
     () =>
-      MOCK_INTERCEPT_EVENTS.find((event) => event.id === selectedEventId) ??
-      MOCK_INTERCEPT_EVENTS[0],
-    [selectedEventId]
+      displayEvents.find((event) => event.id === selectedEventId) ??
+      displayEvents[0],
+    [displayEvents, selectedEventId]
   );
 
   const hasLive = missionStatus && missionStatus.total_dwells > 0;
@@ -93,6 +113,10 @@ export default function Interception() {
   const currentAperture = liveTelemetry
     ? `B${liveTelemetry.band ?? 5} · ${liveTelemetry.modeName ?? "NORMAL_DWELL"}`
     : "B5 · NORMAL_DWELL";
+
+  const bandActivity = (liveTelemetry && Array.isArray(liveTelemetry.bandPriorities) && liveTelemetry.bandPriorities.length === 36)
+    ? liveTelemetry.bandPriorities
+    : BAND_ACTIVITY;
 
   const gridColumns = 30;
 
@@ -157,11 +181,12 @@ export default function Interception() {
               {Array.from({ length: 36 }, (_, band) => (
                 <div className="st-timeline" key={band} style={{ height: 14, gap: 1, marginBottom: 1 }}>
                   {Array.from({ length: gridColumns }, (_, column) => {
-                    const active = BAND_ACTIVITY[band] > 0.3 && (column + band) % 7 === 0;
-                    const event = MOCK_INTERCEPT_EVENTS.find(
+                    const activityVal = bandActivity[band] ?? 0;
+                    const active = activityVal > 0.25 && (column + band) % 5 === 0;
+                    const event = displayEvents.find(
                       (item) =>
                         item.band === band &&
-                        Math.abs(item.timeUs - (12000 + column * 20)) < 12
+                        Math.abs(item.timeUs - (12000 + column * 20)) < 15
                     );
                     let bg = "transparent";
                     if (event?.type === "HIT") bg = "#49df9d";
@@ -174,8 +199,8 @@ export default function Interception() {
                         onClick={() => {
                           if (event) setSelectedEventId(event.id);
                         }}
-                        title={`Band ${band}, event ${event ? TYPE_LABELS[event.type] : "activity"}`}
-                        aria-label={`Band ${band}, event ${event ? TYPE_LABELS[event.type] : "activity"}`}
+                        title={`Band ${band}, event ${event ? (TYPE_LABELS[event.type] ?? event.type) : "activity"}`}
+                        aria-label={`Band ${band}, event ${event ? (TYPE_LABELS[event.type] ?? event.type) : "activity"}`}
                         style={{
                           flex: 1,
                           margin: 0,
@@ -203,11 +228,11 @@ export default function Interception() {
 
       <div className="st-grid-12">
         <div className="st-span-8 st-panel">
-          <PanelHead icon="view_timeline" title="CHRONOLOGICAL DWELL INTERCEPTION STREAM" badge={`${MOCK_INTERCEPT_EVENTS.length} EVENTS`} badgeColor="#bdc2ff" />
+          <PanelHead icon="view_timeline" title="CHRONOLOGICAL DWELL INTERCEPTION STREAM" badge={`${displayEvents.length} EVENTS`} badgeColor="#bdc2ff" />
           <div className="st-table-wrap st-table-wrap-compact">
           <StitchTable
             columns={["T-OFFSET", "RX CENTER FREQ", "BAND ID", "DWELL DURATION", "STATUS", "EMITTER ID", "TIMING DELTA"]}
-            rows={MOCK_INTERCEPT_EVENTS.map((event) => [
+            rows={displayEvents.map((event) => [
               `${event.timeUs} µs`,
               `${event.frequencyMHz.toLocaleString()} MHz`,
               `B${event.band}`,
@@ -220,16 +245,8 @@ export default function Interception() {
                     : event.mode === "REVISIT"
                       ? "120 µs"
                       : "80 µs",
-              <strong key="t" style={{ color: TYPE_COLORS[event.type] }}>{TYPE_LABELS[event.type]}</strong>,
-              event.band === 6
-                ? "E-01"
-                : event.band === 10
-                  ? "E-02"
-                  : event.band === 16
-                    ? "E-03"
-                    : event.band === 28
-                      ? "E-04"
-                      : "—",
+              <strong key="t" style={{ color: TYPE_COLORS[event.type] ?? "#e2e2e8" }}>{TYPE_LABELS[event.type] ?? event.type}</strong>,
+              event.trackId ? `TRK-${event.trackId}` : `E-${String((event.band % 4) + 1).padStart(2, "0")}`,
               event.errorUs === null ? "N/A" : `${event.errorUs > 0 ? "+" : ""}${event.errorUs} µs`,
             ])}
           />

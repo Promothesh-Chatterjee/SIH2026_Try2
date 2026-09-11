@@ -112,6 +112,23 @@ export const api = {
     return request("/mission/status");
   },
 
+  startMissionStream(params = {}) {
+    return request("/mission/stream/start", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  },
+
+  stopMissionStream() {
+    return request("/mission/stream/stop", {
+      method: "POST",
+    });
+  },
+
+  getMissionStreamStatus() {
+    return request("/mission/stream/status");
+  },
+
   resetMission() {
     return request("/reset", {
       method: "POST",

@@ -91,11 +91,33 @@ class DRQNScheduler(nn.Module):
             nn.ReLU(),
             nn.Linear(128, 1),
         )
+
+        # Phase 9B-R4-1: Band-local action-value feature routing
+        # Maps local band evidence: band_features (10) -> 32
+        self.band_features = obs_dim // n_bands if n_bands > 0 else 10
+        self.band_encoder = nn.Sequential(
+            nn.Linear(self.band_features, 32),
+            nn.ReLU(),
+        )
+        # Global temporal context projection: lstm_hidden (256) -> 32
+        self.ctx_proj = nn.Sequential(
+            nn.Linear(lstm_hidden, 32),
+            nn.ReLU(),
+        )
+        # Explicitly band-local advantage head: takes [band_emb_b (32) + ctx (32)] -> 5 modes for band b
+        self.band_advantage_head = nn.Sequential(
+            nn.Linear(32 + 32, 32),
+            nn.ReLU(),
+            nn.Linear(32, self.n_modes),
+        )
+
+        # Retain advantage_stream and q_head for backward compatibility
         self.advantage_stream = nn.Sequential(
             nn.Linear(lstm_hidden, 256),
             nn.ReLU(),
             nn.Linear(256, self.n_actions),
         )
+        self.use_band_routing = True
 
         # Also keep q_head alias for compatibility (combined)
         self.q_head = nn.Sequential(
@@ -121,9 +143,49 @@ class DRQNScheduler(nn.Module):
         )
 
         logger.info(
-            "DRQNScheduler(d=%d, bands=%d, modes=%d, actions=%d, hidden=%d, layers=%d) dueling+aux",
-            obs_dim, n_bands, n_modes, self.n_actions, lstm_hidden, lstm_layers,
+            "DRQNScheduler(d=%d, bands=%d, modes=%d, actions=%d, hidden=%d, layers=%d) band_routing=%s dueling+aux",
+            obs_dim, n_bands, n_modes, self.n_actions, lstm_hidden, lstm_layers, self.use_band_routing,
         )
+
+    def calibrate_band_routing(self) -> None:
+        """Calibrate newly instantiated band-routing layers for causal locality.
+
+        Ensures:
+          1. Strong local evidence (occupancy, det_rate, priority) routes directly
+             to the corresponding band's mode advantages.
+          2. Neutral states produce balanced advantages across all 36 bands.
+        """
+        with torch.no_grad():
+            self.band_encoder[0].weight.zero_()
+            self.band_encoder[0].bias.zero_()
+            # Feed occupancy (feat 0), det_rate (feat 1), priority (feat 9)
+            self.band_encoder[0].weight[:8, 0] = 0.5
+            self.band_encoder[0].weight[:8, 1] = 0.5
+            self.band_encoder[0].weight[:8, 9] = 0.5
+
+            self.ctx_proj[0].weight.zero_()
+            self.ctx_proj[0].bias.zero_()
+
+            self.band_advantage_head[0].weight.zero_()
+            self.band_advantage_head[0].bias.zero_()
+            self.band_advantage_head[0].weight[:8, :8] = torch.eye(8)
+
+            self.band_advantage_head[2].weight.zero_()
+            self.band_advantage_head[2].bias.zero_()
+            self.band_advantage_head[2].weight[:, :8] = 0.2
+            self.band_advantage_head[2].bias[1] = 0.05  # slight default bias to NORMAL_DWELL
+
+        logger.info("Calibrated DRQNScheduler band-routing layers for locality.")
+
+    def load_state_dict(self, state_dict: dict, strict: bool = True, assign: bool = False):
+        """Custom state_dict loader to seamlessly support band routing transfer from Gate20k."""
+        has_band_routing = any(k.startswith("band_encoder") for k in state_dict.keys())
+        if self.use_band_routing and not has_band_routing:
+            logger.info("Checkpoint does not contain band_routing layers; loading shared weights and calibrating routing.")
+            result = super().load_state_dict(state_dict, strict=False, assign=assign)
+            self.calibrate_band_routing()
+            return result
+        return super().load_state_dict(state_dict, strict=strict, assign=assign)
 
     def forward(
         self, obs: torch.Tensor, hidden: tuple[torch.Tensor, torch.Tensor] | None = None
@@ -147,13 +209,25 @@ class DRQNScheduler(nn.Module):
             raise ValueError(
                 f"Input observation feature dim {obs.size(-1)} does not match expected obs_dim {self.obs_dim}"
             )
-        # LayerNorm over last dim
+        # LayerNorm over last dim for temporal LSTM
         x = self.input_norm(obs)
         lstm_out, hidden_out = self.lstm(x, hidden)
 
         # Dueling combination
         v = self.value_stream(lstm_out)  # (B,T,1)
-        a = self.advantage_stream(lstm_out)  # (B,T,n_actions)
+
+        if self.use_band_routing and (self.obs_dim == self.n_bands * self.band_features):
+            # Phase 9B-R4-1: Band b evidence -> Band b advantage
+            B, T, _ = obs.shape
+            obs_bands = obs.view(B, T, self.n_bands, self.band_features)
+            band_emb = self.band_encoder(obs_bands)  # (B, T, 36, 32)
+            ctx = self.ctx_proj(lstm_out).unsqueeze(2).expand(-1, -1, self.n_bands, -1)  # (B, T, 36, 32)
+            joint = torch.cat([band_emb, ctx], dim=-1)  # (B, T, 36, 64)
+            a_bands = self.band_advantage_head(joint)  # (B, T, 36, 5)
+            a = a_bands.view(B, T, self.n_actions)  # (B, T, 180)
+        else:
+            a = self.advantage_stream(lstm_out)  # (B,T,n_actions)
+
         q_values = v + a - a.mean(dim=-1, keepdim=True)
 
         # Aux heads: per-action probabilities and per-action expected intercept time.
@@ -200,7 +274,7 @@ class DRQNScheduler(nn.Module):
         self,
         obs: torch.Tensor,
         hidden: tuple[torch.Tensor, torch.Tensor] | None = None,
-        mode_selection: str = "band_first_decoupled",
+        mode_selection: str = "flat_argmax",
         consecutive_empty: int = 0,
         tau: float = 0.0,
     ) -> tuple[int, tuple[torch.Tensor, torch.Tensor]]:
@@ -209,8 +283,8 @@ class DRQNScheduler(nn.Module):
         Args:
             obs: (obs_dim,) or (1, obs_dim) or (1,1,obs_dim).
             hidden: Current hidden state.
-            mode_selection: "band_first_decoupled" for decoupled band-first hierarchy,
-                or "flat_argmax" for classic flat argmax.
+            mode_selection: "flat_argmax" for classic flat argmax over all 180 actions,
+                or "band_first_decoupled" for legacy decoupled band-first hierarchy.
             consecutive_empty: consecutive non-detection count on current band.
             tau: Boltzmann temperature for band selection (0.0 = argmax).
 
@@ -268,4 +342,49 @@ class DRQNScheduler(nn.Module):
         else:
             action = int(torch.argmax(q[0, -1]).item())
 
+
+        raw_q_np = q[0, -1].detach().cpu().numpy().reshape(-1)
+        raw_drqn_action = int(np.argmax(raw_q_np))
+        raw_drqn_band = band_of_action(raw_drqn_action, self.n_modes)
+        raw_drqn_mode = mode_of_action(raw_drqn_action, self.n_modes)
+        final_action = int(action)
+        final_band = band_of_action(final_action, self.n_modes)
+        final_mode = mode_of_action(final_action, self.n_modes)
+        action_was_overridden = bool(final_action != raw_drqn_action)
+        override_source = mode_selection if action_was_overridden else None
+        exploration_source = (
+            "tau_boltzmann"
+            if (mode_selection == "band_first_decoupled" and tau > 0.0 and 'order_b' in locals() and best_b != int(order_b[0]))
+            else "none"
+        )
+        decision_source = "ml_exploitation" if not action_was_overridden else "legacy_override"
+        q_selected = float(raw_q_np[final_action]) if 0 <= final_action < len(raw_q_np) else 0.0
+        q_max = float(np.max(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+        q_mean = float(np.mean(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+        q_std = float(np.std(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+
+        if mode_selection == "flat_argmax":
+            assert final_action == raw_drqn_action, (
+                f"Discrepancy in flat_argmax: final={final_action} != raw={raw_drqn_action}"
+            )
+            assert not action_was_overridden, "Action was marked overridden in flat_argmax"
+
+        self.last_decision_telemetry = {
+            "raw_drqn_action": raw_drqn_action,
+            "raw_drqn_band": raw_drqn_band,
+            "raw_drqn_mode": raw_drqn_mode,
+            "final_action": final_action,
+            "final_band": final_band,
+            "final_mode": final_mode,
+            "action_was_overridden": action_was_overridden,
+            "override_source": override_source,
+            "exploration_source": exploration_source,
+            "decision_source": decision_source,
+            "q_selected": q_selected,
+            "q_max": q_max,
+            "q_mean": q_mean,
+            "q_std": q_std,
+        }
+
         return action, h
+

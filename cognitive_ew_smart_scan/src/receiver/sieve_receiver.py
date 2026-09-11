@@ -353,6 +353,16 @@ class SieveReceiver:
         return list(self._pulse_buffer.values())
 
     def _detect_buffered_interval(self, start_us: float, end_us: float) -> List[DetectionObservation]:
+        # Keep buffer bounded: purge pulses whose time window has fully elapsed
+        cutoff_us = start_us - 2000.0
+        expired_keys = []
+        for key, pulse in self._pulse_buffer.items():
+            toa = pulse.get("toa_us", pulse.get("time_us", 0.0)) if isinstance(pulse, dict) else getattr(pulse, "toa_us", getattr(pulse, "time_us", 0.0))
+            if float(toa) < cutoff_us:
+                expired_keys.append(key)
+        for key in expired_keys:
+            self._pulse_buffer.pop(key, None)
+
         detections: List[DetectionObservation] = []
         for pulse in list(self._pulse_buffer.values()):
             detection = self._evaluate_interval(pulse, start_us, end_us)

@@ -57,6 +57,8 @@ class ReceiverAdapter:
         self.ibw_mhz = float(ibw_mhz)
         self.sensitivity_dbm = float(sensitivity_dbm)
         self._is_connected: bool = True
+        self._pulse_cursor: int = 0
+        self._last_stream_id: Optional[int] = None
 
     @property
     def is_connected(self) -> bool:
@@ -70,6 +72,8 @@ class ReceiverAdapter:
         """Reset receiver hardware state."""
         self.receiver.reset()
         self._is_connected = True
+        self._pulse_cursor = 0
+        self._last_stream_id = None
 
     def tune(self, center_freq_mhz: float) -> float:
         """Retune receiver local oscillator to center_freq_mhz."""
@@ -95,19 +99,39 @@ class ReceiverAdapter:
         if not self._is_connected:
             raise ReceiverHardwareError("Cannot feed RF: RF Receiver is disconnected")
 
+        # Support RadioEnvironment directly if passed
+        if hasattr(pulses, "peek_time") and hasattr(pulses, "step"):
+            ingested = 0
+            while pulses.remaining_events > 0:
+                next_time = pulses.peek_time()
+                if next_time is not None and max_time_us is not None and next_time > float(max_time_us):
+                    break
+                event = pulses.step()
+                if event and getattr(event, "event_type", None) == "entry" and event.pulse is not None:
+                    self.receiver.add_pulse(event.pulse)
+                    ingested += 1
+            return ingested
+
+        if id(pulses) != self._last_stream_id:
+            self._last_stream_id = id(pulses)
+            self._pulse_cursor = 0
+
         ingested = 0
-        for p in pulses:
+        n = len(pulses)
+        while self._pulse_cursor < n:
+            p = pulses[self._pulse_cursor]
             # Extract time
             t = getattr(p, "time_us", getattr(p, "toa_us", None))
             if t is None and isinstance(p, dict):
                 t = p.get("time_us", p.get("toa_us"))
             if t is None:
+                self._pulse_cursor += 1
                 continue
 
             t = float(t)
             if max_time_us is not None and t > float(max_time_us):
                 # Strictly enforce causality: no future pulse entering buffer
-                continue
+                break
 
             # Ensure pulse dictionary has standard field names expected by SieveReceiver
             pulse_to_add = p
@@ -125,6 +149,7 @@ class ReceiverAdapter:
                 }
 
             self.receiver.add_pulse(pulse_to_add)
+            self._pulse_cursor += 1
             ingested += 1
 
         return ingested
