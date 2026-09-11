@@ -48,9 +48,11 @@ export default function SystemConnection() {
     }
 
     checkBackend();
+    const interval = setInterval(checkBackend, 2500);
 
     return () => {
       active = false;
+      clearInterval(interval);
     };
   }, []);
 
