@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import SystemConnection from "./SystemConnection";
+import ThemeToggle from "./ThemeToggle";
 
 function useUtcClock() {
   const [now, setNow] = useState(() => new Date());
@@ -20,11 +21,11 @@ export default function TopBar() {
       <span
         className="st-tmd"
         style={{
-          background: "#1a1c20",
-          border: "1px solid #454653",
+          background: "var(--panel)",
+          border: "1px solid var(--border)",
           borderRadius: 0,
           padding: "2px 6px",
-          color: "#bdc2ff",
+          color: "var(--accent)",
           whiteSpace: "nowrap",
         }}
       >
@@ -32,13 +33,13 @@ export default function TopBar() {
       </span>
       <span
         className="st-badge"
-        style={{ color: "#49df9d", whiteSpace: "nowrap" }}
+        style={{ color: "var(--success)", whiteSpace: "nowrap" }}
       >
         <span
           style={{
             width: 6,
             height: 6,
-            background: "#49df9d",
+            background: "var(--success)",
             display: "inline-block",
           }}
         />
@@ -47,30 +48,31 @@ export default function TopBar() {
       <span
         className="st-tsm"
         style={{
-          background: "#1a1c20",
-          border: "1px solid #454653",
+          background: "var(--panel)",
+          border: "1px solid var(--border)",
           borderRadius: 0,
           padding: "2px 6px",
-          color: "#c6c5d5",
+          color: "var(--text-muted)",
           whiteSpace: "nowrap",
         }}
       >
-        RX: <strong style={{ color: "#bdc2ff" }}>1 GHz IBW LOCKED</strong>
+        RX: <strong style={{ color: "var(--accent)" }}>1 GHz IBW LOCKED</strong>
       </span>
       <span
         className="st-tsm"
         style={{
-          background: "#1a1c20",
-          border: "1px solid #454653",
+          background: "var(--panel)",
+          border: "1px solid var(--border)",
           borderRadius: 0,
           padding: "2px 6px",
-          color: "#c6c5d5",
+          color: "var(--text-muted)",
           whiteSpace: "nowrap",
         }}
       >
-        SCHEDULER: <strong style={{ color: "#49df9d" }}>DRQN+MoE ACTIVE</strong>
+        SCHEDULER: <strong style={{ color: "var(--success)" }}>DRQN+MoE ACTIVE</strong>
       </span>
       <span style={{ flex: 1 }} />
+      <ThemeToggle />
       <SystemConnection />
     </header>
   );
