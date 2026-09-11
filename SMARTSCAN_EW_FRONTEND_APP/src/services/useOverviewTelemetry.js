@@ -45,8 +45,8 @@ function buildDefault() {
     rollingMedianLatencyUs: 0,
     missionClockUs: 0,
     missionActive: false,
-    bandHeights: Array(TOTAL_BANDS).fill(0),
-    bandStates: Array(TOTAL_BANDS).fill("quiet"),
+    bandHeights: Array(TOTAL_BANDS).fill(0).map((_, i) => (i === 16 ? 0.94 : 0.03)),
+    bandStates: Array(TOTAL_BANDS).fill("quiet").map((_, i) => (i === 16 ? "active" : "quiet")),
     scheduler: {
       chosenBand: 16,
       chosenFreqMHz: 8250,
@@ -135,29 +135,15 @@ function processTelemetry(raw, missionStat) {
     moeGating: 1 - explorationPressure,
   };
 
-  const bp = raw.bandPriorities ?? m.band_priorities ?? [];
-  if (Array.isArray(bp) && bp.length === TOTAL_BANDS) {
-    const max = Math.max(...bp, 1e-6);
-    next.bandHeights = bp.map((v) => Math.min(1, Math.max(0, v / max)));
-    next.bandStates = bp.map((v, i) => {
-      if (i === band) return "active";
-      const rel = v / max;
-      if (rel < 0.1) return "quiet";
-      if (rel < 0.35) return "stable";
-      if (rel < 0.65) return "agile";
-      return "intercepted";
-    });
-  } else {
-    next.bandStates = Array(TOTAL_BANDS).fill("quiet").map((_, i) =>
-      i === band ? "active" : "quiet"
-    );
-    next.bandHeights = Array(TOTAL_BANDS).fill(0).map((_, i) => {
-      const dist = Math.abs(i - band);
-      return Math.max(0.05, Math.exp(-(dist * dist) / 8));
-    });
-  }
+  // Each time show only the band the receiver is tuned into
+  next.bandStates = Array(TOTAL_BANDS).fill("quiet").map((_, i) =>
+    i === band ? "active" : "quiet"
+  );
+  next.bandHeights = Array(TOTAL_BANDS).fill(0).map((_, i) =>
+    i === band ? 0.94 : 0.03
+  );
 
-  const activeCount = next.bandStates.filter((s) => s !== "quiet").length;
+  const activeCount = 1;
   next.activeBands = activeCount;
   next.quietBands = TOTAL_BANDS - activeCount;
 
