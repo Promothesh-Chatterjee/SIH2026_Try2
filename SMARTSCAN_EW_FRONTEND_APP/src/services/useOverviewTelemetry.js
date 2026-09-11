@@ -152,7 +152,7 @@ function processTelemetry(raw, missionStat) {
   next.activeBands = activeCount;
   next.quietBands = TOTAL_BANDS - activeCount;
 
-  const rawPdws = raw.pdws ?? m.pdws ?? [];
+  const rawPdws = raw.pdws ?? m.pdws ?? raw.recent_pdws ?? m.recent_pdws ?? raw.detections ?? m.detections ?? [];
   next.pdws = Array.isArray(rawPdws) ? rawPdws : [];
 
   return next;
@@ -163,6 +163,7 @@ export function useOverviewTelemetry() {
   const dwellHistoryRef = useRef([]);
   const missionStatRef = useRef(null);
   const latestTelRef = useRef(null);
+  const pdwsRef = useRef([]);
 
   const ingest = useCallback((rawTelemetry, missionStat) => {
     if (missionStat) missionStatRef.current = missionStat;
@@ -174,6 +175,28 @@ export function useOverviewTelemetry() {
     );
 
     if (resolved.live) {
+      if (Array.isArray(resolved.pdws) && resolved.pdws.length > 0) {
+        const seen = new Set(
+          pdwsRef.current.map((p) => `${p.pulse_id ?? p.id}-${Number(p.time_us ?? p.toa_us ?? 0).toFixed(1)}`)
+        );
+        const newItems = [];
+        for (const p of resolved.pdws) {
+          const uid = `${p.pulse_id ?? p.id}-${Number(p.time_us ?? p.toa_us ?? 0).toFixed(1)}`;
+          if (!seen.has(uid)) {
+            seen.add(uid);
+            newItems.push(p);
+          }
+        }
+        if (newItems.length > 0) {
+          pdwsRef.current = [...newItems, ...pdwsRef.current].slice(0, 30);
+        } else if (pdwsRef.current.length === 0) {
+          pdwsRef.current = [...resolved.pdws].slice(0, 30);
+        }
+      }
+      if (pdwsRef.current.length > 0 && (!resolved.pdws || resolved.pdws.length === 0)) {
+        resolved.pdws = pdwsRef.current.slice(0, 15);
+      }
+
       const m = (latestTelRef.current?.metrics ?? latestTelRef.current) ?? {};
       const band = m.band ?? resolved.currentBand;
       const hit = m.hit ?? false;
