@@ -41,12 +41,15 @@ FRONTEND_DIR = REPO_ROOT / "SMARTSCAN_EW_FRONTEND_APP"
 
 def check_url(url: str, timeout: float = 1.5) -> bool:
     """Check if an HTTP endpoint is reachable and returns 2xx."""
-    try:
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return 200 <= resp.status < 400
-    except Exception:
-        return False
+    for target in [url, url.rstrip("/") + "/"]:
+        try:
+            req = urllib.request.Request(target)
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                if 200 <= resp.status < 400:
+                    return True
+        except Exception:
+            pass
+    return False
 
 
 def get_json(url: str, timeout: float = 2.0) -> dict:
@@ -189,9 +192,10 @@ def main() -> int:
         print(f"[+] Frontend is already running on port {args.frontend_port}.")
     else:
         print(f"[*] Starting Vite React frontend on {frontend_url}...")
-        npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
+        npm_bin = "npm.cmd" if sys.platform == "win32" else "npm"
+        npm_str = f"{npm_bin} run dev -- --port {args.frontend_port} --host 0.0.0.0"
         f_proc = subprocess.Popen(
-            [npm_cmd, "run", "dev", "--", "--port", str(args.frontend_port)],
+            npm_str,
             cwd=str(FRONTEND_DIR),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
@@ -204,7 +208,7 @@ def main() -> int:
         for _ in range(30):
             time.sleep(0.5)
             print(".", end="", flush=True)
-            if check_url(frontend_url):
+            if check_url(frontend_url) or check_url(f"http://127.0.0.1:{args.frontend_port}"):
                 ready = True
                 break
         print()
