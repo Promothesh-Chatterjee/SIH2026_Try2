@@ -1,0 +1,103 @@
+{
+  "part_a_replay_composition": {
+    "total_transitions_analyzed": 5000,
+    "hit_rate": 0.0742,
+    "novel_hit_rate": 0.0,
+    "repeat_hit_rate": 0.0742,
+    "false_alarm_rate": 0.9258,
+    "miss_rate": 0.0,
+    "mean_reward": -0.08299817500000008,
+    "reward_std": 3.6613152603288657,
+    "reward_min": -1.275,
+    "reward_max": 16.81046875,
+    "band_entropy": 3.6589302144506624,
+    "mode_entropy": 1.9485608083417152,
+    "top_3_scenarios_hit_concentration": 0.954177897574124,
+    "scenarios_breakdown": [
+      {
+        "scenario_id": "train_ep_4",
+        "dynamics": "AGILE",
+        "transitions": 1000,
+        "transition_fraction": 0.2,
+        "hits": 320,
+        "hit_rate": 0.32,
+        "mean_reward": 3.346891656249973
+      },
+      {
+        "scenario_id": "train_ep_0",
+        "dynamics": "AGILE",
+        "transitions": 1000,
+        "transition_fraction": 0.2,
+        "hits": 22,
+        "hit_rate": 0.022,
+        "mean_reward": -0.8119410156249913
+      },
+      {
+        "scenario_id": "train_ep_1",
+        "dynamics": "AGILE",
+        "transitions": 1000,
+        "transition_fraction": 0.2,
+        "hits": 12,
+        "hit_rate": 0.012,
+        "mean_reward": -0.9571923749999909
+      },
+      {
+        "scenario_id": "train_ep_3",
+        "dynamics": "AGILE",
+        "transitions": 1000,
+        "transition_fraction": 0.2,
+        "hits": 9,
+        "hit_rate": 0.009,
+        "mean_reward": -0.9969489999999909
+      },
+      {
+        "scenario_id": "train_ep_2",
+        "dynamics": "AGILE",
+        "transitions": 1000,
+        "transition_fraction": 0.2,
+        "hits": 8,
+        "hit_rate": 0.008,
+        "mean_reward": -0.9958001406249912
+      }
+    ]
+  },
+  "part_b_sequence_diversity": {
+    "seq_len": 16,
+    "burn_in": 8,
+    "graded_steps_per_seq": 8,
+    "sequences_with_hits_pct": 21.640625,
+    "sequences_with_zero_hits_pct": 78.359375,
+    "mean_bands_per_16step_sequence": 8.03453125,
+    "mean_hit_density_in_graded_windows": 0.07197265625
+  },
+  "part_c_q_target_diagnostics": {
+    "gamma": 0.99,
+    "q_stats_20k": {
+      "q_mean": -2.4643666690168904,
+      "q_std": 12.398452398777009,
+      "q_min": -7.371194839477539,
+      "q_max": 69.40758514404297,
+      "target_online_gap": 0.5386322305491195,
+      "mean_td_error": 2.146030746604083,
+      "median_td_error": 0.9605517387390137,
+      "p90_td_error": 5.86579341888427,
+      "max_td_error": 30.242332458496094
+    },
+    "q_stats_50k": {
+      "mean_td_error": 3.678492359886586,
+      "median_td_error": 0.947784423828125,
+      "p90_td_error": 10.85403060913086
+    },
+    "theoretical_q_limits": {
+      "q_infinite_hits": 799.9999999999993,
+      "q_infinite_empty": -99.99999999999991,
+      "q_10_consecutive_hits": 76.4943399929564,
+      "q_25_consecutive_hits": 177.74291248068252,
+      "q_50_consecutive_hits": 315.99514628997065
+    },
+    "root_cause_attribution": {
+      "primary_mechanism": "Bootstrapping on consecutive hits compounded by low epsilon exploitation",
+      "explanation": "Under gamma=0.99 and hit reward=8.0, 10 consecutive hits produce Q=76.5 (matching Gate 20k Qmax=75.3). When epsilon dropped to 0.15 at Gate 50k, the greedy policy stayed in dense bands for 30-40 consecutive steps, pushing Q up to +268.1 (matching theoretical Q_35=243.6). This is pure Bellman compounding under reduced exploration."
+    }
+  }
+}
