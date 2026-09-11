@@ -593,10 +593,7 @@ async def lifespan(app: FastAPI):  # type: ignore
 app = FastAPI(title="Cognitive EW SmartScan API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1247,11 +1244,20 @@ async def ws_state(ws: WebSocket):
     _ws_clients.append(ws)
     try:
         while True:
+            try:
+                payload = _telemetry_payload()
+                await ws.send_text(json.dumps(payload))
+            except Exception as send_err:
+                logger.error("ws_state send_text error: %s", send_err)
+                break
             await asyncio.sleep(0.20)  # 5 Hz stream
-            payload = _telemetry_payload()
-            await ws.send_text(json.dumps(payload))
     except WebSocketDisconnect:
-        _ws_clients.remove(ws)
+        pass
+    except Exception as exc:
+        logger.error("ws_state outer error: %s", exc)
+    finally:
+        if ws in _ws_clients:
+            _ws_clients.remove(ws)
 
 
 # ── Live Mission Streaming Worker & Endpoints ──────────────────────────────
@@ -1293,30 +1299,26 @@ async def _run_live_mission_stream(scenario_name: str, speed_hz: float, max_dwel
     h5_path = next((p for p in h5_candidates if p.exists()), None)
     if h5_path:
         try:
-            import h5py
-            with h5py.File(str(h5_path), "r") as f:
-                ep_keys = list(f.keys())
-                if ep_keys:
-                    grp = f[ep_keys[0]]
-                    toas = grp["time"][:] if "time" in grp else grp["toa"][:]
-                    freqs = grp["freq"][:] if "freq" in grp else grp["frequency"][:]
-                    pws = grp["pw"][:] if "pw" in grp else np.ones_like(toas) * 2.0
-                    amps = grp["amp"][:] if "amp" in grp else np.ones_like(toas) * -50.0
-                    aoas = grp["aoa"][:] if "aoa" in grp else np.zeros_like(toas)
-                    for i in range(len(toas)):
-                        scenario_pulses.append({
-                            "toa_us": float(toas[i]),
-                            "time_us": float(toas[i]),
-                            "frequency_mhz": float(freqs[i]),
-                            "pulse_width_us": float(pws[i]),
-                            "amplitude_db": float(amps[i]),
-                            "aoa_deg": float(aoas[i]),
-                            "pulse_id": i,
-                        })
-                    scenario_pulses.sort(key=lambda x: x["time_us"])
-                    logger.info("Loaded %d pulses from TSRD %s", len(scenario_pulses), h5_path)
+            from ..environment.scenario_generator import load_h5_records
+            records = load_h5_records(
+                h5_path,
+                freq_min_mhz=0.0,
+                freq_max_mhz=18000.0,
+                max_pulses=50000,
+            )
+            for idx, r in enumerate(records):
+                scenario_pulses.append({
+                    "toa_us": float(r.toa_us),
+                    "time_us": float(r.toa_us),
+                    "frequency_mhz": float(r.frequency_mhz),
+                    "pulse_width_us": float(r.pulse_width_us),
+                    "amplitude_db": float(r.amplitude_db),
+                    "aoa_deg": float(r.aoa_deg),
+                    "pulse_id": idx,
+                })
+            logger.info("Loaded %d pulses from TSRD %s", len(scenario_pulses), h5_path)
         except Exception as err:
-            logger.warning("Failed reading HDF5 %s: %s", h5_path, err)
+            logger.warning("Failed reading HDF5 %s via load_h5_records: %s", h5_path, err)
 
     if not scenario_pulses:
         # Fallback to realistic agile radar generator matching config_29
@@ -1362,7 +1364,8 @@ async def _run_live_mission_stream(scenario_name: str, speed_hz: float, max_dwel
 
             t_now = controller.clock.current_time_us
             feed_window = [p for p in scenario_pulses if t_now <= p["time_us"] <= t_now + 2500.0]
-            frame = controller.execute_operational_step(
+            frame = await asyncio.to_thread(
+                controller.execute_operational_step,
                 external_rf_stream=feed_window,
             )
             dwell_idx += 1
