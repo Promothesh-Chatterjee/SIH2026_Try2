@@ -165,7 +165,7 @@ function SpectrumCanvas({ bandHeights, currentBand, activeBands }) {
     // Frequency labels along bottom
     ctx.font = '9px "JetBrains Mono", monospace';
     ctx.textAlign = "center";
-    ctx.fillStyle = isDark ? "#908f9e" : "#475569";
+    ctx.fillStyle = isDark ? "#a8a7b8" : "#1e293b";
     freqTicks.forEach((f) => {
       const x = marginLeft + ((f - FREQ_START_MHZ) / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;
       const label = f >= 1000 ? (f / 1000).toFixed(1) + "G" : f + "M";
@@ -178,7 +178,7 @@ function SpectrumCanvas({ bandHeights, currentBand, activeBands }) {
     const dBLabels = [-20, -30, -40, -50, -60, -70];
     dBLabels.forEach((dB, i) => {
       const y = marginTop + (i / (dBLabels.length - 1)) * plotH;
-      ctx.fillStyle = isDark ? "#908f9e" : "#475569";
+      ctx.fillStyle = isDark ? "#a8a7b8" : "#1e293b";
       ctx.fillText(dB + " dB", marginLeft - 4, y);
     });
 
@@ -328,7 +328,7 @@ function WaterfallCanvas({ waterfall, currentBand }) {
       }
       ctx.font = '9px "JetBrains Mono", monospace';
       ctx.textAlign = "center";
-      ctx.fillStyle = isDark ? "#908f9e" : "#64748b";
+      ctx.fillStyle = isDark ? "#a8a7b8" : "#334155";
       ctx.fillText("WAITING FOR WATERFALL STREAM // NOMINAL", marginLeft + plotW / 2, marginTop + plotH / 2);
       return;
     }
@@ -366,7 +366,7 @@ function WaterfallCanvas({ waterfall, currentBand }) {
 
     ctx.font = '8px "JetBrains Mono", monospace';
     ctx.textAlign = "center";
-    ctx.fillStyle = isDark ? "#908f9e" : "#475569";
+    ctx.fillStyle = isDark ? "#a8a7b8" : "#1e293b";
     const freqLabels = [0, 3000, 6000, 9000, 12000, 15000, 18000];
     freqLabels.forEach((f) => {
       const x = marginLeft + ((f - FREQ_START_MHZ) / (FREQ_END_MHZ - FREQ_START_MHZ)) * plotW;

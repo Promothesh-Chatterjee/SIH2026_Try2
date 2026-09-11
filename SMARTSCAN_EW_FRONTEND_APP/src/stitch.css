@@ -269,6 +269,12 @@
   border-radius: 0;
 }
 
+.st-bar-quiet { background: var(--panel-highest, #333539); }
+.st-bar-stable { background: var(--secondary, #96ccff); }
+.st-bar-intercepted { background: var(--success, #49df9d); }
+.st-bar-agile { background: var(--secondary-deep, #3097e0); }
+.st-bar-active { background: var(--accent, #bdc2ff); }
+
 .st-ibw {
   position: absolute;
   top: 0;
@@ -526,43 +532,243 @@ html.light [style*="color: rgb(226, 226, 232)"] {
 html.light [style*="color: #c6c5d5"],
 html.light [style*="color:#c6c5d5"],
 html.light [style*="color: rgb(198, 197, 213)"] {
-  color: #334155 !important;
+  color: #1e293b !important;
+  font-weight: 500;
 }
 
 html.light [style*="color: #908f9e"],
 html.light [style*="color:#908f9e"],
 html.light [style*="color: rgb(144, 143, 158)"] {
-  color: #64748b !important;
+  color: #334155 !important;
+  font-weight: 500;
 }
 
 html.light [style*="color: #bdc2ff"],
 html.light [style*="color:#bdc2ff"],
 html.light [style*="color: rgb(189, 194, 255)"] {
-  color: #273bc2 !important;
+  color: #1d4ed8 !important;
 }
 
 html.light [style*="color: #96ccff"],
 html.light [style*="color:#96ccff"],
 html.light [style*="color: rgb(150, 204, 255)"] {
-  color: #0284c7 !important;
+  color: #0369a1 !important;
 }
 
+html.light [style*="color: #49df9d"],
+html.light [style*="color:#49df9d"],
+html.light [style*="color: rgb(73, 223, 157)"] {
+  color: #15803d !important;
+}
+
+html.light [style*="color: #ffb4ab"],
+html.light [style*="color:#ffb4ab"],
+html.light [style*="color: rgb(255, 180, 171)"] {
+  color: #b91c1c !important;
+}
+
+html.light [style*="color: #f59e0b"],
+html.light [style*="color:#f59e0b"],
+html.light [style*="color: rgb(245, 158, 11)"] {
+  color: #b45309 !important;
+}
+
+html.light [style*="color: #dfe0ff"],
+html.light [style*="color:#dfe0ff"],
+html.light [style*="color: rgb(223, 224, 255)"] {
+  color: #1e40af !important;
+}
+
+/* Background indicators and dots in light mode */
+html.light [style*="background: #49df9d"],
+html.light [style*="background:#49df9d"] {
+  background: #15803d !important;
+}
+
+html.light [style*="background: #ffb4ab"],
+html.light [style*="background:#ffb4ab"] {
+  background: #b91c1c !important;
+}
+
+html.light [style*="background: #f59e0b"],
+html.light [style*="background:#f59e0b"] {
+  background: #b45309 !important;
+}
+
+html.light [style*="background: #96ccff"],
+html.light [style*="background:#96ccff"] {
+  background: #0369a1 !important;
+}
+
+html.light [style*="background: #bdc2ff"],
+html.light [style*="background:#bdc2ff"] {
+  background: #1d4ed8 !important;
+}
+
+/* Border overrides */
 html.light [style*="border: 1px solid #bdc2ff"],
 html.light [style*="border-color: #bdc2ff"] {
-  border-color: #273bc2 !important;
+  border-color: #1d4ed8 !important;
 }
 
+html.light [style*="border: 1px solid #49df9d"],
+html.light [style*="border-color: #49df9d"] {
+  border-color: #15803d !important;
+}
+
+html.light [style*="border: 1px solid #ffb4ab"],
+html.light [style*="border-color: #ffb4ab"] {
+  border-color: #b91c1c !important;
+}
+
+html.light [style*="border: 1px solid #e2e2e8"] {
+  border-color: #94a3b8 !important;
+}
+
+/* Component-level light mode readability enhancements */
+html.light .st-kpi-label {
+  color: #334155;
+  font-weight: 600;
+}
+
+html.light .st-kpi-foot {
+  color: #334155;
+  font-weight: 600;
+}
+
+html.light .st-mark {
+  font-weight: 500;
+}
+
+html.light .st-table th {
+  background: #e2e8f0;
+  color: #0f172a;
+  font-weight: 700;
+  border-bottom: 2px solid #cbd5e1;
+}
+
+html.light .st-table td {
+  color: #0f172a;
+  border-bottom-color: #e2e8f0;
+}
+
+html.light .st-table tbody tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+html.light .st-badge {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  font-weight: 700;
+}
+
+html.light .st-dwell {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+html.light .st-dwell-now {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #1d4ed8;
+}
+
+html.light .st-heat-cell {
+  background: #f8fafc;
+  color: #334155;
+}
+
+html.light .st-bar-quiet { background: #cbd5e1 !important; }
+html.light .st-bar-stable { background: #0284c7 !important; }
+html.light .st-bar-intercepted { background: #16a34a !important; }
+html.light .st-bar-agile { background: #0369a1 !important; }
+html.light .st-bar-active { background: #2563eb !important; }
+
+
 /* SVGs and radar in light mode */
+html.light svg line[stroke="#454653"] {
+  stroke: #cbd5e1 !important;
+}
+
 html.light svg line[stroke="#333539"] {
   stroke: #cbd5e1 !important;
 }
 
+html.light svg line[stroke="#ffb4ab"] {
+  stroke: #dc2626 !important;
+}
+
+html.light svg line[stroke="#49df9d"] {
+  stroke: #16a34a !important;
+}
+
+html.light svg line[stroke="#4cd6fb"] {
+  stroke: #0284c7 !important;
+}
+
+html.light svg circle[stroke="#ffb4ab"] {
+  stroke: #dc2626 !important;
+}
+
+html.light svg circle[stroke="#49df9d"] {
+  stroke: #16a34a !important;
+}
+
+html.light svg circle[fill="#4edea3"],
+html.light svg circle[fill="#49df9d"] {
+  fill: #16a34a !important;
+}
+
+html.light svg path[stroke="#ffb4ab"] {
+  stroke: #dc2626 !important;
+}
+
+html.light svg path[stroke="#49df9d"] {
+  stroke: #16a34a !important;
+}
+
+html.light svg path[stroke="#96ccff"] {
+  stroke: #0284c7 !important;
+}
+
+html.light svg path[stroke="#bdc2ff"] {
+  stroke: #1d4ed8 !important;
+}
+
 html.light svg text[fill="#908f9e"] {
-  fill: #64748b !important;
+  fill: #334155 !important;
+}
+
+html.light svg text[fill="#c6c5d5"] {
+  fill: #1e293b !important;
+}
+
+html.light svg text[fill="#e2e2e8"] {
+  fill: #0f172a !important;
 }
 
 html.light svg text[fill="#bdc2ff"] {
-  fill: #273bc2 !important;
+  fill: #1d4ed8 !important;
+}
+
+html.light svg text[fill="#96ccff"] {
+  fill: #0369a1 !important;
+}
+
+html.light svg text[fill="#49df9d"] {
+  fill: #15803d !important;
+}
+
+html.light svg text[fill="#ffb4ab"] {
+  fill: #b91c1c !important;
+}
+
+html.light svg text[fill="#f59e0b"] {
+  fill: #b45309 !important;
+}
+
+html.light svg rect[fill="rgba(189,194,255,0.10)"] {
+  fill: rgba(29, 78, 216, 0.08) !important;
 }
 
 html.light .st-radar-sweep {
