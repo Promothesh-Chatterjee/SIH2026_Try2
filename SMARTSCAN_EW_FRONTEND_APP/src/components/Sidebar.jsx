@@ -1,4 +1,5 @@
 import { navigation } from "../data/navigation";
+import ThemeToggle from "./ThemeToggle";
 
 const ICONS = {
   overview: "grid_view",
@@ -27,7 +28,7 @@ export default function Sidebar({ activePage, setActivePage }) {
             display: "flex",
             alignItems: "center",
             gap: 8,
-            background: "rgba(26,28,32,0.4)",
+            background: "var(--panel-2)",
           }}
         >
           <div
@@ -37,8 +38,8 @@ export default function Sidebar({ activePage, setActivePage }) {
               height: 32,
               display: "grid",
               placeItems: "center",
-              border: "1px solid #bdc2ff",
-              color: "#bdc2ff",
+              border: "1px solid var(--accent)",
+              color: "var(--accent)",
               fontFamily: "JetBrains Mono, monospace",
               fontWeight: 700,
             }}
@@ -46,18 +47,17 @@ export default function Sidebar({ activePage, setActivePage }) {
             S
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <span className="st-headline" style={{ color: "#bdc2ff" }}>
+            <span className="st-headline" style={{ color: "var(--accent)" }}>
               SMARTSCAN EW
             </span>
             <span
               className="st-tsm"
-              style={{ color: "#908f9e", textTransform: "uppercase" }}
+              style={{ color: "var(--muted)", textTransform: "uppercase" }}
             >
               Intelligent Spectrum Surveillance
             </span>
           </div>
         </div>
-
 
         <nav
           className="st-side-scroll"
@@ -78,8 +78,8 @@ export default function Sidebar({ activePage, setActivePage }) {
                   padding: "4px 6px",
                   borderRadius: 0,
                   border: "1px solid transparent",
-                  background: active ? "#282a2e" : "transparent",
-                  color: active ? "#bdc2ff" : "#c6c5d5",
+                  background: active ? "var(--panel-3)" : "transparent",
+                  color: active ? "var(--accent)" : "var(--text-muted)",
                   fontWeight: active ? 700 : 400,
                   cursor: "pointer",
                   textAlign: "left",
@@ -111,28 +111,35 @@ export default function Sidebar({ activePage, setActivePage }) {
         </nav>
       </div>
 
-      <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span className="st-tsm" style={{ color: "var(--muted)" }}>
+            Theme Display
+          </span>
+          <ThemeToggle compact />
+        </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span className="st-tsm" style={{ color: "#908f9e" }}>
+          <span className="st-tsm" style={{ color: "var(--muted)" }}>
             Bandwidth Range
           </span>
-          <span className="st-tsm" style={{ color: "#bdc2ff" }}>
+          <span className="st-tsm" style={{ color: "var(--accent)" }}>
             36 BANDS
           </span>
         </div>
         <div
           className="st-tmd"
           style={{
-            background: "#1a1c20",
-            border: "1px solid #454653",
+            background: "var(--panel)",
+            border: "1px solid var(--border)",
             borderRadius: 0,
             padding: "4px 6px",
             display: "flex",
             justifyContent: "space-between",
+            color: "var(--text)",
           }}
         >
           <span>0.00 MHz</span>
-          <span style={{ color: "#908f9e" }}>→</span>
+          <span style={{ color: "var(--muted)" }}>→</span>
           <span>18,000 MHz</span>
         </div>
         <div
@@ -140,12 +147,12 @@ export default function Sidebar({ activePage, setActivePage }) {
           style={{
             display: "flex",
             justifyContent: "space-between",
-            color: "#908f9e",
+            color: "var(--muted)",
             paddingTop: 4,
           }}
         >
           <span>DSP ENGINE VER 4.9.2</span>
-          <span style={{ color: "#49df9d" }}>ONLINE</span>
+          <span style={{ color: "var(--success)" }}>ONLINE</span>
         </div>
       </div>
     </aside>

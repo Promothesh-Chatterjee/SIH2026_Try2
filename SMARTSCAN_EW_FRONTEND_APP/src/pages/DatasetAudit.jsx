@@ -202,23 +202,6 @@ export default function DatasetAudit() {
           </div>
         </div>
       </div>
-
-      <div className="st-panel">
-        <PanelHead title="Dataset Handoff & PyTorch / RL DataLoader Pipeline Specifications" />
-        <div className="st-body" style={{ color: "#c6c5d5" }}>
-          Batch 64 × SeqLen 32 — optimized for DRQN recurrent rollout
-          windowing. 2,048 temporal transitions per batch.
-        </div>
-        <StitchTable
-          columns={["Stage", "Specification", "Status"]}
-          rows={[
-            ["Corpus", "p3ac_50k (Schema 3Y.1)", "VALID"],
-            ["Windowing", "SeqLen 32, stride 1", "READY"],
-            ["Batching", "Batch 64 → 2,048 transitions", "READY"],
-            ["Handoff gate", "50K authorized · 100K blocked", "ENFORCED"],
-          ]}
-        />
-      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 /* Shared Stitch tactical primitives. Appearance must not change per-page. */
 
-export function CmdBadge({ children, color = "#e2e2e8" }) {
+export function CmdBadge({ children, color = "var(--text, #e2e2e8)" }) {
   return (
     <span className="st-badge" style={{ color }}>
       {children}
@@ -8,16 +8,16 @@ export function CmdBadge({ children, color = "#e2e2e8" }) {
   );
 }
 
-export function PanelHead({ icon, title, badge, badgeColor = "#96ccff" }) {
+export function PanelHead({ icon, title, badge, badgeColor = "var(--secondary, #96ccff)" }) {
   return (
     <div className="st-panel-head">
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
         {icon && (
-          <span className="material-symbols-outlined" style={{ fontSize: 16, color: "#96ccff" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--secondary, #96ccff)" }}>
             {icon}
           </span>
         )}
-        <span className="st-headline" style={{ color: "#bdc2ff" }}>
+        <span className="st-headline" style={{ color: "var(--accent, #bdc2ff)" }}>
           {title}
         </span>
       </span>
@@ -26,21 +26,21 @@ export function PanelHead({ icon, title, badge, badgeColor = "#96ccff" }) {
   );
 }
 
-export function KpiCard({ label, icon, value, unit, footLeft, footRight, valueColor = "#e2e2e8" }) {
+export function KpiCard({ label, icon, value, unit, footLeft, footRight, valueColor = "var(--text, #e2e2e8)" }) {
   return (
     <div className="st-kpi">
       <div className="st-kpi-top">
-        <span className="st-tsm" style={{ color: "#908f9e" }}>
+        <span className="st-tsm" style={{ color: "var(--muted, #908f9e)" }}>
           {label}
         </span>
         {icon && (
-          <span className="material-symbols-outlined" style={{ fontSize: 14, color: "#908f9e" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 14, color: "var(--muted, #908f9e)" }}>
             {icon}
           </span>
         )}
       </div>
       <div className="st-tlg" style={{ color: valueColor }}>
-        {value} {unit && <span className="st-tsm" style={{ color: "#908f9e" }}>{unit}</span>}
+        {value} {unit && <span className="st-tsm" style={{ color: "var(--muted, #908f9e)" }}>{unit}</span>}
       </div>
       {(footLeft || footRight) && (
         <div className="st-kpi-foot">
@@ -236,8 +236,6 @@ export function DwellTimeline({ entries = null }) {
       <div className="st-timeline">
         {slots.map((entry, idx) => {
           const kind = entry.now ? "now" : entry.hit ? "hit" : "miss";
-          const deltUs = entry.clockUs ? entry.clockUs - newestClock : 0;
-          const deltMs = (deltUs / 1000).toFixed(0);
           const label = entry.band !== "—"
             ? `B${String(Number(entry.band) + 1).padStart(2, "0")}: ${entry.mode}`
             : "—";
@@ -285,7 +283,7 @@ export function CandidateActions() {
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span className="st-headline" style={{ color: "#e2e2e8" }}>
+      <span className="st-headline" style={{ color: "var(--text, #e2e2e8)" }}>
         ACTION USAGE
       </span>
       {rows.map(([n, act, q, u, sel]) => (
@@ -295,18 +293,18 @@ export function CandidateActions() {
           style={{
             display: "flex",
             justifyContent: "space-between",
-            background: sel ? "#1e2024" : "#1a1c20",
-            border: "1px solid #454653",
+            background: sel ? "var(--panel-2, #1e2024)" : "var(--panel, #1a1c20)",
+            border: "1px solid var(--border, #454653)",
             padding: "4px 6px",
           }}
         >
           <span style={{ display: "flex", gap: 6 }}>
-            <CmdBadge color={sel ? "#49df9d" : "#e2e2e8"}>{n}</CmdBadge>
-            <strong style={{ color: "#e2e2e8" }}>{act}</strong>
+            <CmdBadge color={sel ? "var(--success, #49df9d)" : "var(--text, #e2e2e8)"}>{n}</CmdBadge>
+            <strong style={{ color: "var(--text, #e2e2e8)" }}>{act}</strong>
           </span>
           <span style={{ display: "flex", gap: 8 }}>
-            <span style={{ color: "#e2e2e8" }}>{q}</span>
-            <strong style={{ color: "#e2e2e8" }}>{u}</strong>
+            <span style={{ color: "var(--text, #e2e2e8)" }}>{q}</span>
+            <strong style={{ color: "var(--text, #e2e2e8)" }}>{u}</strong>
           </span>
         </div>
       ))}
