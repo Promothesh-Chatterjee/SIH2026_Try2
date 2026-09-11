@@ -92,55 +92,66 @@ export function PipelineFlow() {
 
 export function BandMatrix({
   tuneBand = 16,
-  bandHeights = null,
-  bandStates = null,
   dwellUs = 120,
   freqMHz = 8250,
 }) {
   const N = 36;
-  const STATIC_H = [
-    14, 48, 18, 72, 22, 64, 55, 42, 12, 68, 20, 78,
-    15, 50, 24, 94, 62, 82, 70, 16, 45, 18, 14, 74,
-    21, 53, 19, 86, 12, 17, 40, 22, 59, 15, 47, 13,
-  ];
-  const heights = bandHeights
-    ? bandHeights.map((h) => Math.round(Math.max(4, h * 96)))
-    : STATIC_H;
+  const safeTune = Math.max(0, Math.min(N - 1, Number(tuneBand) || 0));
 
-  const states = bandStates ?? Array(N).fill("stable");
+  // Each time show ONLY the band the receiver is tuned into
+  const heights = Array.from({ length: N }, (_, i) => (i === safeTune ? 94 : 3));
+  const states = Array.from({ length: N }, (_, i) => (i === safeTune ? "active" : "quiet"));
 
-  const ibwLo = Math.max(0, tuneBand - 1);
-  const ibwHi = Math.min(N - 1, tuneBand);
+  // 1 GHz IBW aperture covers 2 adjacent 500 MHz channels around the tune window
+  const ibwLo = Math.max(0, safeTune - 1);
+  const ibwHi = Math.min(N - 1, safeTune + 1);
   const ibwLoGHz = (ibwLo * 0.5).toFixed(1);
-  const ibwHiGHz = ((ibwHi + 1) * 0.5).toFixed(1);
+  const ibwHiGHz = (ibwHi * 0.5).toFixed(1);
 
   const tuneGHz = (freqMHz / 1000).toFixed(3);
 
-  const freqLabels = [
-    "0 GHz", "2.0 GHz", "4.0 GHz", "6.0 GHz",
-    `${tuneGHz} GHz ↑`,
-    "10.0 GHz", "12.0 GHz", "14.0 GHz", "16.0 GHz", "18.0 GHz",
-  ];
+  // Position aperture overlay centered around tuned band
+  const centerPct = ((safeTune + 0.5) / N) * 100;
+  const boxWidthPct = (4 / N) * 100; // ~11.11% aperture frame
+  const leftPct = Math.max(0, Math.min(100 - boxWidthPct, centerPct - boxWidthPct / 2));
 
   return (
     <div className="st-spec">
       <div
-        style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px" }}
+        style={{ position: "relative", height: 18, padding: "2px 4px" }}
         className="st-tsm"
       >
-        {freqLabels.map((t, idx) => (
-          <span key={idx} style={{ color: idx === 4 ? "#96ccff" : "#908f9e" }}>
-            {t}
-          </span>
-        ))}
+        <div style={{ display: "flex", justifyContent: "space-between", color: "var(--muted, #908f9e)" }}>
+          {["0 GHz", "2.0 GHz", "4.0 GHz", "6.0 GHz", "8.0 GHz", "10.0 GHz", "12.0 GHz", "14.0 GHz", "16.0 GHz", "18.0 GHz"].map((t) => (
+            <span key={t}>{t}</span>
+          ))}
+        </div>
+        <span
+          style={{
+            position: "absolute",
+            top: 1,
+            left: `${centerPct}%`,
+            transform: "translateX(-50%)",
+            color: "var(--accent, #bdc2ff)",
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+            background: "var(--panel-2, #1e2024)",
+            padding: "0 4px",
+            border: "1px solid var(--accent, #bdc2ff)",
+            boxShadow: "0 0 8px rgba(0,0,0,0.5)",
+            transition: "left 0.25s ease",
+            zIndex: 3,
+          }}
+        >
+          {tuneGHz} GHz ↑
+        </span>
       </div>
       <div style={{ position: "relative" }}>
         <div className="st-bars">
           {Array.from({ length: N }, (_, i) => {
             const state = states[i];
             const h = heights[i];
-            const isActive = i === tuneBand;
-            const isIBW = i >= ibwLo && i <= ibwHi;
+            const isActive = i === safeTune;
             return (
               <div
                 key={i}
@@ -149,39 +160,44 @@ export function BandMatrix({
                 style={{
                   height: `${h}%`,
                   boxShadow: isActive
-                    ? "0 0 10px rgba(189,194,255,0.7)"
-                    : isIBW
-                    ? "0 0 4px rgba(150,204,255,0.3)"
+                    ? "0 0 12px rgba(189,194,255,0.85)"
                     : "none",
-                  opacity: state === "quiet" ? 0.35 : 1,
-                  transition: "height 0.25s ease, background 0.25s ease",
+                  opacity: state === "quiet" ? 0.2 : 1,
+                  transition: "height 0.25s ease, background 0.25s ease, opacity 0.25s ease",
                 }}
               />
             );
           })}
         </div>
-        <div className="st-ibw">
-          <span className="st-badge" style={{ color: "#bdc2ff" }}>
+        <div
+          className="st-ibw"
+          style={{
+            left: `${leftPct}%`,
+            width: `${boxWidthPct}%`,
+            transition: "left 0.25s ease, width 0.25s ease",
+          }}
+        >
+          <span className="st-badge" style={{ color: "var(--accent, #bdc2ff)" }}>
             IBW RX: {ibwLoGHz}–{ibwHiGHz} GHz
           </span>
-          <span className="st-mark" style={{ color: "#bdc2ff", textAlign: "center" }}>
+          <span className="st-mark" style={{ color: "var(--accent, #bdc2ff)", textAlign: "center" }}>
             1 GHz IBW LOCKED
           </span>
-          <span className="st-badge" style={{ color: "#bdc2ff", justifyContent: "center" }}>
+          <span className="st-badge" style={{ color: "var(--accent, #bdc2ff)", justifyContent: "center" }}>
             DWELL: {Number(dwellUs).toFixed(0)}µs
           </span>
         </div>
       </div>
       <div
         className="st-mark"
-        style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px", color: "#908f9e" }}
+        style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px", color: "var(--muted, #908f9e)" }}
       >
         {["B01", "B04", "B08", "B12", "B16", "B20", "B24", "B28", "B32", "B36"].map((t) => {
           const bNum = parseInt(t.replace("B", ""), 10) - 1;
-          const isNear = bNum === tuneBand;
+          const isNear = Math.abs(bNum - safeTune) <= 1;
           return (
-            <span key={t} style={isNear ? { color: "#bdc2ff", fontWeight: 700 } : undefined}>
-              {t}{isNear ? " ↑" : ""}
+            <span key={t} style={isNear ? { color: "var(--accent, #bdc2ff)", fontWeight: 700 } : undefined}>
+              {t}{bNum === safeTune ? " ↑" : ""}
             </span>
           );
         })}

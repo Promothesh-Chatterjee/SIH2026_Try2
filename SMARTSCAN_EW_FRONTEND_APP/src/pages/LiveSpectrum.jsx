@@ -13,11 +13,16 @@ const BAND_WIDTH_MHZ = 500;
 const WATERFALL_ROWS = 120;
 
 const SYNTHETIC_EVENTS = [
-  { time: "T-480 ms", band: 6, frequencyMHz: 3250, type: "SEARCH", mode: "NORMAL_DWELL" },
-  { time: "T-360 ms", band: 10, frequencyMHz: 5250, type: "DETECTION", mode: "SHORT_DWELL" },
-  { time: "T-240 ms", band: 16, frequencyMHz: 8250, type: "HIT", mode: "REVISIT" },
-  { time: "T-120 ms", band: 28, frequencyMHz: 14250, type: "SEARCH", mode: "LONG_DWELL" },
   { time: "NOW", band: 16, frequencyMHz: 8250, type: "ARMED", mode: "PREEMPTIVE_INTERCEPT" },
+  { time: "T-60 ms", band: 16, frequencyMHz: 8250, type: "HIT", mode: "REVISIT" },
+  { time: "T-120 ms", band: 28, frequencyMHz: 14250, type: "SEARCH", mode: "LONG_DWELL" },
+  { time: "T-180 ms", band: 22, frequencyMHz: 11250, type: "SEARCH", mode: "NORMAL_DWELL" },
+  { time: "T-240 ms", band: 16, frequencyMHz: 8250, type: "HIT", mode: "REVISIT" },
+  { time: "T-300 ms", band: 14, frequencyMHz: 7250, type: "SEARCH", mode: "SHORT_DWELL" },
+  { time: "T-360 ms", band: 10, frequencyMHz: 5250, type: "DETECTION", mode: "SHORT_DWELL" },
+  { time: "T-420 ms", band: 8, frequencyMHz: 4250, type: "SEARCH", mode: "NORMAL_DWELL" },
+  { time: "T-480 ms", band: 6, frequencyMHz: 3250, type: "SEARCH", mode: "NORMAL_DWELL" },
+  { time: "T-540 ms", band: 4, frequencyMHz: 2250, type: "SEARCH", mode: "NORMAL_DWELL" },
 ];
 
 function waterfallSDRColor(value, isDark = true) {
@@ -455,7 +460,7 @@ export default function LiveSpectrum() {
   const [backendData, setBackendData] = useState(null);
   const [streamStatus, setStreamStatus] = useState("SYNTHETIC");
   const [liveTelemetry, setLiveTelemetry] = useState(null);
-  const [liveEvents, setLiveEvents] = useState([]);
+  const [liveEvents, setLiveEvents] = useState(SYNTHETIC_EVENTS);
   const [waterfall, setWaterfall] = useState(() =>
     Array.from({ length: WATERFALL_ROWS }, (_, row) =>
       Array.from({ length: NUM_BANDS }, (_, band) => {
@@ -465,6 +470,7 @@ export default function LiveSpectrum() {
     )
   );
   const [userSelectedBand, setUserSelectedBand] = useState(false);
+  const lastRestStepRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -482,6 +488,7 @@ export default function LiveSpectrum() {
               live: true,
               step: raw.step ?? raw.metrics?.step ?? prev?.step,
               band: raw.band ?? raw.metrics?.band ?? prev?.band,
+              bandPriorities: raw.bandPriorities ?? raw.metrics?.band_priorities ?? prev?.bandPriorities ?? [],
               mode: raw.mode ?? raw.metrics?.mode ?? prev?.mode,
               modeName: raw.mode_name ?? raw.metrics?.mode_name ?? prev?.modeName,
               hit: raw.hit ?? raw.metrics?.hit ?? prev?.hit,
@@ -492,6 +499,31 @@ export default function LiveSpectrum() {
               clockUs: raw.clock_us ?? raw.metrics?.clock_us ?? prev?.clockUs,
               raw: raw,
             }));
+
+            const liveBand = raw.band ?? raw.metrics?.band;
+            const currentStep = raw.step ?? raw.metrics?.step;
+            if (liveBand !== undefined && liveBand !== null && currentStep !== lastRestStepRef.current) {
+              lastRestStepRef.current = currentStep;
+              if (!userSelectedBand) setSelectedBand(liveBand);
+              const isHit = raw.hit ?? raw.metrics?.hit ?? false;
+              const modeNames = ["SHORT_DWELL", "NORMAL_DWELL", "LONG_DWELL", "REVISIT", "PREEMPTIVE"];
+              const mName = raw.mode_name ?? raw.metrics?.mode_name ?? modeNames[raw.mode ?? 1] ?? "NORMAL_DWELL";
+              const clk = raw.clock_us ?? raw.metrics?.clock_us ?? 0;
+
+              setLiveEvents((prev) => [
+                { time: `T+${(clk / 1000).toFixed(1)} ms`, band: liveBand, frequencyMHz: liveBand * 500 + 250, type: isHit ? "HIT" : "SEARCH", mode: mName },
+                ...prev.slice(0, 9),
+              ]);
+
+              setWaterfall((prev) => {
+                const newRow = Array.from({ length: NUM_BANDS }, (_, col) => {
+                  if (col === liveBand) return isHit ? 92 : 58;
+                  const prior = prev[0]?.[col] ?? 10;
+                  return Math.max(6, prior * 0.92);
+                });
+                return [newRow, ...prev.slice(0, WATERFALL_ROWS - 1)];
+              });
+            }
           }
         }
       } catch {
@@ -501,7 +533,7 @@ export default function LiveSpectrum() {
     loadTelemetry();
     const interval = setInterval(loadTelemetry, 1000);
     return () => { active = false; clearInterval(interval); };
-  }, []);
+  }, [userSelectedBand]);
 
   useEffect(() => {
     let active = true;
@@ -542,7 +574,7 @@ export default function LiveSpectrum() {
 
               setLiveEvents((prev) => [
                 { time: `T+${(clk / 1000).toFixed(1)} ms`, band: liveBand, frequencyMHz: liveBand * 500 + 250, type: isHit ? "HIT" : "SEARCH", mode: mName },
-                ...prev.slice(0, 19),
+                ...prev.slice(0, 9),
               ]);
 
               setWaterfall((prev) => {
@@ -582,16 +614,42 @@ export default function LiveSpectrum() {
   );
 
   const activeBands = useMemo(() => {
-    if (hasRealTelemetry && liveEvents.length > 0) return new Set(liveEvents.map((e) => e.band));
+    if (hasRealTelemetry) {
+      const set = new Set();
+      if (liveEvents.length > 0) {
+        liveEvents.forEach((e) => set.add(e.band));
+      }
+      if (Array.isArray(liveTelemetry?.emitters)) {
+        liveTelemetry.emitters.forEach((em) => {
+          if (em.freq_min_mhz != null) {
+            const b = Math.floor(em.freq_min_mhz / 500);
+            if (b >= 0 && b < NUM_BANDS) set.add(b);
+          }
+        });
+      }
+      if (Array.isArray(liveTelemetry?.pdws)) {
+        liveTelemetry.pdws.forEach((p) => {
+          if (p.frequency_mhz != null) {
+            const b = Math.floor(p.frequency_mhz / 500);
+            if (b >= 0 && b < NUM_BANDS) set.add(b);
+          }
+        });
+      }
+      if (set.size > 0) return set;
+    }
     return new Set([6, 10, 16, 28]);
-  }, [hasRealTelemetry, liveEvents]);
+  }, [hasRealTelemetry, liveEvents, liveTelemetry]);
 
-  const events = liveEvents.length > 0 ? liveEvents : SYNTHETIC_EVENTS;
+  const events = liveEvents.slice(0, 10);
 
   const bandHeights = useMemo(
     () =>
       Array.from({ length: NUM_BANDS }, (_, band) => {
         if (hasRealTelemetry) {
+          const prio = liveTelemetry?.bandPriorities?.[band] ?? liveTelemetry?.metrics?.band_priorities?.[band];
+          if (prio !== undefined && prio > 0) {
+            return Math.min(95, Math.max(15, Math.round(prio * 100)));
+          }
           if (band === currentScheduledBand) return 92;
           if (activeBands.has(band)) return 62;
           return 12 + ((band * 13) % 20);
@@ -663,27 +721,31 @@ export default function LiveSpectrum() {
               badge={hasRealTelemetry ? "STREAMING REAL RF" : "SYNTHETIC"}
               badgeColor={hasRealTelemetry ? "#49df9d" : "#f59e0b"}
             />
-            <span className="st-tsm" style={{ color: "#908f9e" }}>CENTER FREQUENCY</span>
-            <div className="st-tlg" style={{ color: "#bdc2ff" }}>
+            <span className="st-tsm" style={{ color: "var(--muted)" }}>CENTER FREQUENCY</span>
+            <div className="st-tlg" style={{ color: "var(--accent)" }}>
               {currentFrequencyMHz.toLocaleString()} MHz
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {[
-                ["BAND", `B${currentScheduledBand}`],
-                ["IBW", "500 MHz (Canonical)"],
-                ["THRESHOLD", "-140 dBm (Receiver)"],
-                ["INTERCEPT RATE (Pd)", hasRealTelemetry && liveTelemetry?.rollingPd != null ? `${(liveTelemetry.rollingPd * 100).toFixed(1)}%` : (usingBackend ? "0.0%" : "74.0%")],
-                ["MEDIAN LATENCY", hasRealTelemetry && liveTelemetry?.rollingMedianLatencyUs != null ? `${liveTelemetry.rollingMedianLatencyUs.toFixed(1)} µs` : (usingBackend ? "0.0 µs" : "110 µs")],
-                ["TELEMETRY STREAM", streamStatus],
-                ["REST BACKEND", usingBackend ? "AVAILABLE" : "OFFLINE"],
-              ].map(([label, value]) => (
-                <div key={label} className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "3px 6px", background: "var(--panel)", border: "1px solid var(--border)" }}>
-                  <span style={{ color: "var(--muted)" }}>{label}</span>
-                  <strong style={{ color: label === "TELEMETRY STREAM" && (streamStatus === "CONNECTED" || hasRealTelemetry) ? "var(--success)" : label === "INTERCEPT RATE (Pd)" ? "var(--success)" : "var(--text)" }}>
-                    {value}
-                  </strong>
-                </div>
-              ))}
+              {(() => {
+                const rollingPd = liveTelemetry?.rollingPd ?? liveTelemetry?.metrics?.system_metrics?.rolling_pd ?? liveTelemetry?.metrics?.rolling_pd;
+                const rollingMedLat = liveTelemetry?.rollingMedianLatencyUs ?? liveTelemetry?.metrics?.system_metrics?.rolling_median_latency_us ?? liveTelemetry?.metrics?.rolling_median_latency_us;
+                return [
+                  ["BAND", `B${currentScheduledBand}`],
+                  ["IBW", "500 MHz (Canonical)"],
+                  ["THRESHOLD", "-140 dBm (Receiver)"],
+                  ["INTERCEPT RATE (Pd)", hasRealTelemetry && rollingPd != null ? `${(rollingPd * 100).toFixed(1)}%` : (usingBackend ? "0.0%" : "74.0%")],
+                  ["MEDIAN LATENCY", hasRealTelemetry && rollingMedLat != null ? `${rollingMedLat.toFixed(1)} µs` : (usingBackend ? "0.0 µs" : "110 µs")],
+                  ["TELEMETRY STREAM", streamStatus],
+                  ["REST BACKEND", usingBackend ? "AVAILABLE" : "OFFLINE"],
+                ].map(([label, value]) => (
+                  <div key={label} className="st-tsm" style={{ display: "flex", justifyContent: "space-between", padding: "3px 6px", background: "var(--panel)", border: "1px solid var(--border)" }}>
+                    <span style={{ color: "var(--muted)" }}>{label}</span>
+                    <strong style={{ color: label === "TELEMETRY STREAM" && (streamStatus === "CONNECTED" || hasRealTelemetry) ? "var(--success)" : label === "INTERCEPT RATE (Pd)" ? "var(--success)" : "var(--text)" }}>
+                      {value}
+                    </strong>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
 
@@ -698,10 +760,10 @@ export default function LiveSpectrum() {
               <div style={{ gridColumn: "span 6 / span 6", display: "flex", flexDirection: "column", gap: 2 }}>
                 <span className="st-tsm" style={{ color: "var(--muted)" }}>MODE</span>
                 <strong className="st-tmd" style={{ color: "var(--secondary)" }}>
-                  {hasRealTelemetry ? (liveTelemetry?.modeName ?? "NORMAL_DWELL") : syntheticSystem.scheduler.selectedMode}
+                  {hasRealTelemetry ? (liveTelemetry?.modeName ?? liveTelemetry?.metrics?.mode_name ?? "NORMAL_DWELL") : syntheticSystem.scheduler.selectedMode}
                 </strong>
                 <span className="st-mark" style={{ color: "var(--text-muted)" }}>
-                  {hasRealTelemetry ? `${liveTelemetry?.metrics?.dwell_time_us ?? 500} µs` : `${syntheticSystem.scheduler.dwellTimeUs} µs`}
+                  {hasRealTelemetry ? `${liveTelemetry?.metrics?.dwell_time_us ?? liveTelemetry?.dwellTimeUs ?? 500} µs` : `${syntheticSystem.scheduler.dwellTimeUs} µs`}
                 </span>
               </div>
             </div>
