@@ -1044,6 +1044,8 @@ def mission_step(req: MissionStepRequest, request: Request) -> MissionStepRespon
                 action=int(frame.selected_band * CANONICAL_N_MODES + frame.selected_mode),
                 band=frame.selected_band,
                 mode=frame.selected_mode,
+                mode_name=frame.mode_name,
+                band_priorities=frame_dict.get("band_priorities", []),
                 hit=frame.hit,
                 dwell_time_us=frame.dwell_duration_us,
                 retune_latency_us=frame.retune_latency_us,
