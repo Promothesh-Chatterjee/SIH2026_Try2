@@ -126,6 +126,7 @@ class RFEnvAdapter:
         info : dict
         """
         band = action // self.env.n_modes
+        band = action // self.env.n_modes
         center = self.env._band_to_center(band)
         receiver_time = self.env.receiver.current_time_us
         dwell_time_us = self.env.dwell_time_us
@@ -158,6 +159,7 @@ class RFEnvAdapter:
             threshold_db_above_noise=self.detector_threshold_db,
         )
         pdws = detector.detect_iq(iq, sample_offset=0)
+        print(f'DEBUG: center={center}, iq_len={len(iq)}, pdws={pdws}')
 
         # --- 3. Map to logical-RF receiver pulses ---
         ctx = FrequencyContext(center_frequency_mhz=center)
@@ -185,4 +187,5 @@ class RFEnvAdapter:
     @property
     def action_space(self):
         return self.env.action_space
+
 

@@ -3,7 +3,7 @@
 #   - 5 episodes (5000 steps) so the 5000-step fixed-val evaluation triggers.
 #   - thompson_warmup_steps: 0 so DRQN/MoE actions + learning updates occur.
 #   - Run with --output-dir checkpoints/scheduler_rc2_smoke to isolate writes.
-data_dir: "D:/TSRD"
+data_dir: "C:/HACKATHONS/SIH2026_Try2/GNU_RF_ENV/p3ac_50k"
 seed: 42
 subset: "train"
 mode: "scan"
