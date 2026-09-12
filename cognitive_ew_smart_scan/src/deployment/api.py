@@ -1829,7 +1829,7 @@ async def ws_state(ws: WebSocket):
 # ── Live Mission Streaming Worker & Endpoints ──────────────────────────────
 
 class MissionStreamRequest(BaseModel):
-    scenario: str = Field(default="config_29", description="Scenario: config_29 (agile hopper), config_117 (stationary), or AG-04")
+    scenario: str = Field(default="config_96", description="Scenario: config_96 (multi-emitter agile hopper, 11 active bands, IR > 70%), config_64, or config_29")
     speed_hz: float = Field(default=15.0, ge=1.0, le=100.0, description="Dwell simulation frequency in Hz")
     max_dwells: Optional[int] = Field(default=None, description="Max dwell steps (None for continuous)")
 
