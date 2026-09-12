@@ -70,6 +70,7 @@ function buildDefault() {
     cognitiveExplanation: {},
     systemMetrics: {},
     pdws: [],
+    allIncidentPdws: [],
     emitters: [],
     recentDwells: [],
     modulationArchetypes: { periodic: 0, agile_hop: 0, strobe_cw: 0, total_species: 0 },
@@ -173,6 +174,9 @@ function processTelemetry(raw, missionStat) {
   const rawPdws = raw.pdws ?? m.pdws ?? raw.recent_pdws ?? m.recent_pdws ?? raw.detections ?? m.detections ?? [];
   next.pdws = Array.isArray(rawPdws) ? rawPdws : [];
 
+  const rawIncidentPdws = raw.all_incident_pdws ?? m.all_incident_pdws ?? [];
+  next.allIncidentPdws = Array.isArray(rawIncidentPdws) ? rawIncidentPdws : [];
+
   const rawDwells = raw.recent_dwells ?? m.recent_dwells ?? [];
   next.recentDwells = Array.isArray(rawDwells) ? rawDwells : [];
 
@@ -221,6 +225,7 @@ export function useOverviewTelemetry() {
   const missionStatRef = useRef(null);
   const latestTelRef = useRef(null);
   const pdwsRef = useRef([]);
+  const incidentPdwsRef = useRef([]);
   const recentDwellsRef = useRef([]);
 
   const ingest = useCallback((rawTelemetry, missionStat) => {
@@ -255,7 +260,27 @@ export function useOverviewTelemetry() {
         resolved.pdws = pdwsRef.current.slice(0, 15);
       }
 
-      if (Array.isArray(resolved.recentDwells) && resolved.recentDwells.length > 0) {
+      if (Array.isArray(resolved.allIncidentPdws) && resolved.allIncidentPdws.length > 0) {
+          const seenInc = new Set(
+            incidentPdwsRef.current.map((p) => `${p.pulse_id ?? p.id}-${Number(p.time_us ?? p.toa_us ?? 0).toFixed(1)}`)
+          );
+          const newInc = [];
+          for (const p of resolved.allIncidentPdws) {
+            const uid = `${p.pulse_id ?? p.id}-${Number(p.time_us ?? p.toa_us ?? 0).toFixed(1)}`;
+            if (!seenInc.has(uid)) {
+              seenInc.add(uid);
+              newInc.push(p);
+            }
+          }
+          if (newInc.length > 0) {
+            incidentPdwsRef.current = [...newInc, ...incidentPdwsRef.current].slice(0, 100);
+          } else if (incidentPdwsRef.current.length === 0) {
+            incidentPdwsRef.current = [...resolved.allIncidentPdws].slice(0, 100);
+          }
+        }
+        resolved.allIncidentPdws = incidentPdwsRef.current.slice(0, 100);
+
+        if (Array.isArray(resolved.recentDwells) && resolved.recentDwells.length > 0) {
         const seen = new Set(recentDwellsRef.current.map((d) => d.id));
         const newItems = [];
         for (const d of resolved.recentDwells) {
