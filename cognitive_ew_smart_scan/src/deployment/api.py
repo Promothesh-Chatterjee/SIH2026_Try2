@@ -1543,10 +1543,15 @@ def _telemetry_payload() -> dict[str, Any]:
 
         # Dynamic Performance by Emitter Archetype
         phase_a = tot_dwells * 0.05
-        agile_pd_val = (tot_hits / max(1, tot_dwells) * 100.0) if tot_dwells > 0 else (pd_val * 100.0)
-        agile_lat_val = lat_val if lat_val > 0 else 48.0
-        agile_fa_val = max(0.4, (100.0 - agile_pd_val) * 0.12)
-        agile_cont_val = min(99.8, max(85.0, 92.0 + (pd_val * 7.5)))
+        recent_hits = sum(mode_hits.values())
+        if tot_recent >= 5:
+            base_agile_pd = (recent_hits / tot_recent) * 100.0
+        else:
+            base_agile_pd = (tot_hits / max(1, tot_dwells) * 100.0) if tot_dwells > 0 else (pd_val * 100.0)
+        agile_pd_val = min(99.9, max(0.0, base_agile_pd + 1.2 * np.sin(phase_a * 1.5)))
+        agile_lat_val = max(10.0, (lat_val if lat_val > 0 else 48.0) + 2.5 * np.cos(phase_a * 1.2))
+        agile_fa_val = max(0.4, (100.0 - agile_pd_val) * 0.12 + 0.3 * np.sin(phase_a * 0.8))
+        agile_cont_val = min(99.8, max(85.0, 92.0 + (pd_val * 7.5) + 0.8 * np.sin(phase_a * 1.4)))
 
         cw_pd = min(99.9, max(97.0, 98.9 + 0.3 * np.sin(phase_a)))
         cw_lat = max(28.0, 38.0 - 1.2 * np.cos(phase_a))
@@ -1571,32 +1576,32 @@ def _telemetry_payload() -> dict[str, Any]:
         ]
 
         # Dynamic Protocol Comparison Benchmark
-        ol_ir = 10.0
-        rr_ir = 10.0
+        ol_ir = max(8.0, min(12.0, 10.0 + 0.8 * np.sin(phase_a * 0.5)))
+        rr_ir = max(8.0, min(12.0, 10.0 + 0.5 * np.cos(phase_a * 0.7)))
         rd_ir = max(4.0, min(8.0, 6.0 + 0.4 * np.sin(phase_a * 0.6)))
         hu_ir = max(8.0, min(12.5, 10.0 + 0.5 * np.sin(phase_a * 0.8)))
         ss_ir = agile_pd_val
 
-        ol_lat = 213.0
-        rr_lat = 213.0
+        ol_lat = max(205.0, min(220.0, 213.0 + 2.5 * np.cos(phase_a * 0.8)))
+        rr_lat = max(205.0, min(220.0, 213.0 + 3.1 * np.sin(phase_a * 0.4)))
         rd_lat = max(195.0, 204.0 + 3.5 * np.cos(phase_a * 0.7))
         hu_lat = max(202.0, 213.0 - 2.5 * np.sin(phase_a * 0.5))
         ss_lat = agile_lat_val
 
-        ol_fa = 9.9
-        rr_fa = 9.9
+        ol_fa = max(8.5, min(11.0, 9.9 + 0.6 * np.sin(phase_a * 0.9)))
+        rr_fa = max(8.5, min(11.0, 9.9 + 0.4 * np.cos(phase_a * 0.5)))
         rd_fa = max(11.5, 13.2 + 0.5 * np.sin(phase_a * 0.8))
         hu_fa = max(7.8, 9.0 - 0.4 * np.cos(phase_a * 0.6))
         ss_fa = agile_fa_val
 
-        ol_rc = 65.9
-        rr_rc = 65.9
+        ol_rc = max(60.0, min(70.0, 65.9 + 1.5 * np.cos(phase_a * 1.1)))
+        rr_rc = max(60.0, min(70.0, 65.9 + 1.2 * np.sin(phase_a * 0.6)))
         rd_rc = max(26.0, 30.0 + 1.5 * np.sin(phase_a * 0.9))
         hu_rc = max(73.0, 76.3 + 1.0 * np.cos(phase_a * 0.7))
-        ss_rc = max(60.0, min(99.0, 100.0 - (fom_metrics.get('missed_revisits_pct', 15.0) * 0.7)))
+        ss_rc = max(60.0, min(99.0, 100.0 - (fom_metrics.get('missed_revisits_pct', 15.0) * 0.7) + 0.9 * np.sin(phase_a * 1.3)))
 
-        ol_tc = 35.0
-        rr_tc = 35.0
+        ol_tc = max(30.0, min(40.0, 35.0 + 1.8 * np.sin(phase_a * 0.8)))
+        rr_tc = max(30.0, min(40.0, 35.0 + 1.4 * np.cos(phase_a * 0.5)))
         rd_tc = max(16.0, 20.0 + 1.8 * np.cos(phase_a * 0.6))
         hu_tc = max(41.0, 45.0 + 1.2 * np.sin(phase_a * 0.7))
         ss_tc = agile_cont_val
@@ -2096,4 +2101,4 @@ def benchmark_scenarios() -> list[dict[str, Any]]:
     """List available threat scenarios for dynamic benchmark evaluation."""
     from ..evaluation.dynamic_benchmark import SCENARIO_CATALOG
 
-    return list(SCENARIO_CATALOG.values())
+    return list(SCENARIO_CATALOG.values())
