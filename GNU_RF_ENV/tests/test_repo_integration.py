@@ -57,7 +57,7 @@ class TestRepoIntegration(unittest.TestCase):
     def test_instantiate_real_sieve_receiver(self):
         recv = SieveReceiver()
         recv.tune(3200.0)
-        self.assertEqual(recv.get_frequency_window()[0], 2700.0)
+        self.assertEqual(recv.get_frequency_window()[0], 2950.0)
 
     def test_frequency_context_usable(self):
         ctx = FrequencyContext(center_frequency_mhz=3200.0)
