@@ -1870,7 +1870,7 @@ async def _run_live_mission_stream(scenario_name: str, speed_hz: float, max_dwel
                 h5_path,
                 freq_min_mhz=0.0,
                 freq_max_mhz=18000.0,
-                max_pulses=50000,
+                max_pulses=500000,
             )
             for idx, r in enumerate(records):
                 scenario_pulses.append({
