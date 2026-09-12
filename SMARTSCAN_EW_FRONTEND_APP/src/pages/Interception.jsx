@@ -1,125 +1,162 @@
-import { useEffect, useMemo, useState } from "react";
-import { api } from "../services/api";
-import { startTelemetryStream } from "../services/liveSocket";
-import {
-  PanelHead,
-  StitchTable,
-} from "../components/stitch";
+import { useMemo, useState } from "react";
+import { PanelHead } from "../components/stitch";
+import { useOverviewTelemetry } from "../services/useOverviewTelemetry";
 
-const MOCK_INTERCEPT_EVENTS = [
-  { id: 1, timeUs: 12000, band: 6, frequencyMHz: 3250, mode: "NORMAL_DWELL", type: "MISS", expectedUs: 11920, actualUs: null, errorUs: null },
-  { id: 2, timeUs: 12100, band: 10, frequencyMHz: 5250, mode: "SHORT_DWELL", type: "FALSE_ALARM", expectedUs: null, actualUs: 12100, errorUs: null },
-  { id: 3, timeUs: 12200, band: 16, frequencyMHz: 8250, mode: "REVISIT", type: "HIT", expectedUs: 12172, actualUs: 12200, errorUs: 28 },
-  { id: 4, timeUs: 12300, band: 28, frequencyMHz: 14250, mode: "LONG_DWELL", type: "SEARCH", expectedUs: null, actualUs: null, errorUs: null },
-  { id: 5, timeUs: 12400, band: 16, frequencyMHz: 8250, mode: "PREEMPTIVE_INTERCEPT", type: "HIT", expectedUs: 12408, actualUs: 12400, errorUs: -8 },
-  { id: 6, timeUs: 12500, band: 6, frequencyMHz: 3250, mode: "REVISIT", type: "HIT", expectedUs: 12482, actualUs: 12500, errorUs: 18 },
-];
-
-const BAND_ACTIVITY = [
-  0.08, 0.06, 0.05, 0.1, 0.07, 0.1, 0.5, 0.06, 0.05, 0.12, 0.76, 0.08,
-  0.06, 0.11, 0.08, 0.07, 0.94, 0.08, 0.06, 0.05, 0.09, 0.08, 0.15, 0.06,
-  0.04, 0.05, 0.08, 0.07, 0.82, 0.08, 0.06, 0.05, 0.1, 0.07, 0.05, 0.06,
-];
-
-const TYPE_LABELS = { HIT: "HIT", MISS: "MISS", FALSE_ALARM: "FALSE ALARM", SEARCH: "SEARCH" };
+const TYPE_LABELS = {
+  HIT: "HIT",
+  MISS: "MISS",
+  INTERCEPTION: "INTERCEPTION",
+  FALSE_ALARM: "FALSE ALARM",
+};
 
 const TYPE_COLORS = {
   HIT: "#49df9d",
   MISS: "#ffb4ab",
+  INTERCEPTION: "#3097e0",
   FALSE_ALARM: "#f59e0b",
-  SEARCH: "#96ccff",
 };
-
-function eventClass(type) {
-  return type.toLowerCase().replace("_", "-");
-}
 
 export default function Interception() {
   const [selectedEventId, setSelectedEventId] = useState(null);
-  const [missionStatus, setMissionStatus] = useState(null);
-  const [liveTelemetry, setLiveTelemetry] = useState(null);
-  const [liveEvents, setLiveEvents] = useState([]);
 
-  useEffect(() => {
-    let active = true;
-    async function fetchStatus() {
-      try {
-        const stat = await api.getMissionStatus();
-        if (active) setMissionStatus(stat);
-      } catch {
-        // Backend offline or quiet
-      }
+  const t = useOverviewTelemetry();
+  const {
+    live,
+    totalHits,
+    totalDwells,
+    rollingPd,
+    rollingMedianLatencyUs,
+    currentBand,
+    currentMode,
+    missionClockUs,
+    emitters,
+    recentDwells,
+  } = t;
+
+  // Map real dwell events from backend telemetry
+  const displayEvents = useMemo(() => {
+    if (!live || !Array.isArray(recentDwells) || recentDwells.length === 0) {
+      return [];
     }
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 1000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    let stream = null;
-    try {
-      stream = startTelemetryStream({
-        onTelemetry(t) {
-          if (active && t?.valid && t?.live) {
-            setLiveTelemetry(t);
-            const evtId = t.step ?? Date.now();
-            const newEvt = {
-              id: evtId,
-              timeUs: Math.round(t.clockUs ?? 0),
-              band: t.band ?? 0,
-              frequencyMHz: (t.band ?? 0) * 500 + 250,
-              mode: t.modeName ?? "NORMAL_DWELL",
-              type: t.hit ? "HIT" : "MISS",
-              expectedUs: t.cognitiveExplanation?.predicted_eta_us > 0 ? Math.round(t.cognitiveExplanation.predicted_eta_us) : null,
-              actualUs: t.hit ? Math.round(t.clockUs ?? 0) : null,
-              errorUs: t.cognitiveExplanation?.predicted_eta_us > 0 ? Math.round((t.clockUs ?? 0) - t.cognitiveExplanation.predicted_eta_us) : null,
-              trackId: t.cognitiveExplanation?.predicted_track_id !== "None" ? t.cognitiveExplanation?.predicted_track_id : null,
-            };
-            setLiveEvents((prev) => {
-              if (prev.length > 0 && prev[0].id === newEvt.id) return prev;
-              return [newEvt, ...prev.slice(0, 49)];
-            });
-          }
-        },
-      });
-    } catch {
-      // Ignored
-    }
-    return () => {
-      active = false;
-      stream?.close();
-    };
-  }, []);
-
-  const displayEvents = liveEvents.length > 0 ? liveEvents : MOCK_INTERCEPT_EVENTS;
-
-  const selectedEvent = useMemo(
-    () =>
-      displayEvents.find((event) => event.id === selectedEventId) ??
-      displayEvents[0],
-    [displayEvents, selectedEventId]
-  );
-
-  const backendConnected = Boolean(missionStatus);
-  const hasLive = missionStatus && missionStatus.total_dwells > 0;
-  const hitCount = hasLive ? missionStatus.total_hits : (backendConnected ? 0 : MOCK_INTERCEPT_EVENTS.filter((event) => event.type === "HIT").length);
-  const totalCount = hasLive ? missionStatus.total_dwells : (backendConnected ? 0 : MOCK_INTERCEPT_EVENTS.length);
-  const missCount = hasLive ? (missionStatus.total_dwells - missionStatus.total_hits) : (backendConnected ? 0 : MOCK_INTERCEPT_EVENTS.filter((event) => event.type === "MISS").length);
-  const pdPct = hasLive ? (missionStatus.rolling_pd * 100).toFixed(1) + "%" : (backendConnected ? "0.0%" : "74.0%");
-  const latencyUs = hasLive ? missionStatus.rolling_median_latency_us.toFixed(1) + " µs" : (backendConnected ? "0.0 µs" : "110 µs");
-  const currentAperture = liveTelemetry
-    ? `B${liveTelemetry.band ?? 0} · ${liveTelemetry.modeName ?? "NORMAL_DWELL"}`
-    : (backendConnected ? "B0 · 0.0" : "B5 · NORMAL_DWELL");
-
-  const bandActivity = (liveTelemetry && Array.isArray(liveTelemetry.bandPriorities) && liveTelemetry.bandPriorities.length === 36)
-    ? liveTelemetry.bandPriorities
-    : BAND_ACTIVITY;
+    return recentDwells.map((d, idx) => ({
+      id: d.id || `${Math.round(d.time_us ?? d.clock_us ?? 0)}-${d.band ?? 0}-${idx}`,
+      timeUs: Math.round(d.time_us ?? d.clock_us ?? 0),
+      band: d.band ?? 0,
+      frequencyMHz: d.frequency_mhz ?? ((d.band ?? 0) * 500 + 250),
+      mode: d.mode ?? d.mode_name ?? "NORMAL_DWELL",
+      dwellUs: d.dwell_us ?? d.dwell_time_us ?? 100,
+      type: d.type || (d.hit ? "HIT" : "MISS"),
+      expectedUs: d.expected_us != null ? Math.round(d.expected_us) : null,
+      actualUs: d.actual_us != null ? Math.round(d.actual_us) : (d.hit ? Math.round(d.time_us ?? d.clock_us ?? 0) : null),
+      errorUs: d.error_us != null ? Math.round(d.error_us) : null,
+      trackId: d.track_id ? String(d.track_id) : null,
+      emitterId: d.emitter_id ? String(d.emitter_id) : null,
+    }));
+  }, [live, recentDwells]);
 
   const gridColumns = 30;
+  const windowDurationUs = 500;
+
+  // Build grid of signals entering the environment and dwells for T-F Coincidence Plane
+  const gridSignals = useMemo(() => {
+    const grid = Array.from({ length: 36 }, () => Array(gridColumns).fill(null));
+    if (!live || displayEvents.length === 0) return grid;
+
+    const nowUs = missionClockUs > 0 ? missionClockUs : (displayEvents[0]?.timeUs ?? 0);
+    const startUs = Math.max(0, nowUs - windowDurationUs);
+    const colWidthUs = windowDurationUs / gridColumns;
+
+    // 1. Map physical RF signals entering the environment from active emitters
+    if (Array.isArray(emitters) && emitters.length > 0) {
+      for (const emit of emitters) {
+        const band = emit.band ?? 0;
+        if (band < 0 || band >= 36) continue;
+        const pri = emit.pri_us && emit.pri_us > 0 ? emit.pri_us : 100;
+        const firstPulse = Math.ceil(startUs / pri) * pri;
+        for (let pTime = firstPulse; pTime <= nowUs; pTime += pri) {
+          const col = Math.min(gridColumns - 1, Math.max(0, Math.floor((pTime - startUs) / colWidthUs)));
+          const dwellMatch = displayEvents.find(
+            (d) => d.band === band && Math.abs(d.timeUs - pTime) < colWidthUs
+          );
+          if (dwellMatch) {
+            grid[band][col] = dwellMatch;
+          } else {
+            // Signal entered environment but was not intercepted by receiver dwell -> MISS
+            grid[band][col] = {
+              id: `rf-miss-${band}-${Math.round(pTime)}`,
+              timeUs: Math.round(pTime),
+              band,
+              frequencyMHz: emit.frequency_mhz || (band * 500 + 250),
+              mode: "EMITTER_PULSE",
+              type: "MISS",
+              expectedUs: Math.round(pTime),
+              actualUs: null,
+              errorUs: null,
+              trackId: emit.tag || (emit.track_id ? `TRK-${emit.track_id}` : null),
+              emitterId: emit.emitter_id || `EMIT-${band + 1}`,
+            };
+          }
+        }
+      }
+    }
+
+    // 2. Map all real executed dwells (HIT, INTERCEPTION, MISS, FALSE_ALARM)
+    for (const evt of displayEvents) {
+      const band = evt.band ?? 0;
+      if (band < 0 || band >= 36) continue;
+      if (evt.timeUs >= startUs - colWidthUs && evt.timeUs <= nowUs + colWidthUs) {
+        const col = Math.min(gridColumns - 1, Math.max(0, Math.floor((evt.timeUs - startUs) / colWidthUs)));
+        if (!grid[band][col] || evt.type === "INTERCEPTION" || evt.type === "HIT" || evt.type === "FALSE_ALARM") {
+          grid[band][col] = evt;
+        }
+      }
+    }
+
+    return grid;
+  }, [live, displayEvents, missionClockUs, emitters]);
+
+  const selectedEvent = useMemo(() => {
+    if (selectedEventId != null) {
+      const found = displayEvents.find((event) => event.id === selectedEventId);
+      if (found) return found;
+      for (let b = 0; b < 36; b++) {
+        for (let c = 0; c < gridColumns; c++) {
+          if (gridSignals[b]?.[c]?.id === selectedEventId) {
+            return gridSignals[b][c];
+          }
+        }
+      }
+    }
+    return (
+      displayEvents[0] || {
+        id: 0,
+        timeUs: 0,
+        band: 0,
+        frequencyMHz: 250,
+        mode: "0.0",
+        type: "MISS",
+        expectedUs: null,
+        actualUs: null,
+        errorUs: null,
+      }
+    );
+  }, [selectedEventId, displayEvents, gridSignals]);
+
+  // 1. HITS
+  const hitCount = live ? totalHits : 0;
+  // 2. MISSES
+  const missCount = live ? Math.max(0, totalDwells - totalHits) : 0;
+  // 3. INTERCEPT RATE (Pd)
+  const pdPct = live ? (rollingPd * 100).toFixed(1) + "%" : "0.0%";
+  // 4. MEDIAN LATENCY
+  const latencyUs = live ? rollingMedianLatencyUs.toFixed(1) + " µs" : "0.0 µs";
+  // 5. TOTAL DWELLS
+  const totalCount = live ? totalDwells : 0;
+  // 6. SEARCH DIM: 2-D
+  // 7. ACTIVE APERTURE
+  const currentAperture = live
+    ? `B${currentBand} · ${currentMode}`
+    : "B0 · 0.0";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -127,8 +164,8 @@ export default function Interception() {
         <PanelHead
           icon="grid_on"
           title="TIME – FREQUENCY INTERCEPTION MATRIX & SEARCH COINCIDENCE"
-          badge={hasLive ? "LIVE MISSION TELEMETRY" : "2-D SEARCH ACTIVE"}
-          badgeColor={hasLive ? "#49df9d" : "#96ccff"}
+          badge={live ? "LIVE MISSION TELEMETRY" : "2-D SEARCH ACTIVE"}
+          badgeColor={live ? "#49df9d" : "#96ccff"}
         />
         <div className="st-body" style={{ color: "#c6c5d5" }}>
           Frequency and time are jointly evaluated to determine interception
@@ -138,7 +175,7 @@ export default function Interception() {
               Receiver dwell overlapped the transmission window and the signal was successfully intercepted.
             </span>
           )}
-          {hasLive && <span style={{ color: "#49df9d" }}>● Live Closed-Loop Mode Active</span>}
+          {live && <span style={{ color: "#49df9d" }}>● Live Closed-Loop Mode Active</span>}
         </div>
       </div>
 
@@ -162,6 +199,7 @@ export default function Interception() {
         ))}
       </section>
 
+      {/* Feature 8: T-F APERTURE COINCIDENCE PLANE */}
       <div className="st-panel">
         <PanelHead icon="apps" title="T-F APERTURE COINCIDENCE PLANE" badge="36 BANDS" badgeColor="#bdc2ff" />
         <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between", color: "#908f9e" }}>
@@ -182,34 +220,32 @@ export default function Interception() {
               {Array.from({ length: 36 }, (_, band) => (
                 <div className="st-timeline" key={band} style={{ height: 14, gap: 1, marginBottom: 1 }}>
                   {Array.from({ length: gridColumns }, (_, column) => {
-                    const activityVal = bandActivity[band] ?? 0;
-                    const active = activityVal > 0.25 && (column + band) % 5 === 0;
-                    const event = displayEvents.find(
-                      (item) =>
-                        item.band === band &&
-                        Math.abs(item.timeUs - (12000 + column * 20)) < 15
-                    );
+                    const event = gridSignals[band]?.[column];
+                    const isSelected = selectedEvent?.id != null && selectedEvent.id === event?.id;
                     let bg = "transparent";
-                    if (event?.type === "HIT") bg = "#49df9d";
-                    else if (event?.type === "MISS") bg = "#ffb4ab";
-                    else if (event?.type === "FALSE_ALARM") bg = "#f59e0b";
-                    else if (active) bg = "#3097e0";
+                    if (event?.type === "HIT") bg = TYPE_COLORS.HIT;
+                    else if (event?.type === "MISS") bg = TYPE_COLORS.MISS;
+                    else if (event?.type === "INTERCEPTION") bg = TYPE_COLORS.INTERCEPTION;
+                    else if (event?.type === "FALSE_ALARM") bg = TYPE_COLORS.FALSE_ALARM;
+
                     return (
                       <button
                         key={column}
                         onClick={() => {
                           if (event) setSelectedEventId(event.id);
                         }}
-                        title={`Band ${band}, event ${event ? (TYPE_LABELS[event.type] ?? event.type) : "activity"}`}
-                        aria-label={`Band ${band}, event ${event ? (TYPE_LABELS[event.type] ?? event.type) : "activity"}`}
+                        title={event ? `Band ${band}, ${TYPE_LABELS[event.type] ?? event.type}: ${event.frequencyMHz} MHz at ${event.timeUs} µs` : `Band ${band} (Empty)`}
+                        aria-label={event ? `Band ${band}, ${TYPE_LABELS[event.type] ?? event.type}: ${event.frequencyMHz} MHz at ${event.timeUs} µs` : `Band ${band}`}
                         style={{
                           flex: 1,
                           margin: 0,
                           padding: 0,
                           minWidth: 0,
                           background: bg,
-                          border: event ? "1px solid #e2e2e8" : "1px solid rgba(69,70,83,0.4)",
+                          border: isSelected ? "1px solid #ffffff" : (event ? "1px solid rgba(255,255,255,0.4)" : "1px solid rgba(69,70,83,0.3)"),
+                          boxShadow: isSelected ? "0 0 6px #ffffff" : undefined,
                           cursor: event ? "pointer" : "default",
+                          transition: "background 0.15s ease",
                         }}
                       />
                     );
@@ -219,41 +255,78 @@ export default function Interception() {
             </div>
           </div>
         </div>
-        <div className="st-tsm" style={{ display: "flex", gap: 12, color: "#908f9e" }}>
-          <span><i style={{ display: "inline-block", width: 8, height: 8, background: "#3097e0", marginRight: 4 }} />RF ACTIVITY</span>
-          <span><i style={{ display: "inline-block", width: 8, height: 8, background: "#49df9d", marginRight: 4 }} />HIT</span>
-          <span><i style={{ display: "inline-block", width: 8, height: 8, background: "#ffb4ab", marginRight: 4 }} />MISS</span>
-          <span><i style={{ display: "inline-block", width: 8, height: 8, background: "#f59e0b", marginRight: 4 }} />FALSE ALARM</span>
+        {/* Updated legend labels matching the 4 signal categories */}
+        <div className="st-tsm" style={{ display: "flex", gap: 16, color: "#908f9e", marginTop: 8, alignItems: "center" }}>
+          <span><i style={{ display: "inline-block", width: 8, height: 8, background: TYPE_COLORS.HIT, marginRight: 5, verticalAlign: "middle" }} />HIT</span>
+          <span><i style={{ display: "inline-block", width: 8, height: 8, background: TYPE_COLORS.MISS, marginRight: 5, verticalAlign: "middle" }} />MISS</span>
+          <span><i style={{ display: "inline-block", width: 8, height: 8, background: TYPE_COLORS.INTERCEPTION, marginRight: 5, verticalAlign: "middle" }} />INTERCEPTION</span>
+          <span><i style={{ display: "inline-block", width: 8, height: 8, background: TYPE_COLORS.FALSE_ALARM, marginRight: 5, verticalAlign: "middle" }} />FALSE ALARM</span>
         </div>
       </div>
 
+      {/* Feature 9: CHRONOLOGICAL DWELL INTERCEPTION STREAM & Feature 10: EVENT TELEMETRY */}
       <div className="st-grid-12">
         <div className="st-span-8 st-panel">
-          <PanelHead icon="view_timeline" title="CHRONOLOGICAL DWELL INTERCEPTION STREAM" badge={`${displayEvents.length} EVENTS`} badgeColor="#bdc2ff" />
-          <div className="st-table-wrap st-table-wrap-compact">
-          <StitchTable
-            columns={["T-OFFSET", "RX CENTER FREQ", "BAND ID", "DWELL DURATION", "STATUS", "EMITTER ID", "TIMING DELTA"]}
-            rows={displayEvents.map((event) => [
-              `${event.timeUs} µs`,
-              `${event.frequencyMHz.toLocaleString()} MHz`,
-              `B${event.band}`,
-              event.mode === "SHORT_DWELL"
-                ? "50 µs"
-                : event.mode === "NORMAL_DWELL"
-                  ? "100 µs"
-                  : event.mode === "LONG_DWELL"
-                    ? "200 µs"
-                    : event.mode === "REVISIT"
-                      ? "120 µs"
-                      : "80 µs",
-              <strong key="t" style={{ color: TYPE_COLORS[event.type] ?? "#e2e2e8" }}>{TYPE_LABELS[event.type] ?? event.type}</strong>,
-              event.trackId ? `TRK-${event.trackId}` : `E-${String((event.band % 4) + 1).padStart(2, "0")}`,
-              event.errorUs === null ? "N/A" : `${event.errorUs > 0 ? "+" : ""}${event.errorUs} µs`,
-            ])}
+          <PanelHead
+            icon="view_timeline"
+            title="CHRONOLOGICAL DWELL INTERCEPTION STREAM"
+            badge={`${displayEvents.length} EVENTS`}
+            badgeColor="#bdc2ff"
           />
+          <div
+            className="st-table-wrap st-table-wrap-compact"
+            style={{
+              maxHeight: "380px",
+              overflowY: "auto",
+              position: "relative",
+              border: "1px solid var(--border, #454653)",
+            }}
+          >
+            <table className="st-table">
+              <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--panel-3, #282a2e)" }}>
+                <tr>
+                  {["T-OFFSET", "RX CENTER FREQ", "BAND ID", "DWELL DURATION", "STATUS", "EMITTER ID", "TIMING DELTA"].map((c) => (
+                    <th key={c} style={{ background: "#282a2e" }}>{c}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {displayEvents.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: "center", color: "#908f9e", padding: "28px 8px" }}>
+                      NO INTERCEPT EVENTS RECORDED — SYSTEM IDLE / WAITING FOR RF STREAM
+                    </td>
+                  </tr>
+                ) : (
+                  displayEvents.map((event) => {
+                    const isSelected = selectedEvent?.id === event.id;
+                    return (
+                      <tr
+                        key={event.id}
+                        onClick={() => setSelectedEventId(event.id)}
+                        style={{
+                          cursor: "pointer",
+                          background: isSelected ? "rgba(189, 194, 255, 0.12)" : undefined,
+                          borderLeft: isSelected ? "3px solid #bdc2ff" : "3px solid transparent",
+                        }}
+                      >
+                        <td>{event.timeUs} µs</td>
+                        <td>{event.frequencyMHz.toLocaleString()} MHz</td>
+                        <td>B{event.band}</td>
+                        <td>{event.dwellUs ? `${event.dwellUs} µs` : (event.mode === "SHORT_DWELL" ? "50 µs" : event.mode === "NORMAL_DWELL" ? "100 µs" : event.mode === "LONG_DWELL" ? "200 µs" : event.mode === "REVISIT" ? "120 µs" : "80 µs")}</td>
+                        <td><strong style={{ color: TYPE_COLORS[event.type] ?? "#e2e2e8" }}>{TYPE_LABELS[event.type] ?? event.type}</strong></td>
+                        <td>{event.trackId ? (String(event.trackId).startsWith("TRK-") ? event.trackId : `TRK-${event.trackId}`) : (event.emitterId || `E-${String((event.band % 4) + 1).padStart(2, "0")}`)}</td>
+                        <td>{event.errorUs === null ? "N/A" : `${event.errorUs > 0 ? "+" : ""}${event.errorUs} µs`}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
+        {/* Feature 10: EVENT TELEMETRY — UNTOUCHED */}
         <aside className="st-span-4 st-panel">
           <PanelHead title="EVENT TELEMETRY — SELECTED EVENT" badge={`#${String(selectedEvent.id).padStart(2, "0")}`} badgeColor="#bdc2ff" />
           <div className="st-tlg" style={{ color: TYPE_COLORS[selectedEvent.type] }}>
