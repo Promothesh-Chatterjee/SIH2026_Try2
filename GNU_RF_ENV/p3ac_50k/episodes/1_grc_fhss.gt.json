@@ -1,0 +1,2222 @@
+{
+  "episode_id": "1_grc_fhss",
+  "generator_version": "1.grc-FHSS-Bridge-v1.0",
+  "schema_version": "3Y.1",
+  "source_grc": "1.grc",
+  "total_hops": 100,
+  "dwells": [
+    {
+      "dwell_index": 0,
+      "start_time_us": 0.0,
+      "end_time_us": 50000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H0",
+          "rf_frequency_mhz": 3350.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 42
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 1,
+      "start_time_us": 50000.0,
+      "end_time_us": 100000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H1",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 43
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 2,
+      "start_time_us": 100000.0,
+      "end_time_us": 150000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H2",
+          "rf_frequency_mhz": 3537.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 44
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 3,
+      "start_time_us": 150000.0,
+      "end_time_us": 200000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H3",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 45
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 4,
+      "start_time_us": 200000.0,
+      "end_time_us": 250000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H4",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 46
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 5,
+      "start_time_us": 250000.0,
+      "end_time_us": 300000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H5",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 47
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 6,
+      "start_time_us": 300000.0,
+      "end_time_us": 350000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H6",
+          "rf_frequency_mhz": 3350.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 48
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 7,
+      "start_time_us": 350000.0,
+      "end_time_us": 400000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H7",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 49
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 8,
+      "start_time_us": 400000.0,
+      "end_time_us": 450000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H8",
+          "rf_frequency_mhz": 3387.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 50
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 9,
+      "start_time_us": 450000.0,
+      "end_time_us": 500000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H9",
+          "rf_frequency_mhz": 3350.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 51
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 10,
+      "start_time_us": 500000.0,
+      "end_time_us": 550000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H10",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 52
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 11,
+      "start_time_us": 550000.0,
+      "end_time_us": 600000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H11",
+          "rf_frequency_mhz": 3650.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 53
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 12,
+      "start_time_us": 600000.0,
+      "end_time_us": 650000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H12",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 54
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 13,
+      "start_time_us": 650000.0,
+      "end_time_us": 700000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H13",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 55
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 14,
+      "start_time_us": 700000.0,
+      "end_time_us": 750000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H14",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 56
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 15,
+      "start_time_us": 750000.0,
+      "end_time_us": 800000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H15",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 57
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 16,
+      "start_time_us": 800000.0,
+      "end_time_us": 850000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H16",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 58
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 17,
+      "start_time_us": 850000.0,
+      "end_time_us": 900000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H17",
+          "rf_frequency_mhz": 3387.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 59
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 18,
+      "start_time_us": 900000.0,
+      "end_time_us": 950000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H18",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 60
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 19,
+      "start_time_us": 950000.0,
+      "end_time_us": 1000000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H19",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 61
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 20,
+      "start_time_us": 1000000.0,
+      "end_time_us": 1050000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H20",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 62
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 21,
+      "start_time_us": 1050000.0,
+      "end_time_us": 1100000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H21",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 63
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 22,
+      "start_time_us": 1100000.0,
+      "end_time_us": 1150000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H22",
+          "rf_frequency_mhz": 3387.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 64
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 23,
+      "start_time_us": 1150000.0,
+      "end_time_us": 1200000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H23",
+          "rf_frequency_mhz": 3650.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 65
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 24,
+      "start_time_us": 1200000.0,
+      "end_time_us": 1250000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H24",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 66
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 25,
+      "start_time_us": 1250000.0,
+      "end_time_us": 1300000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H25",
+          "rf_frequency_mhz": 3537.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 67
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 26,
+      "start_time_us": 1300000.0,
+      "end_time_us": 1350000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H26",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 68
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 27,
+      "start_time_us": 1350000.0,
+      "end_time_us": 1400000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H27",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 69
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 28,
+      "start_time_us": 1400000.0,
+      "end_time_us": 1450000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H28",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 70
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 29,
+      "start_time_us": 1450000.0,
+      "end_time_us": 1500000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H29",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 71
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 30,
+      "start_time_us": 1500000.0,
+      "end_time_us": 1550000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H30",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 72
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 31,
+      "start_time_us": 1550000.0,
+      "end_time_us": 1600000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H31",
+          "rf_frequency_mhz": 3425.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 73
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 32,
+      "start_time_us": 1600000.0,
+      "end_time_us": 1650000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H32",
+          "rf_frequency_mhz": 3350.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 74
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 33,
+      "start_time_us": 1650000.0,
+      "end_time_us": 1700000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H33",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 75
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 34,
+      "start_time_us": 1700000.0,
+      "end_time_us": 1750000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H34",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 76
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 35,
+      "start_time_us": 1750000.0,
+      "end_time_us": 1800000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H35",
+          "rf_frequency_mhz": 3350.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 77
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 36,
+      "start_time_us": 1800000.0,
+      "end_time_us": 1850000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H36",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 78
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 37,
+      "start_time_us": 1850000.0,
+      "end_time_us": 1900000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H37",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 79
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 38,
+      "start_time_us": 1900000.0,
+      "end_time_us": 1950000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H38",
+          "rf_frequency_mhz": 3425.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 80
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 39,
+      "start_time_us": 1950000.0,
+      "end_time_us": 2000000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H39",
+          "rf_frequency_mhz": 3537.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 81
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 40,
+      "start_time_us": 2000000.0,
+      "end_time_us": 2049999.9999999998,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H40",
+          "rf_frequency_mhz": 3387.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 82
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 41,
+      "start_time_us": 2049999.9999999998,
+      "end_time_us": 2100000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H41",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 83
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 42,
+      "start_time_us": 2100000.0,
+      "end_time_us": 2150000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H42",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 84
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 43,
+      "start_time_us": 2150000.0,
+      "end_time_us": 2200000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H43",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 85
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 44,
+      "start_time_us": 2200000.0,
+      "end_time_us": 2250000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H44",
+          "rf_frequency_mhz": 3350.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 86
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 45,
+      "start_time_us": 2250000.0,
+      "end_time_us": 2300000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H45",
+          "rf_frequency_mhz": 3650.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 87
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 46,
+      "start_time_us": 2300000.0,
+      "end_time_us": 2350000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H46",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 88
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 47,
+      "start_time_us": 2350000.0,
+      "end_time_us": 2400000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H47",
+          "rf_frequency_mhz": 3650.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 89
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 48,
+      "start_time_us": 2400000.0,
+      "end_time_us": 2450000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H48",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 90
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 49,
+      "start_time_us": 2450000.0,
+      "end_time_us": 2500000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H49",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 91
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 50,
+      "start_time_us": 2500000.0,
+      "end_time_us": 2550000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H50",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 92
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 51,
+      "start_time_us": 2550000.0,
+      "end_time_us": 2600000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H51",
+          "rf_frequency_mhz": 3387.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 93
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 52,
+      "start_time_us": 2600000.0,
+      "end_time_us": 2650000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H52",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 94
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 53,
+      "start_time_us": 2650000.0,
+      "end_time_us": 2700000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H53",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 95
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 54,
+      "start_time_us": 2700000.0,
+      "end_time_us": 2750000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H54",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 96
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 55,
+      "start_time_us": 2750000.0,
+      "end_time_us": 2800000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H55",
+          "rf_frequency_mhz": 3350.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 97
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 56,
+      "start_time_us": 2800000.0,
+      "end_time_us": 2850000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H56",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 98
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 57,
+      "start_time_us": 2850000.0,
+      "end_time_us": 2900000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H57",
+          "rf_frequency_mhz": 3387.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 99
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 58,
+      "start_time_us": 2900000.0,
+      "end_time_us": 2950000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H58",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 100
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 59,
+      "start_time_us": 2950000.0,
+      "end_time_us": 3000000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H59",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 101
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 60,
+      "start_time_us": 3000000.0,
+      "end_time_us": 3050000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H60",
+          "rf_frequency_mhz": 3650.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 102
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 61,
+      "start_time_us": 3050000.0,
+      "end_time_us": 3100000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H61",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 103
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 62,
+      "start_time_us": 3100000.0,
+      "end_time_us": 3150000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H62",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 104
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 63,
+      "start_time_us": 3150000.0,
+      "end_time_us": 3200000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H63",
+          "rf_frequency_mhz": 3650.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 105
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 64,
+      "start_time_us": 3200000.0,
+      "end_time_us": 3250000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H64",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 106
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 65,
+      "start_time_us": 3250000.0,
+      "end_time_us": 3300000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H65",
+          "rf_frequency_mhz": 3425.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 107
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 66,
+      "start_time_us": 3300000.0,
+      "end_time_us": 3350000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H66",
+          "rf_frequency_mhz": 3650.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 108
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 67,
+      "start_time_us": 3350000.0,
+      "end_time_us": 3400000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H67",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 109
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 68,
+      "start_time_us": 3400000.0,
+      "end_time_us": 3450000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H68",
+          "rf_frequency_mhz": 3350.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 110
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 69,
+      "start_time_us": 3450000.0,
+      "end_time_us": 3500000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H69",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 111
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 70,
+      "start_time_us": 3500000.0,
+      "end_time_us": 3550000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H70",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 112
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 71,
+      "start_time_us": 3550000.0,
+      "end_time_us": 3600000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H71",
+          "rf_frequency_mhz": 3387.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 113
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 72,
+      "start_time_us": 3600000.0,
+      "end_time_us": 3650000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H72",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 114
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 73,
+      "start_time_us": 3650000.0,
+      "end_time_us": 3700000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H73",
+          "rf_frequency_mhz": 3387.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 115
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 74,
+      "start_time_us": 3700000.0,
+      "end_time_us": 3750000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H74",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 116
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 75,
+      "start_time_us": 3750000.0,
+      "end_time_us": 3800000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H75",
+          "rf_frequency_mhz": 3500.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 117
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 76,
+      "start_time_us": 3800000.0,
+      "end_time_us": 3850000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H76",
+          "rf_frequency_mhz": 3425.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 118
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 77,
+      "start_time_us": 3850000.0,
+      "end_time_us": 3900000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H77",
+          "rf_frequency_mhz": 3425.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 119
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 78,
+      "start_time_us": 3900000.0,
+      "end_time_us": 3950000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H78",
+          "rf_frequency_mhz": 3537.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 120
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 79,
+      "start_time_us": 3950000.0,
+      "end_time_us": 4000000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H79",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 121
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 80,
+      "start_time_us": 4000000.0,
+      "end_time_us": 4050000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H80",
+          "rf_frequency_mhz": 3650.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 122
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 81,
+      "start_time_us": 4050000.0,
+      "end_time_us": 4099999.9999999995,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H81",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 123
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 82,
+      "start_time_us": 4099999.9999999995,
+      "end_time_us": 4150000.0000000005,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H82",
+          "rf_frequency_mhz": 3387.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 124
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 83,
+      "start_time_us": 4150000.0000000005,
+      "end_time_us": 4200000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H83",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 125
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 84,
+      "start_time_us": 4200000.0,
+      "end_time_us": 4250000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H84",
+          "rf_frequency_mhz": 3537.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 126
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 85,
+      "start_time_us": 4250000.0,
+      "end_time_us": 4300000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H85",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 127
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 86,
+      "start_time_us": 4300000.0,
+      "end_time_us": 4350000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H86",
+          "rf_frequency_mhz": 3350.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 128
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 87,
+      "start_time_us": 4350000.0,
+      "end_time_us": 4400000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H87",
+          "rf_frequency_mhz": 3425.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 129
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 88,
+      "start_time_us": 4400000.0,
+      "end_time_us": 4450000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H88",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 130
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 89,
+      "start_time_us": 4450000.0,
+      "end_time_us": 4500000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H89",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 131
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 90,
+      "start_time_us": 4500000.0,
+      "end_time_us": 4550000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H90",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 132
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 91,
+      "start_time_us": 4550000.0,
+      "end_time_us": 4600000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H91",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 133
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 92,
+      "start_time_us": 4600000.0,
+      "end_time_us": 4650000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H92",
+          "rf_frequency_mhz": 3612.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 134
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 93,
+      "start_time_us": 4650000.0,
+      "end_time_us": 4700000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H93",
+          "rf_frequency_mhz": 3462.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 135
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 94,
+      "start_time_us": 4700000.0,
+      "end_time_us": 4750000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H94",
+          "rf_frequency_mhz": 3650.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 136
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 95,
+      "start_time_us": 4750000.0,
+      "end_time_us": 4800000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H95",
+          "rf_frequency_mhz": 3425.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 137
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 96,
+      "start_time_us": 4800000.0,
+      "end_time_us": 4850000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H96",
+          "rf_frequency_mhz": 3425.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 138
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 97,
+      "start_time_us": 4850000.0,
+      "end_time_us": 4900000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H97",
+          "rf_frequency_mhz": 3575.0,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 139
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 98,
+      "start_time_us": 4900000.0,
+      "end_time_us": 4950000.0,
+      "band": 7,
+      "center_frequency_mhz": 3750.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H98",
+          "rf_frequency_mhz": 3537.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 140
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    },
+    {
+      "dwell_index": 99,
+      "start_time_us": 4950000.0,
+      "end_time_us": 5000000.0,
+      "band": 6,
+      "center_frequency_mhz": 3250.0,
+      "emitters": [
+        {
+          "id": "FHSS_E1_H99",
+          "rf_frequency_mhz": 3387.5,
+          "pulse_width_us": 15.0,
+          "pri_us": 100.0,
+          "amplitude": 1.0,
+          "jitter_fraction": 0.01,
+          "in_band": true,
+          "scheduled_active": true,
+          "configured_seed": 141
+        }
+      ],
+      "observed_pdw_count": 500,
+      "any_hit": true
+    }
+  ],
+  "emitters": [
+    {
+      "id": "FHSS_E1_H0",
+      "rf_frequency_mhz": 3350.0,
+      "pulse_width_us": 15.0,
+      "pri_us": 100.0,
+      "amplitude": 1.0,
+      "jitter_fraction": 0.01,
+      "in_band": true,
+      "scheduled_active": true,
+      "configured_seed": 42
+    }
+  ]
+}

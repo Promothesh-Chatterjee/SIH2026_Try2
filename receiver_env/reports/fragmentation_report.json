@@ -1,0 +1,30 @@
+{
+  "emitters": [
+    {
+      "emitter_name": "RADAR_SURVEILLANCE",
+      "associated_tracks": [
+        "TRACK_0001"
+      ],
+      "pulse_count": 16,
+      "fragmentation_count": 0
+    },
+    {
+      "emitter_name": "RADAR_TRACKING",
+      "associated_tracks": [
+        "TRACK_0002"
+      ],
+      "pulse_count": 15,
+      "fragmentation_count": 0
+    },
+    {
+      "emitter_name": "RADAR_FIRE_CONTROL",
+      "associated_tracks": [
+        "TRACK_0004"
+      ],
+      "pulse_count": 21,
+      "fragmentation_count": 0
+    }
+  ],
+  "total_fragmentation": 0,
+  "is_acceptable": true
+}

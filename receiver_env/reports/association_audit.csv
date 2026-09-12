@@ -1,0 +1,192 @@
+pulse_id,pdw_id,assigned_track_id,candidate_track_id,frequency_score,pri_score,pw_score,confidence_score,total_score,decision_threshold,accepted,rejection_reason
+1,1001,,,0.0,0.0,0.0,0.9797,0.0,0.6,False,No active tracks
+2,1002,1,1,1.0,0.0,1.0,0.9789,0.9965,0.6,True,
+3,1003,1,1,1.0,0.8,0.9864,0.9794,0.9159,0.6,True,
+4,1004,,1,0.0,0.0,0.0,0.9927,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+5,1005,1,1,1.0,1.0,0.9954,0.979,1.2472,0.6,True,
+5,1005,,2,0.0,0.0,0.0,0.979,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+6,1006,,1,0.0,0.0,0.0,0.7003,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+6,1006,,2,1.0,0.0,0.0,0.7003,0.0,0.6,False,PW delta (5.80 us) > gate (5.49 us)
+7,1007,,1,0.0,0.0,0.0,0.8558,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+7,1007,,2,0.0,0.0,0.0,0.8558,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+7,1007,,3,0.0,0.0,0.0,0.8558,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+8,1008,1,1,1.0,1.0,0.9761,0.9727,1.2437,0.6,True,
+8,1008,,2,0.0,0.0,0.0,0.9727,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+8,1008,,3,0.0,0.0,0.0,0.9727,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+8,1008,,4,0.0,0.0,0.0,0.9727,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+9,1009,,1,0.0,0.0,0.0,0.8473,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+9,1009,,2,0.0,0.0,0.0,0.8473,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+9,1009,,3,0.0,0.0,0.0,0.8473,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+9,1009,4,4,1.0,0.0,1.0,0.8473,0.9745,0.6,True,
+10,1010,,1,0.0,0.0,0.0,0.9898,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+10,1010,2,2,1.0,0.0,0.9727,0.9898,0.9915,0.6,True,
+10,1010,3,3,1.0,0.0,0.2654,0.9898,0.8147,0.6,True,
+10,1010,,4,0.0,0.0,0.0,0.9898,0.0,0.6,False,Delta-ToA (9.9 us) < min_pri (10.0 us)
+11,1011,,1,0.0,0.0,0.0,0.8534,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+11,1011,,2,0.0,0.0,0.0,0.8534,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+11,1011,,3,0.0,0.0,0.0,0.8534,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+11,1011,4,4,1.0,0.8,0.9776,0.8534,0.902,0.6,True,
+12,1012,1,1,1.0,0.9999,0.9918,0.9799,1.2467,0.6,True,
+12,1012,,2,0.0,0.0,0.0,0.9799,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+12,1012,,3,0.0,0.0,0.0,0.9799,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+12,1012,,4,0.0,0.0,0.0,0.9799,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+13,1013,,1,0.0,0.0,0.0,0.7335,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+13,1013,,2,1.0,0.0,0.9863,0.7335,0.0,0.6,False,Tentative interval residual (110.0 us) inconsistent
+13,1013,3,3,1.0,0.0,0.2654,0.7335,0.7719,0.6,True,
+13,1013,,4,0.0,0.0,0.0,0.7335,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+14,1014,1,1,1.0,1.0,0.9795,0.9796,1.2449,0.6,True,
+14,1014,,2,0.0,0.0,0.0,0.9796,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+14,1014,,3,0.0,0.0,0.0,0.9796,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+14,1014,,4,0.0,0.0,0.0,0.9796,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+15,1015,,1,0.0,0.0,0.0,0.8533,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+15,1015,,2,0.0,0.0,0.0,0.8533,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+15,1015,,3,0.0,0.0,0.0,0.8533,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+15,1015,4,4,1.0,1.0,0.9925,0.8533,1.2342,0.6,True,
+16,1016,,1,0.0,0.0,0.0,0.7342,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+16,1016,2,2,1.0,0.8,0.4731,0.7342,0.8144,0.6,True,
+16,1016,,3,1.0,0.0,0.9963,0.7342,0.0,0.6,False,Tentative interval residual (110.0 us) inconsistent
+16,1016,,4,0.0,0.0,0.0,0.7342,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+17,1017,,1,0.0,0.0,0.0,0.857,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+17,1017,,2,0.0,0.0,0.0,0.857,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+17,1017,,3,0.0,0.0,0.0,0.857,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+17,1017,4,4,1.0,0.1958,0.9832,0.857,0.9115,0.6,True,
+18,1018,1,1,1.0,1.0,0.9961,0.9799,1.2474,0.6,True,
+18,1018,,2,0.0,0.0,0.0,0.9799,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+18,1018,,3,0.0,0.0,0.0,0.9799,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+18,1018,,4,0.0,0.0,0.0,0.9799,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+19,1019,,1,0.0,0.0,0.0,0.9923,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+19,1019,,2,1.0,0.0,0.833,0.9923,0.0,0.6,False,Timing residual (110.1 us) > tol (26.4 us)
+19,1019,3,3,1.0,0.8,0.5674,0.9923,0.8543,0.6,True,
+19,1019,,4,0.0,0.0,0.0,0.9923,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+20,1020,,1,0.0,0.0,0.0,0.8558,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+20,1020,,2,0.0,0.0,0.0,0.8558,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+20,1020,,3,0.0,0.0,0.0,0.8558,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+20,1020,4,4,1.0,1.0,0.9866,0.8558,1.2336,0.6,True,
+21,1021,1,1,1.0,1.0,0.9966,0.9796,1.2474,0.6,True,
+21,1021,,2,0.0,0.0,0.0,0.9796,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+21,1021,,3,0.0,0.0,0.0,0.9796,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+21,1021,,4,0.0,0.0,0.0,0.9796,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+22,1022,,1,0.0,0.0,0.0,0.8531,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+22,1022,,2,0.0,0.0,0.0,0.8531,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+22,1022,,3,0.0,0.0,0.0,0.8531,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+22,1022,4,4,1.0,0.9999,0.9888,0.8531,1.2336,0.6,True,
+23,1023,,1,0.0,0.0,0.0,0.9923,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+23,1023,2,2,1.0,1.0,0.833,0.9923,1.2242,0.6,True,
+23,1023,,3,1.0,0.0,0.6916,0.9923,0.0,0.6,False,Timing residual (109.9 us) > tol (26.4 us)
+23,1023,,4,0.0,0.0,0.0,0.9923,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+24,1024,1,1,1.0,1.0,0.9893,0.9797,1.2464,0.6,True,
+24,1024,,2,0.0,0.0,0.0,0.9797,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+24,1024,,3,0.0,0.0,0.0,0.9797,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+24,1024,,4,0.0,0.0,0.0,0.9797,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+25,1025,,1,0.0,0.0,0.0,0.8533,0.0,0.6,False,Delta-ToA (10.0 us) < min_pri (10.0 us)
+25,1025,,2,0.0,0.0,0.0,0.8533,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+25,1025,,3,0.0,0.0,0.0,0.8533,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+25,1025,4,4,1.0,1.0,0.9904,0.8533,1.2339,0.6,True,
+26,1026,,1,0.0,0.0,0.0,0.8552,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+26,1026,,2,0.0,0.0,0.0,0.8552,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+26,1026,,3,0.0,0.0,0.0,0.8552,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+26,1026,4,4,1.0,1.0,0.9916,0.8552,1.2343,0.6,True,
+27,1027,1,1,1.0,1.0,0.9904,0.98,1.2466,0.6,True,
+27,1027,,2,0.0,0.0,0.0,0.98,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+27,1027,,3,0.0,0.0,0.0,0.98,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+27,1027,,4,0.0,0.0,0.0,0.98,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+28,1028,,1,0.0,0.0,0.0,0.9926,0.0,0.6,False,Delta-ToA (10.0 us) < min_pri (10.0 us)
+28,1028,,2,1.0,0.0,0.8723,0.9926,0.0,0.6,False,Timing residual (110.0 us) > tol (26.4 us)
+28,1028,3,3,1.0,1.0,0.6916,0.9926,1.203,0.6,True,
+28,1028,,4,0.0,0.0,0.0,0.9926,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+29,1029,,1,0.0,0.0,0.0,0.8542,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+29,1029,,2,0.0,0.0,0.0,0.8542,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+29,1029,,3,0.0,0.0,0.0,0.8542,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+29,1029,4,4,1.0,0.9999,0.9703,0.8542,1.2309,0.6,True,
+30,1030,1,1,1.0,1.0,0.995,0.9794,1.2472,0.6,True,
+30,1030,,2,0.0,0.0,0.0,0.9794,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+30,1030,,3,0.0,0.0,0.0,0.9794,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+30,1030,,4,0.0,0.0,0.0,0.9794,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+31,1031,,1,0.0,0.0,0.0,0.8536,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+31,1031,,2,0.0,0.0,0.0,0.8536,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+31,1031,,3,0.0,0.0,0.0,0.8536,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+31,1031,4,4,1.0,0.9999,0.951,0.8536,1.228,0.6,True,
+32,1032,,1,0.0,0.0,0.0,0.9921,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+32,1032,2,2,1.0,1.0,0.8723,0.9921,1.2301,0.6,True,
+32,1032,,3,1.0,0.0,0.7604,0.9921,0.0,0.6,False,Timing residual (110.1 us) > tol (26.4 us)
+32,1032,,4,0.0,0.0,0.0,0.9921,0.0,0.6,False,Delta-ToA (9.9 us) < min_pri (10.0 us)
+33,1033,1,1,1.0,1.0,0.9817,0.9787,1.2451,0.6,True,
+33,1033,,2,0.0,0.0,0.0,0.9787,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+33,1033,,3,0.0,0.0,0.0,0.9787,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+33,1033,,4,0.0,0.0,0.0,0.9787,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+34,1034,,1,0.0,0.0,0.0,0.8534,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+34,1034,,2,0.0,0.0,0.0,0.8534,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+34,1034,,3,0.0,0.0,0.0,0.8534,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+34,1034,4,4,1.0,1.0,1.0,0.8534,1.2353,0.6,True,
+35,1035,,1,0.0,0.0,0.0,0.684,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+35,1035,,2,1.0,0.0,0.0439,0.684,0.0,0.6,False,Timing residual (110.0 us) > tol (26.4 us)
+35,1035,3,3,1.0,1.0,0.2483,0.684,1.1056,0.6,True,
+35,1035,,4,0.0,0.0,0.0,0.684,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+36,1036,,1,0.0,0.0,0.0,0.8572,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+36,1036,,2,0.0,0.0,0.0,0.8572,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+36,1036,,3,0.0,0.0,0.0,0.8572,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+36,1036,4,4,1.0,1.0,1.0,0.8572,1.2357,0.6,True,
+37,1037,1,1,1.0,1.0,0.9831,0.9796,1.2454,0.6,True,
+37,1037,,2,0.0,0.0,0.0,0.9796,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+37,1037,,3,0.0,0.0,0.0,0.9796,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+37,1037,,4,0.0,0.0,0.0,0.9796,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+38,1038,,1,0.0,0.0,0.0,0.7451,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+38,1038,2,2,1.0,1.0,0.6042,0.7451,1.1651,0.6,True,
+38,1038,,3,1.0,0.0,0.9279,0.7451,0.0,0.6,False,Timing residual (110.0 us) > tol (26.4 us)
+38,1038,,4,0.0,0.0,0.0,0.7451,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+39,1039,1,1,1.0,1.0,0.9843,0.9791,1.2456,0.6,True,
+39,1039,,2,0.0,0.0,0.0,0.9791,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+39,1039,,3,0.0,0.0,0.0,0.9791,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+39,1039,,4,0.0,0.0,0.0,0.9791,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+40,1040,,1,0.0,0.0,0.0,0.8513,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+40,1040,,2,0.0,0.0,0.0,0.8513,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+40,1040,,3,0.0,0.0,0.0,0.8513,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+40,1040,4,4,1.0,1.0,1.0,0.8513,1.2351,0.6,True,
+41,1041,,1,0.0,0.0,0.0,0.9922,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+41,1041,,2,1.0,0.0,0.8356,0.9922,0.0,0.6,False,Timing residual (110.0 us) > tol (26.4 us)
+41,1041,3,3,1.0,1.0,0.6347,0.9922,1.1944,0.6,True,
+41,1041,,4,0.0,0.0,0.0,0.9922,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+42,1042,,1,0.0,0.0,0.0,0.8557,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+42,1042,,2,0.0,0.0,0.0,0.8557,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+42,1042,,3,0.0,0.0,0.0,0.8557,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+42,1042,4,4,0.9999,1.0,1.0,0.8557,1.2356,0.6,True,
+43,1043,1,1,1.0,1.0,0.9991,0.978,1.2477,0.6,True,
+43,1043,,2,0.0,0.0,0.0,0.978,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+43,1043,,3,0.0,0.0,0.0,0.978,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+43,1043,,4,0.0,0.0,0.0,0.978,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+44,1044,,1,0.0,0.0,0.0,0.8513,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+44,1044,,2,0.0,0.0,0.0,0.8513,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+44,1044,,3,0.0,0.0,0.0,0.8513,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+44,1044,4,4,0.9999,0.9999,1.0,0.8513,1.2351,0.6,True,
+45,1045,,1,0.0,0.0,0.0,0.736,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+45,1045,2,2,1.0,1.0,0.8271,0.736,1.1977,0.6,True,
+45,1045,,3,1.0,0.0,0.6792,0.736,0.0,0.6,False,Timing residual (110.0 us) > tol (26.4 us)
+45,1045,,4,0.0,0.0,0.0,0.736,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+46,1046,,1,0.0,0.0,0.0,0.8549,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+46,1046,,2,0.0,0.0,0.0,0.8549,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+46,1046,,3,0.0,0.0,0.0,0.8549,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+46,1046,4,4,1.0,0.9999,1.0,0.8549,1.2354,0.6,True,
+47,1047,,1,0.0,0.0,0.0,0.8638,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+47,1047,,2,0.0,0.0,0.0,0.8638,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+47,1047,,3,0.0,0.0,0.0,0.8638,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+47,1047,4,4,1.0,0.9999,1.0,0.8638,1.2363,0.6,True,
+48,1048,,1,0.0,0.0,0.0,0.9919,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+48,1048,,2,1.0,0.0,0.8587,0.9919,0.0,0.6,False,Timing residual (110.0 us) > tol (26.4 us)
+48,1048,3,3,1.0,1.0,0.687,0.9919,1.2022,0.6,True,
+48,1048,,4,0.0,0.0,0.0,0.9919,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+49,1049,,1,0.0,0.0,0.0,0.8519,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+49,1049,,2,0.0,0.0,0.0,0.8519,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+49,1049,,3,0.0,0.0,0.0,0.8519,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+49,1049,4,4,1.0,0.9999,0.9778,0.8519,1.2318,0.6,True,
+50,1050,,1,0.0,0.0,0.0,0.8526,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+50,1050,,2,0.0,0.0,0.0,0.8526,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+50,1050,,3,0.0,0.0,0.0,0.8526,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+50,1050,4,4,1.0,1.0,0.979,0.8526,1.2321,0.6,True,
+51,1051,,1,0.0,0.0,0.0,0.9923,0.0,0.6,False,Freq delta (5.50 MHz) outside gate
+51,1051,2,2,1.0,1.0,0.8673,0.9923,1.2293,0.6,True,
+51,1051,,3,1.0,0.0,0.7343,0.9923,0.0,0.6,False,Timing residual (110.0 us) > tol (26.4 us)
+51,1051,,4,0.0,0.0,0.0,0.9923,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+52,1052,,1,0.0,0.0,0.0,0.8537,0.0,0.6,False,Freq delta (3.00 MHz) outside gate
+52,1052,,2,0.0,0.0,0.0,0.8537,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+52,1052,,3,0.0,0.0,0.0,0.8537,0.0,0.6,False,Freq delta (2.50 MHz) outside gate
+52,1052,4,4,1.0,0.9999,0.9978,0.8537,1.235,0.6,True,
