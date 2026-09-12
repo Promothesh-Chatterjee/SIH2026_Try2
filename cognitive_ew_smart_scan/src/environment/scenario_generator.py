@@ -124,6 +124,103 @@ def load_h5_records(
     return records
 
 
+# ---------------------------------------------------------------------------
+# GNU RF Parsed Dataset Loader
+# ---------------------------------------------------------------------------
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_GNU_DIR = _REPO_ROOT / "GNU_RF_ENV" / "p3ac_50k" / "episodes"
+DEFAULT_GNU_DATA_PATH = (
+    DEFAULT_GNU_DIR / "EP000001.gt.json"
+    if DEFAULT_GNU_DIR.exists()
+    else Path("C:/HACKATHONS/SIH2026_Try2/GNU_RF_ENV/p3ac_50k/episodes/EP000001.gt.json")
+)
+
+
+def load_gnu_records(
+    path: str | Path | None = None,
+    time_horizon_us: float = 600_000.0,
+    seed: int = 42,
+    max_pulses: int = 50000,
+) -> list[PulseRecord]:
+    """Load PulseRecords from GNU parsed ground truth data (.gt.json, .npz, or episode dir)."""
+    import json
+
+    if path is None:
+        p = DEFAULT_GNU_DATA_PATH
+    else:
+        p = Path(path)
+
+    if p.is_dir():
+        cands = sorted(p.glob("*.gt.json"))
+        if cands:
+            p = cands[0]
+        else:
+            raise FileNotFoundError(f"No .gt.json found in GNU directory {path}")
+    elif p.suffix == ".npz":
+        gt_cand = p.parent / (p.stem + ".gt.json")
+        if gt_cand.exists():
+            p = gt_cand
+        else:
+            gt_cand2 = p.with_suffix(".gt.json")
+            if gt_cand2.exists():
+                p = gt_cand2
+
+    if not p.exists():
+        # Try finding in default GNU directory
+        alt = DEFAULT_GNU_DIR / f"{p.name}"
+        if not alt.exists() and not str(p).endswith(".gt.json"):
+            alt = DEFAULT_GNU_DIR / f"{p.stem}.gt.json"
+        if alt.exists():
+            p = alt
+
+    if not p.exists():
+        raise FileNotFoundError(f"GNU parsed scenario file not found: {path} (checked {p})")
+
+    with open(p, "r", encoding="utf-8") as f:
+        gt = json.load(f)
+
+    emitters = []
+    if "dwells" in gt and len(gt["dwells"]) > 0:
+        emitters = gt["dwells"][0].get("emitters", [])
+    if not emitters:
+        emitters = gt.get("emitters", [])
+
+    records: list[PulseRecord] = []
+    for em in emitters:
+        rng = np.random.default_rng(em.get("configured_seed", seed))
+        pri = float(em["pri_us"])
+        pw = float(em["pulse_width_us"])
+        freq = float(em["rf_frequency_mhz"])
+        amp = float(em.get("amplitude", 1.0)) * -50.0  # Linear to rough dBm
+        jitter_frac = float(em.get("jitter_fraction", 0.01))
+        eid_str = str(em.get("id", "E1"))
+        eid = int("".join(c for c in eid_str if c.isdigit()) or 1)
+
+        t = float(rng.uniform(0.0, pri))
+        while t < time_horizon_us:
+            j = float(rng.uniform(-jitter_frac, jitter_frac)) * pri
+            t_pulse = t + j
+            if 0.0 <= t_pulse < time_horizon_us:
+                records.append(
+                    PulseRecord(
+                        toa_us=float(t_pulse),
+                        frequency_mhz=float(freq),
+                        pulse_width_us=float(pw),
+                        amplitude_db=float(amp),
+                        aoa_deg=15.0,
+                        emitter_id=eid,
+                        source_id=f"gnu:{p.stem}",
+                    )
+                )
+            t += pri
+
+    records.sort(key=lambda r: r.toa_us)
+    if max_pulses and len(records) > max_pulses:
+        records = records[:max_pulses]
+    return records
+
+
+
 # Map our {mode}/{split} names onto the official TSRD repo directory naming.
 # Official layout: <mode>/<mode>_<split>/config_*.h5  (e.g. scan/train_scan/).
 # split aliases: train|train_scan|train_stare, val|validation|val_scan|val_stare,

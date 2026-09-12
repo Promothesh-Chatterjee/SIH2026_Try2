@@ -60,6 +60,7 @@ ENV_CONFIG = {
     "frequency_step_mhz": 500.0,
     "detection_threshold_db": -140.0,
     "max_steps_per_episode": 100,
+    "semantic_memory_enabled": False,
 }
 
 FAST_PERCEPTION = {
@@ -169,7 +170,7 @@ def _run_env_episode(env, band_seq):
     for d_idx, band in enumerate(band_seq):
         obs_r = _make_observation(d_idx, band)
         _inject_pulses_into_env(env, obs_r, d_idx)
-        obs_history.append(env.step(band)[0])
+        obs_history.append(env.step(band * 5 + 1)[0])
     return obs_history
 
 
@@ -474,3 +475,7 @@ class TestEmptyDwell:
         rate2 = _feat(obs2, 6, 1)
         assert rate2 == pytest.approx(0.5, abs=1e-6)
         assert rate2 < rate1
+
+
+
+

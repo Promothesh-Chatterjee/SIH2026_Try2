@@ -1,4 +1,4 @@
-﻿"""
+"""
 Feed Strictly Frequency-Agile Emitter Data from TSRD Scan Set.
 
 Extracts transmitters from TSRD/scan scenarios that employ frequency agility
@@ -163,10 +163,12 @@ def feed_agile_scan(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Feed Frequency-Agile Emitters from TSRD Scan")
+    from src.environment.scenario_generator import DEFAULT_GNU_DATA_PATH
+
     parser.add_argument(
         "--scenario",
-        default=r"D:\TSRD\scan\val_scan\config_1.h5",
-        help="Path to TSRD scan .h5 scenario file",
+        default=str(DEFAULT_GNU_DATA_PATH),
+        help=f"Path to GNU parsed scenario (.gt.json, default: {DEFAULT_GNU_DATA_PATH.name}) or TSRD scan .h5",
     )
     parser.add_argument("--steps", type=int, default=5000, help="Maximum dwells to execute")
     parser.add_argument("--delay", type=float, default=0.35, help="Inter-chunk delay (seconds)")

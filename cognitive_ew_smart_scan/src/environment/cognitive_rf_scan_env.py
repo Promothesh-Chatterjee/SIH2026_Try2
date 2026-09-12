@@ -632,7 +632,7 @@ class CognitiveRFScanEnv(gym.Env):
             # Stage 3: Causal pulse ingestion into deterministic temporal & agile predictor
             if getattr(self, "temporal_predictor", None) is not None:
                 for d in detections:
-                    eid = int(getattr(d, "emitter_id", 0))
+                    eid = getattr(d, "emitter_id", 0); eid = int(eid) if eid is not None else 0
                     t = float(getattr(d, "toa_us", getattr(d, "time_us", dwell_start)))
                     f = float(getattr(d, "frequency_mhz", 0.0))
                     b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))

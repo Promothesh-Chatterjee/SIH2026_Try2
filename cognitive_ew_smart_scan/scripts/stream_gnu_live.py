@@ -1,4 +1,4 @@
-﻿import json
+import json
 import time
 import requests
 import numpy as np
@@ -87,5 +87,15 @@ def stream_gnu_live(gt_file: str):
         print("\nStreaming stopped by user.")
 
 if __name__ == '__main__':
-    gt_file = 'C:/HACKATHONS/SIH2026_Try2/GNU_RF_ENV/p3ac_50k/episodes/EP000001.gt.json'
-    stream_gnu_live(gt_file)
+    import argparse
+    repo_root = Path(__file__).resolve().parents[2]
+    default_gt = repo_root / "GNU_RF_ENV" / "p3ac_50k" / "episodes" / "EP000001.gt.json"
+    if not default_gt.exists():
+        default_gt = Path('C:/HACKATHONS/SIH2026_Try2/GNU_RF_ENV/p3ac_50k/episodes/EP000001.gt.json')
+
+    parser = argparse.ArgumentParser(description="Live Stream Physical GNU Emitters to Backend")
+    parser.add_argument("--gt-file", "--scenario", default=str(default_gt), help="Path to GNU .gt.json file")
+    args = parser.parse_args()
+
+    stream_gnu_live(args.gt_file)
+
