@@ -1,6 +1,41 @@
-const WS_BASE_URL =
-  import.meta.env.VITE_WS_BASE_URL ||
-  "ws://localhost:8000";
+export function getWsBaseUrl() {
+  if (typeof window !== "undefined") {
+    const override = localStorage.getItem("smartscan_ws_url");
+    if (override && override.trim()) {
+      return override.trim().replace(/\/+$/, "");
+    }
+    const apiOverride = localStorage.getItem("smartscan_api_url");
+    if (apiOverride && apiOverride.trim()) {
+      const clean = apiOverride.trim().replace(/\/+$/, "");
+      if (clean.startsWith("https://")) {
+        return clean.replace(/^https:\/\//, "wss://");
+      }
+      if (clean.startsWith("http://")) {
+        return clean.replace(/^http:\/\//, "ws://");
+      }
+    }
+  }
+
+  const envWs = import.meta.env.VITE_WS_BASE_URL;
+  if (envWs && envWs.trim()) {
+    return envWs.trim().replace(/\/+$/, "");
+  }
+
+  const envApi = import.meta.env.VITE_API_BASE_URL;
+  if (envApi && envApi.trim()) {
+    const clean = envApi.trim().replace(/\/+$/, "");
+    if (clean.startsWith("https://")) {
+      return clean.replace(/^https:\/\//, "wss://");
+    }
+    if (clean.startsWith("http://")) {
+      return clean.replace(/^http:\/\//, "ws://");
+    }
+  }
+
+  return "ws://localhost:8000";
+}
+
+const WS_BASE_URL = getWsBaseUrl();
 
 export function createWebSocket(
   path,
@@ -49,8 +84,9 @@ export function createWebSocket(
     }
 
     try {
+      const base = getWsBaseUrl();
       socket = new WebSocket(
-        `${WS_BASE_URL}${path}`,
+        `${base}${path}`,
       );
     } catch (error) {
       handlers.onError?.(error);

@@ -97,6 +97,8 @@ def _is_authorized(request: Request) -> bool:
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+
 # Global state populated at startup
 STATE: dict[str, Any] = {
     "device": "cpu",
@@ -435,7 +437,11 @@ async def lifespan(app: FastAPI):  # type: ignore
     logger.info("API starting on device=%s", device_env)
 
     # Load configs
-    cfg_path = Path("configs/model_config.yaml")
+    cfg_candidates = [
+        Path("configs/model_config.yaml"),
+        PACKAGE_ROOT / "configs/model_config.yaml",
+    ]
+    cfg_path = next((p for p in cfg_candidates if p.exists()), Path("configs/model_config.yaml"))
     if cfg_path.exists():
         with open(cfg_path) as f:
             STATE["model_cfg"] = yaml.safe_load(f)
@@ -453,7 +459,15 @@ async def lifespan(app: FastAPI):  # type: ignore
 
     # Try to load PyTorch models (ONNX preferred if available, else PT)
     # Deinterleaver
-    for ckpt in [Path("checkpoints/onnx/deinterleaver.onnx"), Path("checkpoints/deinterleaver/best.pt"), Path("checkpoints/deinterleaver/final.pt")]:
+    deinterleaver_ckpts = [
+        Path("checkpoints/onnx/deinterleaver.onnx"),
+        PACKAGE_ROOT / "checkpoints/onnx/deinterleaver.onnx",
+        Path("checkpoints/deinterleaver/best.pt"),
+        PACKAGE_ROOT / "checkpoints/deinterleaver/best.pt",
+        Path("checkpoints/deinterleaver/final.pt"),
+        PACKAGE_ROOT / "checkpoints/deinterleaver/final.pt",
+    ]
+    for ckpt in deinterleaver_ckpts:
         if ckpt.exists():
             try:
                 if ckpt.suffix == ".onnx":
@@ -499,11 +513,16 @@ async def lifespan(app: FastAPI):  # type: ignore
     # Scheduler / MoE
     scheduler_ckpts = [
         Path("checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"),
+        PACKAGE_ROOT / "checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt",
         Path("cognitive_ew_smart_scan/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"),
         Path("checkpoints/onnx/scheduler.onnx"),
+        PACKAGE_ROOT / "checkpoints/onnx/scheduler.onnx",
         Path("checkpoints/scheduler/checkpoint_gate_110000.pt"),
+        PACKAGE_ROOT / "checkpoints/scheduler/checkpoint_gate_110000.pt",
         Path("checkpoints/scheduler/best.pt"),
+        PACKAGE_ROOT / "checkpoints/scheduler/best.pt",
         Path("checkpoints/scheduler/final.pt"),
+        PACKAGE_ROOT / "checkpoints/scheduler/final.pt",
     ]
     ckpt_env = os.getenv("SCHEDULER_CHECKPOINT")
     if ckpt_env:
@@ -586,9 +605,13 @@ async def lifespan(app: FastAPI):  # type: ignore
         # to the model checkpoints (canonical locations first).
         norm_candidates = [
             Path("checkpoints/deinterleaver/normalization_stats.json"),
+            PACKAGE_ROOT / "checkpoints/deinterleaver/normalization_stats.json",
             Path("configs/normalization_stats.json"),
+            PACKAGE_ROOT / "configs/normalization_stats.json",
             Path("checkpoints/onnx/normalization_stats.json"),
+            PACKAGE_ROOT / "checkpoints/onnx/normalization_stats.json",
             Path("checkpoints/normalization_stats.json"),
+            PACKAGE_ROOT / "checkpoints/normalization_stats.json",
         ]
         stats_path = next((c for c in norm_candidates if c.exists()), None)
         if stats_path is not None:
@@ -672,10 +695,14 @@ async def lifespan(app: FastAPI):  # type: ignore
 
 # ── App ─────────────────────────────────────────────────────────────────────
 
+cors_origins_env = os.getenv("CORS_ORIGINS", "*")
+cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+
 app = FastAPI(title="Cognitive EW SmartScan API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins if cors_origins != ["*"] else ["*"],
+    allow_origin_regex=r"https://.*\.vercel\.app|https://.*\.onrender\.com|http://localhost.*|http://127\.0\.0\.1.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
