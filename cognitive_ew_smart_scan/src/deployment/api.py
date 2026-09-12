@@ -1928,21 +1928,9 @@ async def _run_live_mission_stream(scenario_name: str, speed_hz: float, max_dwel
             if max_dwells is not None and dwell_idx >= max_dwells:
                 break
 
-            t_now = float(controller.clock.current_time_us)
-            scenario_duration_us = float(scenario_pulses[-1]["time_us"]) if scenario_pulses else 1_000_000.0
-            t_mod = t_now % max(10_000.0, scenario_duration_us)
-            feed_window = [
-                {
-                    **p,
-                    "time_us": float(t_now + (p["time_us"] - t_mod)),
-                    "toa_us": float(t_now + (p["time_us"] - t_mod)),
-                }
-                for p in scenario_pulses
-                if t_mod - 500.0 <= p["time_us"] <= t_mod + 3500.0
-            ]
             frame = await asyncio.to_thread(
                 controller.execute_operational_step,
-                external_rf_stream=feed_window,
+                scenario_pulses=scenario_pulses,
             )
             dwell_idx += 1
 
