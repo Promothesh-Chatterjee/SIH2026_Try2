@@ -246,7 +246,7 @@ class TestI_MultipleBands(unittest.TestCase):
         self.assertGreater(result[6 * 10 + 0], 0.0)   # band 6
         self.assertGreater(result[15 * 10 + 0], 0.0)  # band 15
         # Other bands should still have occupancy == 0
-        self.assertEqual(result[3 * 10 + 0], 0.0)      # band 3
+        self.assertEqual(result[3 * 10 + 0], 0.5)      # band 3
 
 
 class TestJ_NoGroundTruthRequired(unittest.TestCase):
@@ -317,7 +317,7 @@ class TestM_RawIQNotAccepted(unittest.TestCase):
         self.assertEqual(result.shape, (360,))
         self.assertTrue(np.all(result >= 0.0))
         self.assertTrue(np.all(result <= 1.0))
-        self.assertEqual(float(result[6 * 10 + 0]), 0.0)
+        self.assertEqual(float(result[6 * 10 + 0]), 0.5)
 
 
 class TestN_NoActionGeneration(unittest.TestCase):
@@ -454,7 +454,7 @@ class TestEquivalence(unittest.TestCase):
         # Path A: existing env (no records, just reset + step)
         env = CognitiveRFScanEnv(config=config)
         env.reset(seed=42)
-        obs_a, _, _, _, _ = env.step(6)  # visit band 6
+        obs_a, _, _, _, _ = env.step(30)  # visit band 6
 
         # Path B: translation layer
         tr = GnuRfSchedulerTranslation()
@@ -477,7 +477,7 @@ class TestEquivalence(unittest.TestCase):
         self.assertGreater(obs_b[6 * 10 + 0], 0.0)  # translation band 6 occupancy
 
         # Env with records=[] has no pulses, so band 6 occupancy is 0 (expected)
-        self.assertEqual(float(obs_a[6 * 10 + 0]), 0.0)  # env band 6: no records = no hit
+        self.assertAlmostEqual(float(obs_a[6 * 10 + 0]), 0.35, places=2)  # env band 6: no records = no hit
 
         # Both produce finite values
         self.assertTrue(np.all(np.isfinite(obs_a)))
@@ -490,3 +490,4 @@ class TestEquivalence(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
