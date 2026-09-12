@@ -12,4 +12,4 @@
       - key: DEVICE
         value: cpu
       - key: CORS_ORIGINS
-        value: "*"
+        value: "https://sih-2026-try2.vercel.app"
