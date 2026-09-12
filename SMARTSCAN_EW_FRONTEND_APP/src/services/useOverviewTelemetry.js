@@ -70,6 +70,24 @@ function buildDefault() {
     cognitiveExplanation: {},
     systemMetrics: {},
     pdws: [],
+    emitters: [],
+    recentDwells: [],
+    modulationArchetypes: { periodic: 0, agile_hop: 0, strobe_cw: 0, total_species: 0 },
+    threatTiers: { tier_1: 0, tier_2: 0, tier_3: 0, critical_count: 0 },
+    fomMetrics: {
+      mean_detection_latency_us: 0.0,
+      median_detection_latency_us: 0.0,
+      latency_delta_baseline_us: 0.0,
+      missed_revisits_count: 0,
+      total_revisits: 0,
+      missed_revisits_pct: 0.0,
+      scheduler_omniscience_leak_pct: 0.0,
+      antenna_azimuth_deg: 0.0,
+      hop_trajectory: null,
+    },
+    benchmarkRows: null,
+    modeRows: null,
+    archetypeRows: null,
   };
 }
 
@@ -155,6 +173,45 @@ function processTelemetry(raw, missionStat) {
   const rawPdws = raw.pdws ?? m.pdws ?? raw.recent_pdws ?? m.recent_pdws ?? raw.detections ?? m.detections ?? [];
   next.pdws = Array.isArray(rawPdws) ? rawPdws : [];
 
+  const rawDwells = raw.recent_dwells ?? m.recent_dwells ?? [];
+  next.recentDwells = Array.isArray(rawDwells) ? rawDwells : [];
+
+  const rawEmitters = raw.emitters ?? m.emitters ?? [];
+  next.emitters = Array.isArray(rawEmitters) ? rawEmitters : [];
+
+  const rawMod = raw.modulation_archetypes ?? m.modulation_archetypes ?? {};
+  next.modulationArchetypes = {
+    periodic: rawMod.periodic ?? 0,
+    agile_hop: rawMod.agile_hop ?? 0,
+    strobe_cw: rawMod.strobe_cw ?? 0,
+    total_species: rawMod.total_species ?? 0,
+  };
+
+  const rawTiers = raw.threat_tiers ?? m.threat_tiers ?? {};
+  next.threatTiers = {
+    tier_1: rawTiers.tier_1 ?? 0,
+    tier_2: rawTiers.tier_2 ?? 0,
+    tier_3: rawTiers.tier_3 ?? 0,
+    critical_count: rawTiers.critical_count ?? 0,
+  };
+
+  const rawFom = raw.fom_metrics ?? m.fom_metrics ?? {};
+  next.fomMetrics = {
+    mean_detection_latency_us: floatOr(rawFom.mean_detection_latency_us, 0.0),
+    median_detection_latency_us: floatOr(rawFom.median_detection_latency_us, 0.0),
+    latency_delta_baseline_us: floatOr(rawFom.latency_delta_baseline_us, 0.0),
+    missed_revisits_count: rawFom.missed_revisits_count ?? 0,
+    total_revisits: rawFom.total_revisits ?? 0,
+    missed_revisits_pct: floatOr(rawFom.missed_revisits_pct, 0.0),
+    scheduler_omniscience_leak_pct: floatOr(rawFom.scheduler_omniscience_leak_pct, 0.0),
+    antenna_azimuth_deg: floatOr(rawFom.antenna_azimuth_deg, 0.0),
+    hop_trajectory: rawFom.hop_trajectory ?? null,
+  };
+
+  next.benchmarkRows = raw.benchmark_rows ?? m.benchmark_rows ?? null;
+  next.modeRows = raw.mode_rows ?? m.mode_rows ?? null;
+  next.archetypeRows = raw.archetype_rows ?? m.archetype_rows ?? null;
+
   return next;
 }
 
@@ -164,6 +221,7 @@ export function useOverviewTelemetry() {
   const missionStatRef = useRef(null);
   const latestTelRef = useRef(null);
   const pdwsRef = useRef([]);
+  const recentDwellsRef = useRef([]);
 
   const ingest = useCallback((rawTelemetry, missionStat) => {
     if (missionStat) missionStatRef.current = missionStat;
@@ -195,6 +253,25 @@ export function useOverviewTelemetry() {
       }
       if (pdwsRef.current.length > 0 && (!resolved.pdws || resolved.pdws.length === 0)) {
         resolved.pdws = pdwsRef.current.slice(0, 15);
+      }
+
+      if (Array.isArray(resolved.recentDwells) && resolved.recentDwells.length > 0) {
+        const seen = new Set(recentDwellsRef.current.map((d) => d.id));
+        const newItems = [];
+        for (const d of resolved.recentDwells) {
+          if (!seen.has(d.id)) {
+            seen.add(d.id);
+            newItems.push(d);
+          }
+        }
+        if (newItems.length > 0) {
+          recentDwellsRef.current = [...newItems, ...recentDwellsRef.current].slice(0, 150);
+        } else if (recentDwellsRef.current.length === 0) {
+          recentDwellsRef.current = [...resolved.recentDwells].slice(0, 150);
+        }
+      }
+      if (recentDwellsRef.current.length > 0) {
+        resolved.recentDwells = recentDwellsRef.current;
       }
 
       const m = (latestTelRef.current?.metrics ?? latestTelRef.current) ?? {};

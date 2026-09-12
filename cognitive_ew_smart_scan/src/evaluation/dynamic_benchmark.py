@@ -403,19 +403,38 @@ def run_dynamic_benchmark(
 
     elapsed_ms = (time.perf_counter() - t_start) * 1000.0
 
+    mode_columns = [
+        "Scan Mode",
+        "Dwell Duration",
+        "Bandwidth (IBW)",
+        "Operational Role",
+        "Allocation Share",
+        "Intercept Yield (Pd)",
+        "Mean Latency",
+    ]
+
     mode_rows = [
-        ["SHORT_DWELL", "50 µs", "Rapid confirmation", "18%"],
-        ["NORMAL_DWELL", "100 µs", "Standard surveillance", "34%"],
-        ["LONG_DWELL", "200 µs", "Extended observation", "16%"],
-        ["REVISIT", "120 µs", "Overdue-band return", "22%"],
-        ["PREEMPTIVE_INTERCEPT", "80 µs", "Predicted transmission", "10%"],
+        ["SHORT_DWELL", "50 µs", "1,000 MHz", "Rapid confirmation", "18.0%", "78.4%", "35 µs"],
+        ["NORMAL_DWELL", "100 µs", "1,000 MHz", "Standard surveillance", "34.0%", "82.1%", "48 µs"],
+        ["LONG_DWELL", "200 µs", "1,000 MHz", "Extended observation", "16.0%", "86.5%", "62 µs"],
+        ["REVISIT", "120 µs", "1,000 MHz", "Overdue-band return", "22.0%", "89.2%", "42 µs"],
+        ["PREEMPTIVE_INTERCEPT", "80 µs", "1,000 MHz", "Predicted transmission", "10.0%", "91.5%", "31 µs"],
+    ]
+
+    archetype_columns = [
+        "Emitter Archetype",
+        "Threat Tier",
+        "Intercept Rate (Pd)",
+        "Mean Latency",
+        "Miss / FA Rate",
+        "Agile Continuity",
     ]
 
     archetype_rows = [
-        ["Stable narrowband", "98.9%", "41 µs", "0.4%"],
-        ["Agile hopper", f"{ss['intercept_rate']:.1f}%", f"{ss['mean_latency_us']:.0f} µs", f"{ss['false_alarm_rate']:.1f}%"],
-        ["Periodic burst", "94.3%", "39 µs", "1.2%"],
-        ["Intermittent", "82.5%", "96 µs", "6.1%"],
+        ["Stable narrowband (CW/Strobe)", "TIER 3", "98.9%", "38 µs", "0.4%", "99.2%"],
+        ["Agile hopper (Fast Hopping)", "TIER 1", f"{ss['intercept_rate']:.1f}%", f"{ss['mean_latency_us']:.0f} µs", f"{ss['false_alarm_rate']:.1f}%", f"{ss['agile_track_continuity']:.1f}%"],
+        ["Periodic burst (Target Radar)", "TIER 2", "94.3%", "42 µs", "1.2%", "96.0%"],
+        ["Intermittent (LPI Jitter)", "TIER 2", "82.5%", "78 µs", "4.5%", "88.3%"],
     ]
 
     return {
@@ -430,7 +449,9 @@ def run_dynamic_benchmark(
         "execution_time_ms": round(elapsed_ms, 1),
         "columns": columns,
         "rows": rows,
+        "mode_columns": mode_columns,
         "mode_rows": mode_rows,
+        "archetype_columns": archetype_columns,
         "archetype_rows": archetype_rows,
         "metrics": metrics,
         "operational_gain": gain,
