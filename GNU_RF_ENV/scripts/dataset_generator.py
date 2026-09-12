@@ -763,11 +763,15 @@ class DatasetGenerator:
         cfg = self.config
         ep_id = f"EP{episode_index + 1:06d}"
 
+        resolved_model = cfg.deinterleaver_model
+        if isinstance(resolved_model, str):
+            resolved_model = load_deinterleaver(resolved_model)
+
         translator = GnuRfSchedulerTranslation(
             n_bands=cfg.n_bands,
             freq_min=cfg.freq_min_mhz,
             freq_max=cfg.freq_max_mhz,
-            deinterleaver_model=cfg.deinterleaver_model,
+            deinterleaver_model=resolved_model,
             deinterleaver_config=cfg.deinterleaver_config,
         )
         translator.reset()

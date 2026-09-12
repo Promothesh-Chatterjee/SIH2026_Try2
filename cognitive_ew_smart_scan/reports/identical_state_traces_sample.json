@@ -1,0 +1,5006 @@
+{
+  "config_29_baseline_50steps": [
+    {
+      "step": 0,
+      "selected_action": 2,
+      "selected_band": 0,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.275,
+      "hidden_norm": 4.271803855895996,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.019999999552965164,
+        "priority": 0.3319999873638153
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.12458086013793945
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.12458086013793945
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.12458086013793945
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.12458086013793945
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.12458086013793945
+        }
+      ],
+      "q_selected": 0.12458086013793945,
+      "q_mean": -0.09744516760110855
+    },
+    {
+      "step": 1,
+      "selected_action": 7,
+      "selected_band": 1,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 7.222724914550781,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.03999999910593033,
+        "priority": 0.33899998664855957
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.09757572412490845
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.09757572412490845
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.09757572412490845
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.09757572412490845
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.09757572412490845
+        }
+      ],
+      "q_selected": 0.09757572412490845,
+      "q_mean": -0.13232585787773132
+    },
+    {
+      "step": 2,
+      "selected_action": 12,
+      "selected_band": 2,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 9.290356636047363,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.05999999865889549,
+        "priority": 0.34599998593330383
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.15140831470489502
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.15140831470489502
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.15140831470489502
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.15140831470489502
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.15140831470489502
+        }
+      ],
+      "q_selected": 0.15140831470489502,
+      "q_mean": -0.08645640313625336
+    },
+    {
+      "step": 3,
+      "selected_action": 17,
+      "selected_band": 3,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 10.663788795471191,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.07999999821186066,
+        "priority": 0.3529999852180481
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.14057046175003052
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.14057046175003052
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.14057046175003052
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.14057046175003052
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.14057046175003052
+        }
+      ],
+      "q_selected": 0.14057046175003052,
+      "q_mean": -0.10534489154815674
+    },
+    {
+      "step": 4,
+      "selected_action": 22,
+      "selected_band": 4,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 11.467637062072754,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.10000000149011612,
+        "priority": 0.35999998450279236
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.10194164514541626
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.10194164514541626
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.10194164514541626
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.10194164514541626
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.10194164514541626
+        }
+      ],
+      "q_selected": 0.10194164514541626,
+      "q_mean": -0.15211209654808044
+    },
+    {
+      "step": 5,
+      "selected_action": 27,
+      "selected_band": 5,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 11.916631698608398,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.11999999731779099,
+        "priority": 0.3669999837875366
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.07266616821289062
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.07266616821289062
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.07266616821289062
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.07266616821289062
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.07266616821289062
+        }
+      ],
+      "q_selected": 0.07266616821289062,
+      "q_mean": -0.18961353600025177
+    },
+    {
+      "step": 6,
+      "selected_action": 32,
+      "selected_band": 6,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.176411628723145,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.14000000059604645,
+        "priority": 0.3739999830722809
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.04398304224014282
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.04398304224014282
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.04398304224014282
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.04398304224014282
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.04398304224014282
+        }
+      ],
+      "q_selected": 0.04398304224014282,
+      "q_mean": -0.22661004960536957
+    },
+    {
+      "step": 7,
+      "selected_action": 37,
+      "selected_band": 7,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.324261665344238,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.1599999964237213,
+        "priority": 0.38099998235702515
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.02496027946472168
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.02496027946472168
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.02496027946472168
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.02496027946472168
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.02496027946472168
+        }
+      ],
+      "q_selected": 0.02496027946472168,
+      "q_mean": -0.25403377413749695
+    },
+    {
+      "step": 8,
+      "selected_action": 42,
+      "selected_band": 8,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.43193244934082,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.18000000715255737,
+        "priority": 0.3879999816417694
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.008051156997680664
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.008051156997680664
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.008051156997680664
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.008051156997680664
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.008051156997680664
+        }
+      ],
+      "q_selected": 0.008051156997680664,
+      "q_mean": -0.2794315218925476
+    },
+    {
+      "step": 9,
+      "selected_action": 47,
+      "selected_band": 9,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.533443450927734,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.20000000298023224,
+        "priority": 0.39499998092651367
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.040433406829833984
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.040433406829833984
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.040433406829833984
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.040433406829833984
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.040433406829833984
+        }
+      ],
+      "q_selected": -0.040433406829833984,
+      "q_mean": -0.33649227023124695
+    },
+    {
+      "step": 10,
+      "selected_action": 52,
+      "selected_band": 10,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.600727081298828,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.2199999988079071,
+        "priority": 0.40199998021125793
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.10616868734359741
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.10616868734359741
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.10616868734359741
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.10616868734359741
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.10616868734359741
+        }
+      ],
+      "q_selected": -0.10616868734359741,
+      "q_mean": -0.4108913838863373
+    },
+    {
+      "step": 11,
+      "selected_action": 57,
+      "selected_band": 11,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.683624267578125,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.23999999463558197,
+        "priority": 0.4089999794960022
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.19295692443847656
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.19295692443847656
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.19295692443847656
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.19295692443847656
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.19295692443847656
+        }
+      ],
+      "q_selected": -0.19295692443847656,
+      "q_mean": -0.5064310431480408
+    },
+    {
+      "step": 12,
+      "selected_action": 62,
+      "selected_band": 12,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.757875442504883,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.25999999046325684,
+        "priority": 0.41599997878074646
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.2707732915878296
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.2707732915878296
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.2707732915878296
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.2707732915878296
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.2707732915878296
+        }
+      ],
+      "q_selected": -0.2707732915878296,
+      "q_mean": -0.5930862426757812
+    },
+    {
+      "step": 13,
+      "selected_action": 67,
+      "selected_band": 13,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.80675983428955,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.2800000011920929,
+        "priority": 0.4229999780654907
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.34335076808929443
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.34335076808929443
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.34335076808929443
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.34335076808929443
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.34335076808929443
+        }
+      ],
+      "q_selected": -0.34335076808929443,
+      "q_mean": -0.6745902299880981
+    },
+    {
+      "step": 14,
+      "selected_action": 72,
+      "selected_band": 14,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.83983325958252,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.30000001192092896,
+        "priority": 0.4300000071525574
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.4018884301185608
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.4018884301185608
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.4018884301185608
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.4018884301185608
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.4018884301185608
+        }
+      ],
+      "q_selected": -0.4018884301185608,
+      "q_mean": -0.7421419620513916
+    },
+    {
+      "step": 15,
+      "selected_action": 77,
+      "selected_band": 15,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.884631156921387,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.3199999928474426,
+        "priority": 0.43699997663497925
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.47303980588912964
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.47303980588912964
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.47303980588912964
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.47303980588912964
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.47303980588912964
+        }
+      ],
+      "q_selected": -0.47303980588912964,
+      "q_mean": -0.8223949670791626
+    },
+    {
+      "step": 16,
+      "selected_action": 82,
+      "selected_band": 16,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.912568092346191,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.3400000035762787,
+        "priority": 0.4440000057220459
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.5535883903503418
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.5535883903503418
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.5535883903503418
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.5535883903503418
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.5535883903503418
+        }
+      ],
+      "q_selected": -0.5535883903503418,
+      "q_mean": -0.9121330380439758
+    },
+    {
+      "step": 17,
+      "selected_action": 87,
+      "selected_band": 17,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.928574562072754,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.36000001430511475,
+        "priority": 0.4509999752044678
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.6437100768089294
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.6437100768089294
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.6437100768089294
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.6437100768089294
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.6437100768089294
+        }
+      ],
+      "q_selected": -0.6437100768089294,
+      "q_mean": -1.0115315914154053
+    },
+    {
+      "step": 18,
+      "selected_action": 92,
+      "selected_band": 18,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.947364807128906,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.3799999952316284,
+        "priority": 0.4580000042915344
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.7559947371482849
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.7559947371482849
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.7559947371482849
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.7559947371482849
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.7559947371482849
+        }
+      ],
+      "q_selected": -0.7559947371482849,
+      "q_mean": -1.1331806182861328
+    },
+    {
+      "step": 19,
+      "selected_action": 97,
+      "selected_band": 19,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.968064308166504,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.4000000059604645,
+        "priority": 0.4649999737739563
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.9193975329399109
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.9193975329399109
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.9193975329399109
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.9193975329399109
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.9193975329399109
+        }
+      ],
+      "q_selected": -0.9193975329399109,
+      "q_mean": -1.3060353994369507
+    },
+    {
+      "step": 20,
+      "selected_action": 102,
+      "selected_band": 20,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.023612022399902,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.41999998688697815,
+        "priority": 0.47200000286102295
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -1.1387250423431396
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -1.1387250423431396
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -1.1387250423431396
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -1.1387250423431396
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -1.1387250423431396
+        }
+      ],
+      "q_selected": -1.1387250423431396,
+      "q_mean": -1.534902572631836
+    },
+    {
+      "step": 21,
+      "selected_action": 107,
+      "selected_band": 21,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.080924034118652,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.4399999976158142,
+        "priority": 0.4789999723434448
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -1.3890548944473267
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -1.3890548944473267
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -1.3890548944473267
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -1.3890548944473267
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -1.3890548944473267
+        }
+      ],
+      "q_selected": -1.3890548944473267,
+      "q_mean": -1.7948592901229858
+    },
+    {
+      "step": 22,
+      "selected_action": 112,
+      "selected_band": 22,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.135276794433594,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.46000000834465027,
+        "priority": 0.4860000014305115
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -1.6532068252563477
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -1.6532068252563477
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -1.6532068252563477
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -1.6532068252563477
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -1.6532068252563477
+        }
+      ],
+      "q_selected": -1.6532068252563477,
+      "q_mean": -2.0687263011932373
+    },
+    {
+      "step": 23,
+      "selected_action": 117,
+      "selected_band": 23,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.192402839660645,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.47999998927116394,
+        "priority": 0.49299997091293335
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -1.9618158340454102
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -1.9618158340454102
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -1.9618158340454102
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -1.9618158340454102
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -1.9618158340454102
+        }
+      ],
+      "q_selected": -1.9618158340454102,
+      "q_mean": -2.3871374130249023
+    },
+    {
+      "step": 24,
+      "selected_action": 122,
+      "selected_band": 24,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.267959594726562,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.5,
+        "priority": 0.5
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -2.340270757675171
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -2.340270757675171
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -2.340270757675171
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -2.340270757675171
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -2.340270757675171
+        }
+      ],
+      "q_selected": -2.340270757675171,
+      "q_mean": -2.775482416152954
+    },
+    {
+      "step": 25,
+      "selected_action": 127,
+      "selected_band": 25,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.415772438049316,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.5199999809265137,
+        "priority": 0.5069999694824219
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -2.7669923305511475
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -2.7669923305511475
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -2.7669923305511475
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -2.7669923305511475
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -2.7669923305511475
+        }
+      ],
+      "q_selected": -2.7669923305511475,
+      "q_mean": -3.212181329727173
+    },
+    {
+      "step": 26,
+      "selected_action": 132,
+      "selected_band": 26,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.629803657531738,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.5400000214576721,
+        "priority": 0.5139999985694885
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -3.2107458114624023
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -3.2107458114624023
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -3.2107458114624023
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -3.2107458114624023
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -3.2107458114624023
+        }
+      ],
+      "q_selected": -3.2107458114624023,
+      "q_mean": -3.6660001277923584
+    },
+    {
+      "step": 27,
+      "selected_action": 137,
+      "selected_band": 27,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.759993553161621,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.5600000023841858,
+        "priority": 0.5209999680519104
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -3.6755318641662598
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -3.6755318641662598
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -3.6755318641662598
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -3.6755318641662598
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -3.6755318641662598
+        }
+      ],
+      "q_selected": -3.6755318641662598,
+      "q_mean": -4.140938758850098
+    },
+    {
+      "step": 28,
+      "selected_action": 142,
+      "selected_band": 28,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.818772315979004,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.5799999833106995,
+        "priority": 0.527999997138977
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -4.202421188354492
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -4.202421188354492
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -4.202421188354492
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -4.202421188354492
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -4.202421188354492
+        }
+      ],
+      "q_selected": -4.202421188354492,
+      "q_mean": -4.678068161010742
+    },
+    {
+      "step": 29,
+      "selected_action": 147,
+      "selected_band": 29,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.819473266601562,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.6000000238418579,
+        "priority": 0.5350000262260437
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -4.820199012756348
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -4.820199012756348
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -4.820199012756348
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -4.820199012756348
+        },
+        {
+          "action": 152,
+          "band": 30,
+          "mode": 2,
+          "q_value": -4.820199012756348
+        }
+      ],
+      "q_selected": -4.820199012756348,
+      "q_mean": -5.306173801422119
+    },
+    {
+      "step": 30,
+      "selected_action": 152,
+      "selected_band": 30,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.829381942749023,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.6200000047683716,
+        "priority": 0.5419999957084656
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -5.542726039886475
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -5.542726039886475
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -5.542726039886475
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -5.542726039886475
+        },
+        {
+          "action": 152,
+          "band": 30,
+          "mode": 2,
+          "q_value": -5.542726039886475
+        }
+      ],
+      "q_selected": -5.542726039886475,
+      "q_mean": -6.039116859436035
+    },
+    {
+      "step": 31,
+      "selected_action": 157,
+      "selected_band": 31,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.936108589172363,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.6399999856948853,
+        "priority": 0.5489999651908875
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -6.321613788604736
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -6.321613788604736
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -6.321613788604736
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -6.321613788604736
+        },
+        {
+          "action": 157,
+          "band": 31,
+          "mode": 2,
+          "q_value": -6.321613788604736
+        }
+      ],
+      "q_selected": -6.321613788604736,
+      "q_mean": -6.828506946563721
+    },
+    {
+      "step": 32,
+      "selected_action": 162,
+      "selected_band": 32,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 14.120046615600586,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.6600000262260437,
+        "priority": 0.5559999942779541
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -7.135622501373291
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -7.135622501373291
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -7.135622501373291
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -7.135622501373291
+        },
+        {
+          "action": 166,
+          "band": 33,
+          "mode": 1,
+          "q_value": -7.410353660583496
+        }
+      ],
+      "q_selected": -7.135622501373291,
+      "q_mean": -7.653106689453125
+    },
+    {
+      "step": 33,
+      "selected_action": 167,
+      "selected_band": 33,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 14.389601707458496,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.6800000071525574,
+        "priority": 0.5630000233650208
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -7.920356750488281
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -7.920356750488281
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -7.920356750488281
+        },
+        {
+          "action": 176,
+          "band": 35,
+          "mode": 1,
+          "q_value": -8.196100234985352
+        },
+        {
+          "action": 166,
+          "band": 33,
+          "mode": 1,
+          "q_value": -8.196100234985352
+        }
+      ],
+      "q_selected": -7.920356750488281,
+      "q_mean": -8.448518753051758
+    },
+    {
+      "step": 34,
+      "selected_action": 172,
+      "selected_band": 34,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 14.616421699523926,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5699999928474426
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -8.552316665649414
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -8.552316665649414
+        },
+        {
+          "action": 171,
+          "band": 34,
+          "mode": 1,
+          "q_value": -8.829071998596191
+        },
+        {
+          "action": 176,
+          "band": 35,
+          "mode": 1,
+          "q_value": -8.829071998596191
+        },
+        {
+          "action": 170,
+          "band": 34,
+          "mode": 0,
+          "q_value": -8.858317375183105
+        }
+      ],
+      "q_selected": -8.552316665649414,
+      "q_mean": -9.091243743896484
+    },
+    {
+      "step": 35,
+      "selected_action": 177,
+      "selected_band": 35,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 14.786258697509766,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.7200000286102295,
+        "priority": 0.5770000219345093
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -9.058914184570312
+        },
+        {
+          "action": 176,
+          "band": 35,
+          "mode": 1,
+          "q_value": -9.336681365966797
+        },
+        {
+          "action": 175,
+          "band": 35,
+          "mode": 0,
+          "q_value": -9.365922927856445
+        },
+        {
+          "action": 178,
+          "band": 35,
+          "mode": 3,
+          "q_value": -9.367715835571289
+        },
+        {
+          "action": 2,
+          "band": 0,
+          "mode": 2,
+          "q_value": -9.379560470581055
+        }
+      ],
+      "q_selected": -9.058914184570312,
+      "q_mean": -9.608695030212402
+    },
+    {
+      "step": 36,
+      "selected_action": 2,
+      "selected_band": 0,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 14.956401824951172,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 2,
+          "band": 0,
+          "mode": 2,
+          "q_value": -9.8318452835083
+        },
+        {
+          "action": 7,
+          "band": 1,
+          "mode": 2,
+          "q_value": -9.835834503173828
+        },
+        {
+          "action": 12,
+          "band": 2,
+          "mode": 2,
+          "q_value": -9.839824676513672
+        },
+        {
+          "action": 17,
+          "band": 3,
+          "mode": 2,
+          "q_value": -9.8438138961792
+        },
+        {
+          "action": 22,
+          "band": 4,
+          "mode": 2,
+          "q_value": -9.847804069519043
+        }
+      ],
+      "q_selected": -9.8318452835083,
+      "q_mean": -10.071920394897461
+    },
+    {
+      "step": 37,
+      "selected_action": 7,
+      "selected_band": 1,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.111019134521484,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 7,
+          "band": 1,
+          "mode": 2,
+          "q_value": -10.25575065612793
+        },
+        {
+          "action": 12,
+          "band": 2,
+          "mode": 2,
+          "q_value": -10.259740829467773
+        },
+        {
+          "action": 17,
+          "band": 3,
+          "mode": 2,
+          "q_value": -10.263731002807617
+        },
+        {
+          "action": 22,
+          "band": 4,
+          "mode": 2,
+          "q_value": -10.267719268798828
+        },
+        {
+          "action": 27,
+          "band": 5,
+          "mode": 2,
+          "q_value": -10.271709442138672
+        }
+      ],
+      "q_selected": -10.25575065612793,
+      "q_mean": -10.501014709472656
+    },
+    {
+      "step": 38,
+      "selected_action": 12,
+      "selected_band": 2,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.248238563537598,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 12,
+          "band": 2,
+          "mode": 2,
+          "q_value": -10.62136459350586
+        },
+        {
+          "action": 17,
+          "band": 3,
+          "mode": 2,
+          "q_value": -10.625353813171387
+        },
+        {
+          "action": 22,
+          "band": 4,
+          "mode": 2,
+          "q_value": -10.62934398651123
+        },
+        {
+          "action": 27,
+          "band": 5,
+          "mode": 2,
+          "q_value": -10.633333206176758
+        },
+        {
+          "action": 32,
+          "band": 6,
+          "mode": 2,
+          "q_value": -10.637323379516602
+        }
+      ],
+      "q_selected": -10.62136459350586,
+      "q_mean": -10.871817588806152
+    },
+    {
+      "step": 39,
+      "selected_action": 17,
+      "selected_band": 3,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.467351913452148,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 17,
+          "band": 3,
+          "mode": 2,
+          "q_value": -10.948580741882324
+        },
+        {
+          "action": 22,
+          "band": 4,
+          "mode": 2,
+          "q_value": -10.952569961547852
+        },
+        {
+          "action": 27,
+          "band": 5,
+          "mode": 2,
+          "q_value": -10.956560134887695
+        },
+        {
+          "action": 32,
+          "band": 6,
+          "mode": 2,
+          "q_value": -10.960549354553223
+        },
+        {
+          "action": 37,
+          "band": 7,
+          "mode": 2,
+          "q_value": -10.964539527893066
+        }
+      ],
+      "q_selected": -10.948580741882324,
+      "q_mean": -11.204221725463867
+    },
+    {
+      "step": 40,
+      "selected_action": 22,
+      "selected_band": 4,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.655802726745605,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 22,
+          "band": 4,
+          "mode": 2,
+          "q_value": -11.17874526977539
+        },
+        {
+          "action": 27,
+          "band": 5,
+          "mode": 2,
+          "q_value": -11.182734489440918
+        },
+        {
+          "action": 32,
+          "band": 6,
+          "mode": 2,
+          "q_value": -11.186724662780762
+        },
+        {
+          "action": 37,
+          "band": 7,
+          "mode": 2,
+          "q_value": -11.190713882446289
+        },
+        {
+          "action": 42,
+          "band": 8,
+          "mode": 2,
+          "q_value": -11.194704055786133
+        }
+      ],
+      "q_selected": -11.17874526977539,
+      "q_mean": -11.4395751953125
+    },
+    {
+      "step": 41,
+      "selected_action": 27,
+      "selected_band": 5,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.787755012512207,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 27,
+          "band": 5,
+          "mode": 2,
+          "q_value": -11.327300071716309
+        },
+        {
+          "action": 32,
+          "band": 6,
+          "mode": 2,
+          "q_value": -11.331289291381836
+        },
+        {
+          "action": 37,
+          "band": 7,
+          "mode": 2,
+          "q_value": -11.33527946472168
+        },
+        {
+          "action": 42,
+          "band": 8,
+          "mode": 2,
+          "q_value": -11.339268684387207
+        },
+        {
+          "action": 47,
+          "band": 9,
+          "mode": 2,
+          "q_value": -11.34325885772705
+        }
+      ],
+      "q_selected": -11.327300071716309,
+      "q_mean": -11.593318939208984
+    },
+    {
+      "step": 42,
+      "selected_action": 32,
+      "selected_band": 6,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.867966651916504,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 32,
+          "band": 6,
+          "mode": 2,
+          "q_value": -11.399192810058594
+        },
+        {
+          "action": 37,
+          "band": 7,
+          "mode": 2,
+          "q_value": -11.403182029724121
+        },
+        {
+          "action": 42,
+          "band": 8,
+          "mode": 2,
+          "q_value": -11.407172203063965
+        },
+        {
+          "action": 47,
+          "band": 9,
+          "mode": 2,
+          "q_value": -11.411161422729492
+        },
+        {
+          "action": 52,
+          "band": 10,
+          "mode": 2,
+          "q_value": -11.415151596069336
+        }
+      ],
+      "q_selected": -11.399192810058594,
+      "q_mean": -11.670400619506836
+    },
+    {
+      "step": 43,
+      "selected_action": 37,
+      "selected_band": 7,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.866835594177246,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 37,
+          "band": 7,
+          "mode": 2,
+          "q_value": -11.419637680053711
+        },
+        {
+          "action": 42,
+          "band": 8,
+          "mode": 2,
+          "q_value": -11.423626899719238
+        },
+        {
+          "action": 47,
+          "band": 9,
+          "mode": 2,
+          "q_value": -11.427617073059082
+        },
+        {
+          "action": 52,
+          "band": 10,
+          "mode": 2,
+          "q_value": -11.43160629272461
+        },
+        {
+          "action": 57,
+          "band": 11,
+          "mode": 2,
+          "q_value": -11.435596466064453
+        }
+      ],
+      "q_selected": -11.419637680053711,
+      "q_mean": -11.69603443145752
+    },
+    {
+      "step": 44,
+      "selected_action": 42,
+      "selected_band": 8,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.90139102935791,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 42,
+          "band": 8,
+          "mode": 2,
+          "q_value": -11.45610237121582
+        },
+        {
+          "action": 47,
+          "band": 9,
+          "mode": 2,
+          "q_value": -11.460091590881348
+        },
+        {
+          "action": 52,
+          "band": 10,
+          "mode": 2,
+          "q_value": -11.464081764221191
+        },
+        {
+          "action": 57,
+          "band": 11,
+          "mode": 2,
+          "q_value": -11.468070983886719
+        },
+        {
+          "action": 62,
+          "band": 12,
+          "mode": 2,
+          "q_value": -11.472061157226562
+        }
+      ],
+      "q_selected": -11.45610237121582,
+      "q_mean": -11.737687110900879
+    },
+    {
+      "step": 45,
+      "selected_action": 47,
+      "selected_band": 9,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 16.008068084716797,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 47,
+          "band": 9,
+          "mode": 2,
+          "q_value": -11.512504577636719
+        },
+        {
+          "action": 52,
+          "band": 10,
+          "mode": 2,
+          "q_value": -11.516493797302246
+        },
+        {
+          "action": 57,
+          "band": 11,
+          "mode": 2,
+          "q_value": -11.52048397064209
+        },
+        {
+          "action": 62,
+          "band": 12,
+          "mode": 2,
+          "q_value": -11.524473190307617
+        },
+        {
+          "action": 67,
+          "band": 13,
+          "mode": 2,
+          "q_value": -11.528463363647461
+        }
+      ],
+      "q_selected": -11.512504577636719,
+      "q_mean": -11.799278259277344
+    },
+    {
+      "step": 46,
+      "selected_action": 52,
+      "selected_band": 10,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 16.032007217407227,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 52,
+          "band": 10,
+          "mode": 2,
+          "q_value": -11.535665512084961
+        },
+        {
+          "action": 57,
+          "band": 11,
+          "mode": 2,
+          "q_value": -11.539654731750488
+        },
+        {
+          "action": 62,
+          "band": 12,
+          "mode": 2,
+          "q_value": -11.543644905090332
+        },
+        {
+          "action": 67,
+          "band": 13,
+          "mode": 2,
+          "q_value": -11.54763412475586
+        },
+        {
+          "action": 72,
+          "band": 14,
+          "mode": 2,
+          "q_value": -11.551624298095703
+        }
+      ],
+      "q_selected": -11.535665512084961,
+      "q_mean": -11.827628135681152
+    },
+    {
+      "step": 47,
+      "selected_action": 57,
+      "selected_band": 11,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 16.061830520629883,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 57,
+          "band": 11,
+          "mode": 2,
+          "q_value": -11.549647331237793
+        },
+        {
+          "action": 62,
+          "band": 12,
+          "mode": 2,
+          "q_value": -11.55363655090332
+        },
+        {
+          "action": 67,
+          "band": 13,
+          "mode": 2,
+          "q_value": -11.557626724243164
+        },
+        {
+          "action": 72,
+          "band": 14,
+          "mode": 2,
+          "q_value": -11.561615943908691
+        },
+        {
+          "action": 77,
+          "band": 15,
+          "mode": 2,
+          "q_value": -11.565606117248535
+        }
+      ],
+      "q_selected": -11.549647331237793,
+      "q_mean": -11.84679889678955
+    },
+    {
+      "step": 48,
+      "selected_action": 62,
+      "selected_band": 12,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 16.095869064331055,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 62,
+          "band": 12,
+          "mode": 2,
+          "q_value": -11.563526153564453
+        },
+        {
+          "action": 67,
+          "band": 13,
+          "mode": 2,
+          "q_value": -11.56751537322998
+        },
+        {
+          "action": 72,
+          "band": 14,
+          "mode": 2,
+          "q_value": -11.571505546569824
+        },
+        {
+          "action": 77,
+          "band": 15,
+          "mode": 2,
+          "q_value": -11.575494766235352
+        },
+        {
+          "action": 82,
+          "band": 16,
+          "mode": 2,
+          "q_value": -11.579484939575195
+        }
+      ],
+      "q_selected": -11.563526153564453,
+      "q_mean": -11.865864753723145
+    },
+    {
+      "step": 49,
+      "selected_action": 67,
+      "selected_band": 13,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 16.109664916992188,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 67,
+          "band": 13,
+          "mode": 2,
+          "q_value": -11.565258026123047
+        },
+        {
+          "action": 72,
+          "band": 14,
+          "mode": 2,
+          "q_value": -11.569247245788574
+        },
+        {
+          "action": 77,
+          "band": 15,
+          "mode": 2,
+          "q_value": -11.573237419128418
+        },
+        {
+          "action": 82,
+          "band": 16,
+          "mode": 2,
+          "q_value": -11.577226638793945
+        },
+        {
+          "action": 87,
+          "band": 17,
+          "mode": 2,
+          "q_value": -11.581216812133789
+        }
+      ],
+      "q_selected": -11.565258026123047,
+      "q_mean": -11.872786521911621
+    }
+  ],
+  "config_143_baseline_50steps": [
+    {
+      "step": 0,
+      "selected_action": 2,
+      "selected_band": 0,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.275,
+      "hidden_norm": 4.271803855895996,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.019999999552965164,
+        "priority": 0.3319999873638153
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.12458086013793945
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.12458086013793945
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.12458086013793945
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.12458086013793945
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.12458086013793945
+        }
+      ],
+      "q_selected": 0.12458086013793945,
+      "q_mean": -0.09744516760110855
+    },
+    {
+      "step": 1,
+      "selected_action": 7,
+      "selected_band": 1,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 7.222724914550781,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.03999999910593033,
+        "priority": 0.33899998664855957
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.09757572412490845
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.09757572412490845
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.09757572412490845
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.09757572412490845
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.09757572412490845
+        }
+      ],
+      "q_selected": 0.09757572412490845,
+      "q_mean": -0.13232585787773132
+    },
+    {
+      "step": 2,
+      "selected_action": 12,
+      "selected_band": 2,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 9.290356636047363,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.05999999865889549,
+        "priority": 0.34599998593330383
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.15140831470489502
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.15140831470489502
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.15140831470489502
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.15140831470489502
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.15140831470489502
+        }
+      ],
+      "q_selected": 0.15140831470489502,
+      "q_mean": -0.08645640313625336
+    },
+    {
+      "step": 3,
+      "selected_action": 17,
+      "selected_band": 3,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 10.663788795471191,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.07999999821186066,
+        "priority": 0.3529999852180481
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.14057046175003052
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.14057046175003052
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.14057046175003052
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.14057046175003052
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.14057046175003052
+        }
+      ],
+      "q_selected": 0.14057046175003052,
+      "q_mean": -0.10534489154815674
+    },
+    {
+      "step": 4,
+      "selected_action": 22,
+      "selected_band": 4,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 11.467637062072754,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.10000000149011612,
+        "priority": 0.35999998450279236
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.10194164514541626
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.10194164514541626
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.10194164514541626
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.10194164514541626
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.10194164514541626
+        }
+      ],
+      "q_selected": 0.10194164514541626,
+      "q_mean": -0.15211209654808044
+    },
+    {
+      "step": 5,
+      "selected_action": 27,
+      "selected_band": 5,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 11.916631698608398,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.11999999731779099,
+        "priority": 0.3669999837875366
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.07266616821289062
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.07266616821289062
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.07266616821289062
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.07266616821289062
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.07266616821289062
+        }
+      ],
+      "q_selected": 0.07266616821289062,
+      "q_mean": -0.18961353600025177
+    },
+    {
+      "step": 6,
+      "selected_action": 32,
+      "selected_band": 6,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.176411628723145,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.14000000059604645,
+        "priority": 0.3739999830722809
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.04398304224014282
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.04398304224014282
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.04398304224014282
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.04398304224014282
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.04398304224014282
+        }
+      ],
+      "q_selected": 0.04398304224014282,
+      "q_mean": -0.22661004960536957
+    },
+    {
+      "step": 7,
+      "selected_action": 37,
+      "selected_band": 7,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.324261665344238,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.1599999964237213,
+        "priority": 0.38099998235702515
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.02496027946472168
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.02496027946472168
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.02496027946472168
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.02496027946472168
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.02496027946472168
+        }
+      ],
+      "q_selected": 0.02496027946472168,
+      "q_mean": -0.25403377413749695
+    },
+    {
+      "step": 8,
+      "selected_action": 42,
+      "selected_band": 8,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.43193244934082,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.18000000715255737,
+        "priority": 0.3879999816417694
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": 0.008051156997680664
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": 0.008051156997680664
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": 0.008051156997680664
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": 0.008051156997680664
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": 0.008051156997680664
+        }
+      ],
+      "q_selected": 0.008051156997680664,
+      "q_mean": -0.2794315218925476
+    },
+    {
+      "step": 9,
+      "selected_action": 47,
+      "selected_band": 9,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.533443450927734,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.20000000298023224,
+        "priority": 0.39499998092651367
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.040433406829833984
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.040433406829833984
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.040433406829833984
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.040433406829833984
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.040433406829833984
+        }
+      ],
+      "q_selected": -0.040433406829833984,
+      "q_mean": -0.33649227023124695
+    },
+    {
+      "step": 10,
+      "selected_action": 52,
+      "selected_band": 10,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.600727081298828,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.2199999988079071,
+        "priority": 0.40199998021125793
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.10616868734359741
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.10616868734359741
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.10616868734359741
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.10616868734359741
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.10616868734359741
+        }
+      ],
+      "q_selected": -0.10616868734359741,
+      "q_mean": -0.4108913838863373
+    },
+    {
+      "step": 11,
+      "selected_action": 57,
+      "selected_band": 11,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.683624267578125,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.23999999463558197,
+        "priority": 0.4089999794960022
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.19295692443847656
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.19295692443847656
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.19295692443847656
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.19295692443847656
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.19295692443847656
+        }
+      ],
+      "q_selected": -0.19295692443847656,
+      "q_mean": -0.5064310431480408
+    },
+    {
+      "step": 12,
+      "selected_action": 62,
+      "selected_band": 12,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.757875442504883,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.25999999046325684,
+        "priority": 0.41599997878074646
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.2707732915878296
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.2707732915878296
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.2707732915878296
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.2707732915878296
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.2707732915878296
+        }
+      ],
+      "q_selected": -0.2707732915878296,
+      "q_mean": -0.5930862426757812
+    },
+    {
+      "step": 13,
+      "selected_action": 67,
+      "selected_band": 13,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.80675983428955,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.2800000011920929,
+        "priority": 0.4229999780654907
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.34335076808929443
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.34335076808929443
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.34335076808929443
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.34335076808929443
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.34335076808929443
+        }
+      ],
+      "q_selected": -0.34335076808929443,
+      "q_mean": -0.6745902299880981
+    },
+    {
+      "step": 14,
+      "selected_action": 72,
+      "selected_band": 14,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.83983325958252,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.30000001192092896,
+        "priority": 0.4300000071525574
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.4018884301185608
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.4018884301185608
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.4018884301185608
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.4018884301185608
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.4018884301185608
+        }
+      ],
+      "q_selected": -0.4018884301185608,
+      "q_mean": -0.7421419620513916
+    },
+    {
+      "step": 15,
+      "selected_action": 77,
+      "selected_band": 15,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.884631156921387,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.3199999928474426,
+        "priority": 0.43699997663497925
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.47303980588912964
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.47303980588912964
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.47303980588912964
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.47303980588912964
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.47303980588912964
+        }
+      ],
+      "q_selected": -0.47303980588912964,
+      "q_mean": -0.8223949670791626
+    },
+    {
+      "step": 16,
+      "selected_action": 82,
+      "selected_band": 16,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.912568092346191,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.3400000035762787,
+        "priority": 0.4440000057220459
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.5535883903503418
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.5535883903503418
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.5535883903503418
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.5535883903503418
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.5535883903503418
+        }
+      ],
+      "q_selected": -0.5535883903503418,
+      "q_mean": -0.9121330380439758
+    },
+    {
+      "step": 17,
+      "selected_action": 87,
+      "selected_band": 17,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.928574562072754,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.36000001430511475,
+        "priority": 0.4509999752044678
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.6437100768089294
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.6437100768089294
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.6437100768089294
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.6437100768089294
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.6437100768089294
+        }
+      ],
+      "q_selected": -0.6437100768089294,
+      "q_mean": -1.0115315914154053
+    },
+    {
+      "step": 18,
+      "selected_action": 92,
+      "selected_band": 18,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.947364807128906,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.3799999952316284,
+        "priority": 0.4580000042915344
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.7559947371482849
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.7559947371482849
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.7559947371482849
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.7559947371482849
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.7559947371482849
+        }
+      ],
+      "q_selected": -0.7559947371482849,
+      "q_mean": -1.1331806182861328
+    },
+    {
+      "step": 19,
+      "selected_action": 97,
+      "selected_band": 19,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 12.968064308166504,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.4000000059604645,
+        "priority": 0.4649999737739563
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -0.9193975329399109
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -0.9193975329399109
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -0.9193975329399109
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -0.9193975329399109
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -0.9193975329399109
+        }
+      ],
+      "q_selected": -0.9193975329399109,
+      "q_mean": -1.3060353994369507
+    },
+    {
+      "step": 20,
+      "selected_action": 102,
+      "selected_band": 20,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.023612022399902,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.41999998688697815,
+        "priority": 0.47200000286102295
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -1.1387250423431396
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -1.1387250423431396
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -1.1387250423431396
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -1.1387250423431396
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -1.1387250423431396
+        }
+      ],
+      "q_selected": -1.1387250423431396,
+      "q_mean": -1.534902572631836
+    },
+    {
+      "step": 21,
+      "selected_action": 107,
+      "selected_band": 21,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.080924034118652,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.4399999976158142,
+        "priority": 0.4789999723434448
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -1.3890548944473267
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -1.3890548944473267
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -1.3890548944473267
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -1.3890548944473267
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -1.3890548944473267
+        }
+      ],
+      "q_selected": -1.3890548944473267,
+      "q_mean": -1.7948592901229858
+    },
+    {
+      "step": 22,
+      "selected_action": 112,
+      "selected_band": 22,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.135276794433594,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.46000000834465027,
+        "priority": 0.4860000014305115
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -1.6532068252563477
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -1.6532068252563477
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -1.6532068252563477
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -1.6532068252563477
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -1.6532068252563477
+        }
+      ],
+      "q_selected": -1.6532068252563477,
+      "q_mean": -2.0687263011932373
+    },
+    {
+      "step": 23,
+      "selected_action": 117,
+      "selected_band": 23,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.192402839660645,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.47999998927116394,
+        "priority": 0.49299997091293335
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -1.9618158340454102
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -1.9618158340454102
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -1.9618158340454102
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -1.9618158340454102
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -1.9618158340454102
+        }
+      ],
+      "q_selected": -1.9618158340454102,
+      "q_mean": -2.3871374130249023
+    },
+    {
+      "step": 24,
+      "selected_action": 122,
+      "selected_band": 24,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.267959594726562,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.5,
+        "priority": 0.5
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -2.340270757675171
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -2.340270757675171
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -2.340270757675171
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -2.340270757675171
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -2.340270757675171
+        }
+      ],
+      "q_selected": -2.340270757675171,
+      "q_mean": -2.775482416152954
+    },
+    {
+      "step": 25,
+      "selected_action": 127,
+      "selected_band": 25,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.415772438049316,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.5199999809265137,
+        "priority": 0.5069999694824219
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -2.7669923305511475
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -2.7669923305511475
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -2.7669923305511475
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -2.7669923305511475
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -2.7669923305511475
+        }
+      ],
+      "q_selected": -2.7669923305511475,
+      "q_mean": -3.212181329727173
+    },
+    {
+      "step": 26,
+      "selected_action": 132,
+      "selected_band": 26,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.629803657531738,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.5400000214576721,
+        "priority": 0.5139999985694885
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -3.2107458114624023
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -3.2107458114624023
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -3.2107458114624023
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -3.2107458114624023
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -3.2107458114624023
+        }
+      ],
+      "q_selected": -3.2107458114624023,
+      "q_mean": -3.6660001277923584
+    },
+    {
+      "step": 27,
+      "selected_action": 137,
+      "selected_band": 27,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.759993553161621,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.5600000023841858,
+        "priority": 0.5209999680519104
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -3.6755318641662598
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -3.6755318641662598
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -3.6755318641662598
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -3.6755318641662598
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -3.6755318641662598
+        }
+      ],
+      "q_selected": -3.6755318641662598,
+      "q_mean": -4.140938758850098
+    },
+    {
+      "step": 28,
+      "selected_action": 142,
+      "selected_band": 28,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.818772315979004,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.5799999833106995,
+        "priority": 0.527999997138977
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -4.202421188354492
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -4.202421188354492
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -4.202421188354492
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -4.202421188354492
+        },
+        {
+          "action": 142,
+          "band": 28,
+          "mode": 2,
+          "q_value": -4.202421188354492
+        }
+      ],
+      "q_selected": -4.202421188354492,
+      "q_mean": -4.678068161010742
+    },
+    {
+      "step": 29,
+      "selected_action": 147,
+      "selected_band": 29,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.819473266601562,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.6000000238418579,
+        "priority": 0.5350000262260437
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -4.820199012756348
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -4.820199012756348
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -4.820199012756348
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -4.820199012756348
+        },
+        {
+          "action": 152,
+          "band": 30,
+          "mode": 2,
+          "q_value": -4.820199012756348
+        }
+      ],
+      "q_selected": -4.820199012756348,
+      "q_mean": -5.306173801422119
+    },
+    {
+      "step": 30,
+      "selected_action": 152,
+      "selected_band": 30,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.829381942749023,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.6200000047683716,
+        "priority": 0.5419999957084656
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -5.542726039886475
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -5.542726039886475
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -5.542726039886475
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -5.542726039886475
+        },
+        {
+          "action": 152,
+          "band": 30,
+          "mode": 2,
+          "q_value": -5.542726039886475
+        }
+      ],
+      "q_selected": -5.542726039886475,
+      "q_mean": -6.039116859436035
+    },
+    {
+      "step": 31,
+      "selected_action": 157,
+      "selected_band": 31,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 13.936108589172363,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.6399999856948853,
+        "priority": 0.5489999651908875
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -6.321613788604736
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -6.321613788604736
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -6.321613788604736
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -6.321613788604736
+        },
+        {
+          "action": 157,
+          "band": 31,
+          "mode": 2,
+          "q_value": -6.321613788604736
+        }
+      ],
+      "q_selected": -6.321613788604736,
+      "q_mean": -6.828506946563721
+    },
+    {
+      "step": 32,
+      "selected_action": 162,
+      "selected_band": 32,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 14.120046615600586,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.6600000262260437,
+        "priority": 0.5559999942779541
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -7.135622501373291
+        },
+        {
+          "action": 162,
+          "band": 32,
+          "mode": 2,
+          "q_value": -7.135622501373291
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -7.135622501373291
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -7.135622501373291
+        },
+        {
+          "action": 166,
+          "band": 33,
+          "mode": 1,
+          "q_value": -7.410353660583496
+        }
+      ],
+      "q_selected": -7.135622501373291,
+      "q_mean": -7.653106689453125
+    },
+    {
+      "step": 33,
+      "selected_action": 167,
+      "selected_band": 33,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 14.389601707458496,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.6800000071525574,
+        "priority": 0.5630000233650208
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -7.920356750488281
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -7.920356750488281
+        },
+        {
+          "action": 167,
+          "band": 33,
+          "mode": 2,
+          "q_value": -7.920356750488281
+        },
+        {
+          "action": 176,
+          "band": 35,
+          "mode": 1,
+          "q_value": -8.196100234985352
+        },
+        {
+          "action": 166,
+          "band": 33,
+          "mode": 1,
+          "q_value": -8.196100234985352
+        }
+      ],
+      "q_selected": -7.920356750488281,
+      "q_mean": -8.448518753051758
+    },
+    {
+      "step": 34,
+      "selected_action": 172,
+      "selected_band": 34,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 14.616421699523926,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5699999928474426
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -8.552316665649414
+        },
+        {
+          "action": 172,
+          "band": 34,
+          "mode": 2,
+          "q_value": -8.552316665649414
+        },
+        {
+          "action": 171,
+          "band": 34,
+          "mode": 1,
+          "q_value": -8.829071998596191
+        },
+        {
+          "action": 176,
+          "band": 35,
+          "mode": 1,
+          "q_value": -8.829071998596191
+        },
+        {
+          "action": 170,
+          "band": 34,
+          "mode": 0,
+          "q_value": -8.858317375183105
+        }
+      ],
+      "q_selected": -8.552316665649414,
+      "q_mean": -9.091243743896484
+    },
+    {
+      "step": 35,
+      "selected_action": 177,
+      "selected_band": 35,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 14.786258697509766,
+      "belief_features": {
+        "occupancy": 0.5,
+        "det_rate": 0.0,
+        "uncertainty": 1.0,
+        "revisit_age": 0.7200000286102295,
+        "priority": 0.5770000219345093
+      },
+      "top5_q": [
+        {
+          "action": 177,
+          "band": 35,
+          "mode": 2,
+          "q_value": -9.058914184570312
+        },
+        {
+          "action": 176,
+          "band": 35,
+          "mode": 1,
+          "q_value": -9.336681365966797
+        },
+        {
+          "action": 175,
+          "band": 35,
+          "mode": 0,
+          "q_value": -9.365922927856445
+        },
+        {
+          "action": 178,
+          "band": 35,
+          "mode": 3,
+          "q_value": -9.367715835571289
+        },
+        {
+          "action": 2,
+          "band": 0,
+          "mode": 2,
+          "q_value": -9.379560470581055
+        }
+      ],
+      "q_selected": -9.058914184570312,
+      "q_mean": -9.608695030212402
+    },
+    {
+      "step": 36,
+      "selected_action": 2,
+      "selected_band": 0,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 14.956401824951172,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 2,
+          "band": 0,
+          "mode": 2,
+          "q_value": -9.8318452835083
+        },
+        {
+          "action": 7,
+          "band": 1,
+          "mode": 2,
+          "q_value": -9.835834503173828
+        },
+        {
+          "action": 12,
+          "band": 2,
+          "mode": 2,
+          "q_value": -9.839824676513672
+        },
+        {
+          "action": 17,
+          "band": 3,
+          "mode": 2,
+          "q_value": -9.8438138961792
+        },
+        {
+          "action": 22,
+          "band": 4,
+          "mode": 2,
+          "q_value": -9.847804069519043
+        }
+      ],
+      "q_selected": -9.8318452835083,
+      "q_mean": -10.071920394897461
+    },
+    {
+      "step": 37,
+      "selected_action": 7,
+      "selected_band": 1,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.111019134521484,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 7,
+          "band": 1,
+          "mode": 2,
+          "q_value": -10.25575065612793
+        },
+        {
+          "action": 12,
+          "band": 2,
+          "mode": 2,
+          "q_value": -10.259740829467773
+        },
+        {
+          "action": 17,
+          "band": 3,
+          "mode": 2,
+          "q_value": -10.263731002807617
+        },
+        {
+          "action": 22,
+          "band": 4,
+          "mode": 2,
+          "q_value": -10.267719268798828
+        },
+        {
+          "action": 27,
+          "band": 5,
+          "mode": 2,
+          "q_value": -10.271709442138672
+        }
+      ],
+      "q_selected": -10.25575065612793,
+      "q_mean": -10.501014709472656
+    },
+    {
+      "step": 38,
+      "selected_action": 12,
+      "selected_band": 2,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.248238563537598,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 12,
+          "band": 2,
+          "mode": 2,
+          "q_value": -10.62136459350586
+        },
+        {
+          "action": 17,
+          "band": 3,
+          "mode": 2,
+          "q_value": -10.625353813171387
+        },
+        {
+          "action": 22,
+          "band": 4,
+          "mode": 2,
+          "q_value": -10.62934398651123
+        },
+        {
+          "action": 27,
+          "band": 5,
+          "mode": 2,
+          "q_value": -10.633333206176758
+        },
+        {
+          "action": 32,
+          "band": 6,
+          "mode": 2,
+          "q_value": -10.637323379516602
+        }
+      ],
+      "q_selected": -10.62136459350586,
+      "q_mean": -10.871817588806152
+    },
+    {
+      "step": 39,
+      "selected_action": 17,
+      "selected_band": 3,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.467351913452148,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 17,
+          "band": 3,
+          "mode": 2,
+          "q_value": -10.948580741882324
+        },
+        {
+          "action": 22,
+          "band": 4,
+          "mode": 2,
+          "q_value": -10.952569961547852
+        },
+        {
+          "action": 27,
+          "band": 5,
+          "mode": 2,
+          "q_value": -10.956560134887695
+        },
+        {
+          "action": 32,
+          "band": 6,
+          "mode": 2,
+          "q_value": -10.960549354553223
+        },
+        {
+          "action": 37,
+          "band": 7,
+          "mode": 2,
+          "q_value": -10.964539527893066
+        }
+      ],
+      "q_selected": -10.948580741882324,
+      "q_mean": -11.204221725463867
+    },
+    {
+      "step": 40,
+      "selected_action": 22,
+      "selected_band": 4,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.655802726745605,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 22,
+          "band": 4,
+          "mode": 2,
+          "q_value": -11.17874526977539
+        },
+        {
+          "action": 27,
+          "band": 5,
+          "mode": 2,
+          "q_value": -11.182734489440918
+        },
+        {
+          "action": 32,
+          "band": 6,
+          "mode": 2,
+          "q_value": -11.186724662780762
+        },
+        {
+          "action": 37,
+          "band": 7,
+          "mode": 2,
+          "q_value": -11.190713882446289
+        },
+        {
+          "action": 42,
+          "band": 8,
+          "mode": 2,
+          "q_value": -11.194704055786133
+        }
+      ],
+      "q_selected": -11.17874526977539,
+      "q_mean": -11.4395751953125
+    },
+    {
+      "step": 41,
+      "selected_action": 27,
+      "selected_band": 5,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.787755012512207,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 27,
+          "band": 5,
+          "mode": 2,
+          "q_value": -11.327300071716309
+        },
+        {
+          "action": 32,
+          "band": 6,
+          "mode": 2,
+          "q_value": -11.331289291381836
+        },
+        {
+          "action": 37,
+          "band": 7,
+          "mode": 2,
+          "q_value": -11.33527946472168
+        },
+        {
+          "action": 42,
+          "band": 8,
+          "mode": 2,
+          "q_value": -11.339268684387207
+        },
+        {
+          "action": 47,
+          "band": 9,
+          "mode": 2,
+          "q_value": -11.34325885772705
+        }
+      ],
+      "q_selected": -11.327300071716309,
+      "q_mean": -11.593318939208984
+    },
+    {
+      "step": 42,
+      "selected_action": 32,
+      "selected_band": 6,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.867966651916504,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 32,
+          "band": 6,
+          "mode": 2,
+          "q_value": -11.399192810058594
+        },
+        {
+          "action": 37,
+          "band": 7,
+          "mode": 2,
+          "q_value": -11.403182029724121
+        },
+        {
+          "action": 42,
+          "band": 8,
+          "mode": 2,
+          "q_value": -11.407172203063965
+        },
+        {
+          "action": 47,
+          "band": 9,
+          "mode": 2,
+          "q_value": -11.411161422729492
+        },
+        {
+          "action": 52,
+          "band": 10,
+          "mode": 2,
+          "q_value": -11.415151596069336
+        }
+      ],
+      "q_selected": -11.399192810058594,
+      "q_mean": -11.670400619506836
+    },
+    {
+      "step": 43,
+      "selected_action": 37,
+      "selected_band": 7,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.866835594177246,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 37,
+          "band": 7,
+          "mode": 2,
+          "q_value": -11.419637680053711
+        },
+        {
+          "action": 42,
+          "band": 8,
+          "mode": 2,
+          "q_value": -11.423626899719238
+        },
+        {
+          "action": 47,
+          "band": 9,
+          "mode": 2,
+          "q_value": -11.427617073059082
+        },
+        {
+          "action": 52,
+          "band": 10,
+          "mode": 2,
+          "q_value": -11.43160629272461
+        },
+        {
+          "action": 57,
+          "band": 11,
+          "mode": 2,
+          "q_value": -11.435596466064453
+        }
+      ],
+      "q_selected": -11.419637680053711,
+      "q_mean": -11.69603443145752
+    },
+    {
+      "step": 44,
+      "selected_action": 42,
+      "selected_band": 8,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 15.90139102935791,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 42,
+          "band": 8,
+          "mode": 2,
+          "q_value": -11.45610237121582
+        },
+        {
+          "action": 47,
+          "band": 9,
+          "mode": 2,
+          "q_value": -11.460091590881348
+        },
+        {
+          "action": 52,
+          "band": 10,
+          "mode": 2,
+          "q_value": -11.464081764221191
+        },
+        {
+          "action": 57,
+          "band": 11,
+          "mode": 2,
+          "q_value": -11.468070983886719
+        },
+        {
+          "action": 62,
+          "band": 12,
+          "mode": 2,
+          "q_value": -11.472061157226562
+        }
+      ],
+      "q_selected": -11.45610237121582,
+      "q_mean": -11.737687110900879
+    },
+    {
+      "step": 45,
+      "selected_action": 47,
+      "selected_band": 9,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 16.008068084716797,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 47,
+          "band": 9,
+          "mode": 2,
+          "q_value": -11.512504577636719
+        },
+        {
+          "action": 52,
+          "band": 10,
+          "mode": 2,
+          "q_value": -11.516493797302246
+        },
+        {
+          "action": 57,
+          "band": 11,
+          "mode": 2,
+          "q_value": -11.52048397064209
+        },
+        {
+          "action": 62,
+          "band": 12,
+          "mode": 2,
+          "q_value": -11.524473190307617
+        },
+        {
+          "action": 67,
+          "band": 13,
+          "mode": 2,
+          "q_value": -11.528463363647461
+        }
+      ],
+      "q_selected": -11.512504577636719,
+      "q_mean": -11.799278259277344
+    },
+    {
+      "step": 46,
+      "selected_action": 52,
+      "selected_band": 10,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 16.032007217407227,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 52,
+          "band": 10,
+          "mode": 2,
+          "q_value": -11.535665512084961
+        },
+        {
+          "action": 57,
+          "band": 11,
+          "mode": 2,
+          "q_value": -11.539654731750488
+        },
+        {
+          "action": 62,
+          "band": 12,
+          "mode": 2,
+          "q_value": -11.543644905090332
+        },
+        {
+          "action": 67,
+          "band": 13,
+          "mode": 2,
+          "q_value": -11.54763412475586
+        },
+        {
+          "action": 72,
+          "band": 14,
+          "mode": 2,
+          "q_value": -11.551624298095703
+        }
+      ],
+      "q_selected": -11.535665512084961,
+      "q_mean": -11.827628135681152
+    },
+    {
+      "step": 47,
+      "selected_action": 57,
+      "selected_band": 11,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 16.061830520629883,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 57,
+          "band": 11,
+          "mode": 2,
+          "q_value": -11.549647331237793
+        },
+        {
+          "action": 62,
+          "band": 12,
+          "mode": 2,
+          "q_value": -11.55363655090332
+        },
+        {
+          "action": 67,
+          "band": 13,
+          "mode": 2,
+          "q_value": -11.557626724243164
+        },
+        {
+          "action": 72,
+          "band": 14,
+          "mode": 2,
+          "q_value": -11.561615943908691
+        },
+        {
+          "action": 77,
+          "band": 15,
+          "mode": 2,
+          "q_value": -11.565606117248535
+        }
+      ],
+      "q_selected": -11.549647331237793,
+      "q_mean": -11.84679889678955
+    },
+    {
+      "step": 48,
+      "selected_action": 62,
+      "selected_band": 12,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 16.095869064331055,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 62,
+          "band": 12,
+          "mode": 2,
+          "q_value": -11.563526153564453
+        },
+        {
+          "action": 67,
+          "band": 13,
+          "mode": 2,
+          "q_value": -11.56751537322998
+        },
+        {
+          "action": 72,
+          "band": 14,
+          "mode": 2,
+          "q_value": -11.571505546569824
+        },
+        {
+          "action": 77,
+          "band": 15,
+          "mode": 2,
+          "q_value": -11.575494766235352
+        },
+        {
+          "action": 82,
+          "band": 16,
+          "mode": 2,
+          "q_value": -11.579484939575195
+        }
+      ],
+      "q_selected": -11.563526153564453,
+      "q_mean": -11.865864753723145
+    },
+    {
+      "step": 49,
+      "selected_action": 67,
+      "selected_band": 13,
+      "selected_mode": 2,
+      "hit": false,
+      "reward": -1.025,
+      "hidden_norm": 16.109664916992188,
+      "belief_features": {
+        "occupancy": 0.3499999940395355,
+        "det_rate": 0.0,
+        "uncertainty": 0.9336402416229248,
+        "revisit_age": 0.699999988079071,
+        "priority": 0.5192280411720276
+      },
+      "top5_q": [
+        {
+          "action": 67,
+          "band": 13,
+          "mode": 2,
+          "q_value": -11.565258026123047
+        },
+        {
+          "action": 72,
+          "band": 14,
+          "mode": 2,
+          "q_value": -11.569247245788574
+        },
+        {
+          "action": 77,
+          "band": 15,
+          "mode": 2,
+          "q_value": -11.573237419128418
+        },
+        {
+          "action": 82,
+          "band": 16,
+          "mode": 2,
+          "q_value": -11.577226638793945
+        },
+        {
+          "action": 87,
+          "band": 17,
+          "mode": 2,
+          "q_value": -11.581216812133789
+        }
+      ],
+      "q_selected": -11.565258026123047,
+      "q_mean": -11.872786521911621
+    }
+  ]
+}

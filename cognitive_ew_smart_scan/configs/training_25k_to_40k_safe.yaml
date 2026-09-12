@@ -1,0 +1,91 @@
+# Safe Continuation Training Configuration (25k to 40k)
+# DRDO SIH2026 Problem Statement: Smart Scan Strategy for Electronic Warfare
+# Experiment: Gate 1 Trial D (Mode-Preserved Continuation: Frozen band_advantage_head + Stratified Sequence Replay)
+
+experiment:
+  name: gate1_trial_d_frozen_head_mode_preserved
+  baseline_checkpoint_sha256: "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+  reservoir_sha256: "edcef07b020563aefeac99fa3b03c2c6a474f07afdac7660e61e336523b8fe0c"
+  start_step: 25000
+  target_step: 27500
+  episode_length: 250
+  freeze_advantage_head: true
+  auxiliary_heads_enabled: true
+  baseline_aux_coef_provenance: "train_scheduler.py:136 (SHA-256 verified) / Memory.md:420"
+
+training:
+  start_step: 25000
+  target_step: 27500  # Gate 1 Pilot target; sequential stages advance to 30000, 35000, 40000
+  total_timesteps: 40000
+  eval_frequency: 500  # Canonical 10-scenario evaluation evaluated every 500 steps
+  save_frequency: 500  # Intermediate checkpoint saved prior to each 500-step evaluation
+  max_steps_per_episode: 250  # 250-step episodes for rapid scenario mixing
+  val_steps_per_scenario: 1000  # 10 canonical scenarios * 1000 = 10,000 eval steps
+
+learning_rate:
+  gate_1_25k_27500: 5.0e-5    # 0.5x of original 1.0e-4
+  gate_2_27500_30k: 2.5e-5    # 0.25x of original
+  gate_3_30k_35k: 2.5e-5      # 0.25x of original
+  gate_4_35k_40k: 1.0e-5      # 0.10x of original
+
+optimization:
+  gradient_clip_norm: 5.0
+  target_update_freq: 250
+  q_reg_coef: 5.0e-4
+  target_q_clamping_enabled: false  # Do NOT clamp yet; log unclamped values first
+  gamma: 0.99
+  update_freq: 4
+  batch_size: 32
+  aux_coef: 0.1  # Exact baseline auxiliary-loss coefficient
+
+exploration:
+  mode: controlled_staged
+  gate_1:
+    eps_start: 0.08
+    eps_end: 0.06
+  gate_2:
+    eps_start: 0.06
+    eps_end: 0.05
+  gate_3_4:
+    eps_fixed: 0.05
+
+replay:
+  sampler: stratified_mode_anchored
+  capacity: 50000
+  seq_len: 16
+  burn_in: 8
+  require_exact_source_counts: true
+  baseline_reservoir_path: "cognitive_ew_smart_scan/checkpoints/production_baseline/baseline_reservoir_5k.pkl"
+  # Target mode quotas across batch_size=32 (anchored around actual mode occurrences)
+  mode_quotas:
+    mode_0: 0.15      # SHORT_DWELL
+    mode_1: 0.25      # NORMAL_DWELL
+    mode_2: 0.30      # LONG_DWELL (Mode 2 guaranteed >= 30%)
+    mode_3: 0.15      # REVISIT
+    mode_4: 0.15      # PREEMPTIVE_INTERCEPT
+
+operational_gate_thresholds:
+  min_mean_ir: 60.45
+  min_agile_ir: 46.70
+  min_worst_case_ir: 12.40
+  min_pd: 99.85
+  max_pfa: 0.0000
+  min_mode2_fraction_agile_sparse: 0.90
+
+safety_thresholds:
+  hard_safety_halt:
+    max_q: 50.0
+    top_band_dominance: 0.80
+    unique_bands: 6
+    action_entropy: 0.80
+    nan_inf_check: true
+  diagnostic_warning:
+    max_q: 25.0
+    top_band_dominance: 0.60
+    unique_bands: 12
+    action_entropy: 1.20
+
+checkpoints:
+  baseline_frozen: "cognitive_ew_smart_scan/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt"
+  output_candidate_dir: "cognitive_ew_smart_scan/checkpoints/safe_continuation_candidate"
+  audit_log_path: "cognitive_ew_smart_scan/reports/safe_continuation_audit_log.json"
