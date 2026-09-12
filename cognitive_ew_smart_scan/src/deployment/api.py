@@ -130,6 +130,41 @@ TELEMETRY_ROOT = os.getenv("TELEMETRY_ROOT", "runs")
 _rolling_pdws: list[dict[str, Any]] = []
 _rolling_pdws_lock = Lock()
 
+_rolling_all_pdws: list[dict[str, Any]] = []
+_rolling_all_pdws_lock = Lock()
+
+def record_incident_pdws(pulses: list[dict[str, Any]]) -> None:
+    global _rolling_all_pdws
+    if not pulses:
+        return
+    with _rolling_all_pdws_lock:
+        existing_uids = {
+            f"{p.get('pulse_id')}-{float(p.get('time_us', 0.0)):.1f}"
+            for p in _rolling_all_pdws
+        }
+        new_records = []
+        for det in pulses:
+            p_id = det.get("pulse_id")
+            t_us = float(det.get("time_us", det.get("toa_us", 0.0)))
+            uid = f"{p_id}-{t_us:.1f}"
+            if uid not in existing_uids:
+                existing_uids.add(uid)
+                amp = float(det.get("amplitude_db", -65.0))
+                snr = float(det.get("snr_db", amp + 95.0))
+                new_records.append({
+                    "pulse_id": int(p_id) if p_id is not None else int(t_us),
+                    "time_us": t_us,
+                    "frequency_mhz": float(det.get("frequency_mhz", 0.0)),
+                    "pulse_width_us": float(det.get("pulse_width_us", 1.0)),
+                    "amplitude_db": amp,
+                    "snr_db": snr,
+                    "aoa_deg": float(det.get("aoa_deg", 0.0)),
+                    "status": "INCIDENT",
+                })
+        if new_records:
+            _rolling_all_pdws = (new_records + _rolling_all_pdws)[:100]  # Store up to 100 for Dataset
+
+
 
 def record_intercepted_pdws(detections: list[dict[str, Any]]) -> None:
     """Record intercepted receiver PDWs into rolling FIFO buffer (last 30 hits)."""
@@ -1116,6 +1151,8 @@ def mission_step(req: MissionStepRequest, request: Request) -> MissionStepRespon
         controller.start_mission(initial_time_us=controller.clock_us)
 
     try:
+        if req.pdws:
+            record_incident_pdws(req.pdws)
         frame = controller.execute_operational_step(
             obs=req.obs,
             external_rf_stream=req.pdws,
@@ -1432,6 +1469,9 @@ def _telemetry_payload() -> dict[str, Any]:
 
         with _rolling_pdws_lock:
             active_pdws = list(_rolling_pdws[:15])
+            
+        with _rolling_all_pdws_lock:
+            all_incident_pdws = list(_rolling_all_pdws[:100])
 
         if not active_pdws:
             raw_dets = latest.get("detections", latest.get("pdws", []))
@@ -1675,6 +1715,7 @@ def _telemetry_payload() -> dict[str, Any]:
             "decision_reason": dec_reason,
             "bandPriorities": band_priors,
             "pdws": active_pdws,
+            "all_incident_pdws": all_incident_pdws,
             "detections": active_pdws,
             "recent_pdws": active_pdws,
             "recent_dwells": recent_dwells,
@@ -1940,6 +1981,8 @@ async def _run_live_mission_stream(scenario_name: str, speed_hz: float, max_dwel
                 for p in scenario_pulses
                 if t_mod - 500.0 <= p["time_us"] <= t_mod + 3500.0
             ]
+            if feed_window:
+                record_incident_pdws(feed_window)
             frame = await asyncio.to_thread(
                 controller.execute_operational_step,
                 external_rf_stream=feed_window,

@@ -64,46 +64,32 @@ const PDW_DESCRIPTORS = [
 export default function DatasetAudit() {
   const telemetry = useOverviewTelemetry();
   const isOnline = telemetry.live && telemetry.wsStatus === "ONLINE";
-  const livePdws = isOnline && Array.isArray(telemetry.pdws) ? telemetry.pdws : [];
+  const livePdws = isOnline && Array.isArray(telemetry.allIncidentPdws) ? telemetry.allIncidentPdws : [];
 
   const pdwRows =
     isOnline && livePdws.length > 0
-      ? livePdws.map((pdw, idx) => [
-          pdw.id ?? `P-${idx + 1}`,
-          pdw.toaUs != null
-            ? pdw.toaUs.toFixed(1)
-            : pdw.toa_us != null
-            ? pdw.toa_us.toFixed(1)
-            : "-",
-          pdw.frequencyMHz != null
-            ? pdw.frequencyMHz.toFixed(1)
-            : pdw.frequency_mhz != null
-            ? pdw.frequency_mhz.toFixed(1)
-            : "-",
-          pdw.pulseWidthUs != null
-            ? pdw.pulseWidthUs.toFixed(1)
-            : pdw.pw_us != null
-            ? pdw.pw_us.toFixed(1)
-            : "-",
-          pdw.amplitudeDb != null
-            ? pdw.amplitudeDb.toFixed(1)
-            : pdw.amplitude_db != null
-            ? pdw.amplitude_db.toFixed(1)
-            : "-",
-          pdw.snrDb != null
-            ? pdw.snrDb.toFixed(1)
-            : pdw.amplitudeDb != null
-            ? (pdw.amplitudeDb + 30).toFixed(1)
-            : "-",
-          pdw.aoaDeg != null
-            ? pdw.aoaDeg.toFixed(1)
-            : pdw.aoa_deg != null
-            ? pdw.aoa_deg.toFixed(1)
-            : "-",
-          <span key={idx} style={{ color: "#49df9d", fontWeight: 700 }}>
-            {pdw.status ?? "DETECTED"}
-          </span>,
-        ])
+      ? livePdws.map((pdw, idx) => {
+          const toa = pdw.time_us ?? pdw.toa_us ?? pdw.toaUs;
+          const freq = pdw.frequency_mhz ?? pdw.frequencyMHz;
+          const pw = pdw.pulse_width_us ?? pdw.pw_us ?? pdw.pulseWidthUs;
+          const amp = pdw.amplitude_db ?? pdw.amplitudeDb;
+          const snr = pdw.snr_db ?? pdw.snrDb ?? (amp != null ? amp + 30 : null);
+          const aoa = pdw.aoa_deg ?? pdw.aoaDeg;
+          const status = pdw.status ?? "DETECTED";
+          const statusColor = status === "INCIDENT" ? "#96ccff" : "#49df9d";
+          return [
+            pdw.pulse_id ?? pdw.id ?? `P-${idx + 1}`,
+            toa != null ? Number(toa).toFixed(1) : "-",
+            freq != null ? Number(freq).toFixed(1) : "-",
+            pw != null ? Number(pw).toFixed(1) : "-",
+            amp != null ? Number(amp).toFixed(1) : "-",
+            snr != null ? Number(snr).toFixed(1) : "-",
+            aoa != null ? Number(aoa).toFixed(1) : "-",
+            <span key={idx} style={{ color: statusColor, fontWeight: 700 }}>
+              {status}
+            </span>,
+          ];
+        })
       : [["-", "-", "-", "-", "-", "-", "-", "-"]];
 
   return (
@@ -167,6 +153,7 @@ export default function DatasetAudit() {
           badge={isOnline && livePdws.length > 0 ? `${livePdws.length} RECORDS` : "OFFLINE"}
           badgeColor={isOnline && livePdws.length > 0 ? "#49df9d" : "#908f9e"}
         />
+        <div className="st-table-wrap" style={{ maxHeight: "380px", overflowY: "auto" }}>
         <StitchTable
           columns={[
             "PULSE ID",
@@ -180,6 +167,7 @@ export default function DatasetAudit() {
           ]}
           rows={pdwRows}
         />
+        </div>
         <div className="st-tsm" style={{ color: "#908f9e" }}>
           Observable receiver fields shown above. Simulation truth is intentionally excluded from this table. SNR is shown against an assumed −30 dBm noise floor (illustrative).
         </div>
