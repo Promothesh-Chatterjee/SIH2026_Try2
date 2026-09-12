@@ -1,0 +1,42 @@
+{
+  "total_emitters": 3,
+  "total_tracks": 3,
+  "swap_count": 0,
+  "swap_rate": 0.0,
+  "fragmentation_count": 0,
+  "fragmentation_rate": 0.0,
+  "false_merge_count": 0,
+  "false_merge_rate": 0.0,
+  "details_by_emitter": {
+    "RADAR_SURVEILLANCE": {
+      "capturing_tracks": [
+        1
+      ],
+      "pulse_counts": [
+        16
+      ],
+      "fragmentation": 0,
+      "swaps": 0
+    },
+    "RADAR_TRACKING": {
+      "capturing_tracks": [
+        2
+      ],
+      "pulse_counts": [
+        15
+      ],
+      "fragmentation": 0,
+      "swaps": 0
+    },
+    "RADAR_FIRE_CONTROL": {
+      "capturing_tracks": [
+        4
+      ],
+      "pulse_counts": [
+        21
+      ],
+      "fragmentation": 0,
+      "swaps": 0
+    }
+  }
+}

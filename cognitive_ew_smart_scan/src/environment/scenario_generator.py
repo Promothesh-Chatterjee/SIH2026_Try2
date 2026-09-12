@@ -179,40 +179,81 @@ def load_gnu_records(
     with open(p, "r", encoding="utf-8") as f:
         gt = json.load(f)
 
-    emitters = []
-    if "dwells" in gt and len(gt["dwells"]) > 0:
-        emitters = gt["dwells"][0].get("emitters", [])
-    if not emitters:
-        emitters = gt.get("emitters", [])
+    # Check if this is a hopping scenario where different dwells have different emitter frequencies
+    has_hopping_dwells = False
+    if "dwells" in gt and len(gt["dwells"]) > 1:
+        first_freqs = {round(em["rf_frequency_mhz"], 2) for em in gt["dwells"][0].get("emitters", []) if "rf_frequency_mhz" in em}
+        for d in gt["dwells"][1:15]:
+            d_freqs = {round(em["rf_frequency_mhz"], 2) for em in d.get("emitters", []) if "rf_frequency_mhz" in em}
+            if d_freqs != first_freqs:
+                has_hopping_dwells = True
+                break
 
     records: list[PulseRecord] = []
-    for em in emitters:
-        rng = np.random.default_rng(em.get("configured_seed", seed))
-        pri = float(em["pri_us"])
-        pw = float(em["pulse_width_us"])
-        freq = float(em["rf_frequency_mhz"])
-        amp = float(em.get("amplitude", 1.0)) * -50.0  # Linear to rough dBm
-        jitter_frac = float(em.get("jitter_fraction", 0.01))
-        eid_str = str(em.get("id", "E1"))
-        eid = int("".join(c for c in eid_str if c.isdigit()) or 1)
+    if has_hopping_dwells:
+        for dwell in gt["dwells"]:
+            d_start = float(dwell.get("start_time_us", 0.0))
+            d_end = float(dwell.get("end_time_us", time_horizon_us))
+            if d_start >= time_horizon_us:
+                break
+            d_limit = min(d_end, time_horizon_us)
+            for em in dwell.get("emitters", []):
+                pri = float(em.get("pri_us", 100.0))
+                pw = float(em.get("pulse_width_us", 10.0))
+                freq = float(em.get("rf_frequency_mhz", 3500.0))
+                amp = float(em.get("amplitude", 1.0)) * -50.0
+                jitter_frac = float(em.get("jitter_fraction", 0.01))
+                eid_str = str(em.get("id", "E1"))
+                eid = int("".join(c for c in eid_str if c.isdigit()) or 1)
 
-        t = float(rng.uniform(0.0, pri))
-        while t < time_horizon_us:
-            j = float(rng.uniform(-jitter_frac, jitter_frac)) * pri
-            t_pulse = t + j
-            if 0.0 <= t_pulse < time_horizon_us:
-                records.append(
-                    PulseRecord(
-                        toa_us=float(t_pulse),
-                        frequency_mhz=float(freq),
-                        pulse_width_us=float(pw),
-                        amplitude_db=float(amp),
-                        aoa_deg=15.0,
-                        emitter_id=eid,
-                        source_id=f"gnu:{p.stem}",
+                t = d_start
+                while t < d_limit:
+                    records.append(
+                        PulseRecord(
+                            toa_us=float(t),
+                            frequency_mhz=float(freq),
+                            pulse_width_us=float(pw),
+                            amplitude_db=float(amp),
+                            aoa_deg=15.0,
+                            emitter_id=eid,
+                            source_id=f"gnu:{p.stem}",
+                        )
                     )
-                )
-            t += pri
+                    t += pri
+    else:
+        emitters = []
+        if "dwells" in gt and len(gt["dwells"]) > 0:
+            emitters = gt["dwells"][0].get("emitters", [])
+        if not emitters:
+            emitters = gt.get("emitters", [])
+
+        for em in emitters:
+            rng = np.random.default_rng(em.get("configured_seed", seed))
+            pri = float(em["pri_us"])
+            pw = float(em["pulse_width_us"])
+            freq = float(em["rf_frequency_mhz"])
+            amp = float(em.get("amplitude", 1.0)) * -50.0  # Linear to rough dBm
+            jitter_frac = float(em.get("jitter_fraction", 0.01))
+            eid_str = str(em.get("id", "E1"))
+            eid = int("".join(c for c in eid_str if c.isdigit()) or 1)
+
+            t = float(rng.uniform(0.0, pri))
+            while t < time_horizon_us:
+                j = float(rng.uniform(-jitter_frac, jitter_frac)) * pri
+                t_pulse = t + j
+                if 0.0 <= t_pulse < time_horizon_us:
+                    records.append(
+                        PulseRecord(
+                            toa_us=float(t_pulse),
+                            frequency_mhz=float(freq),
+                            pulse_width_us=float(pw),
+                            amplitude_db=float(amp),
+                            aoa_deg=15.0,
+                            emitter_id=eid,
+                            source_id=f"gnu:{p.stem}",
+                        )
+                    )
+                t += pri
 
     records.sort(key=lambda r: r.toa_us)
     if max_pulses and len(records) > max_pulses:
