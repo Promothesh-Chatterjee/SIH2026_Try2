@@ -1,0 +1,128 @@
+{
+  "probe_name": "probe3_replay_composition_audit",
+  "timestamp_utc": "2026-09-12T20:16:39.527392+00:00",
+  "git_revision": "2eabd98d70bfb28b830086e756b2598416d92cef",
+  "reproducibility": {
+    "seed": 42,
+    "n_batches_audited": 100,
+    "batch_size": 32,
+    "seq_len": 16,
+    "burn_in": 8,
+    "stratified_quotas": {
+      "0": 0.15,
+      "1": 0.25,
+      "2": 0.3,
+      "3": 0.15,
+      "4": 0.15
+    }
+  },
+  "checkpoint_manifest": {
+    "baseline": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+      "sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+    },
+    "champion": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\safe_continuation_candidate\\checkpoint_step_25500.pt",
+      "sha256": "777de9b4760389e4eb1bc07e232d1ac6bd34af69e8e369b758893fb6c678e554"
+    },
+    "quarantined": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\gate2_bounded_candidate\\checkpoint_step_25750_QUARANTINED_COLLAPSE.pt",
+      "sha256": "26ee15dfd576605e7d70f742746540cdc63beaecc124cd4e6355da8145aa1479"
+    },
+    "reservoir": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\baseline_reservoir_5k.pkl",
+      "sha256": "edcef07b020563aefeac99fa3b03c2c6a474f07afdac7660e61e336523b8fe0c"
+    },
+    "raw_config_119": {
+      "path": "D:\\TSRD\\stare\\val_stare\\config_119.h5",
+      "sha256": "64e62300a8722cb4e4e43509b72aae364da5186569437f67432daaa218d1ea8e"
+    }
+  },
+  "findings": {
+    "raw_dataset_physics": {
+      "config_119": {
+        "total_pulses": 0,
+        "total_duration_us": 0.0,
+        "pulse_density_per_ms": 0.0,
+        "median_pri_us": 0.0,
+        "p95_pri_us": 0.0,
+        "n_unique_emitters": 0,
+        "active_frequency_range_mhz": []
+      }
+    },
+    "reservoir_composition": {
+      "total_episodes": 25,
+      "total_transitions": 5000,
+      "global_mode_counts": {
+        "0": 76,
+        "1": 4708,
+        "2": 73,
+        "3": 73,
+        "4": 70
+      },
+      "global_mode_fractions": {
+        "0": 0.0152,
+        "1": 0.9416,
+        "2": 0.0146,
+        "3": 0.0146,
+        "4": 0.014
+      },
+      "config_119_details": {
+        "length": 200,
+        "hits": 0,
+        "hit_rate": 0.0,
+        "mode_distribution": {
+          "0": 3,
+          "1": 190,
+          "2": 3,
+          "3": 4,
+          "4": 0
+        },
+        "mode2_fraction": 0.015,
+        "mode1_fraction": 0.95
+      }
+    },
+    "stratified_replay_dynamics": {
+      "total_sampled_sequences": 3200,
+      "anchored_target_mode_counts": {
+        "0": 500,
+        "1": 800,
+        "2": 900,
+        "3": 500,
+        "4": 500
+      },
+      "total_sampled_loss_transitions": {
+        "0": 871,
+        "1": 21901,
+        "2": 1188,
+        "3": 827,
+        "4": 813
+      },
+      "loss_transition_mode_fractions": {
+        "0": 0.0340234375,
+        "1": 0.8555078125,
+        "2": 0.04640625,
+        "3": 0.0323046875,
+        "4": 0.0317578125
+      },
+      "config_119_sampled_sequences": 126,
+      "config_119_loss_mode_counts": {
+        "0": 136,
+        "1": 837,
+        "2": 15,
+        "3": 11,
+        "4": 9
+      }
+    }
+  },
+  "safety_assertions": {
+    "baseline_unmodified": true,
+    "champion_unmodified": true,
+    "zero_parameter_mutation": true,
+    "zero_training_steps": true
+  },
+  "pass_fail_interpretation": {
+    "finding": "CONFIRMED_DATA_IMBALANCE",
+    "verdict": "CRITICAL FINDING: In the 5,000-transition baseline reservoir, config_119 was captured with 95.0% Mode 1 (190 transitions) and only 1.5% Mode 2 (3 transitions) with 0 hits. Although the StratifiedModeSampler successfully anchors 30% of batch sequences around Mode 2 globally, config_119 transitions in loss windows are overwhelmingly Mode 1 with zero positive interception feedback. Thus, the offline training signal actively trains the model that on config_119, Mode 1 is the default policy."
+  }
+}

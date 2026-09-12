@@ -1,0 +1,228 @@
+{
+  "rollback_events": [
+    {
+      "timestamp": "2026-09-12T19:59:11.799094+00:00",
+      "step": 25750,
+      "reasons": [
+        "Mean IR 60.03% < 60.45%",
+        "Agile IR 44.85% < 46.70%",
+        "Worst-case IR 3.30% < 12.40%",
+        "Mode 2 Agile/Sparse share 89.2% < 90.0%"
+      ],
+      "failed_checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\gate2_bounded_candidate\\checkpoint_step_25750.pt",
+      "restored_to": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\safe_continuation_candidate\\checkpoint_step_25500.pt",
+      "telemetry": {
+        "eval_res": {
+          "mean_ir": 60.03000000000001,
+          "median_ir": 62.6,
+          "worst_case_ir": 3.3000000000000003,
+          "agile_ir": 44.849999999999994,
+          "sparse_ir": 9.65,
+          "pd": 99.86027299592884,
+          "pfa": 0.0,
+          "mode_selection_totals": {
+            "0": 0,
+            "1": 539,
+            "2": 9461,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_overall_fraction": 0.9461,
+          "mode2_agile_sparse_fraction": 0.8922000000000001,
+          "distinct_bands_mean": 26.9,
+          "scenario_breakdown": {
+            "config_117": {
+              "intercept_rate": 0.994,
+              "hits": 994,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 4,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_119": {
+              "intercept_rate": 0.033,
+              "hits": 33,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 539,
+                "2": 461,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 0.461
+            },
+            "config_143": {
+              "intercept_rate": 0.16,
+              "hits": 160,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_194": {
+              "intercept_rate": 0.887,
+              "hits": 887,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 6,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_195": {
+              "intercept_rate": 0.979,
+              "hits": 979,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 7,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_241": {
+              "intercept_rate": 0.201,
+              "hits": 201,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_29": {
+              "intercept_rate": 0.581,
+              "hits": 581,
+              "steps": 1000,
+              "pd": 0.9965694682675815,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_42": {
+              "intercept_rate": 0.657,
+              "hits": 657,
+              "steps": 1000,
+              "pd": 0.9894578313253012,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_64": {
+              "intercept_rate": 0.595,
+              "hits": 595,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_96": {
+              "intercept_rate": 0.916,
+              "hits": 916,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            }
+          }
+        },
+        "q_diag": {
+          "q_mean": -6.656716346740723,
+          "q_std": 9.895310401916504,
+          "q_min": -13.544559478759766,
+          "q_max": 19.26388168334961,
+          "target_q_unclamped_mean": -7.490495681762695,
+          "target_q_unclamped_max": 5.44877815246582,
+          "target_q_unclamped_min": -12.71813678741455,
+          "td_mean": -0.7015700340270996,
+          "td_std": 5.754520416259766,
+          "unclipped_grad_norm": 37.83220291137695,
+          "clipped_grad_norm": 4.999988555908203,
+          "param_norm": 61.910882974040675,
+          "has_nan": false,
+          "has_inf": false,
+          "diagnostic_warning": false,
+          "safety_halt": false,
+          "halt_reasons": [],
+          "warning_reasons": [],
+          "total_loss": 2.8219430446624756,
+          "drqn_loss": 2.722540855407715,
+          "td_loss": 2.722540855407715,
+          "q_reg_loss": 0.07031481713056564,
+          "aux_loss": 0.29087284207344055,
+          "bce_loss": 0.27729353308677673,
+          "huber_loss": 0.013579322956502438,
+          "valid_bce_targets": 256,
+          "valid_time_targets": 47
+        }
+      }
+    }
+  ]
+}

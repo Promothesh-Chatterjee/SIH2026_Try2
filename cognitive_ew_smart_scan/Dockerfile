@@ -1,9 +1,9 @@
-FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime
+FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    DEVICE=cuda
+    DEVICE=cpu
 
 WORKDIR /app
 
@@ -11,11 +11,15 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsndfile1 \
     libhdf5-dev \
+    git \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Python deps
+# Python deps (CPU PyTorch)
 COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
+    pip install -r requirements.txt
 
 # App code
 COPY configs/ configs/

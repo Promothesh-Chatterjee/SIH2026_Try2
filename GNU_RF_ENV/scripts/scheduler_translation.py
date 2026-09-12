@@ -117,9 +117,21 @@ class GnuRfSchedulerTranslation:
         self.band_features = STATE_FEATURES_PER_BAND
         self.obs_dim = self.n_bands * self.band_features
 
+        if isinstance(deinterleaver_model, str):
+            try:
+                from deinterleaver_loader import load_deinterleaver
+                payload = load_deinterleaver()
+                deinterleaver_model = payload["model"]
+                if not deinterleaver_config:
+                    deinterleaver_config = payload["config"]
+            except Exception as e:
+                logger.error("Failed to auto-load deinterleaver model from string identifier %r: %s", deinterleaver_model, e)
+                raise
+
         self.deinterleaver_model = deinterleaver_model
         self.deinterleaver_config = dict(deinterleaver_config or {})
         self.perception_enabled = deinterleaver_model is not None
+        self.perception_state = "READY" if self.perception_enabled else "DISABLED"
 
         self.belief = BeliefState(self.n_bands)
         self.emitter_tracker: Optional[EmitterTracker] = None
@@ -288,5 +300,6 @@ class GnuRfSchedulerTranslation:
             return perception_result
 
         except Exception as exc:  # noqa: BLE001 — mirrors production env behavior
-            logger.warning("Perception pipeline failed: %s", exc)
+            self.perception_state = "FAILED"
+            logger.error("Perception pipeline crashed: %s", exc, exc_info=True)
             return None

@@ -1,0 +1,796 @@
+{
+  "experiment": "Phase 9D - Advantage-Pathway Micro-Calibration",
+  "timestamp": "2026-09-12T22:43:17.166097+00:00",
+  "git_commit": "2eabd98d70bfb28b830086e756b2598416d92cef",
+  "configuration": {
+    "total_steps": 500,
+    "eval_interval": 100,
+    "trainable_modules": [
+      "band_advantage_head"
+    ],
+    "trainable_params_count": 2245,
+    "frozen_modules": [
+      "input_norm",
+      "lstm",
+      "band_encoder",
+      "ctx_proj",
+      "value_stream",
+      "intercept_prob_head",
+      "intercept_time_head"
+    ],
+    "learning_rate": 1e-06,
+    "clip_grad_norm": 1.0,
+    "target_update_freq": 50
+  },
+  "provenance": {
+    "parent_checkpoint": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\safe_continuation_candidate\\checkpoint_step_25500.pt",
+      "sha256": "777de9b4760389e4eb1bc07e232d1ac6bd34af69e8e369b758893fb6c678e554"
+    },
+    "baseline_checkpoint": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+      "sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+    },
+    "reservoir": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\baseline_reservoir_5k.pkl",
+      "sha256": "edcef07b020563aefeac99fa3b03c2c6a474f07afdac7660e61e336523b8fe0c"
+    }
+  },
+  "parent_reference": {
+    "metrics": {
+      "seeds": [
+        42,
+        123,
+        999
+      ],
+      "mean_ir_mean": 62.1,
+      "mean_ir_std": 0.0,
+      "worst_case_ir_mean": 16.2,
+      "worst_case_ir_std": 0.0,
+      "agile_ir_mean": 49.974999999999994,
+      "sparse_ir_mean": 20.7,
+      "config_119_ir_mean": 25.2,
+      "config_119_ir_std": 0.0,
+      "config_119_mode2_frac_mean": 0.7399999999999999,
+      "pd_mean": 99.84194673430564,
+      "pfa_mean": 0.0,
+      "scenario_irs_mean": {
+        "config_117": 99.40000000000002,
+        "config_119": 25.2,
+        "config_143": 16.2,
+        "config_194": 88.7,
+        "config_195": 97.89999999999999,
+        "config_241": 20.1,
+        "config_29": 56.699999999999996,
+        "config_42": 65.7,
+        "config_64": 59.5,
+        "config_96": 91.60000000000001
+      },
+      "per_seed": {
+        "42": {
+          "mean_ir": 62.1,
+          "worst_case_ir": 16.2,
+          "agile_ir": 49.974999999999994,
+          "sparse_ir": 20.7,
+          "config_119_ir": 25.2,
+          "config_119_mode2_frac": 0.74,
+          "pd": 99.84194673430565,
+          "pfa": 0.0,
+          "scenario_irs": {
+            "config_117": 0.994,
+            "config_119": 0.252,
+            "config_143": 0.162,
+            "config_194": 0.887,
+            "config_195": 0.979,
+            "config_241": 0.201,
+            "config_29": 0.567,
+            "config_42": 0.657,
+            "config_64": 0.595,
+            "config_96": 0.916
+          }
+        },
+        "123": {
+          "mean_ir": 62.1,
+          "worst_case_ir": 16.2,
+          "agile_ir": 49.974999999999994,
+          "sparse_ir": 20.7,
+          "config_119_ir": 25.2,
+          "config_119_mode2_frac": 0.74,
+          "pd": 99.84194673430565,
+          "pfa": 0.0,
+          "scenario_irs": {
+            "config_117": 0.994,
+            "config_119": 0.252,
+            "config_143": 0.162,
+            "config_194": 0.887,
+            "config_195": 0.979,
+            "config_241": 0.201,
+            "config_29": 0.567,
+            "config_42": 0.657,
+            "config_64": 0.595,
+            "config_96": 0.916
+          }
+        },
+        "999": {
+          "mean_ir": 62.1,
+          "worst_case_ir": 16.2,
+          "agile_ir": 49.974999999999994,
+          "sparse_ir": 20.7,
+          "config_119_ir": 25.2,
+          "config_119_mode2_frac": 0.74,
+          "pd": 99.84194673430565,
+          "pfa": 0.0,
+          "scenario_irs": {
+            "config_117": 0.994,
+            "config_119": 0.252,
+            "config_143": 0.162,
+            "config_194": 0.887,
+            "config_195": 0.979,
+            "config_241": 0.201,
+            "config_29": 0.567,
+            "config_42": 0.657,
+            "config_64": 0.595,
+            "config_96": 0.916
+          }
+        }
+      }
+    },
+    "config_119_margin_audit": {
+      "scenario": "config_119",
+      "steps": 1000,
+      "hits": 252,
+      "intercept_rate": 0.252,
+      "mean_advantage_margin_m2_minus_m1": 0.27146384605020285,
+      "min_advantage_margin": -0.029530107975006104,
+      "max_advantage_margin": 0.7731492519378662,
+      "mode_distribution": {
+        "0": 0,
+        "1": 260,
+        "2": 740,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 0.74
+    }
+  },
+  "checkpoint_evaluations": {
+    "step_100": {
+      "step": 100,
+      "global_step": 25600,
+      "checkpoint": {
+        "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\phase9d_advantage_calib\\checkpoint_step_25600_phase9d.pt",
+        "sha256": "c4a955df461eddcbf55249f177cb6fec9edc3893819e7d67fba1765515a09a02"
+      },
+      "max_advantage_param_diff": 2.5045883376151323e-05,
+      "metrics": {
+        "seeds": [
+          42,
+          123,
+          999
+        ],
+        "mean_ir_mean": 62.1,
+        "mean_ir_std": 0.0,
+        "worst_case_ir_mean": 16.2,
+        "worst_case_ir_std": 0.0,
+        "agile_ir_mean": 49.974999999999994,
+        "sparse_ir_mean": 20.7,
+        "config_119_ir_mean": 25.2,
+        "config_119_ir_std": 0.0,
+        "config_119_mode2_frac_mean": 0.7399999999999999,
+        "pd_mean": 99.84194673430564,
+        "pfa_mean": 0.0,
+        "scenario_irs_mean": {
+          "config_117": 99.40000000000002,
+          "config_119": 25.2,
+          "config_143": 16.2,
+          "config_194": 88.7,
+          "config_195": 97.89999999999999,
+          "config_241": 20.1,
+          "config_29": 56.699999999999996,
+          "config_42": 65.7,
+          "config_64": 59.5,
+          "config_96": 91.60000000000001
+        },
+        "per_seed": {
+          "42": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          },
+          "123": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          },
+          "999": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          }
+        }
+      },
+      "config_119_margin_audit": {
+        "scenario": "config_119",
+        "steps": 1000,
+        "hits": 252,
+        "intercept_rate": 0.252,
+        "mean_advantage_margin_m2_minus_m1": 0.27153768980503085,
+        "min_advantage_margin": -0.029473135247826576,
+        "max_advantage_margin": 0.7732512950897217,
+        "mode_distribution": {
+          "0": 0,
+          "1": 260,
+          "2": 740,
+          "3": 0,
+          "4": 0
+        },
+        "mode2_fraction": 0.74
+      },
+      "sentinel_passed": true,
+      "violations": []
+    },
+    "step_200": {
+      "step": 200,
+      "global_step": 25700,
+      "checkpoint": {
+        "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\phase9d_advantage_calib\\checkpoint_step_25700_phase9d.pt",
+        "sha256": "e9eb371072bb483bd43efbfad5a65443989cd98edf2b31958bf5e27c6b290a97"
+      },
+      "max_advantage_param_diff": 5.000550299882889e-05,
+      "metrics": {
+        "seeds": [
+          42,
+          123,
+          999
+        ],
+        "mean_ir_mean": 62.1,
+        "mean_ir_std": 0.0,
+        "worst_case_ir_mean": 16.2,
+        "worst_case_ir_std": 0.0,
+        "agile_ir_mean": 49.974999999999994,
+        "sparse_ir_mean": 20.7,
+        "config_119_ir_mean": 25.2,
+        "config_119_ir_std": 0.0,
+        "config_119_mode2_frac_mean": 0.7399999999999999,
+        "pd_mean": 99.84194673430564,
+        "pfa_mean": 0.0,
+        "scenario_irs_mean": {
+          "config_117": 99.40000000000002,
+          "config_119": 25.2,
+          "config_143": 16.2,
+          "config_194": 88.7,
+          "config_195": 97.89999999999999,
+          "config_241": 20.1,
+          "config_29": 56.699999999999996,
+          "config_42": 65.7,
+          "config_64": 59.5,
+          "config_96": 91.60000000000001
+        },
+        "per_seed": {
+          "42": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          },
+          "123": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          },
+          "999": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          }
+        }
+      },
+      "config_119_margin_audit": {
+        "scenario": "config_119",
+        "steps": 1000,
+        "hits": 252,
+        "intercept_rate": 0.252,
+        "mean_advantage_margin_m2_minus_m1": 0.271503247410059,
+        "min_advantage_margin": -0.02944277971982956,
+        "max_advantage_margin": 0.773108720779419,
+        "mode_distribution": {
+          "0": 0,
+          "1": 260,
+          "2": 740,
+          "3": 0,
+          "4": 0
+        },
+        "mode2_fraction": 0.74
+      },
+      "sentinel_passed": true,
+      "violations": []
+    },
+    "step_300": {
+      "step": 300,
+      "global_step": 25800,
+      "checkpoint": {
+        "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\phase9d_advantage_calib\\checkpoint_step_25800_phase9d.pt",
+        "sha256": "a5955245b3437e8c16f5ed4ec75faffd4d2349de57690203f1a0c223e2d7f334"
+      },
+      "max_advantage_param_diff": 7.407832890748978e-05,
+      "metrics": {
+        "seeds": [
+          42,
+          123,
+          999
+        ],
+        "mean_ir_mean": 62.1,
+        "mean_ir_std": 0.0,
+        "worst_case_ir_mean": 16.2,
+        "worst_case_ir_std": 0.0,
+        "agile_ir_mean": 49.974999999999994,
+        "sparse_ir_mean": 20.7,
+        "config_119_ir_mean": 25.2,
+        "config_119_ir_std": 0.0,
+        "config_119_mode2_frac_mean": 0.7399999999999999,
+        "pd_mean": 99.84194673430564,
+        "pfa_mean": 0.0,
+        "scenario_irs_mean": {
+          "config_117": 99.40000000000002,
+          "config_119": 25.2,
+          "config_143": 16.2,
+          "config_194": 88.7,
+          "config_195": 97.89999999999999,
+          "config_241": 20.1,
+          "config_29": 56.699999999999996,
+          "config_42": 65.7,
+          "config_64": 59.5,
+          "config_96": 91.60000000000001
+        },
+        "per_seed": {
+          "42": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          },
+          "123": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          },
+          "999": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          }
+        }
+      },
+      "config_119_margin_audit": {
+        "scenario": "config_119",
+        "steps": 1000,
+        "hits": 252,
+        "intercept_rate": 0.252,
+        "mean_advantage_margin_m2_minus_m1": 0.27145495162531735,
+        "min_advantage_margin": -0.029415760189294815,
+        "max_advantage_margin": 0.7729346752166748,
+        "mode_distribution": {
+          "0": 0,
+          "1": 260,
+          "2": 740,
+          "3": 0,
+          "4": 0
+        },
+        "mode2_fraction": 0.74
+      },
+      "sentinel_passed": true,
+      "violations": []
+    },
+    "step_400": {
+      "step": 400,
+      "global_step": 25900,
+      "checkpoint": {
+        "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\phase9d_advantage_calib\\checkpoint_step_25900_phase9d.pt",
+        "sha256": "ab2cb5afef15ebfb9e5e4c27bc5c6e570cdd75355195e9bc6c9c478dd2aab846"
+      },
+      "max_advantage_param_diff": 9.889807552099228e-05,
+      "metrics": {
+        "seeds": [
+          42,
+          123,
+          999
+        ],
+        "mean_ir_mean": 62.1,
+        "mean_ir_std": 0.0,
+        "worst_case_ir_mean": 16.2,
+        "worst_case_ir_std": 0.0,
+        "agile_ir_mean": 49.974999999999994,
+        "sparse_ir_mean": 20.7,
+        "config_119_ir_mean": 25.2,
+        "config_119_ir_std": 0.0,
+        "config_119_mode2_frac_mean": 0.7399999999999999,
+        "pd_mean": 99.84194673430564,
+        "pfa_mean": 0.0,
+        "scenario_irs_mean": {
+          "config_117": 99.40000000000002,
+          "config_119": 25.2,
+          "config_143": 16.2,
+          "config_194": 88.7,
+          "config_195": 97.89999999999999,
+          "config_241": 20.1,
+          "config_29": 56.699999999999996,
+          "config_42": 65.7,
+          "config_64": 59.5,
+          "config_96": 91.60000000000001
+        },
+        "per_seed": {
+          "42": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          },
+          "123": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          },
+          "999": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          }
+        }
+      },
+      "config_119_margin_audit": {
+        "scenario": "config_119",
+        "steps": 1000,
+        "hits": 252,
+        "intercept_rate": 0.252,
+        "mean_advantage_margin_m2_minus_m1": 0.2714678253903985,
+        "min_advantage_margin": -0.029374506324529648,
+        "max_advantage_margin": 0.7729003429412842,
+        "mode_distribution": {
+          "0": 0,
+          "1": 260,
+          "2": 740,
+          "3": 0,
+          "4": 0
+        },
+        "mode2_fraction": 0.74
+      },
+      "sentinel_passed": true,
+      "violations": []
+    },
+    "step_500": {
+      "step": 500,
+      "global_step": 26000,
+      "checkpoint": {
+        "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\phase9d_advantage_calib\\checkpoint_step_26000_phase9d.pt",
+        "sha256": "0f838b0379dcf888d48186873a5d42dfac956030f0e888e49b68ada5a876e88c"
+      },
+      "max_advantage_param_diff": 0.00012129917740821838,
+      "metrics": {
+        "seeds": [
+          42,
+          123,
+          999
+        ],
+        "mean_ir_mean": 62.1,
+        "mean_ir_std": 0.0,
+        "worst_case_ir_mean": 16.2,
+        "worst_case_ir_std": 0.0,
+        "agile_ir_mean": 49.974999999999994,
+        "sparse_ir_mean": 20.7,
+        "config_119_ir_mean": 25.2,
+        "config_119_ir_std": 0.0,
+        "config_119_mode2_frac_mean": 0.7399999999999999,
+        "pd_mean": 99.84194673430564,
+        "pfa_mean": 0.0,
+        "scenario_irs_mean": {
+          "config_117": 99.40000000000002,
+          "config_119": 25.2,
+          "config_143": 16.2,
+          "config_194": 88.7,
+          "config_195": 97.89999999999999,
+          "config_241": 20.1,
+          "config_29": 56.699999999999996,
+          "config_42": 65.7,
+          "config_64": 59.5,
+          "config_96": 91.60000000000001
+        },
+        "per_seed": {
+          "42": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          },
+          "123": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          },
+          "999": {
+            "mean_ir": 62.1,
+            "worst_case_ir": 16.2,
+            "agile_ir": 49.974999999999994,
+            "sparse_ir": 20.7,
+            "config_119_ir": 25.2,
+            "config_119_mode2_frac": 0.74,
+            "pd": 99.84194673430565,
+            "pfa": 0.0,
+            "scenario_irs": {
+              "config_117": 0.994,
+              "config_119": 0.252,
+              "config_143": 0.162,
+              "config_194": 0.887,
+              "config_195": 0.979,
+              "config_241": 0.201,
+              "config_29": 0.567,
+              "config_42": 0.657,
+              "config_64": 0.595,
+              "config_96": 0.916
+            }
+          }
+        }
+      },
+      "config_119_margin_audit": {
+        "scenario": "config_119",
+        "steps": 1000,
+        "hits": 252,
+        "intercept_rate": 0.252,
+        "mean_advantage_margin_m2_minus_m1": 0.2714953203778714,
+        "min_advantage_margin": -0.029329383745789528,
+        "max_advantage_margin": 0.7728986740112305,
+        "mode_distribution": {
+          "0": 0,
+          "1": 260,
+          "2": 740,
+          "3": 0,
+          "4": 0
+        },
+        "mode2_fraction": 0.74
+      },
+      "sentinel_passed": true,
+      "violations": []
+    }
+  },
+  "halt_due_to_rollback": false,
+  "rollback_reason": null,
+  "safety_assertions": {
+    "parent_unmodified": true,
+    "baseline_unmodified": true,
+    "frozen_parameters_drift_zero": true,
+    "non_trainable_gradients_none": true
+  }
+}

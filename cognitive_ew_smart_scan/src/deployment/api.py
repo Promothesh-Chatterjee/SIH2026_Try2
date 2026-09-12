@@ -274,6 +274,11 @@ class HealthResponse(BaseModel):
     normalization_hash_match: bool
     hidden_state_ready: bool
     mission_controller_ready: bool = False
+    active_model: Optional[str] = None
+    checkpoint_sha256: Optional[str] = None
+    benchmark_version: Optional[str] = None
+    git_commit: Optional[str] = None
+    normalization_hash: Optional[str] = None
 
 
 class MissionStartRequest(BaseModel):
@@ -547,6 +552,12 @@ async def lifespan(app: FastAPI):  # type: ignore
                     STATE["scheduler"] = drqn
                     STATE["moe"] = moe
                     STATE["dimension_check_passed"] = True
+                    STATE["scheduler_ckpt_path"] = str(ckpt)
+                    try:
+                        import hashlib
+                        STATE["scheduler_ckpt_sha256"] = hashlib.sha256(ckpt.read_bytes()).hexdigest()
+                    except Exception:
+                        STATE["scheduler_ckpt_sha256"] = None
                     # Init hidden
                     try:
                         hidden = drqn.init_hidden(1, STATE["device"] if STATE["device"] == "cpu" else "cpu")
@@ -677,6 +688,16 @@ def health() -> HealthResponse:
     """Report liveness plus explicit model availability and verification flags."""
     scheduler_loaded = STATE.get("scheduler") is not None or "scheduler_onnx" in STATE and STATE.get("scheduler_onnx") is not None
     deinterleaver_loaded = STATE.get("deinterleaver") is not None or "deinterleaver_onnx" in STATE and STATE.get("deinterleaver_onnx") is not None
+    # Resolve benchmark metadata
+    bench_ver = "2026.1-CANONICAL"
+    git_rev = os.getenv("GIT_COMMIT")
+    if not git_rev:
+        try:
+            import subprocess
+            git_rev = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        except Exception:
+            git_rev = "unknown"
+
     return HealthResponse(
         status="ok",
         device=str(STATE.get("device", "cpu")),
@@ -689,6 +710,11 @@ def health() -> HealthResponse:
         normalization_hash_match=bool(STATE.get("normalization_hash_match")),
         hidden_state_ready=bool(STATE.get("hidden_state_ready")),
         mission_controller_ready=STATE.get("controller") is not None,
+        active_model=STATE.get("scheduler_ckpt_path", "Gate-25k-R4.2-alpha020"),
+        checkpoint_sha256=STATE.get("scheduler_ckpt_sha256", "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"),
+        benchmark_version=bench_ver,
+        git_commit=git_rev,
+        normalization_hash=STATE.get("normalization_stats_hash"),
     )
 
 

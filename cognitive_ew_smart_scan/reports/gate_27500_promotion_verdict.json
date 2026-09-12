@@ -1,0 +1,20 @@
+{
+  "candidate_report": "cognitive_ew_smart_scan\\checkpoints\\safe_continuation_candidate\\gate_27500_report.json",
+  "promoted": false,
+  "verdict": "REJECT: Candidate Mean IR (48.65%) below baseline (60.45%) without required robustness offset",
+  "metrics": {
+    "mean_ir": 48.650000000000006,
+    "agile_ir": 8.95,
+    "sparse_ir": 1.25,
+    "worst_case_ir": 50.0
+  },
+  "baseline": {
+    "mean_ir": 60.45,
+    "agile_ir": 46.7,
+    "sparse_ir": 17.6,
+    "worst_case_ir": 12.4,
+    "pfa": 0.0,
+    "distinct_bands": 29.9,
+    "action_entropy": 2.06
+  }
+}

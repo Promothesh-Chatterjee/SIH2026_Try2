@@ -312,9 +312,18 @@ class CognitiveRFScanEnv(gym.Env):
         self.records_provider = records_provider
 
         # Perception configuration
-        self.deinterleaver_model = deinterleaver_model
+        if isinstance(deinterleaver_model, str):
+            try:
+                from src.models.deinterleaver_loader import load_deinterleaver
+                self.deinterleaver_model = load_deinterleaver(deinterleaver_model, device=self.deinterleaver_config.get("device", "cpu") if deinterleaver_config else "cpu")
+            except Exception as exc:
+                logger.error("Failed to load deinterleaver model '%s': %s", deinterleaver_model, exc)
+                self.deinterleaver_model = None
+        else:
+            self.deinterleaver_model = deinterleaver_model
         self.deinterleaver_config = deinterleaver_config or {}
-        self.perception_enabled = deinterleaver_model is not None
+        self.perception_enabled = self.deinterleaver_model is not None
+        self.perception_state = "READY" if self.perception_enabled else "DISABLED"
 
         # Semantic memory configuration: enabled by default unless explicitly disabled in config
         self.semantic_memory_enabled: bool = bool(config.get("semantic_memory_enabled", True))
@@ -359,6 +368,7 @@ class CognitiveRFScanEnv(gym.Env):
         # Complete config-driven reward component weights.
         reward_cfg = config.get("reward", {})
         self.reward_version = str(reward_cfg.get("version", config.get("reward_version", "v2")))
+        self.reward_variant = str(reward_cfg.get("variant", config.get("reward_variant", "baseline")))
         self.w_hit_novel_v2 = float(reward_cfg.get("w_hit_novel", 10.0))
         self.w_hit_repeat_v2 = float(reward_cfg.get("w_hit_repeat", 8.0))
         self.w_latency_v2 = float(reward_cfg.get("w_latency_v2", reward_cfg.get("w_latency", 5.0)))
@@ -793,6 +803,7 @@ class CognitiveRFScanEnv(gym.Env):
                 w_false_alarm=self.w_false_alarm_v2,
                 w_redundant=self.w_redundant_v2,
                 w_dwell_cost=self.w_dwell_cost_v2,
+                reward_variant=self.reward_variant,
             )
         else:
             reward_components = receiver_reward_components(
@@ -1143,7 +1154,8 @@ class CognitiveRFScanEnv(gym.Env):
             return perception_result
 
         except Exception as exc:
-            logger.warning("Perception pipeline failed: %s", exc)
+            self.perception_state = "FAILED"
+            logger.error("Perception pipeline crashed: %s", exc, exc_info=True)
             return None
 
     def _update_semantic_memory(self) -> None:

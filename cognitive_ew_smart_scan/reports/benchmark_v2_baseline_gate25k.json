@@ -1,0 +1,29 @@
+{
+  "benchmark_version": "2026.1-CANONICAL",
+  "designation": "Gate-25k-R4.2-alpha020",
+  "status": "OFFICIAL_OPERATIONAL_CANDIDATE_CONFIRMED",
+  "checkpoint_source": "cognitive_ew_smart_scan/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt",
+  "checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+  "seed": 42,
+  "metrics": {
+    "drqn_mean_ir_pct": 60.45,
+    "drqn_median_ir_pct": 64.55,
+    "drqn_worst_case_ir_pct": 12.4,
+    "drqn_agile_ir_pct": 46.7,
+    "drqn_sparse_ir_pct": 17.6,
+    "config_29_fast_hopper_ir_pct": 49.8,
+    "config_241_hopper_ir_pct": 16.9,
+    "config_119_sparse_ir_pct": 22.8,
+    "config_143_sparse_ir_pct": 12.4,
+    "pd_pct": 99.85,
+    "pfa": 0.0,
+    "distinct_bands": 29.9
+  },
+  "baselines": {
+    "random_ir_pct": 3.37,
+    "round_robin_ir_pct": 3.49,
+    "highest_occupancy_heuristic_ir_pct": 47.64
+  },
+  "delta_vs_highest_occupancy_pct_points": 12.81,
+  "reproduction_verified": true
+}

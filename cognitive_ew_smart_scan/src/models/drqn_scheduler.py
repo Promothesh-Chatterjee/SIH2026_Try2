@@ -55,6 +55,7 @@ class DRQNScheduler(nn.Module):
         lstm_hidden: int = 256,
         lstm_layers: int = 2,
         n_modes: int | None = None,
+        detach_value_stream: bool = False,
     ) -> None:
         """Initialise DRQN.
 
@@ -66,6 +67,8 @@ class DRQNScheduler(nn.Module):
             lstm_hidden: LSTM hidden units.
             lstm_layers: LSTM depth.
             n_modes: Number of dwell modes (used only when n_actions is not given).
+            detach_value_stream: If True, detaches lstm_out before value_stream,
+                preventing value-stream TD gradients from backpropagating into shared LSTM/encoder.
         """
         super().__init__()
         self.obs_dim = obs_dim
@@ -76,6 +79,7 @@ class DRQNScheduler(nn.Module):
         self.n_actions = int(n_actions if n_actions is not None else n_actions_for(n_bands, n_modes))
         self.lstm_hidden = lstm_hidden
         self.lstm_layers = lstm_layers
+        self.detach_value_stream = detach_value_stream
 
         self.input_norm = nn.LayerNorm(obs_dim)
         self.lstm = nn.LSTM(
@@ -214,7 +218,8 @@ class DRQNScheduler(nn.Module):
         lstm_out, hidden_out = self.lstm(x, hidden)
 
         # Dueling combination
-        v = self.value_stream(lstm_out)  # (B,T,1)
+        h_value = lstm_out.detach() if self.detach_value_stream else lstm_out
+        v = self.value_stream(h_value)  # (B,T,1)
 
         if self.use_band_routing and (self.obs_dim == self.n_bands * self.band_features):
             # Phase 9B-R4-1: Band b evidence -> Band b advantage

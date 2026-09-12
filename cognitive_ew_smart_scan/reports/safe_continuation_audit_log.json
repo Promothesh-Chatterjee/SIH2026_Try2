@@ -1,0 +1,984 @@
+{
+  "rollback_events": [
+    {
+      "timestamp": "2026-09-12T17:14:17.182949+00:00",
+      "step": 26716,
+      "reasons": [
+        "Critical top-band dominance: 80.4% >= 80.0%"
+      ],
+      "failed_checkpoint": null,
+      "restored_to": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+      "telemetry": {
+        "q_diag": {
+          "q_mean": 2.3166723251342773,
+          "q_std": 8.117330551147461,
+          "q_min": -2.1357808113098145,
+          "q_max": 21.230241775512695,
+          "target_q_unclamped_mean": 1.0927276611328125,
+          "target_q_unclamped_max": 9.984957695007324,
+          "target_q_unclamped_min": -0.9302409291267395,
+          "td_mean": -1.625398874282837,
+          "td_std": 4.809115886688232,
+          "unclipped_grad_norm": 6.846717834472656,
+          "clipped_grad_norm": 5.000000953674316,
+          "param_norm": 49.74051009540043,
+          "has_nan": false,
+          "has_inf": false,
+          "diagnostic_warning": false,
+          "safety_halt": false,
+          "halt_reasons": [],
+          "warning_reasons": [],
+          "td_loss": 2.239902973175049,
+          "q_reg_loss": 0.03129299357533455
+        },
+        "action_diag": {
+          "window_size": 500,
+          "top_band_dominance": 0.804,
+          "unique_bands": 36,
+          "unique_modes": 5,
+          "band_entropy": 1.1759053513091557,
+          "mode_entropy": 0.23193196482276157,
+          "action_entropy": 1.2499113975766982,
+          "top1_action_pct": 0.804,
+          "top3_action_pct": 0.82,
+          "top5_action_pct": 0.832,
+          "repeat_streak": 31,
+          "max_repeat_streak": 101,
+          "diagnostic_warning": false,
+          "safety_halt": true,
+          "halt_reasons": [
+            "Critical top-band dominance: 80.4% >= 80.0%"
+          ],
+          "warning_reasons": []
+        },
+        "sampler": {
+          "requested_counts": {
+            "baseline_reservoir": 13,
+            "continuation_pool": 13,
+            "scenario_balanced": 5,
+            "high_td_error": 1
+          },
+          "actual_counts": {
+            "baseline_reservoir": 13,
+            "continuation_pool": 13,
+            "scenario_balanced": 5,
+            "high_td_error": 1
+          },
+          "deficits": {
+            "baseline_reservoir": 0,
+            "continuation_pool": 0,
+            "scenario_balanced": 0,
+            "high_td_error": 0
+          },
+          "actual_baseline_fraction": 0.40625,
+          "actual_continuation_fraction": 0.59375
+        }
+      }
+    },
+    {
+      "timestamp": "2026-09-12T19:26:59.104544+00:00",
+      "step": 25004,
+      "reasons": [
+        "Critical band starvation: 4 < 6 bands visited"
+      ],
+      "failed_checkpoint": null,
+      "restored_to": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+      "telemetry": {
+        "q_diag": {
+          "q_mean": 0.36403968930244446,
+          "q_std": 0.3581577241420746,
+          "q_min": -0.39283496141433716,
+          "q_max": 1.2307860851287842,
+          "target_q_unclamped_mean": 0.4339146316051483,
+          "target_q_unclamped_max": 1.150195598602295,
+          "target_q_unclamped_min": 0.10041207075119019,
+          "td_mean": -2.445753335952759,
+          "td_std": 6.306594371795654,
+          "unclipped_grad_norm": 0.701145350933075,
+          "clipped_grad_norm": 0.701145350933075,
+          "param_norm": 49.26085722047254,
+          "has_nan": false,
+          "has_inf": false,
+          "diagnostic_warning": false,
+          "safety_halt": false,
+          "halt_reasons": [],
+          "warning_reasons": [],
+          "total_loss": 3.5538249015808105,
+          "drqn_loss": 3.483799695968628,
+          "td_loss": 3.483799695968628,
+          "q_reg_loss": 9.287998182117008e-06,
+          "aux_loss": 0.7001596093177795,
+          "bce_loss": 0.6926050186157227,
+          "huber_loss": 0.00755457766354084,
+          "valid_bce_targets": 256,
+          "valid_time_targets": 59
+        },
+        "action_diag": {
+          "window_size": 4,
+          "global_top_band_dominance": 0.25,
+          "top_band_dominance": 0.25,
+          "per_scenario_top_band_dominance": 0.25,
+          "scenarios_in_window": [
+            "config_1199"
+          ],
+          "n_scenarios_in_window": 1,
+          "current_scenario_id": "config_1199",
+          "current_scenario_steps": 4,
+          "unique_bands": 4,
+          "unique_modes": 1,
+          "band_entropy": 1.3862943611158907,
+          "mode_entropy": -1.000088900581841e-12,
+          "action_entropy": 1.3862943611158907,
+          "top1_action_pct": 0.25,
+          "top3_action_pct": 0.75,
+          "top5_action_pct": 1.0,
+          "repeat_streak": 1,
+          "max_repeat_streak": 0,
+          "diagnostic_warning": false,
+          "safety_halt": true,
+          "halt_reasons": [
+            "Critical band starvation: 4 < 6 bands visited"
+          ],
+          "warning_reasons": []
+        },
+        "sampler": {
+          "requested_mode_counts": {
+            "0": 5,
+            "1": 8,
+            "2": 9,
+            "3": 5,
+            "4": 5
+          },
+          "actual_anchored_modes": {
+            "0": 5,
+            "1": 8,
+            "2": 9,
+            "3": 5,
+            "4": 5
+          },
+          "total_mode_transitions": {
+            "0": 11,
+            "1": 464,
+            "2": 13,
+            "3": 13,
+            "4": 11
+          },
+          "loss_mode_transitions": {
+            "0": 7,
+            "1": 219,
+            "2": 12,
+            "3": 10,
+            "4": 8
+          },
+          "multi_mode_sequence_count": 30,
+          "sequence_meta": [
+            {
+              "slot": 0,
+              "target_mode": 0,
+              "anchored": true,
+              "scenario_id": "config_505",
+              "modes_present": [
+                0,
+                1
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 1,
+              "target_mode": 0,
+              "anchored": true,
+              "scenario_id": "config_472",
+              "modes_present": [
+                0,
+                1
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 2,
+              "target_mode": 0,
+              "anchored": true,
+              "scenario_id": "config_2175",
+              "modes_present": [
+                0,
+                1,
+                4
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 3,
+              "target_mode": 0,
+              "anchored": true,
+              "scenario_id": "config_505",
+              "modes_present": [
+                0,
+                1
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 4,
+              "target_mode": 0,
+              "anchored": true,
+              "scenario_id": "config_2457",
+              "modes_present": [
+                0,
+                1,
+                2
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 5,
+              "target_mode": 1,
+              "anchored": true,
+              "scenario_id": "config_395",
+              "modes_present": [
+                1,
+                3
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 6,
+              "target_mode": 1,
+              "anchored": true,
+              "scenario_id": "config_1965",
+              "modes_present": [
+                0,
+                1
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 7,
+              "target_mode": 1,
+              "anchored": true,
+              "scenario_id": "config_472",
+              "modes_present": [
+                1
+              ],
+              "is_multi_mode": false
+            },
+            {
+              "slot": 8,
+              "target_mode": 1,
+              "anchored": true,
+              "scenario_id": "config_2175",
+              "modes_present": [
+                0,
+                1
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 9,
+              "target_mode": 1,
+              "anchored": true,
+              "scenario_id": "config_931",
+              "modes_present": [
+                1,
+                3
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 10,
+              "target_mode": 1,
+              "anchored": true,
+              "scenario_id": "config_2175",
+              "modes_present": [
+                1,
+                3
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 11,
+              "target_mode": 1,
+              "anchored": true,
+              "scenario_id": "config_1408",
+              "modes_present": [
+                1,
+                4
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 12,
+              "target_mode": 1,
+              "anchored": true,
+              "scenario_id": "config_2120",
+              "modes_present": [
+                1
+              ],
+              "is_multi_mode": false
+            },
+            {
+              "slot": 13,
+              "target_mode": 2,
+              "anchored": true,
+              "scenario_id": "config_1286",
+              "modes_present": [
+                1,
+                2
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 14,
+              "target_mode": 2,
+              "anchored": true,
+              "scenario_id": "config_395",
+              "modes_present": [
+                1,
+                2
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 15,
+              "target_mode": 2,
+              "anchored": true,
+              "scenario_id": "config_119",
+              "modes_present": [
+                1,
+                2
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 16,
+              "target_mode": 2,
+              "anchored": true,
+              "scenario_id": "config_505",
+              "modes_present": [
+                1,
+                2,
+                3
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 17,
+              "target_mode": 2,
+              "anchored": true,
+              "scenario_id": "config_931",
+              "modes_present": [
+                1,
+                2,
+                4
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 18,
+              "target_mode": 2,
+              "anchored": true,
+              "scenario_id": "config_832",
+              "modes_present": [
+                1,
+                2,
+                3
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 19,
+              "target_mode": 2,
+              "anchored": true,
+              "scenario_id": "config_2457",
+              "modes_present": [
+                0,
+                1,
+                2,
+                3
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 20,
+              "target_mode": 2,
+              "anchored": true,
+              "scenario_id": "config_1408",
+              "modes_present": [
+                1,
+                2
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 21,
+              "target_mode": 2,
+              "anchored": true,
+              "scenario_id": "config_472",
+              "modes_present": [
+                1,
+                2
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 22,
+              "target_mode": 3,
+              "anchored": true,
+              "scenario_id": "config_305",
+              "modes_present": [
+                1,
+                3
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 23,
+              "target_mode": 3,
+              "anchored": true,
+              "scenario_id": "config_1978",
+              "modes_present": [
+                1,
+                3
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 24,
+              "target_mode": 3,
+              "anchored": true,
+              "scenario_id": "config_2009",
+              "modes_present": [
+                1,
+                2,
+                3
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 25,
+              "target_mode": 3,
+              "anchored": true,
+              "scenario_id": "config_832",
+              "modes_present": [
+                1,
+                3
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 26,
+              "target_mode": 3,
+              "anchored": true,
+              "scenario_id": "config_119",
+              "modes_present": [
+                1,
+                3
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 27,
+              "target_mode": 4,
+              "anchored": true,
+              "scenario_id": "config_355",
+              "modes_present": [
+                1,
+                2,
+                4
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 28,
+              "target_mode": 4,
+              "anchored": true,
+              "scenario_id": "config_355",
+              "modes_present": [
+                1,
+                4
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 29,
+              "target_mode": 4,
+              "anchored": true,
+              "scenario_id": "config_1965",
+              "modes_present": [
+                1,
+                4
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 30,
+              "target_mode": 4,
+              "anchored": true,
+              "scenario_id": "config_2148",
+              "modes_present": [
+                1,
+                4
+              ],
+              "is_multi_mode": true
+            },
+            {
+              "slot": 31,
+              "target_mode": 4,
+              "anchored": true,
+              "scenario_id": "config_1286",
+              "modes_present": [
+                1,
+                3,
+                4
+              ],
+              "is_multi_mode": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "timestamp": "2026-09-12T19:31:43.445705+00:00",
+      "step": 25500,
+      "reasons": [
+        "Pd 99.84% < 99.85%"
+      ],
+      "failed_checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\safe_continuation_candidate\\checkpoint_step_25500.pt",
+      "restored_to": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+      "telemetry": {
+        "eval_res": {
+          "mean_ir": 62.1,
+          "median_ir": 62.6,
+          "worst_case_ir": 16.2,
+          "agile_ir": 49.974999999999994,
+          "sparse_ir": 20.7,
+          "pd": 99.84194673430565,
+          "pfa": 0.0,
+          "mode_selection_totals": {
+            "0": 0,
+            "1": 260,
+            "2": 9740,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_overall_fraction": 0.974,
+          "mode2_agile_sparse_fraction": 0.9480000000000001,
+          "distinct_bands_mean": 26.9,
+          "scenario_breakdown": {
+            "config_117": {
+              "intercept_rate": 0.994,
+              "hits": 994,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 4,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_119": {
+              "intercept_rate": 0.252,
+              "hits": 252,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 260,
+                "2": 740,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 0.74
+            },
+            "config_143": {
+              "intercept_rate": 0.162,
+              "hits": 162,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_194": {
+              "intercept_rate": 0.887,
+              "hits": 887,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 6,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_195": {
+              "intercept_rate": 0.979,
+              "hits": 979,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 7,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_241": {
+              "intercept_rate": 0.201,
+              "hits": 201,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_29": {
+              "intercept_rate": 0.567,
+              "hits": 567,
+              "steps": 1000,
+              "pd": 0.9947368421052631,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_42": {
+              "intercept_rate": 0.657,
+              "hits": 657,
+              "steps": 1000,
+              "pd": 0.9894578313253012,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_64": {
+              "intercept_rate": 0.595,
+              "hits": 595,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_96": {
+              "intercept_rate": 0.916,
+              "hits": 916,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            }
+          }
+        },
+        "q_diag": {
+          "q_mean": -5.35934591293335,
+          "q_std": 7.597763538360596,
+          "q_min": -12.673160552978516,
+          "q_max": 7.662454605102539,
+          "target_q_unclamped_mean": -9.872330665588379,
+          "target_q_unclamped_max": -0.13260245323181152,
+          "target_q_unclamped_min": -11.682350158691406,
+          "td_mean": 0.2107340395450592,
+          "td_std": 4.569906711578369,
+          "unclipped_grad_norm": 12.748074531555176,
+          "clipped_grad_norm": 5.000009059906006,
+          "param_norm": 61.87841833156382,
+          "has_nan": false,
+          "has_inf": false,
+          "diagnostic_warning": false,
+          "safety_halt": false,
+          "halt_reasons": [],
+          "warning_reasons": [],
+          "total_loss": 2.06904673576355,
+          "drqn_loss": 1.9861067533493042,
+          "td_loss": 1.9861067533493042,
+          "q_reg_loss": 0.04220831021666527,
+          "aux_loss": 0.40731698274612427,
+          "bce_loss": 0.39491117000579834,
+          "huber_loss": 0.012405822984874249,
+          "valid_bce_targets": 256,
+          "valid_time_targets": 91
+        }
+      }
+    },
+    {
+      "timestamp": "2026-09-12T19:35:04.414668+00:00",
+      "step": 26000,
+      "reasons": [
+        "Mean IR 60.41% < 60.45%",
+        "Agile IR 45.50% < 46.70%",
+        "Worst-case IR 7.00% < 12.40%"
+      ],
+      "failed_checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\safe_continuation_candidate\\checkpoint_step_26000.pt",
+      "restored_to": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\safe_continuation_candidate\\checkpoint_step_25500.pt",
+      "telemetry": {
+        "eval_res": {
+          "mean_ir": 60.410000000000004,
+          "median_ir": 62.6,
+          "worst_case_ir": 7.000000000000001,
+          "agile_ir": 45.5,
+          "sparse_ir": 12.1,
+          "pd": 99.85961327828797,
+          "pfa": 0.0,
+          "mode_selection_totals": {
+            "0": 0,
+            "1": 293,
+            "2": 9707,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_overall_fraction": 0.9707,
+          "mode2_agile_sparse_fraction": 0.9414,
+          "distinct_bands_mean": 26.9,
+          "scenario_breakdown": {
+            "config_117": {
+              "intercept_rate": 0.994,
+              "hits": 994,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 4,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_119": {
+              "intercept_rate": 0.07,
+              "hits": 70,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 293,
+                "2": 707,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 0.707
+            },
+            "config_143": {
+              "intercept_rate": 0.172,
+              "hits": 172,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_194": {
+              "intercept_rate": 0.887,
+              "hits": 887,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 6,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_195": {
+              "intercept_rate": 0.979,
+              "hits": 979,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 7,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_241": {
+              "intercept_rate": 0.201,
+              "hits": 201,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_29": {
+              "intercept_rate": 0.57,
+              "hits": 570,
+              "steps": 1000,
+              "pd": 0.9965034965034965,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_42": {
+              "intercept_rate": 0.657,
+              "hits": 657,
+              "steps": 1000,
+              "pd": 0.9894578313253012,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_64": {
+              "intercept_rate": 0.595,
+              "hits": 595,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            },
+            "config_96": {
+              "intercept_rate": 0.916,
+              "hits": 916,
+              "steps": 1000,
+              "pd": 1.0,
+              "pfa": 0.0,
+              "distinct_bands": 36,
+              "mode_distribution": {
+                "0": 0,
+                "1": 0,
+                "2": 1000,
+                "3": 0,
+                "4": 0
+              },
+              "mode2_fraction": 1.0
+            }
+          }
+        },
+        "q_diag": {
+          "q_mean": -1.5374172925949097,
+          "q_std": 13.378087997436523,
+          "q_min": -13.305315971374512,
+          "q_max": 23.842126846313477,
+          "target_q_unclamped_mean": -5.040441036224365,
+          "target_q_unclamped_max": 10.01883316040039,
+          "target_q_unclamped_min": -12.643396377563477,
+          "td_mean": 0.8553435802459717,
+          "td_std": 4.041909217834473,
+          "unclipped_grad_norm": 61.789154052734375,
+          "clipped_grad_norm": 5.000009059906006,
+          "param_norm": 61.99097825551872,
+          "has_nan": false,
+          "has_inf": false,
+          "diagnostic_warning": false,
+          "safety_halt": false,
+          "halt_reasons": [],
+          "warning_reasons": [],
+          "total_loss": 1.6549639701843262,
+          "drqn_loss": 1.5465056896209717,
+          "td_loss": 1.5465056896209717,
+          "q_reg_loss": 0.08169091492891312,
+          "aux_loss": 0.267673134803772,
+          "bce_loss": 0.25416985154151917,
+          "huber_loss": 0.01350327581167221,
+          "valid_bce_targets": 256,
+          "valid_time_targets": 64
+        }
+      }
+    }
+  ]
+}

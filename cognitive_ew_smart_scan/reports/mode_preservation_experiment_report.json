@@ -1,0 +1,403 @@
+{
+  "baseline_no_training": {
+    "eval_metrics": {
+      "scenario_results": {
+        "config_29": {
+          "category": "agile",
+          "intercept_rate": 0.588,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_241": {
+          "category": "agile",
+          "intercept_rate": 0.201,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_119": {
+          "category": "sparse",
+          "intercept_rate": 0.131,
+          "mode_distribution": {
+            "0": 0,
+            "1": 36,
+            "2": 964,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 0.964
+        },
+        "config_143": {
+          "category": "sparse",
+          "intercept_rate": 0.128,
+          "mode_distribution": {
+            "0": 0,
+            "1": 155,
+            "2": 845,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 0.845
+        },
+        "config_195": {
+          "category": "dense",
+          "intercept_rate": 0.979,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        }
+      },
+      "mean_ir": 0.40540000000000004,
+      "agile_ir": 0.39449999999999996,
+      "sparse_ir": 0.1295,
+      "dense_ir": 0.979
+    },
+    "mode2_weight_val": 0.2668815553188324
+  },
+  "arm_1_frozen_head": {
+    "arm_name": "Arm 1 (Frozen Head)",
+    "mean_drqn_loss": 1.8583144139051437,
+    "mean_anchor_loss": 0.0,
+    "weight_drift_max": 0.0,
+    "mode2_weight_val": 0.2668815553188324,
+    "eval_metrics": {
+      "scenario_results": {
+        "config_29": {
+          "category": "agile",
+          "intercept_rate": 0.576,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_241": {
+          "category": "agile",
+          "intercept_rate": 0.201,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_119": {
+          "category": "sparse",
+          "intercept_rate": 0.245,
+          "mode_distribution": {
+            "0": 0,
+            "1": 270,
+            "2": 730,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 0.73
+        },
+        "config_143": {
+          "category": "sparse",
+          "intercept_rate": 0.171,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_195": {
+          "category": "dense",
+          "intercept_rate": 0.979,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        }
+      },
+      "mean_ir": 0.43439999999999995,
+      "agile_ir": 0.38849999999999996,
+      "sparse_ir": 0.20800000000000002,
+      "dense_ir": 0.979
+    },
+    "mode_telemetry_sample": {
+      "step": 499,
+      "modes": {
+        "mode_0": {
+          "valid_samples": 5,
+          "masked_td_loss": 2.9121365547180176,
+          "masked_grad_norm": 0.0,
+          "has_zero_gradient": true
+        },
+        "mode_1": {
+          "valid_samples": 238,
+          "masked_td_loss": 1.3347644805908203,
+          "masked_grad_norm": 0.0,
+          "has_zero_gradient": true
+        },
+        "mode_2": {
+          "valid_samples": 4,
+          "masked_td_loss": 6.632113933563232,
+          "masked_grad_norm": 0.0,
+          "has_zero_gradient": true
+        },
+        "mode_3": {
+          "valid_samples": 2,
+          "masked_td_loss": 0.67341148853302,
+          "masked_grad_norm": 0.0,
+          "has_zero_gradient": true
+        },
+        "mode_4": {
+          "valid_samples": 7,
+          "masked_td_loss": 7.452319622039795,
+          "masked_grad_norm": 0.0,
+          "has_zero_gradient": true
+        }
+      }
+    }
+  },
+  "arm_2_regularized_head": {
+    "arm_name": "Arm 2 (Regularized Head)",
+    "mean_drqn_loss": 1.849055451989174,
+    "mean_anchor_loss": 0.0033687732679528607,
+    "weight_drift_max": 0.007901221513748169,
+    "mode2_weight_val": 0.26958751678466797,
+    "eval_metrics": {
+      "scenario_results": {
+        "config_29": {
+          "category": "agile",
+          "intercept_rate": 0.59,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_241": {
+          "category": "agile",
+          "intercept_rate": 0.201,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_119": {
+          "category": "sparse",
+          "intercept_rate": 0.07,
+          "mode_distribution": {
+            "0": 0,
+            "1": 92,
+            "2": 908,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 0.908
+        },
+        "config_143": {
+          "category": "sparse",
+          "intercept_rate": 0.172,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_195": {
+          "category": "dense",
+          "intercept_rate": 0.979,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        }
+      },
+      "mean_ir": 0.4024,
+      "agile_ir": 0.39549999999999996,
+      "sparse_ir": 0.121,
+      "dense_ir": 0.979
+    },
+    "mode_telemetry_sample": {
+      "step": 499,
+      "modes": {
+        "mode_0": {
+          "valid_samples": 5,
+          "masked_td_loss": 2.978963851928711,
+          "masked_grad_norm": 0.4811072051525116,
+          "has_zero_gradient": false
+        },
+        "mode_1": {
+          "valid_samples": 238,
+          "masked_td_loss": 1.3389052152633667,
+          "masked_grad_norm": 0.30196261405944824,
+          "has_zero_gradient": false
+        },
+        "mode_2": {
+          "valid_samples": 4,
+          "masked_td_loss": 6.427370071411133,
+          "masked_grad_norm": 0.567364513874054,
+          "has_zero_gradient": false
+        },
+        "mode_3": {
+          "valid_samples": 2,
+          "masked_td_loss": 0.7780873775482178,
+          "masked_grad_norm": 0.5840947031974792,
+          "has_zero_gradient": false
+        },
+        "mode_4": {
+          "valid_samples": 7,
+          "masked_td_loss": 7.122007846832275,
+          "masked_grad_norm": 0.4690310060977936,
+          "has_zero_gradient": false
+        }
+      }
+    }
+  },
+  "arm_3_stratified_replay": {
+    "arm_name": "Arm 3 (Stratified Replay)",
+    "mean_drqn_loss": 2.294674575448036,
+    "mean_anchor_loss": 0.0,
+    "weight_drift_max": 0.012475430965423584,
+    "mode2_weight_val": 0.26200199127197266,
+    "eval_metrics": {
+      "scenario_results": {
+        "config_29": {
+          "category": "agile",
+          "intercept_rate": 0.543,
+          "mode_distribution": {
+            "0": 0,
+            "1": 65,
+            "2": 935,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 0.935
+        },
+        "config_241": {
+          "category": "agile",
+          "intercept_rate": 0.201,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_119": {
+          "category": "sparse",
+          "intercept_rate": 0.3,
+          "mode_distribution": {
+            "0": 0,
+            "1": 211,
+            "2": 789,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 0.789
+        },
+        "config_143": {
+          "category": "sparse",
+          "intercept_rate": 0.186,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_195": {
+          "category": "dense",
+          "intercept_rate": 0.979,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        }
+      },
+      "mean_ir": 0.4418,
+      "agile_ir": 0.372,
+      "sparse_ir": 0.243,
+      "dense_ir": 0.979
+    },
+    "mode_telemetry_sample": {
+      "step": 499,
+      "modes": {
+        "mode_0": {
+          "valid_samples": 8,
+          "masked_td_loss": 1.7272067070007324,
+          "masked_grad_norm": 0.4957937002182007,
+          "has_zero_gradient": false
+        },
+        "mode_1": {
+          "valid_samples": 224,
+          "masked_td_loss": 1.83523428440094,
+          "masked_grad_norm": 0.713573694229126,
+          "has_zero_gradient": false
+        },
+        "mode_2": {
+          "valid_samples": 10,
+          "masked_td_loss": 2.647125005722046,
+          "masked_grad_norm": 0.11053535342216492,
+          "has_zero_gradient": false
+        },
+        "mode_3": {
+          "valid_samples": 8,
+          "masked_td_loss": 4.605627536773682,
+          "masked_grad_norm": 0.1568148136138916,
+          "has_zero_gradient": false
+        },
+        "mode_4": {
+          "valid_samples": 6,
+          "masked_td_loss": 1.5134013891220093,
+          "masked_grad_norm": 0.2652909457683563,
+          "has_zero_gradient": false
+        }
+      }
+    }
+  }
+}

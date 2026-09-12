@@ -1,0 +1,105 @@
+{
+  "status": "PASS",
+  "reservoir_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\baseline_reservoir_5k.pkl",
+  "sha256": "edcef07b020563aefeac99fa3b03c2c6a474f07afdac7660e61e336523b8fe0c",
+  "sha256_verified": true,
+  "total_transitions": 5000,
+  "n_episodes": 25,
+  "distinct_scenarios": 25,
+  "drqn_sequence_integrity": {
+    "all_episodes_ge_16_steps": true,
+    "min_episode_len": 200,
+    "max_episode_len": 200,
+    "boundary_done_enforced": true
+  },
+  "action_distribution": {
+    "unique_bands": 36,
+    "unique_modes": 5,
+    "unique_actions": 161,
+    "band_entropy": 3.346506297395923,
+    "mode_entropy": 0.30347710574189557,
+    "action_entropy": 3.622715600516855,
+    "top_band_dominance": 0.1302,
+    "top1_action_pct": 0.1286,
+    "top5_action_pct": 0.3768,
+    "unseen_action_combos_36x5": 19,
+    "band_counts": [
+      111,
+      110,
+      515,
+      103,
+      283,
+      190,
+      181,
+      98,
+      201,
+      275,
+      96,
+      95,
+      102,
+      90,
+      94,
+      92,
+      97,
+      115,
+      651,
+      103,
+      87,
+      94,
+      86,
+      85,
+      92,
+      88,
+      91,
+      88,
+      86,
+      85,
+      86,
+      86,
+      81,
+      89,
+      86,
+      88
+    ],
+    "mode_counts": [
+      76,
+      4708,
+      73,
+      73,
+      70
+    ]
+  },
+  "revisit_age": {
+    "overall_mean_revisit_steps": 23.46234509056244,
+    "overall_max_revisit_steps": 194
+  },
+  "duplicate_analysis": {
+    "exact_duplicate_rate": 0.0438,
+    "exact_duplicates": 219,
+    "semantic_duplicate_rate": 0.0,
+    "semantic_duplicates": 0
+  },
+  "hit_and_timing": {
+    "hit_rate_pct": 28.26,
+    "hit_count": 1413,
+    "time_valid_count": 1413,
+    "time_min_us": 0.0,
+    "time_max_us": 1040.23583984375,
+    "time_mean_us": 106.16160583496094
+  },
+  "observation_bounds": {
+    "finite_all": true,
+    "obs_min": 0.0,
+    "obs_max": 1.0,
+    "obs_mean": 0.298323392868042,
+    "obs_std": 0.3763909339904785
+  },
+  "reward_bounds": {
+    "reward_min": -4.010000228881836,
+    "reward_max": 16.95882797241211,
+    "reward_mean": 3.2052695751190186,
+    "reward_std": 6.780253887176514
+  },
+  "blocking_failures": [],
+  "warnings": []
+}

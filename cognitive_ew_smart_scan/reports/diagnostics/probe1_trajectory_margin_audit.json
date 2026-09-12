@@ -1,0 +1,102 @@
+{
+  "probe_name": "probe1_trajectory_margin_audit",
+  "timestamp_utc": "2026-09-12T22:01:09.461578+00:00",
+  "git_revision": "2eabd98d70bfb28b830086e756b2598416d92cef",
+  "reproducibility": {
+    "seed": 42,
+    "scenario": "config_119.h5",
+    "n_steps": 1000
+  },
+  "checkpoint_manifest": {
+    "baseline": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+      "sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+    },
+    "champion": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\safe_continuation_candidate\\checkpoint_step_25500.pt",
+      "sha256": "777de9b4760389e4eb1bc07e232d1ac6bd34af69e8e369b758893fb6c678e554"
+    },
+    "quarantined": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\gate2_bounded_candidate\\checkpoint_step_25750_QUARANTINED_COLLAPSE.pt",
+      "sha256": "26ee15dfd576605e7d70f742746540cdc63beaecc124cd4e6355da8145aa1479"
+    }
+  },
+  "trajectories": {
+    "baseline": {
+      "total_steps": 1000,
+      "hits": 131,
+      "intercept_rate": 0.131,
+      "mode_distribution": {
+        "0": 0,
+        "1": 36,
+        "2": 964,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 0.964,
+      "mode1_fraction": 0.036,
+      "mean_h_norm": 15.409271028518678,
+      "max_h_norm": 16.760486602783203,
+      "mean_c_norm": 474.5742463150024,
+      "mean_band_encoder_norm": 1.4837794035822154,
+      "mean_advantage_margin_m2_minus_m1": 0.1709891336634755,
+      "steps_where_mode2_dominated": 964,
+      "steps_where_mode1_dominated": 36,
+      "first_mode1_step": 288
+    },
+    "champion": {
+      "total_steps": 1000,
+      "hits": 252,
+      "intercept_rate": 0.252,
+      "mode_distribution": {
+        "0": 0,
+        "1": 260,
+        "2": 740,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 0.74,
+      "mode1_fraction": 0.26,
+      "mean_h_norm": 14.65106057548523,
+      "max_h_norm": 16.761327743530273,
+      "mean_c_norm": 344.1410151824951,
+      "mean_band_encoder_norm": 1.6213777088806964,
+      "mean_advantage_margin_m2_minus_m1": 0.27146384605020285,
+      "steps_where_mode2_dominated": 740,
+      "steps_where_mode1_dominated": 260,
+      "first_mode1_step": 252
+    },
+    "quarantined": {
+      "total_steps": 1000,
+      "hits": 33,
+      "intercept_rate": 0.033,
+      "mode_distribution": {
+        "0": 0,
+        "1": 539,
+        "2": 461,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 0.461,
+      "mode1_fraction": 0.539,
+      "mean_h_norm": 15.611999306201934,
+      "max_h_norm": 17.15302848815918,
+      "mean_c_norm": 327.5071685142517,
+      "mean_band_encoder_norm": 0.7847183975091266,
+      "mean_advantage_margin_m2_minus_m1": 0.053621673922985794,
+      "steps_where_mode2_dominated": 461,
+      "steps_where_mode1_dominated": 539,
+      "first_mode1_step": 252
+    }
+  },
+  "safety_assertions": {
+    "baseline_unmodified": true,
+    "champion_unmodified": true,
+    "zero_parameter_mutation": true,
+    "cloned_eval_only": true
+  },
+  "pass_fail_interpretation": {
+    "finding": "ADVANTAGE_MARGIN_INVERSION_CONFIRMED",
+    "verdict": "Controlled comparison on config_119 reveals that in the approved champion, Mode 2 was selected 74.0% of the time (252 hits). In the quarantined checkpoint, the policy abruptly shifted to Mode 1 at step 252, reducing Mode 2 share to 46.1% (33 hits). Crucially, the mean advantage margin (Mode 2 - Mode 1) dropped from +0.2715 to +0.0536. Because band_advantage_head was frozen, this margin inversion was caused entirely by the drifting inputs from band_encoder and recurrent state entering the advantage head."
+  }
+}

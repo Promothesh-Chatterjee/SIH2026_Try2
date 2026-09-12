@@ -646,7 +646,7 @@ class StagedGateEvaluator:
             else:
                 verdict = "PASS"
                 notes = f"Gate {gate} PASS. DRQN expanded distinct bands to {drqn_p.get('distinct_bands', 0):.1f}/36 with intercept rate {drqn_p.get('intercept_rate', 0)*100:.2f}%."
-        elif gate in (25000, 25500, 30000, 35000, 50000, 75000, 100000):
+        elif gate in (25000, 25500, 27500, 30000, 32500, 35000, 37500, 40000, 50000, 75000, 100000):
             drqn_p = policies_agg.get("drqn", {})
             moe_p = policies_agg.get("full_moe", {})
             rand_p = policies_agg.get("random", {})

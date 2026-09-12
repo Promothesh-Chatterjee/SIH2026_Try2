@@ -1,0 +1,201 @@
+{
+  "experiment": "phase9c_arm_b_reward_normalization",
+  "timestamp_utc": "2026-09-12T21:02:41.311549+00:00",
+  "git_commit": "2eabd98d70bfb28b830086e756b2598416d92cef",
+  "reproducibility": {
+    "seeds": [
+      42,
+      123,
+      999
+    ],
+    "steps_per_scenario": 1000,
+    "training_steps": 250,
+    "learning_rate": 2.5e-05,
+    "advantage_head_frozen": true,
+    "replay_strategy": "baseline"
+  },
+  "provenance": {
+    "parent_checkpoint": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\safe_continuation_candidate\\checkpoint_step_25500.pt",
+      "sha256": "777de9b4760389e4eb1bc07e232d1ac6bd34af69e8e369b758893fb6c678e554"
+    },
+    "baseline_checkpoint": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+      "sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+    },
+    "reservoir": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\baseline_reservoir_5k.pkl",
+      "sha256": "edcef07b020563aefeac99fa3b03c2c6a474f07afdac7660e61e336523b8fe0c"
+    }
+  },
+  "multi_seed_evaluations": {
+    "variant_b1_baseline_reward": {
+      "seeds": [
+        42,
+        123,
+        999
+      ],
+      "mean_ir_mean": 60.21,
+      "mean_ir_std": 0.0,
+      "worst_case_ir_mean": 5.1,
+      "worst_case_ir_std": 0.0,
+      "config_119_ir_mean": 5.1,
+      "config_119_ir_std": 0.0,
+      "config_119_mode2_frac_mean": 0.547,
+      "per_seed": {
+        "42": {
+          "mean_ir": 60.21,
+          "worst_case_ir": 5.1,
+          "agile_ir": 45.3,
+          "sparse_ir": 10.55,
+          "config_119_ir": 5.1,
+          "config_119_mode2_frac": 0.547,
+          "pd": 99.86027299592884,
+          "pfa": 0.0,
+          "scenario_irs": {
+            "config_117": 0.994,
+            "config_119": 0.051,
+            "config_143": 0.16,
+            "config_194": 0.887,
+            "config_195": 0.979,
+            "config_241": 0.201,
+            "config_29": 0.581,
+            "config_42": 0.657,
+            "config_64": 0.595,
+            "config_96": 0.916
+          }
+        },
+        "123": {
+          "mean_ir": 60.21,
+          "worst_case_ir": 5.1,
+          "agile_ir": 45.3,
+          "sparse_ir": 10.55,
+          "config_119_ir": 5.1,
+          "config_119_mode2_frac": 0.547,
+          "pd": 99.86027299592884,
+          "pfa": 0.0,
+          "scenario_irs": {
+            "config_117": 0.994,
+            "config_119": 0.051,
+            "config_143": 0.16,
+            "config_194": 0.887,
+            "config_195": 0.979,
+            "config_241": 0.201,
+            "config_29": 0.581,
+            "config_42": 0.657,
+            "config_64": 0.595,
+            "config_96": 0.916
+          }
+        },
+        "999": {
+          "mean_ir": 60.21,
+          "worst_case_ir": 5.1,
+          "agile_ir": 45.3,
+          "sparse_ir": 10.55,
+          "config_119_ir": 5.1,
+          "config_119_mode2_frac": 0.547,
+          "pd": 99.86027299592884,
+          "pfa": 0.0,
+          "scenario_irs": {
+            "config_117": 0.994,
+            "config_119": 0.051,
+            "config_143": 0.16,
+            "config_194": 0.887,
+            "config_195": 0.979,
+            "config_241": 0.201,
+            "config_29": 0.581,
+            "config_42": 0.657,
+            "config_64": 0.595,
+            "config_96": 0.916
+          }
+        }
+      }
+    },
+    "variant_b2_dwell_cost_normalized": {
+      "seeds": [
+        42,
+        123,
+        999
+      ],
+      "mean_ir_mean": 60.21,
+      "mean_ir_std": 0.0,
+      "worst_case_ir_mean": 5.1,
+      "worst_case_ir_std": 0.0,
+      "config_119_ir_mean": 5.1,
+      "config_119_ir_std": 0.0,
+      "config_119_mode2_frac_mean": 0.547,
+      "per_seed": {
+        "42": {
+          "mean_ir": 60.21,
+          "worst_case_ir": 5.1,
+          "agile_ir": 45.3,
+          "sparse_ir": 10.55,
+          "config_119_ir": 5.1,
+          "config_119_mode2_frac": 0.547,
+          "pd": 99.86027299592884,
+          "pfa": 0.0,
+          "scenario_irs": {
+            "config_117": 0.994,
+            "config_119": 0.051,
+            "config_143": 0.16,
+            "config_194": 0.887,
+            "config_195": 0.979,
+            "config_241": 0.201,
+            "config_29": 0.581,
+            "config_42": 0.657,
+            "config_64": 0.595,
+            "config_96": 0.916
+          }
+        },
+        "123": {
+          "mean_ir": 60.21,
+          "worst_case_ir": 5.1,
+          "agile_ir": 45.3,
+          "sparse_ir": 10.55,
+          "config_119_ir": 5.1,
+          "config_119_mode2_frac": 0.547,
+          "pd": 99.86027299592884,
+          "pfa": 0.0,
+          "scenario_irs": {
+            "config_117": 0.994,
+            "config_119": 0.051,
+            "config_143": 0.16,
+            "config_194": 0.887,
+            "config_195": 0.979,
+            "config_241": 0.201,
+            "config_29": 0.581,
+            "config_42": 0.657,
+            "config_64": 0.595,
+            "config_96": 0.916
+          }
+        },
+        "999": {
+          "mean_ir": 60.21,
+          "worst_case_ir": 5.1,
+          "agile_ir": 45.3,
+          "sparse_ir": 10.55,
+          "config_119_ir": 5.1,
+          "config_119_mode2_frac": 0.547,
+          "pd": 99.86027299592884,
+          "pfa": 0.0,
+          "scenario_irs": {
+            "config_117": 0.994,
+            "config_119": 0.051,
+            "config_143": 0.16,
+            "config_194": 0.887,
+            "config_195": 0.979,
+            "config_241": 0.201,
+            "config_29": 0.581,
+            "config_42": 0.657,
+            "config_64": 0.595,
+            "config_96": 0.916
+          }
+        }
+      }
+    }
+  },
+  "safety_assertions": {
+    "parent_unmodified": true,
+    "baseline_unmodified": true
+  }
+}

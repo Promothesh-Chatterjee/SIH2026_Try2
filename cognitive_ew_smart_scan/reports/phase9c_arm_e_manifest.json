@@ -1,0 +1,51 @@
+{
+  "manifest_version": "1.0",
+  "status": "VALIDATED_CONTINUATION_CANDIDATE",
+  "checkpoint_filename": "checkpoint_step_26000_arme.pt",
+  "checkpoint_path": "cognitive_ew_smart_scan\\checkpoints\\phase9c_synthesis_arme\\checkpoint_step_26000_arme.pt",
+  "checkpoint_sha256": "88a7c6261b96d7ecfeba87d190fb843ac06f45c86e012f913e9c095ef370b53f",
+  "training_step": 26000,
+  "parent_champion": {
+    "name": "checkpoint_step_25500.pt",
+    "sha256": "777de9b4760389e4eb1bc07e232d1ac6bd34af69e8e369b758893fb6c678e554",
+    "status": "IMMUTABLE_PRODUCTION_CHAMPION"
+  },
+  "fallback_baseline": {
+    "name": "checkpoint_gate_25000_frozen.pt",
+    "sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+    "status": "IMMUTABLE_FALLBACK"
+  },
+  "quarantined_checkpoints": [
+    "checkpoint_step_25750_QUARANTINED_COLLAPSE.pt",
+    "checkpoint_step_26000_QUARANTINED_COLLAPSE.pt"
+  ],
+  "configuration": {
+    "replay_strategy": "sparse_balanced",
+    "reward_variant": "baseline",
+    "detach_value_stream": false,
+    "freeze_shared_representation": true,
+    "freeze_band_advantage_head": true,
+    "trainable_modules": [
+      "value_stream",
+      "intercept_prob_head",
+      "intercept_time_head"
+    ],
+    "learning_rate": 2.5e-05
+  },
+  "performance_metrics": {
+    "mean_ir": 62.1,
+    "agile_ir": 49.97,
+    "worst_case_ir": 16.2,
+    "sparse_config_119_ir": 25.2,
+    "sparse_config_119_mode2_share": 0.74,
+    "decision_pd": 99.84,
+    "pfa": 0.0,
+    "advantage_margin_m2_minus_m1": 0.2715
+  },
+  "audit_findings": {
+    "value_stream_delta_w_max": 0.003258,
+    "intercept_prob_delta_w_max": 0.003349,
+    "frozen_parameters_drift": 0.0,
+    "policy_relationship": "MATHEMATICALLY_LOCKED_POLICY_PRESERVING_CONTINUATION"
+  }
+}

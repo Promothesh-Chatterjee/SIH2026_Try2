@@ -1,0 +1,87 @@
+{
+  "step": 25000,
+  "top_band_dominance": 0.1849,
+  "unique_bands": 36,
+  "band_entropy": 3.0000338781873914,
+  "q_max": 1.350538730621338,
+  "target_q_unclamped_max": 1.350538730621338,
+  "gradient_norm": 0.0,
+  "reward_components": {
+    "reward_hit": 66610.02976562509,
+    "reward_novel": 0.0,
+    "reward_miss": 0.0,
+    "reward_false_alarm": -5535.230000000696,
+    "reward_dwell_cost": 0.0,
+    "reward_redundant": 0.0
+  },
+  "scenario_metrics": {
+    "config_117": {
+      "intercept_rate": 0.882,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36.0
+    },
+    "config_119": {
+      "intercept_rate": 0.001,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36.0
+    },
+    "config_143": {
+      "intercept_rate": 0.003,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36.0
+    },
+    "config_194": {
+      "intercept_rate": 0.995,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36.0
+    },
+    "config_195": {
+      "intercept_rate": 0.866,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36.0
+    },
+    "config_241": {
+      "intercept_rate": 0.09,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36.0
+    },
+    "config_29": {
+      "intercept_rate": 0.04,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36.0
+    },
+    "config_42": {
+      "intercept_rate": 0.436,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36.0
+    },
+    "config_64": {
+      "intercept_rate": 0.801,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36.0
+    },
+    "config_96": {
+      "intercept_rate": 0.613,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36.0
+    }
+  },
+  "summary": {
+    "mean_ir": 47.27,
+    "agile_ir": 6.5,
+    "sparse_ir": 0.2,
+    "worst_case_ir": 0.1,
+    "safety_halt": false,
+    "diagnostic_warning": false
+  }
+}

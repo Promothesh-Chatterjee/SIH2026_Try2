@@ -3,74 +3,74 @@
   "mode": "scan",
   "splits": {
     "train": {
-      "directory": "D:\\TSRD\\scan\\train",
+      "directory": "D:\\TSRD\\scan\\train_scan",
       "file_count": 2,
-      "total_pulses": 1248,
-      "structurally_valid_files": 0,
+      "total_pulses": 288898,
+      "structurally_valid_files": 2,
       "empty_files": 0,
-      "training_eligible": 0,
-      "evaluation_eligible": 0,
+      "training_eligible": 2,
+      "evaluation_eligible": 2,
       "files": [
         {
-          "path": "scan/train/synthetic_000.h5",
-          "filename": "synthetic_000.h5",
-          "size_bytes": 17024,
-          "sha256": "e5fde060f8b11a4cba970bca9678616414e52062180ae3eb48bc8b1997b3968c",
-          "num_pulses": 624,
-          "num_emitters": 5,
-          "duration_s": 0.05,
-          "structurally_valid": false,
+          "path": "scan/train_scan/config_0.h5",
+          "filename": "config_0.h5",
+          "size_bytes": 3629191,
+          "sha256": "761bea81f6231dff9745f2b17a5c335d1aefd1ceb98b83239c49e7495c9bf8ad",
+          "num_pulses": 169617,
+          "num_emitters": 72,
+          "duration_s": 28.995,
+          "structurally_valid": true,
           "empty_scenario": false,
-          "training_eligible": false,
-          "evaluation_eligible": false
+          "training_eligible": true,
+          "evaluation_eligible": true
         },
         {
-          "path": "scan/train/synthetic_001.h5",
-          "filename": "synthetic_001.h5",
-          "size_bytes": 17024,
-          "sha256": "84b1f32d6f1750f06099dbce7b90b8a860f533815ee03f05878541b498a98912",
-          "num_pulses": 624,
-          "num_emitters": 5,
-          "duration_s": 0.05,
-          "structurally_valid": false,
+          "path": "scan/train_scan/config_1.h5",
+          "filename": "config_1.h5",
+          "size_bytes": 2302672,
+          "sha256": "c4c813769124ba489b7f46dd7c88bb1fc41f987e6a31e55698cdfbeb26c1d927",
+          "num_pulses": 119281,
+          "num_emitters": 37,
+          "duration_s": 28.558,
+          "structurally_valid": true,
           "empty_scenario": false,
-          "training_eligible": false,
-          "evaluation_eligible": false
+          "training_eligible": true,
+          "evaluation_eligible": true
         }
       ]
     },
     "val": {
-      "directory": "D:\\TSRD\\scan\\val",
+      "directory": "D:\\TSRD\\scan\\val_scan",
       "file_count": 1,
-      "total_pulses": 624,
-      "structurally_valid_files": 0,
+      "total_pulses": 79340,
+      "structurally_valid_files": 1,
       "empty_files": 0,
-      "training_eligible": 0,
-      "evaluation_eligible": 0,
+      "training_eligible": 1,
+      "evaluation_eligible": 1,
       "files": [
         {
-          "path": "scan/val/synthetic_000.h5",
-          "filename": "synthetic_000.h5",
-          "size_bytes": 17024,
-          "sha256": "84b1f32d6f1750f06099dbce7b90b8a860f533815ee03f05878541b498a98912",
-          "num_pulses": 624,
-          "num_emitters": 5,
-          "duration_s": 0.05,
-          "structurally_valid": false,
+          "path": "scan/val_scan/config_0.h5",
+          "filename": "config_0.h5",
+          "size_bytes": 1408164,
+          "sha256": "e3f34be9b3347b7d8d514e91bd2787a819bd9d300ef07babb31327363afacc39",
+          "num_pulses": 79340,
+          "num_emitters": 15,
+          "duration_s": 28.221,
+          "structurally_valid": true,
           "empty_scenario": false,
-          "training_eligible": false,
-          "evaluation_eligible": false
+          "training_eligible": true,
+          "evaluation_eligible": true
         }
       ]
     }
   },
   "summary": {
     "total_files": 3,
-    "total_pulses": 1872,
-    "structurally_valid_files": 0,
+    "total_pulses": 368238,
+    "structurally_valid_files": 3,
     "empty_files": 0,
-    "training_eligible": 0,
-    "evaluation_eligible": 0
+    "training_eligible": 3,
+    "evaluation_eligible": 3
   },
-  "dataset_fingerprint": "35ce5474a22bd80f418b5f85fda6e689b8dfdfd2f1a71242d2ec710e28427e11"
+  "dataset_fingerprint": "27eca11016df104e4fceec5544ca2153a47b400558cebe4db76f6efab42bf321"
 }

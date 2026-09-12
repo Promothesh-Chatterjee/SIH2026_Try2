@@ -1,0 +1,70 @@
+{
+  "manifest_version": "1.0",
+  "status": "APPROVED_FOR_STAGED_DEPLOYMENT",
+  "checkpoint_filename": "checkpoint_step_25500.pt",
+  "checkpoint_path": "cognitive_ew_smart_scan\\checkpoints\\safe_continuation_candidate\\checkpoint_step_25500.pt",
+  "checkpoint_sha256": "777de9b4760389e4eb1bc07e232d1ac6bd34af69e8e369b758893fb6c678e554",
+  "training_step": 25500,
+  "parent_baseline": {
+    "name": "checkpoint_gate_25000_frozen.pt",
+    "sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+    "status": "IMMUTABLE_PRESERVED"
+  },
+  "quarantined_checkpoints": [
+    {
+      "filename": "checkpoint_step_26000_QUARANTINED_COLLAPSE.pt",
+      "reason": "Autonomous rollback at step 26000 due to sub-threshold operational IR dip"
+    }
+  ],
+  "configuration": {
+    "config_file": "cognitive_ew_smart_scan\\configs\\training_25k_to_40k_safe.yaml",
+    "config_sha256": "2aafdbe8f44d37cd305756922dc647e3f6bcc32b724f5412855fa4244a38c588",
+    "freeze_advantage_head": true,
+    "sampler": "stratified_mode_anchored",
+    "learning_rate": 5e-05
+  },
+  "provenance": {
+    "git_revision": "2eabd98d70bfb28b830086e756b2598416d92cef",
+    "evaluator_version": "2026.1-CANONICAL",
+    "canonical_scenarios": [
+      "config_117",
+      "config_119",
+      "config_143",
+      "config_194",
+      "config_195",
+      "config_241",
+      "config_29",
+      "config_42",
+      "config_64",
+      "config_96"
+    ],
+    "evaluation_seed": 42,
+    "evaluation_steps_per_scenario": 1000,
+    "total_evaluation_steps": 10000
+  },
+  "performance_metrics": {
+    "mean_ir": 62.1,
+    "agile_ir": 49.974999999999994,
+    "sparse_ir": 20.7,
+    "worst_case_ir": 16.2,
+    "decision_pd": 99.84194673430565,
+    "pfa": 0.0,
+    "pd_acceptance_interval": "[99.80%, 99.90%] (canonical 99.85% +- 0.05%)",
+    "delays_relative_to_baseline": {
+      "mean_ir_delta_pp": 1.6499999999999986,
+      "agile_ir_delta_pp": 3.2749999999999915,
+      "sparse_ir_delta_pp": 3.099999999999998,
+      "worst_case_ir_delta_pp": 3.799999999999999
+    }
+  },
+  "promotion_sentinel": {
+    "promoted": true,
+    "verdict": "PROMOTED: Candidate Mean IR (62.10%) exceeds baseline (60.45%) by +1.65%",
+    "details": {
+      "mean_ir": 62.1,
+      "agile_ir": 49.974999999999994,
+      "sparse_ir": 20.7,
+      "worst_case_ir": 16.2
+    }
+  }
+}

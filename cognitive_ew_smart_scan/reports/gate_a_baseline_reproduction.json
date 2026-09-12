@@ -1,0 +1,176 @@
+{
+  "mean_ir": 60.760000000000005,
+  "median_ir": 62.6,
+  "worst_case_ir": 12.8,
+  "agile_ir": 47.474999999999994,
+  "sparse_ir": 12.950000000000001,
+  "fast_hopper_config_29": 58.8,
+  "hopper_config_241": 20.1,
+  "sparse_config_119": 13.100000000000001,
+  "sparse_config_143": 12.8,
+  "pd": 99.86068000816827,
+  "pfa": 0.0,
+  "distinct_bands_mean": 26.9,
+  "scenario_breakdown": {
+    "config_117": {
+      "intercept_rate": 0.994,
+      "hits": 994,
+      "steps": 1000,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 4,
+      "mode_distribution": {
+        "0": 0,
+        "1": 0,
+        "2": 1000,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 1.0
+    },
+    "config_119": {
+      "intercept_rate": 0.131,
+      "hits": 131,
+      "steps": 1000,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36,
+      "mode_distribution": {
+        "0": 0,
+        "1": 36,
+        "2": 964,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 0.964
+    },
+    "config_143": {
+      "intercept_rate": 0.128,
+      "hits": 128,
+      "steps": 1000,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36,
+      "mode_distribution": {
+        "0": 0,
+        "1": 155,
+        "2": 845,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 0.845
+    },
+    "config_194": {
+      "intercept_rate": 0.887,
+      "hits": 887,
+      "steps": 1000,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 6,
+      "mode_distribution": {
+        "0": 0,
+        "1": 0,
+        "2": 1000,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 1.0
+    },
+    "config_195": {
+      "intercept_rate": 0.979,
+      "hits": 979,
+      "steps": 1000,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 7,
+      "mode_distribution": {
+        "0": 0,
+        "1": 0,
+        "2": 1000,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 1.0
+    },
+    "config_241": {
+      "intercept_rate": 0.201,
+      "hits": 201,
+      "steps": 1000,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36,
+      "mode_distribution": {
+        "0": 0,
+        "1": 0,
+        "2": 1000,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 1.0
+    },
+    "config_29": {
+      "intercept_rate": 0.588,
+      "hits": 588,
+      "steps": 1000,
+      "pd": 0.9966101694915255,
+      "pfa": 0.0,
+      "distinct_bands": 36,
+      "mode_distribution": {
+        "0": 0,
+        "1": 0,
+        "2": 1000,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 1.0
+    },
+    "config_42": {
+      "intercept_rate": 0.657,
+      "hits": 657,
+      "steps": 1000,
+      "pd": 0.9894578313253012,
+      "pfa": 0.0,
+      "distinct_bands": 36,
+      "mode_distribution": {
+        "0": 0,
+        "1": 0,
+        "2": 1000,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 1.0
+    },
+    "config_64": {
+      "intercept_rate": 0.595,
+      "hits": 595,
+      "steps": 1000,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36,
+      "mode_distribution": {
+        "0": 0,
+        "1": 0,
+        "2": 1000,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 1.0
+    },
+    "config_96": {
+      "intercept_rate": 0.916,
+      "hits": 916,
+      "steps": 1000,
+      "pd": 1.0,
+      "pfa": 0.0,
+      "distinct_bands": 36,
+      "mode_distribution": {
+        "0": 0,
+        "1": 0,
+        "2": 1000,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_fraction": 1.0
+    }
+  }
+}
