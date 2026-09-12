@@ -1,10 +1,33 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  "http://localhost:8000";
+export function getApiBaseUrl() {
+  if (typeof window !== "undefined") {
+    const override = localStorage.getItem("smartscan_api_url");
+    if (override && override.trim()) {
+      return override.trim().replace(/\/+$/, "");
+    }
+  }
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, "");
+  }
+  return "http://localhost:8000";
+}
+
+export function setApiBaseUrl(url) {
+  if (typeof window !== "undefined") {
+    if (url) {
+      localStorage.setItem("smartscan_api_url", url.trim().replace(/\/+$/, ""));
+    } else {
+      localStorage.removeItem("smartscan_api_url");
+    }
+  }
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 async function request(path, options = {}) {
+  const base = getApiBaseUrl();
   const response = await fetch(
-    `${API_BASE_URL}${path}`,
+    `${base}${path}`,
     {
       headers: {
         Accept: "application/json",

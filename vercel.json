@@ -1,0 +1,10 @@
+﻿{
+  "buildCommand": "cd SMARTSCAN_EW_FRONTEND_APP && npm install && npm run build",
+  "outputDirectory": "SMARTSCAN_EW_FRONTEND_APP/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
