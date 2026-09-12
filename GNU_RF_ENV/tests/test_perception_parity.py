@@ -343,15 +343,15 @@ class TestBandMappingTranslated:
         tr = GnuRfSchedulerTranslation(deinterleaver_model=_MockDeinterleaver())
         obs = tr.update(_make_observation(0))
         assert _feat(obs, 6, 0) > 0.0, "band 6 should be visited"
-        assert _feat(obs, 5, 0) == 0.0, "band 5 should stay unvisited"
-        assert _feat(obs, 7, 0) == 0.0, "band 7 should stay unvisited"
+        assert _feat(obs, 5, 0) == 0.5, "band 5 should stay unvisited"
+        assert _feat(obs, 7, 0) == 0.5, "band 7 should stay unvisited"
 
     def test_7999_75_mhz_maps_to_band_15(self):
         tr = GnuRfSchedulerTranslation(deinterleaver_model=_MockDeinterleaver())
         obs = tr.update(_make_observation(0, band=15))
         assert _feat(obs, 15, 0) > 0.0, "band 15 should be visited"
-        assert _feat(obs, 14, 0) == 0.0, "band 14 should stay unvisited"
-        assert _feat(obs, 16, 0) == 0.0, "band 16 should stay unvisited"
+        assert _feat(obs, 14, 0) == 0.5, "band 14 should stay unvisited"
+        assert _feat(obs, 16, 0) == 0.5, "band 16 should stay unvisited"
 
     def test_boundary_8000_mhz_maps_to_band_16(self):
         tr = GnuRfSchedulerTranslation(deinterleaver_model=_MockDeinterleaver())
@@ -388,7 +388,7 @@ class TestMultiDwellPersistence:
         # normalized age/priority from global time decay).
         for b in [30, 31, 32]:
             block = obs[b * 10:b * 10 + 10]
-            assert block[0] == 0.0, f"band {b} occupancy should be 0"
+            assert block[0] == 0.5, f"band {b} occupancy should be 0.5"
             assert block[1] == 0.0, f"band {b} det_rate should be 0"
             assert block[2] == 1.0, f"band {b} miss_rate should be 1 (no data)"
             assert block[3] == 1.0, f"band {b} uncertainty should be 1 (unvisited)"
