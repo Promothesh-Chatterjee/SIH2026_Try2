@@ -54,6 +54,7 @@ class OperationalStateBuilder:
         max_revisit_age_us: float = 50_000.0,
         ema_alpha: float = 0.30,
         ema_alpha_miss_confirmed: float = 0.20,
+        recent_hop_window_us: float = 10_000.0,
     ) -> None:
         self.n_bands = int(n_bands)
         self.n_features = CANONICAL_BAND_FEATURES
@@ -61,6 +62,7 @@ class OperationalStateBuilder:
         self.max_revisit_age_us = float(max_revisit_age_us)
         self.ema_alpha = float(ema_alpha)
         self.ema_alpha_miss_confirmed = float(ema_alpha_miss_confirmed)
+        self.recent_hop_window_us = float(recent_hop_window_us)
 
         # Per-band rolling channel statistics (initialized to max-entropy prior p=0.5)
         self.ema_occupancy = np.full(self.n_bands, 0.5, dtype=np.float32)
@@ -164,15 +166,59 @@ class OperationalStateBuilder:
         if active_tracks:
             band_tracks: Dict[int, List[Any]] = {b: [] for b in range(self.n_bands)}
             for tid, trk in active_tracks.items():
-                freq = getattr(trk, "current_frequency_mhz", None)
-                if freq is None:
-                    # Try last frequency
-                    fh = getattr(trk, "frequency_history", [])
-                    if fh:
-                        freq = fh[-1]
-                if freq is not None and math.isfinite(freq):
-                    b = int(np.clip(freq // 500.0, 0, self.n_bands - 1))
-                    band_tracks[b].append(trk)
+                is_hopping = bool(
+                    getattr(trk, "frequency_hopping_detected", False)
+                    or getattr(trk, "agility_score", 0.0) > 0.3
+                    or getattr(trk, "frequency_span_mhz", 0.0) > 2.0
+                    or getattr(trk, "frequency_range_mhz", 0.0) > 2.0
+                )
+
+                if is_hopping:
+                    cutoff_us = current_time_us - self.recent_hop_window_us
+                    visited_bands = set()
+
+                    toa_hist = getattr(trk, "toa_history", None)
+                    freq_hist = getattr(trk, "frequency_history", None)
+
+                    if toa_hist and freq_hist and len(toa_hist) == len(freq_hist):
+                        for t_p, f in zip(toa_hist, freq_hist):
+                            if t_p >= cutoff_us and math.isfinite(f):
+                                b = int(np.clip(f // 500.0, 0, self.n_bands - 1))
+                                visited_bands.add(b)
+                    elif hasattr(trk, "history") and hasattr(trk.history, "recent_frequency_mhz"):
+                        rh = trk.history
+                        for t_p, f in zip(rh.recent_toas, rh.recent_frequency_mhz):
+                            if t_p >= cutoff_us and math.isfinite(f):
+                                b = int(np.clip(f // 500.0, 0, self.n_bands - 1))
+                                visited_bands.add(b)
+                    elif freq_hist:
+                        for f in freq_hist:
+                            if math.isfinite(f):
+                                b = int(np.clip(f // 500.0, 0, self.n_bands - 1))
+                                visited_bands.add(b)
+
+                    # Fallback to latest frequency if no pulses within window or empty
+                    if not visited_bands:
+                        latest_f = getattr(trk, "latest_frequency_mhz", None)
+                        if latest_f is None and freq_hist:
+                            latest_f = freq_hist[-1]
+                        if latest_f is not None and math.isfinite(latest_f):
+                            visited_bands.add(int(np.clip(latest_f // 500.0, 0, self.n_bands - 1)))
+
+                    for b in visited_bands:
+                        band_tracks[b].append(trk)
+                else:
+                    # Stable / fixed frequency emitter: strictly preserve mean / current frequency
+                    freq = getattr(trk, "mean_frequency_mhz", None)
+                    if freq is None:
+                        freq = getattr(trk, "current_frequency_mhz", None)
+                    if freq is None:
+                        fh = getattr(trk, "frequency_history", [])
+                        if fh:
+                            freq = fh[-1]
+                    if freq is not None and math.isfinite(freq):
+                        b = int(np.clip(freq // 500.0, 0, self.n_bands - 1))
+                        band_tracks[b].append(trk)
 
             for b in range(self.n_bands):
                 trks = band_tracks[b]
@@ -199,7 +245,7 @@ class OperationalStateBuilder:
                 # [8] Frequency dispersion / agility
                 agils = []
                 for t in trks:
-                    frange = getattr(t, "frequency_range_mhz", 0.0)
+                    frange = getattr(t, "frequency_span_mhz", getattr(t, "frequency_range_mhz", 0.0))
                     agils.append(float(np.clip(frange / 500.0, 0.0, 1.0)))
                 obs[b, 8] = float(np.clip(np.mean(agils), 0.0, 1.0))
 

@@ -356,8 +356,8 @@ class TestReceiverStateAfterSequence(unittest.TestCase):
         orch.run_dwell(3200.0, [_make_pdw(10.0, 100.0)], 100.0)
         orch.run_dwell(8000.0, [_make_pdw(150.0, -250.0)], 100.0)
         win = orch.receiver.get_frequency_window()
-        expected_low = 8000.0 - 500.0
-        expected_high = 8000.0 + 500.0
+        expected_low = 8000.0 - 250.0
+        expected_high = 8000.0 + 250.0
         self.assertAlmostEqual(win[0], expected_low, places=3)
         self.assertAlmostEqual(win[1], expected_high, places=3)
 

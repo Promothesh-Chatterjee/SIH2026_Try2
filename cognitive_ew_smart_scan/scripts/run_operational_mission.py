@@ -49,9 +49,8 @@ from src.contracts import (
     DWELL_MODES,
     band_of_action,
     mode_of_action,
-)
 from src.environment.radio_environment import PulseRecord
-from src.environment.scenario_generator import load_h5_records
+from src.environment.scenario_generator import DEFAULT_GNU_DATA_PATH, DEFAULT_GNU_DIR, load_gnu_records, load_h5_records
 from src.models.drqn_scheduler import DRQNScheduler
 from src.models.smartscan_moe import SmartScanMoE
 from src.operational import (
@@ -110,7 +109,7 @@ def render_operational_card(frame: ReceiverTelemetryFrame) -> str:
 
 
 def run_mission(
-    scenario_id: str = "config_194",
+    scenario_id: str = str(DEFAULT_GNU_DATA_PATH),
     n_steps: int = 100,
     interactive: bool = False,
     delay_s: float = 0.05,
@@ -203,7 +202,25 @@ def run_mission(
 
     # Load incident RF scenario pulses
     raw_pulses: List[Dict[str, Any]] = []
-    if scenario_id.startswith("AG-"):
+    scen_path = Path(scenario_id)
+    if not scen_path.exists() and (scenario_id.startswith("EP") or scenario_id.startswith("ep")):
+        cand = DEFAULT_GNU_DIR / f"{scenario_id}.gt.json"
+        if cand.exists():
+            scen_path = cand
+
+    if scen_path.exists() and (scen_path.suffix in [".json", ".npz"] or "GNU_RF_ENV" in str(scen_path)):
+        print(f"  -> Ingesting GNU Parsed Dataset from '{scen_path.name}'...")
+        recs = load_gnu_records(scen_path, time_horizon_us=n_steps * 1000.0)
+        for r in recs:
+            raw_pulses.append({
+                "toa_us": float(r.toa_us),
+                "frequency_mhz": float(r.frequency_mhz),
+                "pulse_width_us": float(r.pulse_width_us),
+                "amplitude_db": float(r.amplitude_db),
+                "aoa_deg": float(r.aoa_deg),
+                "emitter_id": r.emitter_id,
+            })
+    elif scenario_id.startswith("AG-"):
         print(f"  -> Generating Agile Scenario '{scenario_id}'...")
         records = generate_agile_scenario(scenario_id, time_horizon_us=n_steps * 1000.0, seed=42)
         for r in records:
@@ -403,7 +420,11 @@ def run_mission(
 
 def main():
     parser = argparse.ArgumentParser(description="Operational Demonstration Mission Runner")
-    parser.add_argument("--scenario", default="config_194", help="Scenario ID (e.g. config_194, AG-04, AG-08)")
+    parser.add_argument(
+        "--scenario",
+        default=str(DEFAULT_GNU_DATA_PATH),
+        help=f"Scenario ID or path (default: GNU {DEFAULT_GNU_DATA_PATH.name})",
+    )
     parser.add_argument("--steps", type=int, default=100, help="Number of operational dwell steps")
     parser.add_argument("--interactive", action="store_true", help="Display visual telemetry card for each cycle")
     parser.add_argument("--delay", type=float, default=0.02, help="Delay between interactive steps (seconds)")

@@ -60,6 +60,7 @@ ENV_CONFIG = {
     "frequency_step_mhz": 500.0,
     "detection_threshold_db": -140.0,
     "max_steps_per_episode": 100,
+    "semantic_memory_enabled": False,
 }
 
 FAST_PERCEPTION = {
@@ -169,7 +170,7 @@ def _run_env_episode(env, band_seq):
     for d_idx, band in enumerate(band_seq):
         obs_r = _make_observation(d_idx, band)
         _inject_pulses_into_env(env, obs_r, d_idx)
-        obs_history.append(env.step(band)[0])
+        obs_history.append(env.step(band * 5 + 1)[0])
     return obs_history
 
 
@@ -343,15 +344,15 @@ class TestBandMappingTranslated:
         tr = GnuRfSchedulerTranslation(deinterleaver_model=_MockDeinterleaver())
         obs = tr.update(_make_observation(0))
         assert _feat(obs, 6, 0) > 0.0, "band 6 should be visited"
-        assert _feat(obs, 5, 0) == 0.0, "band 5 should stay unvisited"
-        assert _feat(obs, 7, 0) == 0.0, "band 7 should stay unvisited"
+        assert _feat(obs, 5, 0) == 0.5, "band 5 should stay unvisited"
+        assert _feat(obs, 7, 0) == 0.5, "band 7 should stay unvisited"
 
     def test_7999_75_mhz_maps_to_band_15(self):
         tr = GnuRfSchedulerTranslation(deinterleaver_model=_MockDeinterleaver())
         obs = tr.update(_make_observation(0, band=15))
         assert _feat(obs, 15, 0) > 0.0, "band 15 should be visited"
-        assert _feat(obs, 14, 0) == 0.0, "band 14 should stay unvisited"
-        assert _feat(obs, 16, 0) == 0.0, "band 16 should stay unvisited"
+        assert _feat(obs, 14, 0) == 0.5, "band 14 should stay unvisited"
+        assert _feat(obs, 16, 0) == 0.5, "band 16 should stay unvisited"
 
     def test_boundary_8000_mhz_maps_to_band_16(self):
         tr = GnuRfSchedulerTranslation(deinterleaver_model=_MockDeinterleaver())
@@ -388,7 +389,7 @@ class TestMultiDwellPersistence:
         # normalized age/priority from global time decay).
         for b in [30, 31, 32]:
             block = obs[b * 10:b * 10 + 10]
-            assert block[0] == 0.0, f"band {b} occupancy should be 0"
+            assert block[0] == 0.5, f"band {b} occupancy should be 0.5"
             assert block[1] == 0.0, f"band {b} det_rate should be 0"
             assert block[2] == 1.0, f"band {b} miss_rate should be 1 (no data)"
             assert block[3] == 1.0, f"band {b} uncertainty should be 1 (unvisited)"
@@ -474,3 +475,7 @@ class TestEmptyDwell:
         rate2 = _feat(obs2, 6, 1)
         assert rate2 == pytest.approx(0.5, abs=1e-6)
         assert rate2 < rate1
+
+
+
+

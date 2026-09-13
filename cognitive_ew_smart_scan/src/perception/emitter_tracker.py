@@ -98,6 +98,12 @@ class EmitterTrack:
     current_pw_us: Optional[float] = None
     current_amplitude_db: Optional[float] = None
 
+    # Frequency agility & hopping diagnostic attributes
+    latest_frequency_mhz: float = 0.0
+    frequency_span_mhz: float = 0.0
+    frequency_hopping_detected: bool = False
+    hop_rate_hz: float = 0.0
+
     # Derived estimates
     pri_estimate_us: Optional[float] = None
     pri_confidence: float = 0.0
@@ -203,9 +209,24 @@ class EmitterTrack:
         self.current_pw_us = self._trimmed_mean("pw_history")
         self.current_amplitude_db = self._trimmed_mean("amplitude_history")
         if len(self.frequency_history) > 0:
+            self.latest_frequency_mhz = float(self.frequency_history[-1])
             self.frequency_range_mhz = float(
                 np.max(self.frequency_history) - np.min(self.frequency_history)
             )
+            self.frequency_span_mhz = self.frequency_range_mhz
+
+        if self.frequency_span_mhz > 2.0 and len(self.frequency_history) >= 4:
+            self.frequency_hopping_detected = True
+            fh = np.asarray(self.frequency_history, dtype=np.float64)
+            hops = int(np.sum(np.abs(np.diff(fh)) > 2.0))
+            if len(self.toa_history) >= 2 and (self.toa_history[-1] - self.toa_history[0]) > 0:
+                dt_s = (self.toa_history[-1] - self.toa_history[0]) * 1e-6
+                self.hop_rate_hz = float(hops / dt_s) if dt_s > 0 else 0.0
+            else:
+                self.hop_rate_hz = 0.0
+        else:
+            self.frequency_hopping_detected = False
+            self.hop_rate_hz = 0.0
 
     def _update_frequency_trend(self) -> None:
         """Estimate MHz/pulse drift trend over recent frequency history."""

@@ -1525,7 +1525,10 @@ def _telemetry_payload() -> dict[str, Any]:
                     "tag": f"TRK-{int(tid)+1:02d}",
                     "band": b_idx,
                     "frequency_mhz": round(freq_val, 1),
+                    "latest_frequency_mhz": round(float(getattr(trk, "latest_frequency_mhz", freq_val) or freq_val), 1),
                     "frequency_range_mhz": round(freq_rng, 1),
+                    "frequency_span_mhz": round(float(getattr(trk, "frequency_span_mhz", freq_rng) or freq_rng), 1),
+                    "frequency_hopping_detected": bool(getattr(trk, "frequency_hopping_detected", False) or mod == "Agile Hop"),
                     "frequency_history": freq_hist,
                     "pri_us": round(pri_val, 1),
                     "pw_us": round(pw_val, 2),
@@ -2200,14 +2203,63 @@ async def _run_live_mission_stream(scenario_name: str, speed_hz: float, max_dwel
         "rolling_pd": 0.0,
     }
 
-    # Load pulses from TSRD H5 file if present, else realistic scenario generator
+    # Load pulses from GNU parsed dataset if present, else TSRD H5, else generator
     scenario_pulses: list[dict[str, Any]] = []
-    h5_candidates = [
-        Path(f"D:/TSRD/stare/val_stare/{scenario_name}.h5"),
-        Path(f"D:/TSRD/stare/{scenario_name}.h5"),
-        Path(f"data/{scenario_name}.h5"),
-        Path(f"../data/{scenario_name}.h5"),
+    repo_root = Path(__file__).resolve().parents[2]
+    gnu_dir = repo_root.parent / "GNU_RF_ENV" / "p3ac_50k" / "episodes"
+    if not gnu_dir.exists():
+        gnu_dir = Path("C:/HACKATHONS/SIH2026_Try2/GNU_RF_ENV/p3ac_50k/episodes")
+
+    candidates = [
+        Path(scenario_name) if scenario_name and Path(scenario_name).exists() else None,
+        gnu_dir / f"{scenario_name}.gt.json" if scenario_name else None,
+        gnu_dir / f"{scenario_name}" if scenario_name else None,
+        gnu_dir / "EP000001.gt.json",
+        Path(f"D:/TSRD/stare/val_stare/{scenario_name}.h5") if scenario_name else None,
+        Path(f"data/{scenario_name}.h5") if scenario_name else None,
     ]
+    matched_path = next((p for p in candidates if p is not None and p.exists()), None)
+
+    if matched_path:
+        if matched_path.suffix in [".json", ".npz"] or "GNU_RF_ENV" in str(matched_path):
+            try:
+                from ..environment.scenario_generator import load_gnu_records
+                records = load_gnu_records(matched_path, time_horizon_us=1_000_000.0)
+                for idx, r in enumerate(records):
+                    scenario_pulses.append({
+                        "toa_us": float(r.toa_us),
+                        "time_us": float(r.toa_us),
+                        "frequency_mhz": float(r.frequency_mhz),
+                        "pulse_width_us": float(r.pulse_width_us),
+                        "amplitude_db": float(r.amplitude_db),
+                        "aoa_deg": float(r.aoa_deg),
+                        "pulse_id": idx,
+                    })
+                logger.info("Loaded %d pulses from GNU parsed dataset %s", len(scenario_pulses), matched_path.name)
+            except Exception as err:
+                logger.warning("Failed reading GNU dataset %s: %s", matched_path, err)
+        elif matched_path.suffix == ".h5":
+            try:
+                from ..environment.scenario_generator import load_h5_records
+                records = load_h5_records(
+                    matched_path,
+                    freq_min_mhz=0.0,
+                    freq_max_mhz=18000.0,
+                    max_pulses=50000,
+                )
+                for idx, r in enumerate(records):
+                    scenario_pulses.append({
+                        "toa_us": float(r.toa_us),
+                        "time_us": float(r.toa_us),
+                        "frequency_mhz": float(r.frequency_mhz),
+                        "pulse_width_us": float(r.pulse_width_us),
+                        "amplitude_db": float(r.amplitude_db),
+                        "aoa_deg": float(r.aoa_deg),
+                        "pulse_id": idx,
+                    })
+                logger.info("Loaded %d pulses from TSRD %s", len(scenario_pulses), matched_path)
+            except Exception as err:
+                logger.warning("Failed reading HDF5 %s via load_h5_records: %s", matched_path, err)
     h5_path = next((p for p in h5_candidates if p.exists()), None)
     if h5_path:
         try:
