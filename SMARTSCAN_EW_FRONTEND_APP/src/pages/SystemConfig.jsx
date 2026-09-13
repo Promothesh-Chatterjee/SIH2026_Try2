@@ -18,7 +18,10 @@ export default function SystemConfig() {
   const [apiUrl, setApiUrl] = useState(getApiBaseUrl());
   const [savedNotice, setSavedNotice] = useState("");
 
-  const testConnection = (urlToTest) => {
+  const testConnection = (targetUrl) => {
+    if (targetUrl) {
+      setApiBaseUrl(targetUrl);
+    }
     setStatus("TESTING...");
     backend.api
       .getSystemStatus()
@@ -33,7 +36,25 @@ export default function SystemConfig() {
   };
 
   useEffect(() => {
-    testConnection(apiUrl);
+    let active = true;
+    const initialCheck = async () => {
+      try {
+        const data = await backend.api.getSystemStatus();
+        if (active) {
+          setStatus("CONNECTED");
+          setSavedNotice(`Connected: model ${data?.active_model ? data.active_model.split(/[\\\\/]/).pop() : "active"}`);
+        }
+      } catch (err) {
+        if (active) {
+          setStatus("OFFLINE — SYNTHETIC FALLBACK");
+          setSavedNotice(`Connection failed: ${err.message || "Failed to reach endpoint"}`);
+        }
+      }
+    };
+    initialCheck();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleSaveApiUrl = () => {
@@ -78,7 +99,7 @@ export default function SystemConfig() {
               type="text"
               value={apiUrl}
               onChange={(e) => setApiUrl(e.target.value)}
-              placeholder="https://smartscan-backend.onrender.com"
+              placeholder="https://smartscan-backend-q6ay.onrender.com"
               style={{
                 flex: "1 1 320px",
                 padding: "8px 12px",

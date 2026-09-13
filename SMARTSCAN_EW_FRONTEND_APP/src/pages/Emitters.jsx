@@ -64,7 +64,9 @@ export default function Emitters() {
   ];
 
   // 3. Agile Hop Trajectory & Primary Track
-  const emitters = Array.isArray(telemetry.emitters) ? telemetry.emitters : [];
+  const emitters = useMemo(() => {
+    return Array.isArray(telemetry.emitters) ? telemetry.emitters : [];
+  }, [telemetry.emitters]);
   const primaryTrack = useMemo(() => {
     if (!emitters || emitters.length === 0) return null;
     return emitters.find((e) => e.modulation === "Agile Hop") || emitters[0];

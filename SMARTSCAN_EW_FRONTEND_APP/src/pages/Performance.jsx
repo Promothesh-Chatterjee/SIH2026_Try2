@@ -77,6 +77,32 @@ export default function Performance() {
 
   const isOnline = telemetry.live || Boolean(benchmarkStaticBase);
 
+  // Fetch scenarios from backend if available
+  const [availableScenarios, setAvailableScenarios] = useState(SCENARIOS);
+
+  useEffect(() => {
+    let active = true;
+    const fetchScenarios = async () => {
+      try {
+        const list = await api.getBenchmarkScenarios();
+        if (active && Array.isArray(list) && list.length > 0) {
+          setAvailableScenarios(
+            list.map((item) => ({
+              id: item.id,
+              name: `${item.id} — ${item.name} (${item.description || item.threat_class || ""})`,
+            }))
+          );
+        }
+      } catch {
+        // Fallback to static scenario definitions
+      }
+    };
+    fetchScenarios();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Fetch benchmark evaluation scenario metadata and base comparisons
   useEffect(() => {
     let active = true;
@@ -308,13 +334,14 @@ export default function Performance() {
     const tDwells = telemetry.totalDwells || 0;
 
     return modeNames.map((m, idx) => {
-      let allocPct = baseAlloc[m];
-      let yieldPct = baseYield[m];
-      let latVal = baseLats[m];
+      let allocPct;
+      let yieldPct;
+      let latVal;
 
       if (tot >= 5 && counts[m] > 0) {
         allocPct = (counts[m] / tot) * 100.0;
         yieldPct = (hits[m] / counts[m]) * 100.0;
+        latVal = baseLats[m];
       } else {
         const delta = 1.2 * Math.sin(tDwells * 0.08 + idx);
         allocPct = Math.max(5.0, baseAlloc[m] + delta);
@@ -468,7 +495,7 @@ export default function Performance() {
                 cursor: isOnline ? "pointer" : "not-allowed",
               }}
             >
-              {SCENARIOS.map((s) => (
+              {availableScenarios.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
