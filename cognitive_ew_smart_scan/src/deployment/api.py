@@ -661,9 +661,12 @@ async def lifespan(app: FastAPI):  # type: ignore
         ])
 
         stats_path = next((c for c in norm_candidates if c.exists()), None)
+        file_exists = stats_path is not None and stats_path.exists()
+        json_parsed_successfully = False
         if stats_path is not None:
             try:
                 loaded_dict = load_normalization_stats(stats_path)
+                json_parsed_successfully = True
                 STATE["normalization_stats"] = loaded_dict
                 STATE["normalization_stats_path"] = str(stats_path)
                 STATE["normalization_stats_hash"] = normalization_stats_hash(loaded_dict)
@@ -673,7 +676,14 @@ async def lifespan(app: FastAPI):  # type: ignore
                     STATE["normalization_stats_hash"],
                 )
             except Exception as exc:
-                logger.warning("Failed to load normalization stats %s: %s", stats_path, exc)
+                logger.error("Failed to load/parse normalization stats %s: %s", stats_path, exc)
+
+        logger.error(
+            "NORMALIZATION FILE CHECK | resolved_path=%r | exists=%r | json_parsed=%r",
+            str(stats_path) if stats_path else None,
+            file_exists,
+            json_parsed_successfully,
+        )
 
         # Fallback to verified canonical training statistics if none found or load failed
         if STATE.get("normalization_stats") is None:
@@ -688,6 +698,24 @@ async def lifespan(app: FastAPI):  # type: ignore
 
         expected_hash = STATE.get("normalization_expected_hash") or _expected_normalization_hash()
         _set_normalization_verification(expected_hash)
+
+        expected_normalization_hash = STATE.get("normalization_expected_hash")
+        loaded_normalization_hash = STATE.get("normalization_stats_hash")
+        normalization_stats_path = STATE.get("normalization_stats_path")
+        normalization_hash_match = STATE.get("normalization_hash_match")
+
+        logger.error(
+            "NORMALIZATION DEBUG | expected=%r | loaded=%r | path=%r | match=%r",
+            expected_normalization_hash,
+            loaded_normalization_hash,
+            normalization_stats_path,
+            normalization_hash_match,
+        )
+        logger.error(
+            "NORMALIZATION ENV | EXPECTED_NORMALIZATION_HASH=%r",
+            os.getenv("EXPECTED_NORMALIZATION_HASH"),
+        )
+
         if (STATE.get("deinterleaver") is not None or STATE.get("deinterleaver_onnx") is not None) and not STATE["normalization_hash_match"]:
             logger.error("Loaded deinterleaver normalization statistics do not match checkpoint metadata; disabling model")
             STATE["deinterleaver"] = None
@@ -798,6 +826,17 @@ def health(response: Response = Response()) -> HealthResponse:
             controller_ready,
             dimensions_ok,
             normalization_ok,
+        )
+        logger.error(
+            "NORMALIZATION DEBUG | expected=%r | loaded=%r | path=%r | match=%r",
+            STATE.get("normalization_expected_hash"),
+            STATE.get("normalization_stats_hash"),
+            STATE.get("normalization_stats_path"),
+            bool(STATE.get("normalization_hash_match")),
+        )
+        logger.error(
+            "NORMALIZATION ENV | EXPECTED_NORMALIZATION_HASH=%r",
+            os.getenv("EXPECTED_NORMALIZATION_HASH"),
         )
 
     # Resolve benchmark metadata
