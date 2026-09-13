@@ -121,10 +121,16 @@ export const api = {
     return request("/memory/emitters", options);
   },
 
-  startMission(initialTimeUs = 0.0, options = {}) {
+  startMission(initialTimeUs = 0.0, params = {}, options = {}) {
     return request("/mission/start", {
       method: "POST",
-      body: JSON.stringify({ initial_time_us: Number(initialTimeUs) || 0.0 }),
+      body: JSON.stringify({
+        initial_time_us: Number(initialTimeUs) || 0.0,
+        scenario: params.scenario ?? "final_grc",
+        speed_hz: Number(params.speed_hz) || 15.0,
+        max_dwells: params.max_dwells ?? 4000,
+        auto_stream: true,
+      }),
       ...options,
     });
   },

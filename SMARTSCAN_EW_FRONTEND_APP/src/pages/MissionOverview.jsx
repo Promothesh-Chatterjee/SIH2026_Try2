@@ -101,7 +101,7 @@ function MissionControls({
   controlError,
   setControlError,
 }) {
-  const [selectedScenario, setSelectedScenario] = useState("final_and_saa");
+  const [selectedScenario, setSelectedScenario] = useState("final_grc");
   const [selectedSpeed, setSelectedSpeed] = useState(15.0);
 
   const {
@@ -118,6 +118,8 @@ function MissionControls({
     resetMission,
     lastError,
   } = t;
+
+  const isLiveActive = streamRunning || missionActive;
 
   const handleAction = async (fn, desc) => {
     setIsOperating(true);
@@ -169,64 +171,70 @@ function MissionControls({
             MISSION CONTROLLER:
           </span>
 
-          {/* Stream Start / Stop */}
-          {!streamRunning ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <select
-                value={selectedScenario}
-                onChange={(e) => setSelectedScenario(e.target.value)}
-                disabled={isOperating}
-                style={{
-                  background: "#1c1d22",
-                  color: "#e2e2e8",
-                  border: "1px solid #454653",
-                  fontSize: 11,
-                  padding: "3px 6px",
-                  cursor: "pointer",
-                }}
-                title="Select emitter scenario for streaming"
-              >
-                <optgroup label="GNU Radio RF Environment (Real)">
-                  <option value="final_and_saa">GNU Radio 5-Hopper + S&H Combined (3-9.2 GHz)</option>
-                  <option value="final_grc">GNU Radio 5-Emitter Agile FHSS (3-8.4 GHz)</option>
-                  <option value="saa_grc">GNU Radio Sample & Hold / Chirp (5.4-9.2 GHz)</option>
-                  <option value="1_grc_fhss">GNU Radio 1.grc FHSS Agile Source</option>
-                  <option value="step09_jittered">GNU Radio Jittered Pulse Train (24k Pulses)</option>
-                  <option value="EP000001">GNU Radio Benchmark Episode 001</option>
-                </optgroup>
-                <optgroup label="TSRD / Cognitive Baselines">
-                  <option value="config_96">Scenario 96 (Agile Hopper 11 Bands)</option>
-                  <option value="config_64">Scenario 64 (Dense Agile Threat)</option>
-                  <option value="config_29">Scenario 29 (Periodic Pulse Baseline)</option>
-                </optgroup>
-              </select>
+          {/* Scenario & Speed Selectors */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <select
+              value={selectedScenario}
+              onChange={(e) => setSelectedScenario(e.target.value)}
+              disabled={isOperating || isLiveActive}
+              style={{
+                background: "#1c1d22",
+                color: "#e2e2e8",
+                border: "1px solid #454653",
+                fontSize: 11,
+                padding: "4px 8px",
+                cursor: isLiveActive ? "not-allowed" : "pointer",
+                fontWeight: 600,
+              }}
+              title="Select GNU Radio RF scenario"
+            >
+              <option value="final_grc">final.grc — GNU Radio 5-Emitter Agile FHSS (4,000 Dwells)</option>
+              <option value="saa_grc">saa.grc — GNU Radio Sample & Hold / Chirp (4,000 Dwells)</option>
+            </select>
 
-              <select
-                value={selectedSpeed}
-                onChange={(e) => setSelectedSpeed(Number(e.target.value))}
-                disabled={isOperating}
-                style={{
-                  background: "#1c1d22",
-                  color: "#e2e2e8",
-                  border: "1px solid #454653",
-                  fontSize: 11,
-                  padding: "3px 6px",
-                  cursor: "pointer",
-                }}
-                title="Simulation speed in Hz"
-              >
-                <option value={10.0}>10 Hz</option>
-                <option value={15.0}>15 Hz (Standard)</option>
-                <option value={25.0}>25 Hz</option>
-                <option value={50.0}>50 Hz (Fast)</option>
-              </select>
+            <select
+              value={selectedSpeed}
+              onChange={(e) => setSelectedSpeed(Number(e.target.value))}
+              disabled={isOperating || isLiveActive}
+              style={{
+                background: "#1c1d22",
+                color: "#e2e2e8",
+                border: "1px solid #454653",
+                fontSize: 11,
+                padding: "4px 8px",
+                cursor: isLiveActive ? "not-allowed" : "pointer",
+              }}
+              title="Simulation speed in Hz"
+            >
+              <option value={10.0}>10 Hz</option>
+              <option value={15.0}>15 Hz (Standard)</option>
+              <option value={25.0}>25 Hz</option>
+              <option value={50.0}>50 Hz (Fast)</option>
+            </select>
 
+            {/* Primary Action: START / STOP MISSION */}
+            {!isLiveActive ? (
               <button
                 type="button"
                 onClick={() =>
                   handleAction(
-                    () => startStream({ scenario: selectedScenario, speed_hz: selectedSpeed }),
-                    "start stream",
+                    async () => {
+                      await startMission(0.0, {
+                        scenario: selectedScenario,
+                        speed_hz: selectedSpeed,
+                        max_dwells: 4000,
+                      });
+                      try {
+                        await startStream({
+                          scenario: selectedScenario,
+                          speed_hz: selectedSpeed,
+                          max_dwells: 4000,
+                        });
+                      } catch {
+                        // Stream already started via auto_stream
+                      }
+                    },
+                    "start mission",
                   )
                 }
                 disabled={isOperating}
@@ -236,98 +244,71 @@ function MissionControls({
                   color: "#49df9d",
                   fontWeight: 700,
                   fontSize: 11,
-                  padding: "4px 10px",
+                  padding: "4px 12px",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
-                  gap: 4,
+                  gap: 6,
                   boxShadow: "0 0 8px rgba(73, 223, 157, 0.2)",
                 }}
+                title="Start continuous operational mission streaming 4000 dwells"
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
                   play_arrow
                 </span>
-                START STREAM
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  color: "#49df9d",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  animation: "st-pulse 1.5s ease-in-out infinite",
-                }}
-              >
-                ● STREAM ACTIVE ({t.streamStatus?.scenario || "config_96"})
-              </span>
-              <button
-                type="button"
-                onClick={() => handleAction(() => stopStream(), "stop stream")}
-                disabled={isOperating}
-                style={{
-                  background: "#2a0a0a",
-                  border: "1px solid #ef4444",
-                  color: "#ef4444",
-                  fontWeight: 700,
-                  fontSize: 11,
-                  padding: "4px 10px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                  stop
-                </span>
-                STOP STREAM
-              </button>
-            </div>
-          )}
-
-          {/* Discrete Mission Controls */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {!missionActive ? (
-              <button
-                type="button"
-                onClick={() => handleAction(() => startMission(0.0), "start mission")}
-                disabled={isOperating}
-                style={{
-                  background: "#161d2a",
-                  border: "1px solid #38bdf8",
-                  color: "#38bdf8",
-                  fontWeight: 600,
-                  fontSize: 11,
-                  padding: "4px 8px",
-                  cursor: "pointer",
-                }}
-                title="Start manual discrete mission via POST /mission/start"
-              >
                 START MISSION
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={() => handleAction(() => stopMission(), "stop mission")}
-                disabled={isOperating}
-                style={{
-                  background: "#2a1616",
-                  border: "1px solid #f87171",
-                  color: "#f87171",
-                  fontWeight: 600,
-                  fontSize: 11,
-                  padding: "4px 8px",
-                  cursor: "pointer",
-                }}
-                title="Stop discrete mission via POST /mission/stop"
-              >
-                STOP MISSION
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span
+                  style={{
+                    color: "#49df9d",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    animation: "st-pulse 1.5s ease-in-out infinite",
+                  }}
+                >
+                  ● STREAMING {selectedScenario === "saa_grc" ? "saa.grc" : "final.grc"} (4000 Dwells)
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleAction(
+                      async () => {
+                        try {
+                          await stopStream();
+                        } catch {
+                          // Ignore
+                        }
+                        await stopMission();
+                      },
+                      "stop mission",
+                    )
+                  }
+                  disabled={isOperating}
+                  style={{
+                    background: "#2a0a0a",
+                    border: "1px solid #ef4444",
+                    color: "#ef4444",
+                    fontWeight: 700,
+                    fontSize: 11,
+                    padding: "4px 12px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                  title="Stop continuous operational mission"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                    stop
+                  </span>
+                  STOP MISSION
+                </button>
+              </div>
             )}
 
             <button
