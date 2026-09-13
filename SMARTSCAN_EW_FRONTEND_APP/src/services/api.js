@@ -15,7 +15,8 @@ export function getApiBaseUrl() {
   if (envUrl && envUrl.trim()) {
     return envUrl.trim().replace(/\/+$/, "");
   }
-  return "https://smartscan-backend-q6ay.onrender.com";
+  const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  return isLocal ? "http://localhost:8080" : "https://smartscan-backend-q6ay.onrender.com";
 }
 
 export function setApiBaseUrl(url) {

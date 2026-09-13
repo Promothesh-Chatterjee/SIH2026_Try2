@@ -66,14 +66,7 @@ const SCENARIOS = [
 
 export default function Performance() {
   const telemetry = useOverviewTelemetry();
-  const [isEvaluating, setIsEvaluating] = useState(false);
-  const [selectedScenario, setSelectedScenario] = useState("AG-04");
   const [benchmarkStaticBase, setBenchmarkStaticBase] = useState(null);
-  const [scenarioMeta, setScenarioMeta] = useState({
-    name: "Fast Agile Radar Hopper",
-    threatClass: "Pulsed Agile Fire-Control Radar",
-    execTimeMs: null,
-  });
 
   const isOnline = telemetry.live || Boolean(benchmarkStaticBase);
 
@@ -112,13 +105,6 @@ export default function Performance() {
         const data = await api.getLatestBenchmark();
         if (active && data) {
           setBenchmarkStaticBase(data);
-          if (data.scenario_name) {
-            setScenarioMeta({
-              name: data.scenario_name,
-              threatClass: data.threat_class || "Electronic Warfare Environment",
-              execTimeMs: data.execution_time_ms,
-            });
-          }
         }
       } catch {
         // Backend offline
@@ -132,32 +118,6 @@ export default function Performance() {
       clearInterval(timer);
     };
   }, []);
-
-  const handleRunEvaluation = async () => {
-    setIsEvaluating(true);
-    try {
-      const data = await api.evaluateBenchmark({
-        scenario: selectedScenario,
-        n_steps: 50,
-        snr_db: 15.0,
-        seed: 42,
-      });
-      if (data) {
-        setBenchmarkStaticBase(data);
-        if (data.scenario_name) {
-          setScenarioMeta({
-            name: data.scenario_name,
-            threatClass: data.threat_class || "Electronic Warfare Environment",
-            execTimeMs: data.execution_time_ms,
-          });
-        }
-      }
-    } catch {
-      // Evaluation failed or backend offline
-    } finally {
-      setIsEvaluating(false);
-    }
-  };
 
   // 1. Fully Dynamic Protocol Comparison Benchmark
   const dynamicBenchmarkRows = useMemo(() => {
@@ -414,7 +374,7 @@ export default function Performance() {
           Dynamic multi-scheduler comparative evaluation engine: Baseline Open-Loop Sweep vs. DRQN+MoE Adaptive Reinforcement Policy.
           {isOnline ? (
             <span style={{ color: "#49df9d", marginLeft: 6 }}>
-              ● Live telemetry streaming from Cognitive EW backend ({scenarioMeta.name}).
+              ● Live telemetry streaming from Cognitive EW backend.
             </span>
           ) : (
             <span style={{ color: "#ef4444", marginLeft: 6 }}>
@@ -536,7 +496,7 @@ export default function Performance() {
       <div className="st-panel">
         <PanelHead
           title="PROTOCOL COMPARISON BENCHMARK (DYNAMIC INPUT EVALUATION)"
-          badge={isOnline ? `${selectedScenario} · LIVE EVALUATION` : "BACKEND OFFLINE"}
+          badge={isOnline ? "LIVE EVALUATION" : "BACKEND OFFLINE"}
           badgeColor={isOnline ? "#49df9d" : "#ef4444"}
         />
         <div className="st-table-wrap">

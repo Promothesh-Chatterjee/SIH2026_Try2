@@ -42,7 +42,8 @@ export function getWsBaseUrl() {
     }
   }
 
-  return "wss://smartscan-backend-q6ay.onrender.com";
+  const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  return isLocal ? "ws://localhost:8080" : "wss://smartscan-backend-q6ay.onrender.com";
 }
 
 const WS_BASE_URL = getWsBaseUrl();
