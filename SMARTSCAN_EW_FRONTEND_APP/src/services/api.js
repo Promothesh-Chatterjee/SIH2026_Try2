@@ -5,11 +5,11 @@ export function getApiBaseUrl() {
       return override.trim().replace(/\/+$/, "");
     }
   }
-  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.NEXT_PUBLIC_API_BASE_URL;
   if (envUrl && envUrl.trim()) {
     return envUrl.trim().replace(/\/+$/, "");
   }
-  return "http://localhost:8000";
+  return "https://smartscan-backend-q6ay.onrender.com";
 }
 
 export function setApiBaseUrl(url) {
@@ -167,6 +167,42 @@ export const api = {
 
   getLatestBenchmark() {
     return request("/benchmark/latest");
+  },
+
+  /**
+   * Predict single best time-frequency action from the trained DRQN+MoE scheduler.
+   *
+   * Observation contract:
+   * Exactly 360 numeric values (36 frequency bands × 10 features per band).
+   * Flattened layout:
+   *   [band_0_feat_0, ..., band_0_feat_9, band_1_feat_0, ..., band_35_feat_9]
+   *
+   * @param {Array<number>} obs - Exactly 360 numeric values.
+   * @param {string} [policyMode="default"] - Policy mode ('default', 'operational', 'demo', 'fallback').
+   * @returns {Promise<Object>} Real model output (selected_action, selected_band, selected_mode, etc.)
+   */
+  predictBands(obs, policyMode = "default") {
+    if (!Array.isArray(obs)) {
+      return Promise.reject(new Error("Observation must be an array of numeric values."));
+    }
+    if (obs.length !== 360) {
+      return Promise.reject(
+        new Error(`Invalid observation dimension: expected exactly 360 numeric values (36 bands × 10 features), got ${obs.length}.`)
+      );
+    }
+    for (let i = 0; i < obs.length; i++) {
+      const val = Number(obs[i]);
+      if (!Number.isFinite(val)) {
+        return Promise.reject(new Error(`Invalid observation value at index ${i}: must be a finite number, got ${obs[i]}.`));
+      }
+    }
+    return request("/predict_bands", {
+      method: "POST",
+      body: JSON.stringify({
+        obs: obs.map(Number),
+        policy_mode: policyMode,
+      }),
+    });
   },
 
   getBenchmarkScenarios() {

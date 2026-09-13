@@ -1,6 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import {
-  CmdBadge,
   DataSourceBadge,
   KpiCard,
   PanelHead,
@@ -17,12 +16,9 @@ export default function Receiver() {
     wsStatus,
     live,
     currentBand,
-    currentFreqMHz,
     currentDwellUs,
     bandHeights,
     pdws,
-    totalHits,
-    totalDwells,
   } = t;
 
   const [manualBand, setManualBand] = useState(null);

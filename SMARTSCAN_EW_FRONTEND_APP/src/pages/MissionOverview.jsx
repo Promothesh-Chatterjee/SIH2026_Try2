@@ -233,7 +233,6 @@ export default function MissionOverview() {
   const {
     wsStatus,
     live,
-    source,
     activeBands,
     quietBands,
     currentBand,

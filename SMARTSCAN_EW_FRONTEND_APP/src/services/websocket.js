@@ -21,7 +21,7 @@ export function getWsBaseUrl() {
     return envWs.trim().replace(/\/+$/, "");
   }
 
-  const envApi = import.meta.env.VITE_API_BASE_URL;
+  const envApi = import.meta.env.VITE_API_BASE_URL || import.meta.env.NEXT_PUBLIC_API_BASE_URL;
   if (envApi && envApi.trim()) {
     const clean = envApi.trim().replace(/\/+$/, "");
     if (clean.startsWith("https://")) {
@@ -32,7 +32,7 @@ export function getWsBaseUrl() {
     }
   }
 
-  return "ws://localhost:8000";
+  return "wss://smartscan-backend-q6ay.onrender.com";
 }
 
 const WS_BASE_URL = getWsBaseUrl();
