@@ -626,19 +626,14 @@ async def lifespan(app: FastAPI):  # type: ignore
             except Exception as exc:
                 logger.warning("Failed to load scheduler %s: %s", ckpt, exc)
 
-    # Memory and FoM
+    # Normalization Statistics Loading & Verification (Phase 14)
+    # Isolated so secondary analytics/metrics classes never interrupt normalization loading.
     try:
-        from ..cognitive.memory import SemanticMemory
-        from ..evaluation.metrics import FiguresOfMerit
-        from ..preprocessing.normalise import load_normalization_stats, normalization_stats_hash
-
-        STATE["memory"] = SemanticMemory()
-        STATE["fom"] = FiguresOfMerit()
-
-        # Phase 14: only TRAIN-fitted normalization statistics may be used once a
-        # trained deinterleaver is serving. Locate the persisted stats JSON next
-        # to the model checkpoints (canonical locations first).
-        from ..preprocessing.normalise import save_normalization_stats
+        from ..preprocessing.normalise import (
+            load_normalization_stats,
+            normalization_stats_hash,
+            save_normalization_stats,
+        )
 
         norm_candidates: list[Path] = []
         if os.getenv("NORMALIZATION_STATS_PATH"):
@@ -724,6 +719,16 @@ async def lifespan(app: FastAPI):  # type: ignore
             (STATE.get("scheduler") is not None or STATE.get("scheduler_onnx") is not None)
             and (STATE.get("deinterleaver") is not None or STATE.get("deinterleaver_onnx") is not None)
         )
+    except Exception as exc:
+        logger.error("Normalization stats initialization failed: %s", exc)
+
+    # Memory and FoM
+    try:
+        from ..cognitive.memory import SemanticMemory
+        from ..evaluation.metrics import FiguresOfMerit
+
+        STATE["memory"] = SemanticMemory()
+        STATE["fom"] = FiguresOfMerit()
         logger.info("SemanticMemory and FiguresOfMerit initialised")
     except Exception as exc:
         logger.warning("Memory/FoM init failed: %s", exc)
