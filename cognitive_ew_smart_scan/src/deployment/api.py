@@ -671,9 +671,9 @@ async def lifespan(app: FastAPI):  # type: ignore
                     STATE["normalization_stats_hash"],
                 )
             except Exception as exc:
-                logger.error("Failed to load/parse normalization stats %s: %s", stats_path, exc)
+                logger.warning("Failed to load/parse normalization stats %s: %s", stats_path, exc)
 
-        logger.error(
+        logger.info(
             "NORMALIZATION FILE CHECK | resolved_path=%r | exists=%r | json_parsed=%r",
             str(stats_path) if stats_path else None,
             file_exists,
@@ -699,14 +699,14 @@ async def lifespan(app: FastAPI):  # type: ignore
         normalization_stats_path = STATE.get("normalization_stats_path")
         normalization_hash_match = STATE.get("normalization_hash_match")
 
-        logger.error(
+        logger.info(
             "NORMALIZATION DEBUG | expected=%r | loaded=%r | path=%r | match=%r",
             expected_normalization_hash,
             loaded_normalization_hash,
             normalization_stats_path,
             normalization_hash_match,
         )
-        logger.error(
+        logger.info(
             "NORMALIZATION ENV | EXPECTED_NORMALIZATION_HASH=%r",
             os.getenv("EXPECTED_NORMALIZATION_HASH"),
         )
@@ -835,14 +835,14 @@ def health(response: Response = Response()) -> HealthResponse:
             dimensions_ok,
             normalization_ok,
         )
-        logger.error(
+        logger.warning(
             "NORMALIZATION DEBUG | expected=%r | loaded=%r | path=%r | match=%r",
             STATE.get("normalization_expected_hash"),
             STATE.get("normalization_stats_hash"),
             STATE.get("normalization_stats_path"),
             bool(STATE.get("normalization_hash_match")),
         )
-        logger.error(
+        logger.warning(
             "NORMALIZATION ENV | EXPECTED_NORMALIZATION_HASH=%r",
             os.getenv("EXPECTED_NORMALIZATION_HASH"),
         )
