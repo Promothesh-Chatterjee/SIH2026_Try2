@@ -82,6 +82,9 @@ function buildDefault() {
       missed_revisits_count: 0,
       total_revisits: 0,
       missed_revisits_pct: 0.0,
+      cumulative_missed_revisits: 0,
+      cumulative_total_revisits: 0,
+      cumulative_missed_pct: 0.0,
       scheduler_omniscience_leak_pct: 0.0,
       antenna_azimuth_deg: 0.0,
       hop_trajectory: null,
@@ -112,6 +115,7 @@ function processTelemetry(raw, missionStat) {
 
   next.live = true;
   next.source = raw.source ?? "publisher";
+  next.wsStatus = "ONLINE";
 
   const m = raw.metrics ?? raw;
 
@@ -207,6 +211,9 @@ function processTelemetry(raw, missionStat) {
     missed_revisits_count: rawFom.missed_revisits_count ?? 0,
     total_revisits: rawFom.total_revisits ?? 0,
     missed_revisits_pct: floatOr(rawFom.missed_revisits_pct, 0.0),
+    cumulative_missed_revisits: rawFom.cumulative_missed_revisits ?? 0,
+    cumulative_total_revisits: rawFom.cumulative_total_revisits ?? 0,
+    cumulative_missed_pct: floatOr(rawFom.cumulative_missed_pct, 0.0),
     scheduler_omniscience_leak_pct: floatOr(rawFom.scheduler_omniscience_leak_pct, 0.0),
     antenna_azimuth_deg: floatOr(rawFom.antenna_azimuth_deg, 0.0),
     hop_trajectory: rawFom.hop_trajectory ?? null,
@@ -251,13 +258,13 @@ export function useOverviewTelemetry() {
           }
         }
         if (newItems.length > 0) {
-          pdwsRef.current = [...newItems, ...pdwsRef.current].slice(0, 30);
+          pdwsRef.current = [...newItems, ...pdwsRef.current].slice(0, 1000);
         } else if (pdwsRef.current.length === 0) {
-          pdwsRef.current = [...resolved.pdws].slice(0, 30);
+          pdwsRef.current = [...resolved.pdws].slice(0, 1000);
         }
       }
       if (pdwsRef.current.length > 0 && (!resolved.pdws || resolved.pdws.length === 0)) {
-        resolved.pdws = pdwsRef.current.slice(0, 15);
+        resolved.pdws = pdwsRef.current.slice(0, 1000);
       }
 
       if (Array.isArray(resolved.allIncidentPdws) && resolved.allIncidentPdws.length > 0) {
@@ -273,12 +280,12 @@ export function useOverviewTelemetry() {
             }
           }
           if (newInc.length > 0) {
-            incidentPdwsRef.current = [...newInc, ...incidentPdwsRef.current].slice(0, 100);
+            incidentPdwsRef.current = [...newInc, ...incidentPdwsRef.current].slice(0, 5000);
           } else if (incidentPdwsRef.current.length === 0) {
-            incidentPdwsRef.current = [...resolved.allIncidentPdws].slice(0, 100);
+            incidentPdwsRef.current = [...resolved.allIncidentPdws].slice(0, 5000);
           }
         }
-        resolved.allIncidentPdws = incidentPdwsRef.current.slice(0, 100);
+        resolved.allIncidentPdws = incidentPdwsRef.current.slice(0, 5000);
 
         if (Array.isArray(resolved.recentDwells) && resolved.recentDwells.length > 0) {
         const seen = new Set(recentDwellsRef.current.map((d) => d.id));
@@ -327,7 +334,10 @@ export function useOverviewTelemetry() {
     }
 
     resolved.dwellHistory = dwellHistoryRef.current;
-    setState(resolved);
+    setState((prev) => ({
+      ...resolved,
+      wsStatus: prev.wsStatus === "ONLINE" || resolved.live ? "ONLINE" : prev.wsStatus,
+    }));
   }, []);
 
   // WebSocket – primary 4 Hz real-time feed

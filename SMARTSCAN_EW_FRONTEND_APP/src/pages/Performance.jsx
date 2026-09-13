@@ -66,14 +66,7 @@ const SCENARIOS = [
 
 export default function Performance() {
   const telemetry = useOverviewTelemetry();
-  const [isEvaluating, setIsEvaluating] = useState(false);
-  const [selectedScenario, setSelectedScenario] = useState("AG-04");
   const [benchmarkStaticBase, setBenchmarkStaticBase] = useState(null);
-  const [scenarioMeta, setScenarioMeta] = useState({
-    name: "Fast Agile Radar Hopper",
-    threatClass: "Pulsed Agile Fire-Control Radar",
-    execTimeMs: null,
-  });
 
   const isOnline = telemetry.live || Boolean(benchmarkStaticBase);
 
@@ -86,13 +79,6 @@ export default function Performance() {
         const data = await api.getLatestBenchmark();
         if (active && data) {
           setBenchmarkStaticBase(data);
-          if (data.scenario_name) {
-            setScenarioMeta({
-              name: data.scenario_name,
-              threatClass: data.threat_class || "Electronic Warfare Environment",
-              execTimeMs: data.execution_time_ms,
-            });
-          }
         }
       } catch {
         // Backend offline
@@ -106,32 +92,6 @@ export default function Performance() {
       clearInterval(timer);
     };
   }, []);
-
-  const handleRunEvaluation = async () => {
-    setIsEvaluating(true);
-    try {
-      const data = await api.evaluateBenchmark({
-        scenario: selectedScenario,
-        n_steps: 50,
-        snr_db: 15.0,
-        seed: 42,
-      });
-      if (data) {
-        setBenchmarkStaticBase(data);
-        if (data.scenario_name) {
-          setScenarioMeta({
-            name: data.scenario_name,
-            threatClass: data.threat_class || "Electronic Warfare Environment",
-            execTimeMs: data.execution_time_ms,
-          });
-        }
-      }
-    } catch {
-      // Evaluation failed or backend offline
-    } finally {
-      setIsEvaluating(false);
-    }
-  };
 
   // 1. Fully Dynamic Protocol Comparison Benchmark
   const dynamicBenchmarkRows = useMemo(() => {
@@ -387,7 +347,7 @@ export default function Performance() {
           Dynamic multi-scheduler comparative evaluation engine: Baseline Open-Loop Sweep vs. DRQN+MoE Adaptive Reinforcement Policy.
           {isOnline ? (
             <span style={{ color: "#49df9d", marginLeft: 6 }}>
-              ● Live telemetry streaming from Cognitive EW backend ({scenarioMeta.name}).
+              ● Live telemetry streaming from Cognitive EW backend.
             </span>
           ) : (
             <span style={{ color: "#ef4444", marginLeft: 6 }}>
@@ -434,82 +394,13 @@ export default function Performance() {
           </div>
         )}
 
-        {/* Dynamic Scenario Evaluation Controller */}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 8,
-            padding: "8px 12px",
-            background: "#1a1c20",
-            border: "1px solid #454653",
-            marginTop: 6,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 280 }}>
-            <span className="st-tsm" style={{ color: "#908f9e", textTransform: "uppercase" }}>
-              TARGET SCENARIO:
-            </span>
-            <select
-              value={selectedScenario}
-              onChange={(e) => setSelectedScenario(e.target.value)}
-              disabled={!isOnline || isEvaluating}
-              style={{
-                flex: 1,
-                maxWidth: 440,
-                background: "#282a2e",
-                color: "#e2e2e8",
-                border: "1px solid #454653",
-                padding: "4px 8px",
-                fontFamily: "JetBrains Mono, monospace",
-                fontSize: 11,
-                cursor: isOnline ? "pointer" : "not-allowed",
-              }}
-            >
-              {SCENARIOS.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {scenarioMeta.execTimeMs && (
-              <span className="st-tsm" style={{ color: "#908f9e" }}>
-                LATENCY: <strong style={{ color: "#bdc2ff" }}>{scenarioMeta.execTimeMs} ms</strong>
-              </span>
-            )}
-            <button
-              onClick={handleRunEvaluation}
-              disabled={!isOnline || isEvaluating}
-              style={{
-                background: isOnline ? (isEvaluating ? "#454653" : "#3097e0") : "#282a2e",
-                color: isOnline ? "#ffffff" : "#908f9e",
-                border: "1px solid #454653",
-                padding: "4px 14px",
-                fontFamily: "JetBrains Mono, monospace",
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                cursor: isOnline && !isEvaluating ? "pointer" : "not-allowed",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {isEvaluating ? "EVALUATING..." : "RUN BENCHMARK EVALUATION"}
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Feature 1: PROTOCOL COMPARISON BENCHMARK (DYNAMIC INPUT EVALUATION) */}
       <div className="st-panel">
         <PanelHead
           title="PROTOCOL COMPARISON BENCHMARK (DYNAMIC INPUT EVALUATION)"
-          badge={isOnline ? `${selectedScenario} · LIVE EVALUATION` : "BACKEND OFFLINE"}
+          badge={isOnline ? "LIVE EVALUATION" : "BACKEND OFFLINE"}
           badgeColor={isOnline ? "#49df9d" : "#ef4444"}
         />
         <div className="st-table-wrap">
