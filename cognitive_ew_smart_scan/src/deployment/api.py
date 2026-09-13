@@ -784,7 +784,10 @@ async def lifespan(app: FastAPI):  # type: ignore
 
 # ── App ─────────────────────────────────────────────────────────────────────
 
-cors_origins_env = os.getenv("CORS_ORIGINS", "https://sih-2026-try2.vercel.app")
+cors_origins_env = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080,https://sih-2026-try2.vercel.app",
+)
 cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
 
 app = FastAPI(title="Cognitive EW SmartScan API", version="0.1.0", lifespan=lifespan)
@@ -846,13 +849,16 @@ def health(response: Response = Response()) -> HealthResponse:
 
     # Resolve benchmark metadata
     bench_ver = "2026.1-CANONICAL"
-    git_rev = os.getenv("GIT_COMMIT")
-    if not git_rev:
-        try:
-            import subprocess
-            git_rev = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-        except Exception:
-            git_rev = "unknown"
+    global _CACHED_GIT_REV
+    if "_CACHED_GIT_REV" not in globals():
+        _CACHED_GIT_REV = os.getenv("GIT_COMMIT")
+        if not _CACHED_GIT_REV:
+            try:
+                import subprocess
+                _CACHED_GIT_REV = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+            except Exception:
+                _CACHED_GIT_REV = "unknown"
+    git_rev = _CACHED_GIT_REV
 
     moe = STATE.get("moe")
     p_mode = getattr(moe, "policy_mode", os.getenv("SCHEDULER_POLICY_MODE", "operational")) if moe else os.getenv("SCHEDULER_POLICY_MODE", "operational")
