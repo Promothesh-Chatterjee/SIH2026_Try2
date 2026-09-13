@@ -64,9 +64,8 @@ export default function Emitters() {
   ];
 
   // 3. Agile Hop Trajectory & Primary Track
-  const emitters = useMemo(() => {
-    return Array.isArray(telemetry.emitters) ? telemetry.emitters : [];
-  }, [telemetry.emitters]);
+  const rawEmitters = telemetry.emitters;
+  const emitters = useMemo(() => (Array.isArray(rawEmitters) ? rawEmitters : []), [rawEmitters]);
   const primaryTrack = useMemo(() => {
     if (!emitters || emitters.length === 0) return null;
     return emitters.find((e) => e.modulation === "Agile Hop") || emitters[0];
@@ -176,11 +175,17 @@ export default function Emitters() {
     ? `${deltaLatUs >= 0 ? "+" : ""}${deltaLatUs.toFixed(1)} µs VS BASELINE`
     : "0.0 µs OFFLINE";
 
-  const missedCnt = telemetry.fomMetrics?.missed_revisits_count ?? Math.max(0, telemetry.totalDwells - telemetry.totalHits);
-  const totRev = telemetry.fomMetrics?.total_revisits || Math.max(1, telemetry.totalDwells);
-  const missedPct = telemetry.fomMetrics?.missed_revisits_pct ?? (totRev > 0 ? (missedCnt / totRev) * 100 : 0.0);
-  const missedDisplay = backendOnline ? `${missedCnt} / ${totRev}` : "0.0 / 0.0";
-  const missedBadge = backendOnline ? `${missedPct.toFixed(2)}% (${missedPct < 2.0 ? "OPTIMAL" : "TOLERABLE"})` : "0.0% OFFLINE";
+  const activeMissed = telemetry.fomMetrics?.missed_revisits_count ?? 0;
+  const activeTargets = telemetry.fomMetrics?.total_revisits || Math.max(1, emitters.filter((e) => (e.threat_tier || 3) <= 2).length);
+  const activePct = telemetry.fomMetrics?.missed_revisits_pct ?? (activeTargets > 0 ? (activeMissed / activeTargets) * 100 : 0.0);
+  const cumMissed = telemetry.fomMetrics?.cumulative_missed_revisits ?? 0;
+  const cumTotal = telemetry.fomMetrics?.cumulative_total_revisits ?? 0;
+  const cumPct = telemetry.fomMetrics?.cumulative_missed_pct ?? 0.0;
+
+  const missedDisplay = backendOnline ? `${activeMissed} / ${activeTargets}` : "0 / 0";
+  const missedBadge = backendOnline
+    ? `${activePct.toFixed(1)}% (${activeMissed === 0 ? "OPTIMAL" : (activePct < 25.0 ? "TOLERABLE" : "HIGH")})`
+    : "0.0% OFFLINE";
 
   const leakDisplay = backendOnline ? "0.000%" : na;
   const leakBadge = backendOnline ? "ZERO LEAK CONFIRMED" : "ZERO LEAK CONFIRMED (0.0)";
@@ -188,7 +193,19 @@ export default function Emitters() {
   // CSV Export Handler
   const handleExportCsv = () => {
     if (!emitters || emitters.length === 0) return;
-    const headers = ["EMIT-ID", "TRACK TAG", "BAND", "FREQUENCY_MHZ", "PRI_US", "PW_US", "AOA_DEG", "THREAT_TIER", "REVISIT_DEADLINE_US", "STATUS"];
+    const headers = [
+      "EMIT-ID",
+      "TRACK TAG",
+      "BAND",
+      "FREQUENCY_MHZ",
+      "PRI_US",
+      "PW_US",
+      "AOA_DEG",
+      "THREAT_TIER",
+      "REVISIT_DEADLINE_US",
+      "TIME_TO_DEADLINE_US",
+      "STATUS",
+    ];
     const rows = emitters.map((e) => [
       e.emitter_id,
       e.tag,
@@ -199,6 +216,7 @@ export default function Emitters() {
       e.aoa_deg,
       e.threat_tier_label || `TIER ${e.threat_tier}`,
       e.revisit_deadline_us,
+      e.time_to_deadline_us != null ? e.time_to_deadline_us : "",
       e.revisit_status,
     ]);
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
@@ -448,8 +466,16 @@ export default function Emitters() {
                 <text fill="#bdc2ff" fontSize="9" fontFamily="JetBrains Mono" x="525" y="16">RX DWELL #83</text>
                 {/* Revisit Deadline */}
                 <line stroke="#ffb4ab" strokeDasharray="3,3" strokeWidth="1.5" x1="420" x2="420" y1="0" y2="180" />
-                <text fill="#ffb4ab" fontSize="9" fontFamily="JetBrains Mono" x="315" y="172">
-                  {primaryTrack ? `REVISIT DEADLINE: ${primaryTrack.revisit_status} (T+${primaryTrack.revisit_deadline_us}µs)` : "REVISIT DEADLINE (T+320µs)"}
+                <text fill="#ffb4ab" fontSize="9" fontFamily="JetBrains Mono" x="280" y="172">
+                  {primaryTrack
+                    ? `REVISIT DEADLINE: ${primaryTrack.revisit_status} (${
+                        primaryTrack.time_to_deadline_us != null
+                          ? (primaryTrack.time_to_deadline_us > 0
+                              ? `+${Number(primaryTrack.time_to_deadline_us).toFixed(1)}µs`
+                              : `${Math.abs(Number(primaryTrack.time_to_deadline_us)).toFixed(1)}µs OVERDUE`)
+                          : `T+${Number(primaryTrack.revisit_deadline_us || 0).toFixed(1)}µs`
+                      })`
+                    : "REVISIT DEADLINE: LOCKED (+320µs)"}
                 </text>
                 {/* Ground Truth Hopping Path */}
                 <path d={hopPath} fill="none" stroke="#96ccff" strokeLinecap="round" strokeWidth="1.5" />
@@ -654,7 +680,14 @@ export default function Emitters() {
                 emitters.map((em, idx) => {
                   const tierColor = em.threat_tier === 1 ? "#ffb4ab" : (em.threat_tier === 2 ? "#96ccff" : "#bdc2ff");
                   const tierBg = em.threat_tier === 1 ? "rgba(255,180,171,0.15)" : (em.threat_tier === 2 ? "rgba(150,204,255,0.15)" : "rgba(189,194,255,0.15)");
-                  const statusColor = em.revisit_status === "LOCKED" ? "#49df9d" : (em.revisit_status === "ACTIVE HOP" ? "#96ccff" : "#ffb4ab");
+                  const isOverdue = Boolean(em.is_overdue || (em.time_to_deadline_us != null && em.time_to_deadline_us <= 0));
+                  const statusColor = isOverdue
+                    ? "#ffb4ab"
+                    : em.revisit_status === "REVISIT DUE"
+                    ? "#ffd54f"
+                    : em.revisit_status === "ACTIVE HOP"
+                    ? "#96ccff"
+                    : "#49df9d";
 
                   return (
                     <tr key={em.track_id ?? idx}>
@@ -681,11 +714,36 @@ export default function Emitters() {
                           {em.threat_tier_label || `TIER ${em.threat_tier || 3}`}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right", fontFamily: "JetBrains Mono", color: "#ffb4ab" }}>
-                        T+{Number(em.revisit_deadline_us || 0).toFixed(1)} µs
+                      <td
+                        style={{ textAlign: "right", fontFamily: "JetBrains Mono" }}
+                        title={`Deadline: T+${Number(em.revisit_deadline_us || 0).toFixed(1)} µs | Horizon: ${Number(em.revisit_horizon_us || 0).toFixed(1)} µs`}
+                      >
+                        {em.time_to_deadline_us != null ? (
+                          em.time_to_deadline_us > 0 ? (
+                            <span
+                              style={{
+                                color:
+                                  em.time_to_deadline_us < Number(em.revisit_horizon_us || 300) * 0.35
+                                    ? "#ffd54f"
+                                    : "#49df9d",
+                                fontWeight: 600,
+                              }}
+                            >
+                              +{Number(em.time_to_deadline_us).toFixed(1)} µs
+                            </span>
+                          ) : (
+                            <span style={{ color: "#ffb4ab", fontWeight: 700 }}>
+                              {Math.abs(Number(em.time_to_deadline_us)).toFixed(1)} µs OVERDUE
+                            </span>
+                          )
+                        ) : (
+                          <span style={{ color: "#ffb4ab" }}>
+                            T+{Number(em.revisit_deadline_us || 0).toFixed(1)} µs
+                          </span>
+                        )}
                       </td>
                       <td style={{ textAlign: "right", fontWeight: 700, color: statusColor }}>
-                        {em.revisit_status || "TRACKING"}
+                        {em.revisit_status || (isOverdue ? "MISSED DEADLINE" : "TRACKING")}
                       </td>
                     </tr>
                   );
@@ -764,17 +822,32 @@ export default function Emitters() {
         {/* Metric 2: Missed Revisit Deadlines */}
         <div className="st-panel" style={{ padding: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 22, color: "#ffb4ab" }}>heart_broken</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 22, color: activeMissed > 0 ? "#ffb4ab" : "#49df9d" }}>
+              {activeMissed > 0 ? "warning" : "task_alt"}
+            </span>
             <div style={{ display: "flex", flexDirection: "column" }}>
               <span className="st-headline" style={{ color: "#e2e2e8" }}>MISSED REVISIT DEADLINES</span>
-              <span className="st-tsm" style={{ color: "#908f9e" }}>Tier-1 & Tier-2 Targets Expired</span>
+              <span className="st-tsm" style={{ color: "#908f9e" }}>
+                {backendOnline ? `${activeMissed} of ${activeTargets} Priority Targets Overdue` : "Tier-1 & Tier-2 Targets Expired"}
+              </span>
+              {backendOnline && cumTotal > 0 && (
+                <span className="st-tsm" style={{ color: "#bdc2ff", fontSize: 10, marginTop: 2 }}>
+                  Mission: {cumMissed} / {cumTotal} ({cumPct.toFixed(1)}% missed)
+                </span>
+              )}
             </div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div className="st-tmd" style={{ color: backendOnline ? "#ffb4ab" : "#908f9e" }}>
+            <div className="st-tmd" style={{ color: backendOnline ? (activeMissed > 0 ? "#ffb4ab" : "#49df9d") : "#908f9e" }}>
               {missedDisplay}
             </div>
-            <span className="st-badge" style={{ color: backendOnline ? "#49df9d" : "#908f9e" }}>
+            <span
+              className="st-badge"
+              style={{
+                color: backendOnline ? (activeMissed === 0 ? "#49df9d" : "#ffb4ab") : "#908f9e",
+                background: backendOnline ? (activeMissed === 0 ? "rgba(73,223,157,0.15)" : "rgba(255,180,171,0.15)") : "#1a1c20",
+              }}
+            >
               {missedBadge}
             </span>
           </div>
