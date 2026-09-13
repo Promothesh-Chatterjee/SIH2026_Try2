@@ -156,9 +156,9 @@ export const api = {
 
   startMissionStream(params = {}, options = {}) {
     const payload = {
-      scenario: params.scenario ?? "config_96",
+      scenario: params.scenario ?? "final_grc",
       speed_hz: Number(params.speed_hz) || 15.0,
-      max_dwells: params.max_dwells ?? null,
+      max_dwells: params.max_dwells ?? 4000,
     };
     return request("/mission/stream/start", {
       method: "POST",

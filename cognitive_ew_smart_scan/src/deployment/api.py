@@ -2530,7 +2530,7 @@ def mission_stream_status() -> dict[str, Any]:
 
     return {
         "running": bool(_stream_running),
-        "scenario": _stream_info.get("scenario", "config_29"),
+        "scenario": _stream_info.get("scenario", "final_grc"),
         "total_dwells": dwells,
         "total_hits": hits,
         "rolling_pd": pd,

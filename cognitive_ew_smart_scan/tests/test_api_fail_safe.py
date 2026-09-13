@@ -85,6 +85,9 @@ class _BaseAPITest(unittest.TestCase):
         api_mod.STATE["deinterleaver"] = None
         api_mod.STATE["deinterleaver_onnx"] = None
         api_mod.STATE["normalization_stats"] = None
+        api_mod.STATE["dimension_check_passed"] = False
+        api_mod.STATE["normalization_hash_match"] = False
+        api_mod.STATE["hidden_state_ready"] = False
 
     def tearDown(self):
         api_mod.STATE.clear()
