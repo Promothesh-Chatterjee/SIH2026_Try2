@@ -2183,6 +2183,136 @@ class MissionStreamRequest(BaseModel):
     max_dwells: Optional[int] = Field(default=None, description="Max dwell steps (None for continuous)")
 
 
+def find_gnu_scenario_file(scenario_name: str) -> Optional[Path]:
+    """Dynamically resolve GNU Radio ground-truth or pulse data across local and cloud deployments."""
+    if not scenario_name:
+        return None
+
+    direct_p = Path(scenario_name)
+    if direct_p.is_file():
+        return direct_p
+
+    repo_root = Path(__file__).resolve().parents[2]
+    candidate_roots = [
+        repo_root.parent / "GNU_RF_ENV",
+        repo_root / "GNU_RF_ENV",
+        Path.cwd() / "GNU_RF_ENV",
+        Path.cwd().parent / "GNU_RF_ENV",
+        Path("C:/HACKATHONS/SIH2026_Try2/GNU_RF_ENV"),
+    ]
+    env_dir = os.environ.get("GNU_RF_ENV_DIR")
+    if env_dir:
+        candidate_roots.insert(0, Path(env_dir))
+
+    subdirs = [
+        Path("p3ac_50k/episodes"),
+        Path("data"),
+        Path("dry_run_corpus/episodes"),
+        Path(""),
+    ]
+
+    filenames = [
+        f"{scenario_name}.gt.json",
+        f"{scenario_name}_pulses.json",
+        f"{scenario_name}.json",
+        f"{scenario_name}.npz",
+        f"{scenario_name}.h5",
+        scenario_name,
+    ]
+
+    for root in candidate_roots:
+        if not root.exists():
+            continue
+        for sub in subdirs:
+            for fname in filenames:
+                cand = root / sub / fname
+                if cand.is_file():
+                    return cand
+
+    # Check TSRD and data directory fallbacks
+    for fallback in [
+        Path(f"data/{scenario_name}.h5"),
+        Path(f"D:/TSRD/stare/val_stare/{scenario_name}.h5"),
+    ]:
+        if fallback.is_file():
+            return fallback
+
+    return None
+
+
+def load_scenario_pulses_from_dataset(matched_path: Path, time_horizon_us: float = 1_000_000.0) -> list[dict[str, Any]]:
+    """Parse pulses from GNU RF Environment (.gt.json, _pulses.json) or HDF5."""
+    scenario_pulses: list[dict[str, Any]] = []
+
+    # 1. Direct raw JSON pulse list (e.g. final_grc_pulses.json, step09_jittered_pulses.json)
+    if matched_path.suffix == ".json" and not matched_path.name.endswith(".gt.json"):
+        try:
+            with open(matched_path, "r", encoding="utf-8") as f:
+                raw_data = json.load(f)
+            if isinstance(raw_data, list):
+                for idx, p in enumerate(raw_data):
+                    t = float(p.get("time_us", p.get("toa_us", idx * 100.0)))
+                    scenario_pulses.append({
+                        "toa_us": t,
+                        "time_us": t,
+                        "frequency_mhz": float(p.get("frequency_mhz", 3500.0)),
+                        "pulse_width_us": float(p.get("pulse_width_us", 10.0)),
+                        "amplitude_db": float(p.get("amplitude_db", -50.0)),
+                        "aoa_deg": float(p.get("aoa_deg", 15.0)),
+                        "emitter_id": p.get("emitter_id", 1),
+                        "source_id": str(p.get("source_id", matched_path.stem)),
+                        "pulse_id": int(p.get("pulse_id", idx)),
+                    })
+                logger.info("Loaded %d raw pulses from GNU pulse array %s", len(scenario_pulses), matched_path.name)
+                return scenario_pulses
+        except Exception as err:
+            logger.warning("Failed reading raw pulses from %s: %s", matched_path, err)
+
+    # 2. GNU Ground Truth JSON or NPZ via load_gnu_records
+    if matched_path.name.endswith(".gt.json") or matched_path.suffix in [".json", ".npz"] or "GNU_RF_ENV" in str(matched_path):
+        try:
+            from ..environment.scenario_generator import load_gnu_records
+            records = load_gnu_records(matched_path, time_horizon_us=time_horizon_us)
+            for idx, r in enumerate(records):
+                scenario_pulses.append({
+                    "toa_us": float(r.toa_us),
+                    "time_us": float(r.toa_us),
+                    "frequency_mhz": float(r.frequency_mhz),
+                    "pulse_width_us": float(r.pulse_width_us),
+                    "amplitude_db": float(r.amplitude_db),
+                    "aoa_deg": float(r.aoa_deg),
+                    "emitter_id": getattr(r, "emitter_id", 1),
+                    "source_id": getattr(r, "source_id", matched_path.stem),
+                    "pulse_id": idx,
+                })
+            logger.info("Loaded %d pulses from GNU ground truth %s", len(scenario_pulses), matched_path.name)
+            return scenario_pulses
+        except Exception as err:
+            logger.warning("Failed reading GNU dataset %s via load_gnu_records: %s", matched_path, err)
+
+    # 3. HDF5 TSRD dataset
+    if matched_path.suffix == ".h5":
+        try:
+            from ..environment.scenario_generator import load_h5_records
+            records = load_h5_records(matched_path, freq_min_mhz=0.0, freq_max_mhz=18000.0, max_pulses=50000)
+            for idx, r in enumerate(records):
+                scenario_pulses.append({
+                    "toa_us": float(r.toa_us),
+                    "time_us": float(r.toa_us),
+                    "frequency_mhz": float(r.frequency_mhz),
+                    "pulse_width_us": float(r.pulse_width_us),
+                    "amplitude_db": float(r.amplitude_db),
+                    "aoa_deg": float(r.aoa_deg),
+                    "pulse_id": idx,
+                })
+            logger.info("Loaded %d pulses from TSRD %s", len(scenario_pulses), matched_path.name)
+            return scenario_pulses
+        except Exception as err:
+            logger.warning("Failed reading HDF5 %s via load_h5_records: %s", matched_path, err)
+
+    return scenario_pulses
+
+
 async def _run_live_mission_stream(scenario_name: str, speed_hz: float, max_dwells: Optional[int] = None):
     global _stream_running, _stream_info
     logger.info("Starting live mission stream: scenario=%s, speed=%.1f Hz", scenario_name, speed_hz)
@@ -2203,86 +2333,11 @@ async def _run_live_mission_stream(scenario_name: str, speed_hz: float, max_dwel
         "rolling_pd": 0.0,
     }
 
-    # Load pulses from GNU parsed dataset if present, else TSRD H5, else generator
+    # Resolve and load pulses from GNU RF Environment, TSRD H5, or synthetic fallback
     scenario_pulses: list[dict[str, Any]] = []
-    repo_root = Path(__file__).resolve().parents[2]
-    gnu_dir = repo_root.parent / "GNU_RF_ENV" / "p3ac_50k" / "episodes"
-    if not gnu_dir.exists():
-        gnu_dir = Path("C:/HACKATHONS/SIH2026_Try2/GNU_RF_ENV/p3ac_50k/episodes")
-
-    candidates = [
-        Path(scenario_name) if scenario_name and Path(scenario_name).exists() else None,
-        gnu_dir / f"{scenario_name}.gt.json" if scenario_name else None,
-        gnu_dir / f"{scenario_name}" if scenario_name else None,
-        gnu_dir / "EP000001.gt.json",
-        Path(f"D:/TSRD/stare/val_stare/{scenario_name}.h5") if scenario_name else None,
-        Path(f"data/{scenario_name}.h5") if scenario_name else None,
-    ]
-    matched_path = next((p for p in candidates if p is not None and p.exists()), None)
-
+    matched_path = find_gnu_scenario_file(scenario_name)
     if matched_path:
-        if matched_path.suffix in [".json", ".npz"] or "GNU_RF_ENV" in str(matched_path):
-            try:
-                from ..environment.scenario_generator import load_gnu_records
-                records = load_gnu_records(matched_path, time_horizon_us=1_000_000.0)
-                for idx, r in enumerate(records):
-                    scenario_pulses.append({
-                        "toa_us": float(r.toa_us),
-                        "time_us": float(r.toa_us),
-                        "frequency_mhz": float(r.frequency_mhz),
-                        "pulse_width_us": float(r.pulse_width_us),
-                        "amplitude_db": float(r.amplitude_db),
-                        "aoa_deg": float(r.aoa_deg),
-                        "pulse_id": idx,
-                    })
-                logger.info("Loaded %d pulses from GNU parsed dataset %s", len(scenario_pulses), matched_path.name)
-            except Exception as err:
-                logger.warning("Failed reading GNU dataset %s: %s", matched_path, err)
-        elif matched_path.suffix == ".h5":
-            try:
-                from ..environment.scenario_generator import load_h5_records
-                records = load_h5_records(
-                    matched_path,
-                    freq_min_mhz=0.0,
-                    freq_max_mhz=18000.0,
-                    max_pulses=50000,
-                )
-                for idx, r in enumerate(records):
-                    scenario_pulses.append({
-                        "toa_us": float(r.toa_us),
-                        "time_us": float(r.toa_us),
-                        "frequency_mhz": float(r.frequency_mhz),
-                        "pulse_width_us": float(r.pulse_width_us),
-                        "amplitude_db": float(r.amplitude_db),
-                        "aoa_deg": float(r.aoa_deg),
-                        "pulse_id": idx,
-                    })
-                logger.info("Loaded %d pulses from TSRD %s", len(scenario_pulses), matched_path)
-            except Exception as err:
-                logger.warning("Failed reading HDF5 %s via load_h5_records: %s", matched_path, err)
-    h5_path = next((p for p in h5_candidates if p.exists()), None)
-    if h5_path:
-        try:
-            from ..environment.scenario_generator import load_h5_records
-            records = load_h5_records(
-                h5_path,
-                freq_min_mhz=0.0,
-                freq_max_mhz=18000.0,
-                max_pulses=500000,
-            )
-            for idx, r in enumerate(records):
-                scenario_pulses.append({
-                    "toa_us": float(r.toa_us),
-                    "time_us": float(r.toa_us),
-                    "frequency_mhz": float(r.frequency_mhz),
-                    "pulse_width_us": float(r.pulse_width_us),
-                    "amplitude_db": float(r.amplitude_db),
-                    "aoa_deg": float(r.aoa_deg),
-                    "pulse_id": idx,
-                })
-            logger.info("Loaded %d pulses from TSRD %s", len(scenario_pulses), h5_path)
-        except Exception as err:
-            logger.warning("Failed reading HDF5 %s via load_h5_records: %s", h5_path, err)
+        scenario_pulses = load_scenario_pulses_from_dataset(matched_path, time_horizon_us=1_000_000.0)
 
     if not scenario_pulses:
         # Fallback to realistic agile radar generator matching config_29
@@ -2444,6 +2499,98 @@ def mission_stream_status() -> dict[str, Any]:
         "rolling_median_latency_us": round(med_lat, 2),
         "mission_clock_us": float(controller.clock_us) if controller else 0.0,
     }
+
+
+# ── GNU Radio RF Environment Scenarios Catalog ──────────────────────────────
+
+GNU_RF_SCENARIOS_CATALOG: list[dict[str, Any]] = [
+    {
+        "id": "final_and_saa",
+        "name": "GNU Radio 5-Hopper + S&H/VCO Combined",
+        "source": "GNU_RF_ENV (final.grc + saa.grc)",
+        "freq_range_mhz": [3000.0, 9200.0],
+        "active_bands": [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+        "dwell_count": 4000,
+        "threat_class": "Combined Agile Multi-Hopper & Chirp Subcarrier",
+        "description": "High-density agile EW combat environment combining 5 independent FHSS radars and S&H VCO chirped emitters across 3.0-9.2 GHz.",
+    },
+    {
+        "id": "final_grc",
+        "name": "GNU Radio 5-Emitter Agile FHSS",
+        "source": "GNU_RF_ENV (final.grc)",
+        "freq_range_mhz": [3000.0, 8400.0],
+        "active_bands": [6, 7, 15, 16],
+        "dwell_count": 2000,
+        "threat_class": "Agile Multi-Emitter Tactical Network",
+        "description": "5 concurrent agile emitters from final.grc (Standard, FastWide, SlowNarrow, EdgeHopper, CenterBiased) hopping across S and X bands.",
+    },
+    {
+        "id": "saa_grc",
+        "name": "GNU Radio Sample & Hold / Audio-RF Chirp",
+        "source": "GNU_RF_ENV (saa.grc)",
+        "freq_range_mhz": [5400.0, 9200.0],
+        "active_bands": [10, 11, 12, 13, 14, 15, 16, 17, 18],
+        "dwell_count": 2000,
+        "threat_class": "S&H Chirp / VCO Tactical Modulation",
+        "description": "Sample & Hold pulsed frequency modulated emitter with dual audio-RF subcarrier excursions across 5.4-9.2 GHz.",
+    },
+    {
+        "id": "1_grc_fhss",
+        "name": "GNU Radio 1.grc FHSS Agile Source",
+        "source": "GNU_RF_ENV (1.grc)",
+        "freq_range_mhz": [3350.0, 3575.0],
+        "active_bands": [6, 7],
+        "dwell_count": 100,
+        "threat_class": "Tactical Agile FHSS Source",
+        "description": "Canonical agile frequency-hopping radar source simulated in GNU Radio 1.grc.",
+    },
+    {
+        "id": "step09_jittered",
+        "name": "GNU Radio Jittered Pulse Train",
+        "source": "GNU_RF_ENV (step09_jittered_pulses.json)",
+        "freq_range_mhz": [3000.0, 8500.0],
+        "pulse_count": 24286,
+        "threat_class": "High-Jitter Doppler-Perturbed Agile Radar",
+        "description": "24,286 real detected pulses with non-uniform PRI jitter, amplitude fluctuations, and angle-of-arrival dispersion.",
+    },
+    {
+        "id": "EP000001",
+        "name": "GNU Radio Episode 001 Benchmark",
+        "source": "GNU_RF_ENV (p3ac_50k/episodes/EP000001.gt.json)",
+        "freq_range_mhz": [3200.0, 8000.0],
+        "dwell_count": 500,
+        "threat_class": "Benchmark Tactical Threat Episode",
+        "description": "Standard benchmark episode 001 from the 50,000 episode corpus.",
+    },
+    {
+        "id": "config_96",
+        "name": "Scenario 96 (Agile Hopper 11 Bands)",
+        "source": "TSRD / Cognitive Benchmark",
+        "active_bands": 11,
+        "threat_class": "Multi-Band Agile Radar Network",
+        "description": "Canonical TSRD multi-emitter agility scenario across 11 active frequency bands (IR > 70%).",
+    },
+    {
+        "id": "config_64",
+        "name": "Scenario 64 (Dense Agile Threat)",
+        "source": "TSRD / Cognitive Benchmark",
+        "threat_class": "Dense Agility Radar Cluster",
+        "description": "High-density agile threat cluster for stress-testing cognitive arbitration.",
+    },
+    {
+        "id": "config_29",
+        "name": "Scenario 29 (Periodic Pulse Baseline)",
+        "source": "TSRD / Calibration Baseline",
+        "threat_class": "Periodic Pulse Emitter",
+        "description": "Periodic pulse radar baseline used for calibration of sensitivity and FoM metrics.",
+    },
+]
+
+
+@app.get("/gnu_rf/scenarios", tags=["mission", "gnu_rf"])
+def gnu_rf_scenarios() -> list[dict[str, Any]]:
+    """List available GNU Radio physical RF environment datasets and scenarios."""
+    return GNU_RF_SCENARIOS_CATALOG
 
 
 # ── Dynamic Benchmark Evaluation Endpoints ─────────────────────────────────
