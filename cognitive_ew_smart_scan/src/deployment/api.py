@@ -291,6 +291,10 @@ class MissionStartRequest(BaseModel):
     """Request to start a closed-loop scanning mission."""
 
     initial_time_us: float = Field(0.0, description="Initial mission clock time in microseconds")
+    scenario: Optional[str] = Field(default="final_grc", description="GNU Radio scenario: 'final_grc' (final.grc) or 'saa_grc' (saa.grc)")
+    speed_hz: Optional[float] = Field(default=15.0, ge=1.0, le=100.0, description="Simulation frequency in Hz")
+    max_dwells: Optional[int] = Field(default=4000, description="Max dwell steps (default: 4000 dwells)")
+    auto_stream: bool = Field(default=True, description="Automatically start continuous stream of dwells")
 
 
 class MissionStepRequest(BaseModel):
@@ -1310,8 +1314,8 @@ def list_emitters() -> list[dict[str, Any]]:
 # ── Operational Mission Endpoints (Closed-Loop Demonstration) ────────────────
 
 @app.post("/mission/start", tags=["mission"])
-def mission_start(req: MissionStartRequest, request: Request) -> dict[str, Any]:
-    """Start or restart a closed-loop operational mission."""
+async def mission_start(req: MissionStartRequest, request: Request) -> dict[str, Any]:
+    """Start or restart a closed-loop operational mission and launch continuous GNU Radio stream."""
     if not _is_authorized(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     controller = STATE.get("controller")
@@ -1322,10 +1326,27 @@ def mission_start(req: MissionStartRequest, request: Request) -> dict[str, Any]:
         )
     try:
         controller.start_mission(initial_time_us=req.initial_time_us)
+        global _stream_task, _stream_running
+        scenario = req.scenario or "final_grc"
+        speed_hz = float(req.speed_hz or 15.0)
+        max_dwells = req.max_dwells if req.max_dwells is not None else 4000
+
+        if req.auto_stream:
+            if _stream_running and _stream_task and not _stream_task.done():
+                _stream_running = False
+                _stream_task.cancel()
+            _stream_task = asyncio.create_task(
+                _run_live_mission_stream(scenario, speed_hz, max_dwells)
+            )
+
         return {
             "status": "mission_started",
             "initial_time_us": float(req.initial_time_us),
             "mission_active": controller.is_mission_active,
+            "stream_started": bool(req.auto_stream),
+            "scenario": scenario,
+            "speed_hz": speed_hz,
+            "max_dwells": max_dwells,
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -1385,12 +1406,18 @@ def mission_step(req: MissionStepRequest, request: Request) -> MissionStepRespon
 
 @app.post("/mission/stop", tags=["mission"])
 def mission_stop(request: Request) -> dict[str, Any]:
-    """Stop the current closed-loop operational mission."""
+    """Stop the current closed-loop operational mission and halt live stream."""
     if not _is_authorized(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     controller = STATE.get("controller")
     if controller is None:
         raise HTTPException(status_code=503, detail="OperationalReceiverController not initialised")
+
+    global _stream_task, _stream_running
+    _stream_running = False
+    if _stream_task and not _stream_task.done():
+        _stream_task.cancel()
+
     controller.stop_mission()
     return {
         "status": "mission_stopped",
@@ -2178,9 +2205,9 @@ async def ws_state(ws: WebSocket):
 # ── Live Mission Streaming Worker & Endpoints ──────────────────────────────
 
 class MissionStreamRequest(BaseModel):
-    scenario: str = Field(default="config_96", description="Scenario: config_96 (multi-emitter agile hopper, 11 active bands, IR > 70%), config_64, or config_29")
+    scenario: str = Field(default="final_grc", description="GNU Radio scenario: 'final_grc' (final.grc) or 'saa_grc' (saa.grc)")
     speed_hz: float = Field(default=15.0, ge=1.0, le=100.0, description="Dwell simulation frequency in Hz")
-    max_dwells: Optional[int] = Field(default=None, description="Max dwell steps (None for continuous)")
+    max_dwells: Optional[int] = Field(default=4000, description="Max dwell steps (default: 4000 continuous dwells)")
 
 
 def find_gnu_scenario_file(scenario_name: str) -> Optional[Path]:
@@ -2192,13 +2219,23 @@ def find_gnu_scenario_file(scenario_name: str) -> Optional[Path]:
     if direct_p.is_file():
         return direct_p
 
+    # Normalize scenario names (support both final.grc and final_grc, saa.grc and saa_grc)
+    names_to_check = [scenario_name]
+    clean_name = scenario_name.replace(".grc", "_grc")
+    if clean_name not in names_to_check:
+        names_to_check.append(clean_name)
+    dot_name = scenario_name.replace("_grc", ".grc")
+    if dot_name not in names_to_check:
+        names_to_check.append(dot_name)
+
     repo_root = Path(__file__).resolve().parents[2]
     candidate_roots = [
-        repo_root.parent / "GNU_RF_ENV",
-        repo_root / "GNU_RF_ENV",
-        Path.cwd() / "GNU_RF_ENV",
-        Path.cwd().parent / "GNU_RF_ENV",
-        Path("C:/HACKATHONS/SIH2026_Try2/GNU_RF_ENV"),
+        repo_root / "data",                                     # cognitive_ew_smart_scan/data (fail-safe deployment)
+        repo_root.parent / "GNU_RF_ENV",                        # Repo root/GNU_RF_ENV (standard repo layout)
+        repo_root / "GNU_RF_ENV",                               # cognitive_ew_smart_scan/GNU_RF_ENV
+        Path.cwd() / "GNU_RF_ENV",                              # CWD/GNU_RF_ENV
+        Path.cwd().parent / "GNU_RF_ENV",                       # Parent of CWD/GNU_RF_ENV
+        Path("C:/HACKATHONS/SIH2026_Try2/GNU_RF_ENV"),          # Local hackathon path
     ]
     env_dir = os.environ.get("GNU_RF_ENV_DIR")
     if env_dir:
@@ -2211,14 +2248,16 @@ def find_gnu_scenario_file(scenario_name: str) -> Optional[Path]:
         Path(""),
     ]
 
-    filenames = [
-        f"{scenario_name}.gt.json",
-        f"{scenario_name}_pulses.json",
-        f"{scenario_name}.json",
-        f"{scenario_name}.npz",
-        f"{scenario_name}.h5",
-        scenario_name,
-    ]
+    filenames = []
+    for n in names_to_check:
+        filenames.extend([
+            f"{n}.gt.json",
+            f"{n}_pulses.json",
+            f"{n}.json",
+            f"{n}.npz",
+            f"{n}.h5",
+            n,
+        ])
 
     for root in candidate_roots:
         if not root.exists():
@@ -2505,84 +2544,26 @@ def mission_stream_status() -> dict[str, Any]:
 
 GNU_RF_SCENARIOS_CATALOG: list[dict[str, Any]] = [
     {
-        "id": "final_and_saa",
-        "name": "GNU Radio 5-Hopper + S&H/VCO Combined",
-        "source": "GNU_RF_ENV (final.grc + saa.grc)",
-        "freq_range_mhz": [3000.0, 9200.0],
-        "active_bands": [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-        "dwell_count": 4000,
-        "threat_class": "Combined Agile Multi-Hopper & Chirp Subcarrier",
-        "description": "High-density agile EW combat environment combining 5 independent FHSS radars and S&H VCO chirped emitters across 3.0-9.2 GHz.",
-    },
-    {
         "id": "final_grc",
-        "name": "GNU Radio 5-Emitter Agile FHSS",
+        "name": "final.grc — GNU Radio 5-Emitter Agile FHSS (4,000 Dwells)",
         "source": "GNU_RF_ENV (final.grc)",
+        "flowgraph": "final.grc",
         "freq_range_mhz": [3000.0, 8400.0],
         "active_bands": [6, 7, 15, 16],
-        "dwell_count": 2000,
-        "threat_class": "Agile Multi-Emitter Tactical Network",
-        "description": "5 concurrent agile emitters from final.grc (Standard, FastWide, SlowNarrow, EdgeHopper, CenterBiased) hopping across S and X bands.",
+        "dwell_count": 4000,
+        "threat_class": "Agile Multi-Emitter Tactical FHSS Network",
+        "description": "5 agile radar species from final.grc (Standard, FastWide, SlowNarrow, EdgeHopper, CenterBiased) hopping across S and X bands up to 4,000 continuous dwells.",
     },
     {
         "id": "saa_grc",
-        "name": "GNU Radio Sample & Hold / Audio-RF Chirp",
+        "name": "saa.grc — GNU Radio Sample & Hold / Audio-RF Chirp (4,000 Dwells)",
         "source": "GNU_RF_ENV (saa.grc)",
+        "flowgraph": "saa.grc",
         "freq_range_mhz": [5400.0, 9200.0],
         "active_bands": [10, 11, 12, 13, 14, 15, 16, 17, 18],
-        "dwell_count": 2000,
-        "threat_class": "S&H Chirp / VCO Tactical Modulation",
-        "description": "Sample & Hold pulsed frequency modulated emitter with dual audio-RF subcarrier excursions across 5.4-9.2 GHz.",
-    },
-    {
-        "id": "1_grc_fhss",
-        "name": "GNU Radio 1.grc FHSS Agile Source",
-        "source": "GNU_RF_ENV (1.grc)",
-        "freq_range_mhz": [3350.0, 3575.0],
-        "active_bands": [6, 7],
-        "dwell_count": 100,
-        "threat_class": "Tactical Agile FHSS Source",
-        "description": "Canonical agile frequency-hopping radar source simulated in GNU Radio 1.grc.",
-    },
-    {
-        "id": "step09_jittered",
-        "name": "GNU Radio Jittered Pulse Train",
-        "source": "GNU_RF_ENV (step09_jittered_pulses.json)",
-        "freq_range_mhz": [3000.0, 8500.0],
-        "pulse_count": 24286,
-        "threat_class": "High-Jitter Doppler-Perturbed Agile Radar",
-        "description": "24,286 real detected pulses with non-uniform PRI jitter, amplitude fluctuations, and angle-of-arrival dispersion.",
-    },
-    {
-        "id": "EP000001",
-        "name": "GNU Radio Episode 001 Benchmark",
-        "source": "GNU_RF_ENV (p3ac_50k/episodes/EP000001.gt.json)",
-        "freq_range_mhz": [3200.0, 8000.0],
-        "dwell_count": 500,
-        "threat_class": "Benchmark Tactical Threat Episode",
-        "description": "Standard benchmark episode 001 from the 50,000 episode corpus.",
-    },
-    {
-        "id": "config_96",
-        "name": "Scenario 96 (Agile Hopper 11 Bands)",
-        "source": "TSRD / Cognitive Benchmark",
-        "active_bands": 11,
-        "threat_class": "Multi-Band Agile Radar Network",
-        "description": "Canonical TSRD multi-emitter agility scenario across 11 active frequency bands (IR > 70%).",
-    },
-    {
-        "id": "config_64",
-        "name": "Scenario 64 (Dense Agile Threat)",
-        "source": "TSRD / Cognitive Benchmark",
-        "threat_class": "Dense Agility Radar Cluster",
-        "description": "High-density agile threat cluster for stress-testing cognitive arbitration.",
-    },
-    {
-        "id": "config_29",
-        "name": "Scenario 29 (Periodic Pulse Baseline)",
-        "source": "TSRD / Calibration Baseline",
-        "threat_class": "Periodic Pulse Emitter",
-        "description": "Periodic pulse radar baseline used for calibration of sensitivity and FoM metrics.",
+        "dwell_count": 4000,
+        "threat_class": "Sample & Hold Chirp / VCO Agile Modulation",
+        "description": "Sample & Hold pulsed frequency modulated emitter from saa.grc with audio-RF subcarrier excursions across 5.4-9.2 GHz up to 4,000 continuous dwells.",
     },
 ]
 

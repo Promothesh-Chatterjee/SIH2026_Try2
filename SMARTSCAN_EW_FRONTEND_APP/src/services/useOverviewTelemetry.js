@@ -450,8 +450,8 @@ export function useOverviewTelemetry(options = {}) {
     return res;
   }, []);
 
-  const startMission = useCallback(async (initialTimeUs = 0.0) => {
-    const res = await api.startMission(initialTimeUs);
+  const startMission = useCallback(async (initialTimeUs = 0.0, params = {}) => {
+    const res = await api.startMission(initialTimeUs, params);
     pollerRef.current?.pollCycle();
     return res;
   }, []);

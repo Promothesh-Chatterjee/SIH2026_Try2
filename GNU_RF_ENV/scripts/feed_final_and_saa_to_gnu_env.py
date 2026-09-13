@@ -389,8 +389,8 @@ def create_combined_final_saa_scenario(dwells_each: int = 2000) -> dict[str, Any
 
 
 if __name__ == "__main__":
-    res_final = feed_final_grc_to_gnu_env(2000)
-    res_saa = feed_saa_grc_to_gnu_env(2000)
-    res_comb = create_combined_final_saa_scenario(2000)
-    print("\n[+] Both final.grc and saa.grc successfully ingested into GNU Environment.")
+    res_final = feed_final_grc_to_gnu_env(4000)
+    res_saa = feed_saa_grc_to_gnu_env(4000)
+    res_comb = create_combined_final_saa_scenario(4000)
+    print("\n[+] Both final.grc and saa.grc successfully ingested into GNU Environment with 4000 dwells each.")
 
