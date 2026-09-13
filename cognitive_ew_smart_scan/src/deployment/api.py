@@ -695,14 +695,13 @@ async def lifespan(app: FastAPI):  # type: ignore
 
 # ── App ─────────────────────────────────────────────────────────────────────
 
-cors_origins_env = os.getenv("CORS_ORIGINS", "*")
+cors_origins_env = os.getenv("CORS_ORIGINS", "https://sih-2026-try2.vercel.app")
 cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
 
 app = FastAPI(title="Cognitive EW SmartScan API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins if cors_origins != ["*"] else ["*"],
-    allow_origin_regex=r"https://.*\.vercel\.app|https://.*\.onrender\.com|http://localhost.*|http://127\.0\.0\.1.*",
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -713,8 +712,34 @@ app.add_middleware(TimingMiddleware)
 @app.get("/health", response_model=HealthResponse, tags=["system"])
 def health(response: Response) -> HealthResponse:
     """Report liveness plus explicit model availability and verification flags."""
-    scheduler_loaded = STATE.get("scheduler") is not None or "scheduler_onnx" in STATE and STATE.get("scheduler_onnx") is not None
-    deinterleaver_loaded = STATE.get("deinterleaver") is not None or "deinterleaver_onnx" in STATE and STATE.get("deinterleaver_onnx") is not None
+    scheduler_loaded = (
+        STATE.get("scheduler") is not None
+        or ("scheduler_onnx" in STATE and STATE.get("scheduler_onnx") is not None)
+    )
+    deinterleaver_loaded = (
+        STATE.get("deinterleaver") is not None
+        or ("deinterleaver_onnx" in STATE and STATE.get("deinterleaver_onnx") is not None)
+    )
+    controller_ready = STATE.get("controller") is not None
+    dimensions_ok = bool(STATE.get("dimension_check_passed"))
+
+    overall_healthy = bool(
+        scheduler_loaded
+        and deinterleaver_loaded
+        and controller_ready
+        and dimensions_ok
+    )
+
+    if not overall_healthy:
+        response.status_code = 503
+        logger.error(
+            "Health check degraded: scheduler=%s, deinterleaver=%s, controller=%s, dimensions=%s",
+            scheduler_loaded,
+            deinterleaver_loaded,
+            controller_ready,
+            dimensions_ok,
+        )
+
     # Resolve benchmark metadata
     bench_ver = "2026.1-CANONICAL"
     git_rev = os.getenv("GIT_COMMIT")
@@ -725,32 +750,18 @@ def health(response: Response) -> HealthResponse:
         except Exception:
             git_rev = "unknown"
 
-    overall_healthy = bool(
-        scheduler_loaded
-        and STATE.get("controller") is not None
-        and bool(STATE.get("dimension_check_passed"))
-    )
-    if not overall_healthy:
-        response.status_code = 503
-        logger.error(
-            "Health check degraded: scheduler_loaded=%s, controller=%s, dimension_check=%s",
-            scheduler_loaded,
-            STATE.get("controller") is not None,
-            STATE.get("dimension_check_passed"),
-        )
-
     return HealthResponse(
         status="ok" if overall_healthy else "degraded",
         device=str(STATE.get("device", "cpu")),
         models_loaded={
-            "deinterleaver": deinterleaver_loaded,
             "scheduler": scheduler_loaded,
+            "deinterleaver": deinterleaver_loaded,
             "memory": STATE.get("memory") is not None,
         },
-        dimension_check_passed=bool(STATE.get("dimension_check_passed")),
+        dimension_check_passed=dimensions_ok,
         normalization_hash_match=bool(STATE.get("normalization_hash_match")),
         hidden_state_ready=bool(STATE.get("hidden_state_ready")),
-        mission_controller_ready=STATE.get("controller") is not None,
+        mission_controller_ready=controller_ready,
         active_model=STATE.get("scheduler_ckpt_path", "Gate-25k-R4.2-alpha020"),
         checkpoint_sha256=STATE.get("scheduler_ckpt_sha256", "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"),
         benchmark_version=bench_ver,
