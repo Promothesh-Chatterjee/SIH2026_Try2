@@ -1,0 +1,26 @@
+{
+  "episode_id": "step09_jittered",
+  "generator_version": "step09-GRC-Bridge-v1.0",
+  "source_grc": "step09_jittered_emitter.grc",
+  "total_pulses": 24286,
+  "emitters": [
+    {
+      "id": "E1_SURVEILLANCE",
+      "rf_frequency_mhz": 3200.1,
+      "pulse_width_us": 10.0,
+      "pri_us": 100.0,
+      "amplitude": 1.0,
+      "jitter_fraction": 0.01,
+      "band": 6
+    },
+    {
+      "id": "E2_TRACKING",
+      "rf_frequency_mhz": 7999.75,
+      "pulse_width_us": 4.0,
+      "pri_us": 70.0,
+      "amplitude": 0.7,
+      "jitter_fraction": 0.01,
+      "band": 15
+    }
+  ]
+}

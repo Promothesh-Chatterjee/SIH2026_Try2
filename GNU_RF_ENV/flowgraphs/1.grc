@@ -1,0 +1,284 @@
+options:
+  parameters:
+    author: ''
+    catch_exceptions: 'True'
+    category: '[GRC Hier Blocks]'
+    cmake_opt: ''
+    comment: ''
+    copyright: ''
+    description: ''
+    gen_cmake: 'On'
+    gen_linking: dynamic
+    generate_options: qt_gui
+    hier_block_src_path: '.:'
+    id: fhss_simulator
+    max_nouts: '0'
+    output_language: python
+    placement: (0,0)
+    qt_qss_theme: ''
+    realtime_scheduling: ''
+    run: 'True'
+    run_command: '{python} -u {filename}'
+    run_options: prompt
+    sizing_mode: fixed
+    thread_safe_setters: ''
+    title: Not titled yet
+    window_size: (1000,1000)
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 8]
+    rotation: 0
+    state: enabled
+
+blocks:
+- name: samp_rate
+  id: variable
+  parameters:
+    comment: ''
+    value: '32000'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [200, 12]
+    rotation: 0
+    state: enabled
+- name: blocks_throttle2_0
+  id: blocks_throttle2
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    ignoretag: 'True'
+    limit: auto
+    maximum: '0.1'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    samples_per_second: samp_rate
+    type: complex
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [336, 124.0]
+    rotation: 0
+    state: enabled
+- name: channels_channel_model_0
+  id: channels_channel_model
+  parameters:
+    affinity: ''
+    alias: ''
+    block_tags: 'False'
+    comment: ''
+    epsilon: '1.0'
+    freq_offset: '0.0'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    noise_voltage: '0.2'
+    seed: '0'
+    taps: '1.0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [368, 328.0]
+    rotation: 0
+    state: enabled
+- name: epy_block_0
+  id: epy_block
+  parameters:
+    _source_code: "import numpy as np\nfrom gnuradio import gr\n\nclass blk(gr.sync_block):\n\
+      \    \"\"\"\n    Embedded Python Block for Frequency Hopping Spread Spectrum\
+      \ (FHSS) Simulation\n    \"\"\"\n    def __init__(self, sample_rate=32000, hop_dwell_time=0.05,\
+      \ freqs=[-120000, -90000, -60000, -30000, 0, 30000, 60000, 90000, 120000]):\n\
+      \        gr.sync_block.__init__(\n            self,\n            name=\"FHSS\
+      \ Signal Source\",\n            in_sig=None,\n            out_sig=[np.complex64]\n\
+      \        )\n        self.sample_rate = sample_rate\n        self.hop_dwell_time\
+      \ = hop_dwell_time\n        self.freqs = freqs\n        \n        self.samples_per_hop\
+      \ = int(self.sample_rate * self.hop_dwell_time)\n        self.current_sample_count\
+      \ = 0\n        self.current_freq_idx = 0\n        self.phase = 0.0\n\n    def\
+      \ work(self, input_items, output_items):\n        out = output_items[0]\n  \
+      \      noutput_items = len(out)\n        dt = 1.0 / self.sample_rate\n     \
+      \   \n        for i in range(noutput_items):\n            if self.current_sample_count\
+      \ >= self.samples_per_hop:\n                self.current_sample_count = 0\n\
+      \                self.current_freq_idx = np.random.randint(0, len(self.freqs))\n\
+      \            \n            freq = self.freqs[self.current_freq_idx]\n      \
+      \      \n            out[i] = np.exp(1j * self.phase)\n            self.phase\
+      \ += 2 * np.pi * freq * dt\n            self.phase = self.phase % (2 * np.pi)\n\
+      \            \n            self.current_sample_count += 1\n            \n  \
+      \      return noutput_items"
+    affinity: ''
+    alias: ''
+    comment: ''
+    freqs: '[-120000, -90000, -60000, -30000, 0, 30000, 60000, 90000, 120000]'
+    hop_dwell_time: '0.05'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    sample_rate: '32000'
+  states:
+    _io_cache: ('FHSS Signal Source', 'blk', [('sample_rate', '32000'), ('hop_dwell_time',
+      '0.05'), ('freqs', '[-120000, -90000, -60000, -30000, 0, 30000, 60000, 90000,
+      120000]')], [], [('0', 'complex', 1)], '\n    Embedded Python Block for Frequency
+      Hopping Spread Spectrum (FHSS) Simulation\n    ', ['freqs', 'hop_dwell_time',
+      'sample_rate'])
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [72, 256.0]
+    rotation: 0
+    state: enabled
+- name: qtgui_freq_sink_x_0
+  id: qtgui_freq_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'False'
+    average: '1.0'
+    axislabels: 'True'
+    bw: samp_rate
+    color1: '"blue"'
+    color10: '"dark blue"'
+    color2: '"red"'
+    color3: '"green"'
+    color4: '"black"'
+    color5: '"cyan"'
+    color6: '"magenta"'
+    color7: '"yellow"'
+    color8: '"dark red"'
+    color9: '"dark green"'
+    comment: ''
+    ctrlpanel: 'False'
+    fc: '0'
+    fftsize: '1024'
+    freqhalf: 'True'
+    grid: 'False'
+    gui_hint: ''
+    label: Relative Gain
+    label1: ''
+    label10: ''''''
+    label2: ''''''
+    label3: ''''''
+    label4: ''''''
+    label5: ''''''
+    label6: ''''''
+    label7: ''''''
+    label8: ''''''
+    label9: ''''''
+    legend: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    name: '""'
+    nconnections: '1'
+    norm_window: 'False'
+    showports: 'False'
+    tr_chan: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_tag: '""'
+    type: complex
+    units: dB
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    wintype: window.WIN_BLACKMAN_hARRIS
+    ymax: '10'
+    ymin: '-140'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [552, 36.0]
+    rotation: 0
+    state: enabled
+- name: qtgui_waterfall_sink_x_0
+  id: qtgui_waterfall_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    axislabels: 'True'
+    bw: samp_rate
+    color1: '0'
+    color10: '0'
+    color2: '0'
+    color3: '0'
+    color4: '0'
+    color5: '0'
+    color6: '0'
+    color7: '0'
+    color8: '0'
+    color9: '0'
+    comment: ''
+    fc: '0'
+    fftsize: '1024'
+    freqhalf: 'True'
+    grid: 'False'
+    gui_hint: ''
+    int_max: '10'
+    int_min: '-140'
+    label1: ''
+    label10: ''
+    label2: ''
+    label3: ''
+    label4: ''
+    label5: ''
+    label6: ''
+    label7: ''
+    label8: ''
+    label9: ''
+    legend: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    name: '""'
+    nconnections: '1'
+    showports: 'False'
+    type: complex
+    update_time: '0.10'
+    wintype: window.WIN_BLACKMAN_hARRIS
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [536, 196.0]
+    rotation: 0
+    state: enabled
+
+connections:
+- [blocks_throttle2_0, '0', qtgui_freq_sink_x_0, '0']
+- [blocks_throttle2_0, '0', qtgui_waterfall_sink_x_0, '0']
+- [channels_channel_model_0, '0', blocks_throttle2_0, '0']
+- [epy_block_0, '0', channels_channel_model_0, '0']
+
+metadata:
+  file_format: 1
+  grc_version: 3.10.12.0

@@ -23,17 +23,26 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.evaluate_agile_benchmark import generate_agile_scenario
+from src.environment.scenario_generator import DEFAULT_GNU_DATA_PATH, DEFAULT_GNU_DIR, load_gnu_records
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("stream_live_feed")
 
 
-def build_scenario_records(scenario_id: str, time_horizon_us: float = 600_000.0) -> List[Dict[str, Any]]:
-    """Generate or load incident RF pulse train."""
-    h5_candidate = Path(scenario_id)
-    if h5_candidate.exists() and h5_candidate.suffix == ".h5":
-        from src.environment.scenario_generator import load_h5_records
-        records, _ = load_h5_records(h5_candidate, max_pulses=50000)
+def build_scenario_records(scenario_id: str | None = None, time_horizon_us: float = 600_000.0) -> List[Dict[str, Any]]:
+    """Generate or load incident RF pulse train. Defaults to GNU parsed data."""
+    scen_str = str(scenario_id) if scenario_id else str(DEFAULT_GNU_DATA_PATH)
+
+    # 1. Check if scenario refers to GNU parsed data (.gt.json, .npz, episode ID, or default)
+    gnu_path = Path(scen_str)
+    if not gnu_path.exists() and (scen_str.startswith("EP") or scen_str.startswith("ep")):
+        cand = DEFAULT_GNU_DIR / f"{scen_str}.gt.json"
+        if cand.exists():
+            gnu_path = cand
+
+    if gnu_path.exists() and (gnu_path.suffix in [".json", ".npz"] or "GNU_RF_ENV" in str(gnu_path)):
+        logger.info("Loading incident pulses from GNU parsed dataset: %s", gnu_path)
+        records = load_gnu_records(gnu_path, time_horizon_us=time_horizon_us)
         return [
             {
                 "toa_us": float(r.toa_us),
@@ -41,14 +50,32 @@ def build_scenario_records(scenario_id: str, time_horizon_us: float = 600_000.0)
                 "pulse_width_us": float(r.pulse_width_us),
                 "amplitude_db": float(r.amplitude_db),
                 "aoa_deg": float(r.aoa_deg),
+                "emitter_id": r.emitter_id,
             }
             for r in records
         ]
 
-    # Generate Agile Scenario (AG-01 through AG-10)
-    scen = scenario_id if scenario_id.startswith("AG-") else "AG-04"
+    # 2. Check for TSRD HDF5 file
+    h5_candidate = Path(scen_str)
+    if h5_candidate.exists() and h5_candidate.suffix == ".h5":
+        from src.environment.scenario_generator import load_h5_records
+        records = load_h5_records(h5_candidate, max_pulses=50000)
+        return [
+            {
+                "toa_us": float(r.toa_us),
+                "frequency_mhz": float(r.frequency_mhz),
+                "pulse_width_us": float(r.pulse_width_us),
+                "amplitude_db": float(r.amplitude_db),
+                "aoa_deg": float(r.aoa_deg),
+                "emitter_id": r.emitter_id,
+            }
+            for r in records
+        ]
+
+    # 3. Fallback: Generate Agile Scenario (AG-01 through AG-10)
+    scen = scen_str if scen_str.startswith("AG-") else "AG-04"
+    logger.info("Generating agile scenario pulses: %s", scen)
     pulse_records = generate_agile_scenario(scen, time_horizon_us=time_horizon_us, seed=42)
-    # Sort pulses strictly by TOA
     sorted_recs = sorted(pulse_records, key=lambda r: r.toa_us)
     return [
         {
@@ -57,6 +84,7 @@ def build_scenario_records(scenario_id: str, time_horizon_us: float = 600_000.0)
             "pulse_width_us": float(r.pulse_width_us),
             "amplitude_db": float(r.amplitude_db),
             "aoa_deg": float(r.aoa_deg),
+            "emitter_id": getattr(r, "emitter_id", 0),
         }
         for r in sorted_recs
     ]
@@ -172,7 +200,11 @@ def stream_live_feed(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Live RF Data Feeder for Cognitive EW SmartScan")
-    parser.add_argument("--scenario", default="AG-04", help="Agile threat scenario (AG-01 to AG-10) or path to .h5")
+    parser.add_argument(
+        "--scenario",
+        default=str(DEFAULT_GNU_DATA_PATH),
+        help=f"Path to GNU parsed scenario (.gt.json, default: {DEFAULT_GNU_DATA_PATH.name}), TSRD .h5, or Agile scenario ID",
+    )
     parser.add_argument("--delay", type=float, default=0.15, help="Cadence delay between dwell cycles (seconds)")
     parser.add_argument("--steps", type=int, default=0, help="Max steps (0 for continuous stream)")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="FastAPI backend URL")

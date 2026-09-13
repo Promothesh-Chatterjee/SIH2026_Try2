@@ -45,10 +45,14 @@ def feed_tsrd_chunks(
     if not h5_path.exists():
         raise FileNotFoundError(f"TSRD file not found: {h5_path}")
 
-    # 1. Load authentic TSRD pulse stream
-    print(f"\n[PHASE 1] Ingesting Authentic TSRD HDF5 Scenario: '{h5_path.name}'...")
-    # Load up to generous pulse count to support the steps
-    records = load_h5_records(h5_path, max_pulses=max_steps * chunk_pulse_size * 2)
+    # 1. Load authentic pulse stream (GNU parsed data or TSRD HDF5)
+    print(f"\n[PHASE 1] Ingesting Authentic Scenario Dataset: '{h5_path.name}'...")
+    from src.environment.scenario_generator import DEFAULT_GNU_DATA_PATH, load_gnu_records
+
+    if h5_path.suffix in [".json", ".npz"] or "GNU_RF_ENV" in str(h5_path):
+        records = load_gnu_records(h5_path, max_pulses=max_steps * chunk_pulse_size * 2)
+    else:
+        records = load_h5_records(h5_path, max_pulses=max_steps * chunk_pulse_size * 2)
     if not records:
         raise ValueError(f"No valid pulses extracted from {h5_path}")
 
@@ -198,10 +202,12 @@ def feed_tsrd_chunks(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Feed Real TSRD Chunks to Live Cognitive EW Backend")
+    from src.environment.scenario_generator import DEFAULT_GNU_DATA_PATH, DEFAULT_GNU_DIR
+
     parser.add_argument(
         "--scenario",
-        default=r"D:\TSRD\stare\val_stare\config_194.h5",
-        help="Path to real TSRD .h5 scenario file",
+        default=str(DEFAULT_GNU_DATA_PATH),
+        help=f"Path to GNU parsed scenario (.gt.json, default: {DEFAULT_GNU_DATA_PATH.name}) or TSRD .h5",
     )
     parser.add_argument("--steps", type=int, default=50, help="Number of chunks/dwells to execute")
     parser.add_argument("--chunk-size", type=int, default=50, help="Pulses fed per chunk")
@@ -209,15 +215,21 @@ if __name__ == "__main__":
     parser.add_argument("--output", default="results/real_tsrd_chunk_evaluation.json", help="Path to output report")
     args = parser.parse_args()
 
-    h5_file = Path(args.scenario)
-    if not h5_file.exists():
-        # Try finding in D:\TSRD\stare\val_stare
-        alt = Path(r"D:\TSRD\stare\val_stare") / f"{args.scenario}.h5"
-        if alt.exists():
-            h5_file = alt
+    scen_path = Path(args.scenario)
+    if not scen_path.exists():
+        # Try finding in GNU episodes directory
+        alt_gnu = DEFAULT_GNU_DIR / f"{scen_path.name}"
+        if not alt_gnu.exists() and not str(scen_path).endswith(".gt.json"):
+            alt_gnu = DEFAULT_GNU_DIR / f"{scen_path.stem}.gt.json"
+        if alt_gnu.exists():
+            scen_path = alt_gnu
+        else:
+            alt_tsrd = Path(r"D:\TSRD\stare\val_stare") / f"{args.scenario}.h5"
+            if alt_tsrd.exists():
+                scen_path = alt_tsrd
 
     feed_tsrd_chunks(
-        h5_path=h5_file,
+        h5_path=scen_path,
         max_steps=args.steps,
         chunk_pulse_size=args.chunk_size,
         step_delay_s=args.delay,
