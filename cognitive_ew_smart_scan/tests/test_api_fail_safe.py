@@ -94,7 +94,7 @@ class _BaseAPITest(unittest.TestCase):
 class PredictBandsFailSafeTests(_BaseAPITest):
     def test_health_exposes_verification_state_without_fabricating_readiness(self):
         response = health()
-        self.assertEqual(response.status, "ok")  # liveness remains separate from readiness
+        self.assertEqual(response.status, "degraded")  # unready models report degraded status
         self.assertFalse(response.models_loaded["scheduler"])
         self.assertFalse(response.models_loaded["deinterleaver"])
         self.assertFalse(response.dimension_check_passed)

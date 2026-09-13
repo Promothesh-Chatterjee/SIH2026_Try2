@@ -1,10 +1,40 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  "http://localhost:8080";
+export function getApiBaseUrl() {
+  if (typeof window !== "undefined") {
+    const isProd = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+    const override = localStorage.getItem("smartscan_api_url");
+    if (override && override.trim()) {
+      const cleanOverride = override.trim().replace(/\/+$/, "");
+      if (isProd && (cleanOverride.includes("localhost") || cleanOverride.includes("127.0.0.1"))) {
+        localStorage.removeItem("smartscan_api_url");
+      } else {
+        return cleanOverride;
+      }
+    }
+  }
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, "");
+  }
+  const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  return isLocal ? "http://localhost:8080" : "https://smartscan-backend-q6ay.onrender.com";
+}
+
+export function setApiBaseUrl(url) {
+  if (typeof window !== "undefined") {
+    if (url) {
+      localStorage.setItem("smartscan_api_url", url.trim().replace(/\/+$/, ""));
+    } else {
+      localStorage.removeItem("smartscan_api_url");
+    }
+  }
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 async function request(path, options = {}) {
+  const base = getApiBaseUrl();
   const response = await fetch(
-    `${API_BASE_URL}${path}`,
+    `${base}${path}`,
     {
       headers: {
         Accept: "application/json",
@@ -144,6 +174,42 @@ export const api = {
 
   getLatestBenchmark() {
     return request("/benchmark/latest");
+  },
+
+  /**
+   * Predict single best time-frequency action from the trained DRQN+MoE scheduler.
+   *
+   * Observation contract:
+   * Exactly 360 numeric values (36 frequency bands × 10 features per band).
+   * Flattened layout:
+   *   [band_0_feat_0, ..., band_0_feat_9, band_1_feat_0, ..., band_35_feat_9]
+   *
+   * @param {Array<number>} obs - Exactly 360 numeric values.
+   * @param {string} [policyMode="default"] - Policy mode ('default', 'operational', 'demo', 'fallback').
+   * @returns {Promise<Object>} Real model output (selected_action, selected_band, selected_mode, etc.)
+   */
+  predictBands(obs, policyMode = "default") {
+    if (!Array.isArray(obs)) {
+      return Promise.reject(new Error("Observation must be an array of numeric values."));
+    }
+    if (obs.length !== 360) {
+      return Promise.reject(
+        new Error(`Invalid observation dimension: expected exactly 360 numeric values (36 bands × 10 features), got ${obs.length}.`)
+      );
+    }
+    for (let i = 0; i < obs.length; i++) {
+      const val = Number(obs[i]);
+      if (!Number.isFinite(val)) {
+        return Promise.reject(new Error(`Invalid observation value at index ${i}: must be a finite number, got ${obs[i]}.`));
+      }
+    }
+    return request("/predict_bands", {
+      method: "POST",
+      body: JSON.stringify({
+        obs: obs.map(Number),
+        policy_mode: policyMode,
+      }),
+    });
   },
 
   getBenchmarkScenarios() {
