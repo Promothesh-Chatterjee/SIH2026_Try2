@@ -101,7 +101,7 @@ function MissionControls({
   controlError,
   setControlError,
 }) {
-  const [selectedScenario, setSelectedScenario] = useState("config_96");
+  const [selectedScenario, setSelectedScenario] = useState("final_and_saa");
   const [selectedSpeed, setSelectedSpeed] = useState(15.0);
 
   const {
@@ -186,9 +186,19 @@ function MissionControls({
                 }}
                 title="Select emitter scenario for streaming"
               >
-                <option value="config_96">Scenario 96 (Agile Hopper 11 Bands)</option>
-                <option value="config_64">Scenario 64 (Dense Agile Threat)</option>
-                <option value="config_29">Scenario 29 (Periodic Pulse Baseline)</option>
+                <optgroup label="GNU Radio RF Environment (Real)">
+                  <option value="final_and_saa">GNU Radio 5-Hopper + S&H Combined (3-9.2 GHz)</option>
+                  <option value="final_grc">GNU Radio 5-Emitter Agile FHSS (3-8.4 GHz)</option>
+                  <option value="saa_grc">GNU Radio Sample & Hold / Chirp (5.4-9.2 GHz)</option>
+                  <option value="1_grc_fhss">GNU Radio 1.grc FHSS Agile Source</option>
+                  <option value="step09_jittered">GNU Radio Jittered Pulse Train (24k Pulses)</option>
+                  <option value="EP000001">GNU Radio Benchmark Episode 001</option>
+                </optgroup>
+                <optgroup label="TSRD / Cognitive Baselines">
+                  <option value="config_96">Scenario 96 (Agile Hopper 11 Bands)</option>
+                  <option value="config_64">Scenario 64 (Dense Agile Threat)</option>
+                  <option value="config_29">Scenario 29 (Periodic Pulse Baseline)</option>
+                </optgroup>
               </select>
 
               <select

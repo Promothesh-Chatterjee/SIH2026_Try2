@@ -70,6 +70,28 @@ export default function Performance() {
 
   const isOnline = telemetry.live || Boolean(benchmarkStaticBase);
 
+  // Dynamic scenario selection and evaluation state
+  const [selectedScenario, setSelectedScenario] = useState("AG-04");
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [scenarioMeta, setScenarioMeta] = useState({ execTimeMs: null });
+
+  const handleRunEvaluation = async () => {
+    if (!isOnline || isEvaluating) return;
+    setIsEvaluating(true);
+    const t0 = performance.now();
+    try {
+      const res = await api.evaluateBenchmark({ scenario: selectedScenario });
+      if (res) {
+        setBenchmarkStaticBase(res);
+      }
+      setScenarioMeta({ execTimeMs: Math.round(performance.now() - t0) });
+    } catch (err) {
+      console.warn("Evaluation error:", err);
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
+
   // Fetch scenarios from backend if available
   const [availableScenarios, setAvailableScenarios] = useState(SCENARIOS);
 

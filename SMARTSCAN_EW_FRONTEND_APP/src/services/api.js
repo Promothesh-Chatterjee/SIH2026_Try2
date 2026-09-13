@@ -236,6 +236,10 @@ export const api = {
   getBenchmarkScenarios(options = {}) {
     return request("/benchmark/scenarios", options);
   },
+
+  getGnuRfScenarios(options = {}) {
+    return request("/gnu_rf/scenarios", options);
+  },
 };
 
 export { API_BASE_URL };
