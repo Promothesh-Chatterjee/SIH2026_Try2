@@ -564,7 +564,7 @@ def train_scheduler(
         data_root=data_dir,
         subset=str(val_cfg.get("subset", "val")),
         mode="stare",
-        n_files=int(val_cfg.get("n_files", 2)),
+        n_files=int(val_cfg.get("n_files", 10)),
         seed=int(val_cfg.get("seed", 42)),
         freq_min_mhz=float(env_config.get("freq_min_mhz", 0.0)),
         freq_max_mhz=float(env_config.get("freq_max_mhz", 18000.0)),
@@ -690,6 +690,7 @@ def train_scheduler(
         ep_greedy_mode_counts = np.zeros(n_modes, dtype=np.float64)
         ep_targeted_exp_steps = 0
         ep_uniform_exp_steps = 0
+        ep_thompson_exp_steps = 0
 
         while not done and global_step < total_steps:
             # ---- Action selection ----
@@ -734,6 +735,8 @@ def train_scheduler(
                 moe_attr = None
                 act_source = "thompson"
                 decision_source = "thompson_exploration"
+                ep_thompson_exp_steps += 1
+                ep_explore_mode_counts[int(action % n_modes)] += 1
             else:
                 use_ts = False
                 if random.random() < eps:
@@ -948,7 +951,7 @@ def train_scheduler(
                     else:
                         raise
 
-            # ---- Periodic Q-margin and stuck-state diagnostics ----
+            # ---- Periodic Q-margin, stuck-state, and shadow validation diagnostics ----
             if global_step % 500 == 0:
                 try:
                     q_diag = evaluate_q_diagnostics(online_drqn, fixed_eval_batch, device)
@@ -965,6 +968,31 @@ def train_scheduler(
                     )
                 except Exception as exc:
                     logger.warning("Failed evaluating QDiag at step %d: %s", global_step, exc)
+
+                # Benchmark V2 Shadow Validation (every 500 steps on config_117 and config_29)
+                try:
+                    shadow_bench = gate_evaluator.evaluate_baseline_hierarchy(
+                        online_drqn,
+                        moe=moe,
+                        n_steps=200,
+                        policies=["drqn"],
+                        max_scenarios=2,
+                    )
+                    drqn_shadow = shadow_bench.get("policies", {}).get("drqn", {})
+                    logger.info(
+                        "Step %d [ShadowVal-500] | DRQN Mean IR: %.2f%% | Distinct Bands: %.1f/36 | Pd: %.2f%%",
+                        global_step,
+                        float(drqn_shadow.get("intercept_rate", 0.0)) * 100,
+                        float(drqn_shadow.get("distinct_bands", 0.0)),
+                        float(drqn_shadow.get("decision_level_pd", 0.0)) * 100,
+                    )
+                except Exception as exc:
+                    logger.warning("Shadow validation failed at step %d: %s", global_step, exc)
+
+                # Safety Sentinel check
+                if ep_learn["max_q"] > 50.0:
+                    logger.error("SAFETY SENTINEL TRIGGERED: max_q=%.2f exceeds 50.0 ceiling! Halting run.", ep_learn["max_q"])
+                    break
 
             # ---- Target update ----
             if global_step % target_update_freq == 0:
@@ -1131,7 +1159,7 @@ def train_scheduler(
             "action_entropy": shannon_entropy(ep_action_counts),
             "band_entropy": shannon_entropy(ep_band_counts),
             "mode_entropy": shannon_entropy(ep_mode_counts),
-            # Phase 9B-R3 Targeted Discovery Telemetry
+            # Phase 9B-R3 / Benchmark V2 Formalized Exploration Telemetry
             "min_band_visits": min_bv,
             "median_band_visits": med_bv,
             "max_band_visits": max_bv,
@@ -1139,7 +1167,16 @@ def train_scheduler(
             "underexplored_band_count": under_cnt,
             "targeted_exploration_steps": int(ep_targeted_exp_steps),
             "uniform_exploration_steps": int(ep_uniform_exp_steps),
+            "thompson_exploration_steps": int(ep_thompson_exp_steps),
             "targeted_exploration_fraction": float(ep_targeted_exp_steps / max(1, tot_exp_steps)) if tot_exp_steps > 0 else 0.0,
+            "random_action_fraction": float(ep_uniform_exp_steps / n_steps_ep) if n_steps_ep else 0.0,
+            "targeted_action_fraction": float(ep_targeted_exp_steps / n_steps_ep) if n_steps_ep else 0.0,
+            "thompson_action_fraction": float(ep_thompson_exp_steps / n_steps_ep) if n_steps_ep else 0.0,
+            "greedy_action_fraction": float(np.sum(ep_greedy_mode_counts) / n_steps_ep) if n_steps_ep else 0.0,
+            "mode_histogram": [int(c) for c in ep_mode_counts],
+            "band_histogram": [int(c) for c in ep_band_counts],
+            "explore_mode_histogram": [int(c) for c in ep_explore_mode_counts],
+            "greedy_mode_histogram": [int(c) for c in ep_greedy_mode_counts],
         }
 
         # --- RC-2 learning statistics (averaged over the episode's updates) ---

@@ -1,18 +1,21 @@
 /**
  * useOverviewTelemetry
  *
- * Single source-of-truth hook for the Mission Overview page.
- * Combines WebSocket /ws/state (4 Hz) + REST poll /telemetry/latest
- * and /mission/status (2 Hz fallback).
+ * Single source-of-truth hook for the Mission Overview and live subsystem pages.
+ * Powered by verified HTTP polling against the deployed FastAPI backend (/telemetry/latest,
+ * /mission/status, /mission/stream/status, and /metrics).
+ * Automatically stops polling when stopped or unmounted, with AbortController cancellation
+ * and exponential backoff retry for Render cold starts.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { backend } from "./backend";
+import { api } from "./api";
+import { createTelemetryPoller, CONNECTION_STATES } from "./telemetryPoller";
 
 const TOTAL_BANDS = 36;
 const BAND_WIDTH_MHZ = 500;
 const IBW_MHZ = 1000;
-const DWELL_HISTORY_SIZE = 6;
+const DWELL_HISTORY_SIZE = 8;
 
 const MODE_LABELS = {
   0: "SHORT_DWELL",
@@ -33,9 +36,13 @@ function floatOr(val, fallback = 0.0) {
 
 function buildDefault() {
   return {
-    wsStatus: "OFFLINE",
+    connectionState: "CONNECTING",
+    connectionLabel: CONNECTION_STATES.CONNECTING,
+    wsStatus: "ONLINE",
     live: false,
     source: "none",
+    streamRunning: false,
+    missionActive: false,
     totalSpectrumGHz: 18,
     ibwMHz: IBW_MHZ,
     activeBands: 0,
@@ -49,7 +56,6 @@ function buildDefault() {
     rollingPd: 0.0,
     rollingMedianLatencyUs: 0.0,
     missionClockUs: 0.0,
-    missionActive: false,
     bandHeights: Array(TOTAL_BANDS).fill(0).map((_, i) => (i === 0 ? 0.94 : 0.03)),
     bandStates: Array(TOTAL_BANDS).fill("quiet").map((_, i) => (i === 0 ? "active" : "quiet")),
     scheduler: {
@@ -69,6 +75,9 @@ function buildDefault() {
     dwellHistory: [],
     cognitiveExplanation: {},
     systemMetrics: {},
+    metrics: null,
+    missionStatus: null,
+    streamStatus: null,
     pdws: [],
     allIncidentPdws: [],
     emitters: [],
@@ -82,6 +91,9 @@ function buildDefault() {
       missed_revisits_count: 0,
       total_revisits: 0,
       missed_revisits_pct: 0.0,
+      cumulative_missed_revisits: 0,
+      cumulative_total_revisits: 0,
+      cumulative_missed_pct: 0.0,
       scheduler_omniscience_leak_pct: 0.0,
       antenna_azimuth_deg: 0.0,
       hop_trajectory: null,
@@ -89,51 +101,89 @@ function buildDefault() {
     benchmarkRows: null,
     modeRows: null,
     archetypeRows: null,
+    lastError: null,
   };
 }
 
-function processTelemetry(raw, missionStat) {
+function processTelemetry({ raw, missionStat, streamStat, metrics, connectionState }) {
   const next = buildDefault();
 
-  if (missionStat) {
-    next.missionActive = missionStat.is_mission_active ?? false;
-    next.missionClockUs = missionStat.mission_clock_us ?? 0;
-    next.totalDwells = missionStat.total_dwells ?? 0;
-    next.totalHits = missionStat.total_hits ?? 0;
-    next.rollingPd = missionStat.rolling_pd ?? 0;
-    next.rollingMedianLatencyUs = missionStat.rolling_median_latency_us ?? 0;
+  next.connectionState = connectionState || "BACKEND_CONNECTED";
+  next.connectionLabel = CONNECTION_STATES[next.connectionState] || next.connectionState;
+  next.wsStatus = next.connectionState === "BACKEND_UNAVAILABLE" ? "OFFLINE" : "ONLINE";
+
+  if (streamStat) {
+    next.streamStatus = streamStat;
+    next.streamRunning = Boolean(streamStat.running);
+    if (streamStat.total_dwells != null) next.totalDwells = streamStat.total_dwells;
+    if (streamStat.total_hits != null) next.totalHits = streamStat.total_hits;
+    if (streamStat.rolling_pd != null) next.rollingPd = streamStat.rolling_pd;
+    if (streamStat.rolling_median_latency_us != null) next.rollingMedianLatencyUs = streamStat.rolling_median_latency_us;
+    if (streamStat.mission_clock_us != null) next.missionClockUs = streamStat.mission_clock_us;
   }
 
-  if (!raw || raw.live === false) {
-    next.live = false;
-    next.source = raw?.source ?? "none";
+  if (missionStat) {
+    next.missionStatus = missionStat;
+    next.missionActive = Boolean(missionStat.is_mission_active);
+    if (missionStat.mission_clock_us != null) next.missionClockUs = missionStat.mission_clock_us;
+    if (missionStat.total_dwells != null) next.totalDwells = Math.max(next.totalDwells, missionStat.total_dwells);
+    if (missionStat.total_hits != null) next.totalHits = Math.max(next.totalHits, missionStat.total_hits);
+    if (missionStat.rolling_pd != null && next.rollingPd === 0) next.rollingPd = missionStat.rolling_pd;
+    if (missionStat.rolling_median_latency_us != null && next.rollingMedianLatencyUs === 0) {
+      next.rollingMedianLatencyUs = missionStat.rolling_median_latency_us;
+    }
+  }
+
+  if (metrics) {
+    next.metrics = metrics;
+    next.systemMetrics = { ...metrics };
+    if (metrics.rolling_pd != null && next.rollingPd === 0) next.rollingPd = metrics.rolling_pd;
+    if (metrics.rolling_median_latency_us != null && next.rollingMedianLatencyUs === 0) {
+      next.rollingMedianLatencyUs = metrics.rolling_median_latency_us;
+    }
+    if (metrics.operational_dwells != null) next.totalDwells = Math.max(next.totalDwells, metrics.operational_dwells);
+    if (metrics.operational_hits != null) next.totalHits = Math.max(next.totalHits, metrics.operational_hits);
+  }
+
+  const isLive = Boolean(
+    (raw && raw.live !== false && (raw.source === "publisher" || raw.step != null || raw.band != null)) ||
+    next.streamRunning ||
+    next.missionActive
+  );
+
+  if (!raw || !isLive) {
+    next.live = isLive;
+    next.source = raw?.source ?? (next.streamRunning ? "publisher" : "none");
     return next;
   }
 
   next.live = true;
   next.source = raw.source ?? "publisher";
+  next.wsStatus = "ONLINE";
 
   const m = raw.metrics ?? raw;
-
   const band = m.band ?? 0;
   const modeIdx = m.mode ?? 1;
   const modeName = m.mode_name ?? MODE_LABELS[modeIdx] ?? "NORMAL_DWELL";
   const dwellUs = floatOr(m.dwell_time_us, floatOr(raw.dwell_time_us, 500.0));
-  const clockUs = m.clock_us ?? raw.clock_us ?? 0;
+  const clockUs = m.clock_us ?? raw.clock_us ?? next.missionClockUs ?? 0;
 
   next.currentBand = band;
   next.currentFreqMHz = bandToFreqMHz(band);
   next.currentMode = modeName;
   next.currentDwellUs = dwellUs;
-  if (!missionStat) next.missionClockUs = clockUs;
+  if (!missionStat && !streamStat) next.missionClockUs = clockUs;
 
   const ce = m.cognitive_explanation ?? raw.cognitive_explanation ?? {};
   next.cognitiveExplanation = ce;
 
   const sm = m.system_metrics ?? raw.system_metrics ?? {};
-  next.systemMetrics = sm;
-  if (!missionStat) {
+  next.systemMetrics = { ...next.systemMetrics, ...sm };
+
+  if (next.rollingPd === 0) {
     next.rollingPd = sm.rolling_pd ?? raw.rolling_pd ?? m.rolling_pd ?? 0.0;
+  }
+  if (next.rollingMedianLatencyUs === 0) {
     next.rollingMedianLatencyUs = sm.rolling_median_latency_us ?? raw.rolling_median_latency_us ?? m.rolling_median_latency_us ?? 0.0;
   }
 
@@ -159,17 +209,10 @@ function processTelemetry(raw, missionStat) {
     moeGating: Math.max(0.0, 1.0 - explorationPressure),
   };
 
-  // Each time show only the band the receiver is tuned into
-  next.bandStates = Array(TOTAL_BANDS).fill("quiet").map((_, i) =>
-    i === band ? "active" : "quiet"
-  );
-  next.bandHeights = Array(TOTAL_BANDS).fill(0).map((_, i) =>
-    i === band ? 0.94 : 0.03
-  );
-
-  const activeCount = 1;
-  next.activeBands = activeCount;
-  next.quietBands = TOTAL_BANDS - activeCount;
+  next.bandStates = Array(TOTAL_BANDS).fill("quiet").map((_, i) => (i === band ? "active" : "quiet"));
+  next.bandHeights = Array(TOTAL_BANDS).fill(0).map((_, i) => (i === band ? 0.94 : 0.03));
+  next.activeBands = 1;
+  next.quietBands = TOTAL_BANDS - 1;
 
   const rawPdws = raw.pdws ?? m.pdws ?? raw.recent_pdws ?? m.recent_pdws ?? raw.detections ?? m.detections ?? [];
   next.pdws = Array.isArray(rawPdws) ? rawPdws : [];
@@ -207,6 +250,9 @@ function processTelemetry(raw, missionStat) {
     missed_revisits_count: rawFom.missed_revisits_count ?? 0,
     total_revisits: rawFom.total_revisits ?? 0,
     missed_revisits_pct: floatOr(rawFom.missed_revisits_pct, 0.0),
+    cumulative_missed_revisits: rawFom.cumulative_missed_revisits ?? 0,
+    cumulative_total_revisits: rawFom.cumulative_total_revisits ?? 0,
+    cumulative_missed_pct: floatOr(rawFom.cumulative_missed_pct, 0.0),
     scheduler_omniscience_leak_pct: floatOr(rawFom.scheduler_omniscience_leak_pct, 0.0),
     antenna_azimuth_deg: floatOr(rawFom.antenna_azimuth_deg, 0.0),
     hop_trajectory: rawFom.hop_trajectory ?? null,
@@ -219,28 +265,42 @@ function processTelemetry(raw, missionStat) {
   return next;
 }
 
-export function useOverviewTelemetry() {
+export function useOverviewTelemetry(options = {}) {
+  const defaultIntervalMs = options.intervalMs || 1000;
+  const [pollingIntervalMs, setPollingIntervalMs] = useState(defaultIntervalMs);
   const [state, setState] = useState(buildDefault);
+
+  const pollerRef = useRef(null);
   const dwellHistoryRef = useRef([]);
-  const missionStatRef = useRef(null);
-  const latestTelRef = useRef(null);
   const pdwsRef = useRef([]);
   const incidentPdwsRef = useRef([]);
   const recentDwellsRef = useRef([]);
 
-  const ingest = useCallback((rawTelemetry, missionStat) => {
-    if (missionStat) missionStatRef.current = missionStat;
-    if (rawTelemetry) latestTelRef.current = rawTelemetry;
+  const latestTelRef = useRef(null);
+  const missionStatRef = useRef(null);
+  const streamStatRef = useRef(null);
+  const metricsRef = useRef(null);
+  const connStateRef = useRef("CONNECTING");
 
-    const resolved = processTelemetry(
-      latestTelRef.current,
-      missionStatRef.current,
-    );
+  const ingest = useCallback(({ telemetry, missionStatus, streamStatus, metrics, connectionState }) => {
+    if (telemetry) latestTelRef.current = telemetry;
+    if (missionStatus) missionStatRef.current = missionStatus;
+    if (streamStatus) streamStatRef.current = streamStatus;
+    if (metrics) metricsRef.current = metrics;
+    if (connectionState) connStateRef.current = connectionState;
+
+    const resolved = processTelemetry({
+      raw: latestTelRef.current,
+      missionStat: missionStatRef.current,
+      streamStat: streamStatRef.current,
+      metrics: metricsRef.current,
+      connectionState: connStateRef.current,
+    });
 
     if (resolved.live) {
       if (Array.isArray(resolved.pdws) && resolved.pdws.length > 0) {
         const seen = new Set(
-          pdwsRef.current.map((p) => `${p.pulse_id ?? p.id}-${Number(p.time_us ?? p.toa_us ?? 0).toFixed(1)}`)
+          pdwsRef.current.map((p) => `${p.pulse_id ?? p.id}-${Number(p.time_us ?? p.toa_us ?? 0).toFixed(1)}`),
         );
         const newItems = [];
         for (const p of resolved.pdws) {
@@ -251,36 +311,36 @@ export function useOverviewTelemetry() {
           }
         }
         if (newItems.length > 0) {
-          pdwsRef.current = [...newItems, ...pdwsRef.current].slice(0, 30);
+          pdwsRef.current = [...newItems, ...pdwsRef.current].slice(0, 1000);
         } else if (pdwsRef.current.length === 0) {
-          pdwsRef.current = [...resolved.pdws].slice(0, 30);
+          pdwsRef.current = [...resolved.pdws].slice(0, 1000);
         }
       }
       if (pdwsRef.current.length > 0 && (!resolved.pdws || resolved.pdws.length === 0)) {
-        resolved.pdws = pdwsRef.current.slice(0, 15);
+        resolved.pdws = pdwsRef.current.slice(0, 1000);
       }
 
       if (Array.isArray(resolved.allIncidentPdws) && resolved.allIncidentPdws.length > 0) {
-          const seenInc = new Set(
-            incidentPdwsRef.current.map((p) => `${p.pulse_id ?? p.id}-${Number(p.time_us ?? p.toa_us ?? 0).toFixed(1)}`)
-          );
-          const newInc = [];
-          for (const p of resolved.allIncidentPdws) {
-            const uid = `${p.pulse_id ?? p.id}-${Number(p.time_us ?? p.toa_us ?? 0).toFixed(1)}`;
-            if (!seenInc.has(uid)) {
-              seenInc.add(uid);
-              newInc.push(p);
-            }
-          }
-          if (newInc.length > 0) {
-            incidentPdwsRef.current = [...newInc, ...incidentPdwsRef.current].slice(0, 100);
-          } else if (incidentPdwsRef.current.length === 0) {
-            incidentPdwsRef.current = [...resolved.allIncidentPdws].slice(0, 100);
+        const seenInc = new Set(
+          incidentPdwsRef.current.map((p) => `${p.pulse_id ?? p.id}-${Number(p.time_us ?? p.toa_us ?? 0).toFixed(1)}`),
+        );
+        const newInc = [];
+        for (const p of resolved.allIncidentPdws) {
+          const uid = `${p.pulse_id ?? p.id}-${Number(p.time_us ?? p.toa_us ?? 0).toFixed(1)}`;
+          if (!seenInc.has(uid)) {
+            seenInc.add(uid);
+            newInc.push(p);
           }
         }
-        resolved.allIncidentPdws = incidentPdwsRef.current.slice(0, 100);
+        if (newInc.length > 0) {
+          incidentPdwsRef.current = [...newInc, ...incidentPdwsRef.current].slice(0, 5000);
+        } else if (incidentPdwsRef.current.length === 0) {
+          incidentPdwsRef.current = [...resolved.allIncidentPdws].slice(0, 5000);
+        }
+      }
+      resolved.allIncidentPdws = incidentPdwsRef.current.slice(0, 5000);
 
-        if (Array.isArray(resolved.recentDwells) && resolved.recentDwells.length > 0) {
+      if (Array.isArray(resolved.recentDwells) && resolved.recentDwells.length > 0) {
         const seen = new Set(recentDwellsRef.current.map((d) => d.id));
         const newItems = [];
         for (const d of resolved.recentDwells) {
@@ -307,7 +367,7 @@ export function useOverviewTelemetry() {
       const modeName = m.mode_name ?? resolved.currentMode;
 
       const entry = {
-        id: `${clockUs}-${band}`,
+        id: `${clockUs}-${band}-${Date.now()}`,
         band,
         freqMHz: bandToFreqMHz(band),
         mode: modeName,
@@ -318,7 +378,7 @@ export function useOverviewTelemetry() {
       };
 
       const prev = dwellHistoryRef.current;
-      const isDuplicate = prev.length > 0 && prev[prev.length - 1].id === entry.id;
+      const isDuplicate = prev.length > 0 && prev[prev.length - 1].band === band && Math.abs(prev[prev.length - 1].clockUs - clockUs) < 1;
       if (!isDuplicate) {
         const updated = prev.map((e) => ({ ...e, now: false }));
         updated.push(entry);
@@ -327,62 +387,106 @@ export function useOverviewTelemetry() {
     }
 
     resolved.dwellHistory = dwellHistoryRef.current;
-    setState(resolved);
+    setState((prev) => ({
+      ...resolved,
+      wsStatus: prev.wsStatus === "ONLINE" || resolved.live ? "ONLINE" : prev.wsStatus,
+    }));
   }, []);
 
-  // WebSocket – primary 4 Hz real-time feed
+  // Initialize unified HTTP poller
   useEffect(() => {
     let unmounted = false;
 
-    const ws = backend.connectState({
-      onOpen: () => {
-        if (!unmounted) setState((p) => ({ ...p, wsStatus: "ONLINE" }));
+    const poller = createTelemetryPoller({
+      intervalMs: pollingIntervalMs,
+      onData(data) {
+        if (!unmounted) ingest(data);
       },
-      onMessage: (payload) => {
-        if (unmounted) return;
-        setState((p) => ({ ...p, wsStatus: "ONLINE" }));
-        ingest(payload, missionStatRef.current);
+      onStateChange(connState) {
+        if (!unmounted) {
+          connStateRef.current = connState;
+          setState((prev) => ({
+            ...prev,
+            connectionState: connState,
+            connectionLabel: CONNECTION_STATES[connState] || connState,
+            wsStatus: connState === "BACKEND_UNAVAILABLE" ? "OFFLINE" : "ONLINE",
+          }));
+        }
       },
-      onError: () => {
-        if (!unmounted) setState((p) => ({ ...p, wsStatus: "ERROR" }));
-      },
-      onClose: () => {
-        if (!unmounted) setState((p) => ({ ...p, wsStatus: "OFFLINE" }));
+      onError(err) {
+        if (!unmounted) {
+          setState((prev) => ({
+            ...prev,
+            lastError: err?.message || String(err),
+          }));
+        }
       },
     });
 
+    pollerRef.current = poller;
+
     return () => {
       unmounted = true;
-      ws.close();
+      poller.close();
+      pollerRef.current = null;
     };
-  }, [ingest]);
+  }, [pollingIntervalMs, ingest]);
 
-  // REST poll fallback – 2 Hz
-  useEffect(() => {
-    let active = true;
+  const updateInterval = useCallback((newMs) => {
+    setPollingIntervalMs(newMs);
+    pollerRef.current?.setIntervalMs(newMs);
+  }, []);
 
-    async function poll() {
-      try {
-        const [telRes, statRes] = await Promise.allSettled([
-          backend.api.getLatestTelemetry(),
-          backend.api.getMissionStatus(),
-        ]);
-        if (!active) return;
-        const tel = telRes.status === "fulfilled" ? telRes.value : null;
-        const stat = statRes.status === "fulfilled" ? statRes.value : null;
-        ingest(tel, stat);
-      } catch {
-        // silently swallow
-      }
-    }
+  // Mission control functions
+  const startStream = useCallback(async (params = {}) => {
+    const res = await api.startMissionStream(params);
+    pollerRef.current?.pollCycle();
+    return res;
+  }, []);
 
-    poll();
-    const id = setInterval(poll, 500);
-    return () => {
-      active = false;
-      clearInterval(id);
-    };
-  }, [ingest]);
+  const stopStream = useCallback(async () => {
+    const res = await api.stopMissionStream();
+    pollerRef.current?.pollCycle();
+    return res;
+  }, []);
 
-  return state;
+  const startMission = useCallback(async (initialTimeUs = 0.0) => {
+    const res = await api.startMission(initialTimeUs);
+    pollerRef.current?.pollCycle();
+    return res;
+  }, []);
+
+  const stepMission = useCallback(async (pdws = null, obs = null) => {
+    const res = await api.stepMission(pdws, obs);
+    pollerRef.current?.pollCycle();
+    return res;
+  }, []);
+
+  const stopMission = useCallback(async () => {
+    const res = await api.stopMission();
+    pollerRef.current?.pollCycle();
+    return res;
+  }, []);
+
+  const resetMission = useCallback(async () => {
+    const res = await api.resetMission();
+    dwellHistoryRef.current = [];
+    pdwsRef.current = [];
+    incidentPdwsRef.current = [];
+    recentDwellsRef.current = [];
+    pollerRef.current?.pollCycle();
+    return res;
+  }, []);
+
+  return {
+    ...state,
+    pollingIntervalMs,
+    setPollingInterval: updateInterval,
+    startStream,
+    stopStream,
+    startMission,
+    stepMission,
+    stopMission,
+    resetMission,
+  };
 }

@@ -7,10 +7,12 @@ Tracks Pd, Pfa, intercept rate/time-error, and ROC used by SIH judges.
 import logging
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+except Exception:
+    plt = None
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -686,6 +688,10 @@ class FiguresOfMerit:
         """
         save_path = Path(save_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if plt is None:
+            logger.warning("matplotlib is not installed — skipping ROC curve plot")
+            return save_path
 
         if not self._roc_points:
             logger.warning("No ROC points collected — saving empty plot")

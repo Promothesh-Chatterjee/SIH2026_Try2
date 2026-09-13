@@ -27,6 +27,7 @@ that crossed episode boundaries.
 
 import logging
 from collections import deque
+from pathlib import Path
 
 import numpy as np
 
@@ -376,9 +377,65 @@ class SequenceReplayBuffer:
         """Return number of complete episodes stored."""
         return len(self._episodes)
 
+    def save_episodes(self, path: Path | str) -> None:
+        """Persist stored episodes to disk."""
+        import pickle
+        p = Path(path).resolve()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "wb") as f:
+            pickle.dump({"episodes": self._episodes, "total": self._total}, f)
+        logger.info("Saved %d episodes (%d transitions) to %s", len(self._episodes), self._total, p)
+
+    def load_episodes(self, path: Path | str) -> int:
+        """Load stored episodes from disk. Returns count of loaded transitions."""
+        import pickle
+        p = Path(path).resolve()
+        if not p.exists():
+            raise FileNotFoundError(f"Replay episodes file not found: {p}")
+        with open(p, "rb") as f:
+            data = pickle.load(f)
+        loaded_eps = data.get("episodes", [])
+        for ep in loaded_eps:
+            self._episodes.append(ep)
+            self._total += int(ep["length"])
+        self._trim()
+        logger.info("Loaded %d episodes (%d transitions) from %s", len(loaded_eps), self._total, p)
+        return len(loaded_eps)
+
+    @staticmethod
+    def combine_batches(
+        batch_a: dict[str, np.ndarray],
+        batch_b: dict[str, np.ndarray],
+    ) -> dict[str, Any]:
+        """Combine two sampled sequence batches along the batch dimension."""
+        combined = {}
+        for k in batch_a.keys():
+            if isinstance(batch_a[k], np.ndarray):
+                combined[k] = np.concatenate([batch_a[k], batch_b[k]], axis=0)
+            elif isinstance(batch_a[k], list):
+                combined[k] = batch_a[k] + batch_b[k]
+            elif isinstance(batch_a[k], (int, float)):
+                if k == "sequence_hit_fraction":
+                    n_total = batch_a["obs"].shape[0] + batch_b["obs"].shape[0]
+                    n_hits = batch_a["n_hit_sequences"] + batch_b["n_hit_sequences"]
+                    combined[k] = float(n_hits / max(1, n_total))
+                elif k == "n_hit_sequences":
+                    combined[k] = batch_a[k] + batch_b[k]
+                elif k == "pos_scen_concentration":
+                    all_scens = batch_a.get("sampled_pos_scenarios", []) + batch_b.get("sampled_pos_scenarios", [])
+                    if all_scens:
+                        counts = {s: all_scens.count(s) for s in set(all_scens)}
+                        combined[k] = float(max(counts.values()) / len(all_scens))
+                    else:
+                        combined[k] = 0.0
+                else:
+                    combined[k] = batch_a[k]
+        return combined
+
     def __len__(self) -> int:
         """Return current number of stored transitions."""
         return self._total
+
 
 
 # Alias for backward compatibility
