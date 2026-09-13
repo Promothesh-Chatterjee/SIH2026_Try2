@@ -91,6 +91,19 @@ class ReceiverTelemetryFrame:
     exploration_pressure: float = 0.0
     q_margin: float = 0.0
 
+    # Policy, arbitration, and override diagnostics
+    policy_mode: str = "operational"
+    exploration_enabled: bool = False
+    action_was_overridden: bool = False
+    fallback_triggered: float = 0.0
+    fallback_reason: str = "none"
+    action_rejection_reason: str = "none"
+    drqn_candidate_active: float = 1.0
+    confidence_threshold: float = 0.020
+    drqn_candidate_score: float = 0.0
+    arbitration_score: float = 0.0
+    operational_checkpoint: str = "Gate-25k-R4.2-alpha020"
+
     # System rolling figures of merit
     rolling_pd: float = 0.0
     rolling_median_latency_us: float = 0.0
@@ -130,6 +143,17 @@ class ReceiverTelemetryFrame:
                 "spatial_score": self.spatial_score,
                 "exploration_pressure": self.exploration_pressure,
                 "q_margin": self.q_margin,
+                "policy_mode": self.policy_mode,
+                "exploration_enabled": self.exploration_enabled,
+                "action_was_overridden": self.action_was_overridden,
+                "fallback_triggered": self.fallback_triggered,
+                "fallback_reason": self.fallback_reason,
+                "action_rejection_reason": self.action_rejection_reason,
+                "drqn_candidate_active": self.drqn_candidate_active,
+                "confidence_threshold": self.confidence_threshold,
+                "drqn_candidate_score": self.drqn_candidate_score,
+                "arbitration_score": self.arbitration_score,
+                "operational_checkpoint": self.operational_checkpoint,
             },
             "system_metrics": {
                 "rolling_pd": self.rolling_pd,
@@ -486,6 +510,17 @@ class OperationalReceiverController:
             rolling_median_latency_us=rolling_med_lat,
             consecutive_empty_band=int(getattr(self.moe_scheduler, "_consecutive_empty_band", 0)),
             consecutive_empty_total=int(getattr(self.moe_scheduler, "_consecutive_empty_total", 0)),
+            policy_mode=str(attr.get("policy_mode", "operational")),
+            exploration_enabled=bool(attr.get("exploration_enabled", False)),
+            action_was_overridden=bool(attr.get("action_was_overridden", False)),
+            fallback_triggered=float(attr.get("fallback_triggered", 0.0)),
+            fallback_reason=str(attr.get("fallback_reason", "none")),
+            action_rejection_reason=str(attr.get("action_rejection_reason", "none")),
+            drqn_candidate_active=float(attr.get("drqn_candidate_active", 1.0)),
+            confidence_threshold=float(attr.get("confidence_threshold", 0.020)),
+            drqn_candidate_score=float(attr.get("drqn_candidate_score", 0.0)),
+            arbitration_score=float(attr.get("arbitration_score", 0.0)),
+            operational_checkpoint=str(attr.get("operational_checkpoint", "Gate-25k-R4.2-alpha020")),
         )
 
         self.telemetry_history.append(telemetry_frame)

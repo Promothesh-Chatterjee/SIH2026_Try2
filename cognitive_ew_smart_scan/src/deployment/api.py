@@ -207,6 +207,7 @@ class PredictBandsRequest(BaseModel):
     """Request for band prediction."""
 
     obs: list[float] = Field(..., description=f"Observation vector of exactly obs_dim={CANONICAL_OBS_DIM} (36 bands x 10 features)", min_length=2)
+    policy_mode: Optional[str] = Field(None, description="Scheduler policy mode: 'operational', 'demo', or 'fallback'")
 
 
 class PredictBandsResponse(BaseModel):
@@ -281,6 +282,9 @@ class HealthResponse(BaseModel):
     benchmark_version: Optional[str] = None
     git_commit: Optional[str] = None
     normalization_hash: Optional[str] = None
+    policy_mode: Optional[str] = None
+    operational_mode_ready: bool = True
+    exploration_enabled: bool = False
 
 
 class MissionStartRequest(BaseModel):
@@ -597,7 +601,7 @@ async def lifespan(app: FastAPI):  # type: ignore
                     drqn.eval()
                     moe = SmartScanMoE(
                         drqn,
-                        {**moe_cfg, "n_bands": n_bands_api, "n_modes": n_modes_api, "n_actions": n_actions_api, "device": STATE["device"], "enable_t0": True, "tau": 0.05},
+                        {**moe_cfg, "n_bands": n_bands_api, "n_modes": n_modes_api, "n_actions": n_actions_api, "device": STATE["device"], "enable_t0": True, "tau": float(moe_cfg.get("tau", 0.0))},
                     )
                     STATE["scheduler"] = drqn
                     STATE["moe"] = moe
@@ -806,6 +810,10 @@ def health(response: Response = Response()) -> HealthResponse:
         except Exception:
             git_rev = "unknown"
 
+    moe = STATE.get("moe")
+    p_mode = getattr(moe, "policy_mode", os.getenv("SCHEDULER_POLICY_MODE", "operational")) if moe else os.getenv("SCHEDULER_POLICY_MODE", "operational")
+    expl_en = bool(getattr(moe, "exploration_enabled", False)) if moe else False
+
     return HealthResponse(
         status="ok" if overall_healthy else "degraded",
         device=str(STATE.get("device", "cpu")),
@@ -823,6 +831,9 @@ def health(response: Response = Response()) -> HealthResponse:
         benchmark_version=bench_ver,
         git_commit=git_rev,
         normalization_hash=STATE.get("normalization_stats_hash"),
+        policy_mode=p_mode,
+        operational_mode_ready=bool(scheduler_loaded and controller_ready),
+        exploration_enabled=expl_en,
     )
 
 
@@ -1021,7 +1032,7 @@ def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
         with hidden_lock:
             pre_step_hidden = moe.eager_agent.hidden if moe.eager_agent.hidden is not None else STATE.get("hidden")
             hidden_state = STATE.get("hidden")
-            action, hidden, attribution = moe.select_action(obs, hidden_state)
+            action, hidden, attribution = moe.select_action(obs, hidden_state, policy_mode=req.policy_mode)
             STATE["hidden"] = hidden
             prob, pred_time_us = _aux_for_action(moe.eager_agent.drqn, obs, action, pre_step_hidden)
             moe.update(action)

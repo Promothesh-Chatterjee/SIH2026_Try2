@@ -11,6 +11,7 @@ that visit pressure applies to the whole time-frequency cell of a band.
 """
 
 import logging
+import os
 from typing import Any
 
 import numpy as np
@@ -253,15 +254,36 @@ class SmartScanMoE(nn.Module):
         self.enable_spatial: bool = bool(config.get("enable_spatial", False))
         self.lambda_spatial: float = float(config.get("lambda_spatial", 0.25))
 
+        # Policy modes: "operational" (deterministic, direct DRQN when confident, no random exploration),
+        # "demo" (visible exploration and telemetry),
+        # "fallback" (forced heuristic fallback).
+        self.policy_mode: str = str(
+            config.get("policy_mode", os.getenv("SCHEDULER_POLICY_MODE", "operational"))
+        ).lower().strip()
+        self.exploration_enabled: bool = bool(
+            config.get(
+                "exploration_enabled",
+                os.getenv("SCHEDULER_EXPLORATION_ENABLED", "false").lower() in ("true", "1", "yes"),
+            )
+        )
+        self.operational_checkpoint: str = str(
+            config.get("operational_checkpoint", "Gate-25k-R4.2-alpha020")
+        )
+        self.operational_checkpoint_valid: bool = bool(
+            config.get("operational_checkpoint_valid", True)
+        )
+
         self._simulated_clock_us: float = 0.0
 
         # Keep direct refs for torch MoE forward
         self.drqn = drqn_agent
         self._config = config
         logger.info(
-            "SmartScanMoE eager=%.1f revisit=%.1f preemptive=%.1f K=%d actions=%d (T0=%s, T1=%s, Spatial=%s, Guard=%s, Alpha=%.2f)",
+            "SmartScanMoE eager=%.1f revisit=%.1f preemptive=%.1f K=%d actions=%d (policy_mode=%s, exploration=%s, checkpoint=%s, valid=%s, T0=%s, T1=%s, Spatial=%s, Guard=%s, Alpha=%.2f)",
             self.eager_weight, self.revisit_weight, self.preemptive_weight,
-            self.k_receivers, self.n_actions, self.enable_t0, self.enable_t1, self.enable_spatial,
+            self.k_receivers, self.n_actions, self.policy_mode, self.exploration_enabled,
+            self.operational_checkpoint, self.operational_checkpoint_valid,
+            self.enable_t0, self.enable_t1, self.enable_spatial,
             self.enable_exploration_guard, self.alpha_dirichlet,
         )
 
@@ -543,12 +565,21 @@ class SmartScanMoE(nn.Module):
         }
 
     def select_action(
-        self, obs: np.ndarray | torch.Tensor, eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None, tau: float | None = None
-    ) -> tuple[int, tuple[torch.Tensor, torch.Tensor] | None, dict[str, float]]:
-        """Select action via confidence gating: DRQN primary (stochastic), heuristics fallback."""
-        eff_tau = self.default_tau if tau is None else float(tau)
+        self,
+        obs: np.ndarray | torch.Tensor,
+        eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None,
+        tau: float | None = None,
+        policy_mode: str | None = None,
+    ) -> tuple[int, tuple[torch.Tensor, torch.Tensor] | None, dict[str, Any]]:
+        """Select action via policy gating: operational (deterministic DRQN), demo (exploration), fallback."""
         # 1. Compute components
         fused_scores, eager_norm, revisit_norm, hidden, obs_1d, q_values = self._compute_fused_full(obs, eager_hidden)
+
+        # Raw DRQN output analysis
+        raw_q_np = np.asarray(q_values, dtype=np.float32).reshape(-1)
+        raw_drqn_action = int(np.argmax(raw_q_np)) if len(raw_q_np) > 0 else 0
+        raw_drqn_band = int(band_of_action(raw_drqn_action, self.n_modes))
+        raw_drqn_mode = int(mode_of_action(raw_drqn_action, self.n_modes))
 
         # 2. Confidence evaluation (Background-relative Q-margin)
         band_max = np.array([np.max(q_values[b * self.n_modes : (b + 1) * self.n_modes]) for b in range(self.n_bands)])
@@ -569,193 +600,297 @@ class SmartScanMoE(nn.Module):
             (c_bg >= self.confidence_margin_threshold) or (band_q_margin >= self.confidence_margin_threshold)
         )
 
-        # 4. Multi-emitter candidate set
-        per_vec = np.clip(self._preemptive_urgency[: self.n_bands], 0.0, 1.0)
-        q_candidates = [int(b) for b in order_b if band_max[b] >= q_top1 - 0.05][:3]
+        eff_policy = str(policy_mode or self.policy_mode or "operational").lower().strip()
+        if eff_policy not in ("operational", "demo", "fallback"):
+            eff_policy = "operational"
 
-        # Stage 3 Temporal Predictor candidates & arrival forecasts
-        pred_candidates = []
-        pred_probs = np.zeros(self.n_bands, dtype=np.float32)
-        pred_etas = {}
-        if self.enable_t0 or self.enable_t1:
-            curr_t = self._simulated_clock_us
-            pred_candidates = self.temporal_predictor.get_predicted_candidate_bands(current_time=curr_t, top_k=2)
-            for p in self.temporal_predictor.predict_all(curr_t):
-                if p.prediction_confidence > 0.2:
-                    b_p = p.target_band
-                    pred_probs[b_p] = max(pred_probs[b_p], float(p.prediction_confidence))
-                    pred_etas[b_p] = min(pred_etas.get(b_p, float("inf")), float(p.eta_us))
-
-        # Adaptive occupancy threshold: in dense stare require 0.15, in sparse or scan regimes adapt down to 0.02
         max_occ = float(np.max(occ_vec)) if len(occ_vec) > 0 else 0.0
         occ_threshold = max(0.02, min(0.15, 0.5 * max_occ))
         occ_candidates = [int(b) for b in range(self.n_bands) if occ_vec[b] >= occ_threshold][:3]
-        per_candidates = [int(b) for b in range(self.n_bands) if per_vec[b] > 0.50][:2] if self.preemptive_weight > 0.0 else []
-        all_candidates = list(dict.fromkeys(pred_candidates + per_candidates + q_candidates + occ_candidates))[:7]
+        per_vec = np.clip(self._preemptive_urgency[: self.n_bands], 0.0, 1.0)
 
-        # Filter out repeatedly empty band to enforce escape
-        if self._consecutive_empty_band >= 2 and self._last_band in all_candidates and len(all_candidates) > 1:
-            all_candidates = [b for b in all_candidates if b != self._last_band]
-
-        # Force exploration if 3 consecutive dwells anywhere produced zero hits
-        force_exploration = bool(self._consecutive_empty_total >= 3)
-
-        # Exploration Guard: protect high-confidence impending arrivals from being overridden
-        has_guarded_arrival = False
-        if force_exploration and self.enable_exploration_guard:
-            curr_t = self._simulated_clock_us
-            preds = self.temporal_predictor.predict_all(curr_t, horizon_us=self.exploration_guard_eta_us)
-            for p in preds:
-                if p.prediction_confidence >= self.exploration_guard_confidence and p.eta_us <= self.exploration_guard_eta_us:
-                    has_guarded_arrival = True
-                    break
-            if has_guarded_arrival:
-                force_exploration = False
-
-        # Evaluate T1 Action-Conditioned Predictive Utility if enabled
-        u_action = None
-        if self.enable_t1 and not force_exploration and (self._consecutive_empty_band < 2):
-            u_scores, u_telem = self.temporal_predictor.compute_action_conditioned_utility(
-                q_values=q_values,
-                current_time=self._simulated_clock_us,
-                lambda_p=self.lambda_p,
-                lambda_t=self.lambda_t,
-                lambda_d=self.lambda_d,
-                lambda_a=self.lambda_a,
-            )
-            pred_b_set = set(u_telem.get("predicted_bands", []))
-            act_res = u_telem.get("actionable_reservation", None)
-            if act_res is not None:
-                res_b = int(act_res["target_band"])
-                if res_b not in all_candidates:
-                    all_candidates.insert(0, res_b)
-                pred_b_set.add(res_b)
-
-            if pred_b_set and all_candidates:
-                # Rank candidates by U(b, m) + optional gated spatial priority
-                cand_actions = [b * self.n_modes + m for b in all_candidates for m in range(self.n_modes)]
-                if self.enable_spatial:
-                    cand_act_scores = []
-                    for a in cand_actions:
-                        b = band_of_action(a, self.n_modes)
-                        # Bounded spatial priority across tracks active in band b
-                        s_prio = 0.0
-                        for eid, track in getattr(self.temporal_predictor, "tracks", {}).items():
-                            if getattr(track, "last_band", None) == b:
-                                s_prio = max(s_prio, self.spatial_tracker.get_spatial_priority(eid, self._simulated_clock_us))
-                        cand_act_scores.append(u_scores[a] + self.lambda_spatial * s_prio)
-                    best_cand_act = int(cand_actions[int(np.argmax(cand_act_scores))])
-                else:
-                    best_cand_act = int(cand_actions[int(np.argmax([u_scores[a] for a in cand_actions]))])
-                b_cand = band_of_action(best_cand_act, self.n_modes)
-                if b_cand in pred_b_set or pred_probs[b_cand] >= 0.4:
-                    u_action = best_cand_act
-
-        cand_pred = None
-        if self.enable_t0 and pred_candidates and not force_exploration and (self._consecutive_empty_band < 2):
-            for p_cand in pred_candidates:
-                if (p_cand != self._last_band or self._consecutive_dwells_same_band < 1) and (pred_probs[p_cand] >= 0.4):
-                    cand_pred = p_cand
-                    break
-
-        mode = None
-        if self.eager_weight == 0.0 and self.revisit_weight == 0.0 and self.semantic_weight > 0.0 and not force_exploration:
+        if self.eager_weight == 0.0 and self.semantic_weight > 0.0:
             action = int(np.argmax(fused_scores))
             best_b = band_of_action(action, self.n_modes)
             mode = int(mode_of_action(action, self.n_modes))
             reason = DWELL_MODE_SEMANTICS[mode]
-        elif u_action is not None:
-            best_b = band_of_action(u_action, self.n_modes)
-            mode = int(mode_of_action(u_action, self.n_modes))
-            act_res = u_telem.get("actionable_reservation", None) if "u_telem" in locals() else None
-            if act_res is not None and best_b == act_res["target_band"]:
-                reason = "Temporal_reservation_active"
-                if hasattr(self.temporal_predictor, "reservation_manager"):
-                    self.temporal_predictor.reservation_manager.mark_executed(act_res["reservation_id"])
-            else:
-                reason = "Predictive_utility_active"
-        elif cand_pred is not None:
-            best_b = cand_pred
-            reason = "Predictive_hop_intercept"
-            eta = pred_etas.get(best_b, 500.0)
-            if eta <= 125.0:
-                mode = 0  # SHORT_DWELL
-            elif eta <= 500.0:
-                mode = 1  # NORMAL_DWELL
-            else:
-                mode = 2  # LONG_DWELL
-        elif self.preemptive_weight > 0.0 and np.max(per_vec) > 0.5 and (self._consecutive_empty_band < 2):
-            best_b = int(np.argmax(per_vec))
-            reason = "Preemptive_intercept"
-        elif is_confident and all_candidates and not force_exploration and (self._consecutive_empty_band < 2):
-            dwell_penalty = 10.0 * float(self._consecutive_dwells_same_band)
-            cand_scores = np.array([
-                self.eager_weight * (band_max[b] - q_median)
-                + 0.5 * occ_vec[b]
-                + 2.0 * self.preemptive_weight * per_vec[b]
-                + (1.5 * pred_probs[b] if self.enable_t0 else 0.0)
-                - (dwell_penalty if b == self._last_band else 0.0)
-                for b in all_candidates
-            ])
-            if self.enable_spatial:
-                for idx_c, b in enumerate(all_candidates):
-                    s_prio = 0.0
-                    for eid, track in getattr(self.temporal_predictor, "tracks", {}).items():
-                        if getattr(track, "last_band", None) == b:
-                            s_prio = max(s_prio, self.spatial_tracker.get_spatial_priority(eid, self._simulated_clock_us))
-                    cand_scores[idx_c] += self.lambda_spatial * s_prio
-            if eff_tau > 0.0:
-                probs = np.exp((cand_scores - np.max(cand_scores)) / max(1e-5, eff_tau))
-                probs = probs / np.sum(probs)
-                best_b = int(np.random.choice(all_candidates, p=probs))
-            else:
-                best_b = int(all_candidates[int(np.argmax(cand_scores))])
-            reason = "DRQN_topk_active"
-        elif occ_candidates and not force_exploration and (self._consecutive_empty_band < 2):
-            # Cognitive fallback: prefer another occupied band if already dwelled here
-            active_cands = [b for b in occ_candidates if b != self._last_band] if (self._consecutive_dwells_same_band >= 1 and len(occ_candidates) > 1) else occ_candidates
-            occ_vals = np.array([occ_vec[b] for b in active_cands])
-            if eff_tau > 0.0:
-                probs = np.exp(occ_vals / max(1e-5, eff_tau))
-                probs = probs / np.sum(probs)
-                best_b = int(np.random.choice(active_cands, p=probs))
-            else:
-                best_b = int(active_cands[int(np.argmax(occ_vals))])
-            reason = "Occupancy_fallback"
-        else:
-            # Cognitive exploration: revisit + uncertainty + historical hits + preemptive urgency
-            max_hist = float(np.max(self._historical_hits)) if len(self._historical_hits) > 0 else 0.0
-            hist_norm = (self._historical_hits / max(1.0, max_hist)).astype(np.float32)
-            explor_scores = 0.40 * revisit_norm + 0.35 * unc_vec + 0.15 * hist_norm + 0.10 * per_vec
-            if (self._consecutive_empty_band >= 1 or self._consecutive_dwells_same_band >= 1) and 0 <= self._last_band < self.n_bands:
-                explor_scores[self._last_band] = -1e9
-            best_b = int(np.argmax(explor_scores))
-            reason = "Cognitive_exploration"
+            force_exploration = False
+            has_guarded_arrival = False
+            u_action = None
+            drqn_candidate_active = 0.0
+            action_was_overridden = False
+            fallback_triggered = 0.0
+            fallback_reason = "none"
+            action_rejection_reason = "none"
+        elif eff_policy == "operational":
+            eff_tau = 0.0
+            force_exploration = False
+            has_guarded_arrival = False
+            u_action = None
 
-        if mode is None:
-            # Mode hierarchy combining learned Q-values + uncertainty/safety
-            occ = float(occ_vec[best_b])
-            unc = float(unc_vec[best_b])
-            age = float(age_vec[best_b])
-
-            # If a single mode has a massive learned Q margin (e.g. unit test or specialized fine-tuning), honor it
-            q_modes = q_values[best_b * self.n_modes : (best_b + 1) * self.n_modes]
-            m_argmax = int(np.argmax(q_modes))
-            q_norm = float(q_values[best_b * self.n_modes + 1])
-            q_long = float(q_values[best_b * self.n_modes + 2])
-
-            if float(q_modes[m_argmax] - np.partition(q_modes, -2)[-2] if len(q_modes) > 1 else 0.0) >= 1.0:
-                mode = m_argmax
-            elif unc > 0.6 or age > 0.6:
-                mode = 2  # LONG_DWELL
-            elif self._consecutive_empty_band >= 2 and occ < 0.1:
-                mode = 0  # SHORT_DWELL
-            elif q_long > q_norm + 0.05:
-                mode = 2  # LONG_DWELL
+            if not self.operational_checkpoint_valid:
+                is_confident = False
+                fallback_triggered = 1.0
+                fallback_reason = "checkpoint_invalid"
+                action_rejection_reason = f"Operational candidate '{self.operational_checkpoint}' failed verification"
+                drqn_candidate_active = 0.0
+                action_was_overridden = True
+                if occ_candidates:
+                    best_b = int(occ_candidates[0])
+                    reason = "Occupancy_fallback"
+                else:
+                    best_b = int(np.argmax(revisit_norm))
+                    reason = "Cognitive_exploration"
+                mode = 1
+                action = best_b * self.n_modes + mode
+            elif is_confident:
+                # Operational mode primary path: DRQN candidate dispatched directly and deterministically
+                action = raw_drqn_action
+                best_b = raw_drqn_band
+                mode = raw_drqn_mode
+                reason = "DRQN_operational_active"
+                drqn_candidate_active = 1.0
+                action_was_overridden = False
+                fallback_triggered = 0.0
+                fallback_reason = "none"
+                action_rejection_reason = "none"
             else:
-                mode = 1  # NORMAL_DWELL
+                # Operational fallback: activated ONLY when confidence threshold fails
+                fallback_triggered = 1.0
+                fallback_reason = "low_confidence_margin"
+                action_rejection_reason = (
+                    f"DRQN confidence margin ({band_q_margin:.4f}) and background margin ({c_bg:.4f}) "
+                    f"below threshold ({self.confidence_margin_threshold:.4f})"
+                )
+                drqn_candidate_active = 0.0
+                action_was_overridden = True
+                if self.preemptive_weight > 0.0 and np.max(per_vec) > 0.5:
+                    best_b = int(np.argmax(per_vec))
+                    reason = "Preemptive_intercept"
+                    mode = 1
+                elif occ_candidates:
+                    best_b = int(occ_candidates[0])
+                    reason = "Occupancy_fallback"
+                    mode = 1
+                else:
+                    best_b = int(np.argmax(revisit_norm))
+                    reason = "Cognitive_exploration"
+                    mode = 1
+                action = best_b * self.n_modes + mode
 
-        action = best_b * self.n_modes + mode
+                logger.warning(
+                    "Scheduler fallback triggered [operational]: %s (threshold=%.4f, q_top1=%.4f, arbitration_score=%.4f, checkpoint=%s)",
+                    action_rejection_reason,
+                    self.confidence_margin_threshold,
+                    q_top1,
+                    float(fused_scores[action]),
+                    self.operational_checkpoint,
+                )
+
+        elif eff_policy == "fallback":
+            eff_tau = 0.0
+            force_exploration = False
+            has_guarded_arrival = False
+            u_action = None
+            fallback_triggered = 1.0
+            fallback_reason = "forced_fallback_policy"
+            action_rejection_reason = "Forced fallback policy mode active"
+            drqn_candidate_active = 0.0
+            action_was_overridden = True
+            if occ_candidates:
+                best_b = int(occ_candidates[0])
+                reason = "Occupancy_fallback"
+            else:
+                best_b = int(np.argmax(revisit_norm))
+                reason = "Cognitive_exploration"
+            mode = 1
+            action = best_b * self.n_modes + mode
+            logger.info("Forced fallback mode: selected band %d mode %d (%s)", best_b, mode, reason)
+
+        else:  # "demo" mode: exploration enabled and visible
+            eff_tau = self.default_tau if tau is None else float(tau)
+            if eff_tau <= 0.0:
+                eff_tau = 0.1
+
+            q_candidates = [int(b) for b in order_b if band_max[b] >= q_top1 - 0.05][:3]
+
+            pred_candidates = []
+            pred_probs = np.zeros(self.n_bands, dtype=np.float32)
+            pred_etas = {}
+            if self.enable_t0 or self.enable_t1:
+                curr_t = self._simulated_clock_us
+                pred_candidates = self.temporal_predictor.get_predicted_candidate_bands(current_time=curr_t, top_k=2)
+                for p in self.temporal_predictor.predict_all(curr_t):
+                    if p.prediction_confidence > 0.2:
+                        b_p = p.target_band
+                        pred_probs[b_p] = max(pred_probs[b_p], float(p.prediction_confidence))
+                        pred_etas[b_p] = min(pred_etas.get(b_p, float("inf")), float(p.eta_us))
+
+            per_candidates = [int(b) for b in range(self.n_bands) if per_vec[b] > 0.50][:2] if self.preemptive_weight > 0.0 else []
+            all_candidates = list(dict.fromkeys(pred_candidates + per_candidates + q_candidates + occ_candidates))[:7]
+
+            if self._consecutive_empty_band >= 2 and self._last_band in all_candidates and len(all_candidates) > 1:
+                all_candidates = [b for b in all_candidates if b != self._last_band]
+
+            force_exploration = bool(self._consecutive_empty_total >= 3)
+            has_guarded_arrival = False
+            if force_exploration and self.enable_exploration_guard:
+                curr_t = self._simulated_clock_us
+                preds = self.temporal_predictor.predict_all(curr_t, horizon_us=self.exploration_guard_eta_us)
+                for p in preds:
+                    if p.prediction_confidence >= self.exploration_guard_confidence and p.eta_us <= self.exploration_guard_eta_us:
+                        has_guarded_arrival = True
+                        break
+                if has_guarded_arrival:
+                    force_exploration = False
+
+            u_action = None
+            if self.enable_t1 and not force_exploration and (self._consecutive_empty_band < 2):
+                u_scores, u_telem = self.temporal_predictor.compute_action_conditioned_utility(
+                    q_values=q_values,
+                    current_time=self._simulated_clock_us,
+                    lambda_p=self.lambda_p,
+                    lambda_t=self.lambda_t,
+                    lambda_d=self.lambda_d,
+                    lambda_a=self.lambda_a,
+                )
+                pred_b_set = set(u_telem.get("predicted_bands", []))
+                act_res = u_telem.get("actionable_reservation", None)
+                if act_res is not None:
+                    res_b = int(act_res["target_band"])
+                    if res_b not in all_candidates:
+                        all_candidates.insert(0, res_b)
+                    pred_b_set.add(res_b)
+
+                if pred_b_set and all_candidates:
+                    cand_actions = [b * self.n_modes + m for b in all_candidates for m in range(self.n_modes)]
+                    if self.enable_spatial:
+                        cand_act_scores = []
+                        for a in cand_actions:
+                            b = band_of_action(a, self.n_modes)
+                            s_prio = 0.0
+                            for eid, track in getattr(self.temporal_predictor, "tracks", {}).items():
+                                if getattr(track, "last_band", None) == b:
+                                    s_prio = max(s_prio, self.spatial_tracker.get_spatial_priority(eid, self._simulated_clock_us))
+                            cand_act_scores.append(u_scores[a] + self.lambda_spatial * s_prio)
+                        best_cand_act = int(cand_actions[int(np.argmax(cand_act_scores))])
+                    else:
+                        best_cand_act = int(cand_actions[int(np.argmax([u_scores[a] for a in cand_actions]))])
+                    b_cand = band_of_action(best_cand_act, self.n_modes)
+                    if b_cand in pred_b_set or pred_probs[b_cand] >= 0.4:
+                        u_action = best_cand_act
+
+            cand_pred = None
+            if self.enable_t0 and pred_candidates and not force_exploration and (self._consecutive_empty_band < 2):
+                for p_cand in pred_candidates:
+                    if (p_cand != self._last_band or self._consecutive_dwells_same_band < 1) and (pred_probs[p_cand] >= 0.4):
+                        cand_pred = p_cand
+                        break
+
+            mode = None
+            if self.eager_weight == 0.0 and self.revisit_weight == 0.0 and self.semantic_weight > 0.0 and not force_exploration:
+                action = int(np.argmax(fused_scores))
+                best_b = band_of_action(action, self.n_modes)
+                mode = int(mode_of_action(action, self.n_modes))
+                reason = DWELL_MODE_SEMANTICS[mode]
+            elif u_action is not None:
+                best_b = band_of_action(u_action, self.n_modes)
+                mode = int(mode_of_action(u_action, self.n_modes))
+                act_res = u_telem.get("actionable_reservation", None) if "u_telem" in locals() else None
+                if act_res is not None and best_b == act_res["target_band"]:
+                    reason = "Temporal_reservation_active"
+                    if hasattr(self.temporal_predictor, "reservation_manager"):
+                        self.temporal_predictor.reservation_manager.mark_executed(act_res["reservation_id"])
+                else:
+                    reason = "Predictive_utility_active"
+            elif cand_pred is not None:
+                best_b = cand_pred
+                reason = "Predictive_hop_intercept"
+                eta = pred_etas.get(best_b, 500.0)
+                if eta <= 125.0:
+                    mode = 0
+                elif eta <= 500.0:
+                    mode = 1
+                else:
+                    mode = 2
+            elif self.preemptive_weight > 0.0 and np.max(per_vec) > 0.5 and (self._consecutive_empty_band < 2):
+                best_b = int(np.argmax(per_vec))
+                reason = "Preemptive_intercept"
+            elif is_confident and all_candidates and not force_exploration and (self._consecutive_empty_band < 2):
+                dwell_penalty = 10.0 * float(self._consecutive_dwells_same_band)
+                cand_scores = np.array([
+                    self.eager_weight * (band_max[b] - q_median)
+                    + 0.5 * occ_vec[b]
+                    + 2.0 * self.preemptive_weight * per_vec[b]
+                    + (1.5 * pred_probs[b] if self.enable_t0 else 0.0)
+                    - (dwell_penalty if b == self._last_band else 0.0)
+                    for b in all_candidates
+                ])
+                if self.enable_spatial:
+                    for idx_c, b in enumerate(all_candidates):
+                        s_prio = 0.0
+                        for eid, track in getattr(self.temporal_predictor, "tracks", {}).items():
+                            if getattr(track, "last_band", None) == b:
+                                s_prio = max(s_prio, self.spatial_tracker.get_spatial_priority(eid, self._simulated_clock_us))
+                        cand_scores[idx_c] += self.lambda_spatial * s_prio
+                if eff_tau > 0.0:
+                    probs = np.exp((cand_scores - np.max(cand_scores)) / max(1e-5, eff_tau))
+                    probs = probs / np.sum(probs)
+                    best_b = int(np.random.choice(all_candidates, p=probs))
+                else:
+                    best_b = int(all_candidates[int(np.argmax(cand_scores))])
+                reason = "DRQN_topk_active"
+            elif occ_candidates and not force_exploration and (self._consecutive_empty_band < 2):
+                active_cands = [b for b in occ_candidates if b != self._last_band] if (self._consecutive_dwells_same_band >= 1 and len(occ_candidates) > 1) else occ_candidates
+                occ_vals = np.array([occ_vec[b] for b in active_cands])
+                if eff_tau > 0.0:
+                    probs = np.exp(occ_vals / max(1e-5, eff_tau))
+                    probs = probs / np.sum(probs)
+                    best_b = int(np.random.choice(active_cands, p=probs))
+                else:
+                    best_b = int(active_cands[int(np.argmax(occ_vals))])
+                reason = "Occupancy_fallback"
+            else:
+                max_hist = float(np.max(self._historical_hits)) if len(self._historical_hits) > 0 else 0.0
+                hist_norm = (self._historical_hits / max(1.0, max_hist)).astype(np.float32)
+                explor_scores = 0.40 * revisit_norm + 0.35 * unc_vec + 0.15 * hist_norm + 0.10 * per_vec
+                if (self._consecutive_empty_band >= 1 or self._consecutive_dwells_same_band >= 1) and 0 <= self._last_band < self.n_bands:
+                    explor_scores[self._last_band] = -1e9
+                best_b = int(np.argmax(explor_scores))
+                reason = "Cognitive_exploration"
+
+            if mode is None:
+                occ = float(occ_vec[best_b])
+                unc = float(unc_vec[best_b])
+                age = float(age_vec[best_b])
+                q_modes = q_values[best_b * self.n_modes : (best_b + 1) * self.n_modes]
+                m_argmax = int(np.argmax(q_modes))
+                q_norm = float(q_values[best_b * self.n_modes + 1])
+                q_long = float(q_values[best_b * self.n_modes + 2])
+
+                if float(q_modes[m_argmax] - np.partition(q_modes, -2)[-2] if len(q_modes) > 1 else 0.0) >= 1.0:
+                    mode = m_argmax
+                elif unc > 0.6 or age > 0.6:
+                    mode = 2
+                elif self._consecutive_empty_band >= 2 and occ < 0.1:
+                    mode = 0
+                elif q_long > q_norm + 0.05:
+                    mode = 2
+                else:
+                    mode = 1
+
+            action = best_b * self.n_modes + mode
+            action_was_overridden = bool(action != raw_drqn_action)
+            drqn_candidate_active = float(not action_was_overridden or reason in ("DRQN_topk_active", "DRQN_operational_active"))
+            fallback_triggered = float(reason in ("Cognitive_exploration", "Occupancy_fallback"))
+            fallback_reason = "demo_exploration" if reason == "Cognitive_exploration" else ("occupancy_fallback" if reason == "Occupancy_fallback" else ("none" if not fallback_triggered else "arbitration_override"))
+            action_rejection_reason = f"Demo exploration/arbitration active: {reason}" if action_was_overridden else "none"
+
+            if action_was_overridden:
+                logger.info(
+                    "Demo mode arbitration override: action=%d (raw_drqn=%d, reason=%s, q_top1=%.4f, arbitration_score=%.4f)",
+                    action, raw_drqn_action, reason, q_top1, float(fused_scores[action]),
+                )
 
         attribution = self._attribution_for(action, obs_1d)
         
@@ -768,24 +903,32 @@ class SmartScanMoE(nn.Module):
         attribution["action_score"] = float(fused_scores[action])
         attribution["action"] = action
         attribution["q_margin"] = float(band_q_margin)
-        attribution["fallback_triggered"] = float(reason in ("Cognitive_exploration", "Occupancy_fallback"))
+        attribution["fallback_triggered"] = float(fallback_triggered)
         attribution["exploration_mode_active"] = float(reason == "Cognitive_exploration")
-        attribution["drqn_candidate_active"] = float(reason == "DRQN_topk_active")
+        attribution["drqn_candidate_active"] = float(drqn_candidate_active)
         attribution["occupancy_candidate_active"] = float(reason == "Occupancy_fallback")
         attribution["preemptive_candidate_active"] = float(reason == "Preemptive_intercept")
         attribution["consecutive_empty_total"] = int(self._consecutive_empty_total)
         attribution["consecutive_empty_band"] = int(self._consecutive_empty_band)
         attribution["reason"] = reason
 
+        # Policy & Diagnostic Audit fields
+        attribution["policy_mode"] = str(eff_policy)
+        attribution["exploration_enabled"] = bool(eff_policy == "demo" or (eff_policy == "operational" and self.exploration_enabled))
+        attribution["operational_checkpoint"] = str(self.operational_checkpoint)
+        attribution["operational_checkpoint_valid"] = bool(self.operational_checkpoint_valid)
+        attribution["confidence_threshold"] = float(self.confidence_margin_threshold)
+        attribution["confidence_margin"] = float(band_q_margin)
+        attribution["is_confident"] = bool(is_confident)
+        attribution["drqn_candidate_score"] = float(q_top1)
+        attribution["arbitration_score"] = float(fused_scores[action])
+        attribution["action_rejection_reason"] = str(action_rejection_reason)
+        attribution["fallback_reason"] = str(fallback_reason)
+
         # Phase 2 runtime decision telemetry fields
-        raw_q_np = np.asarray(q_values, dtype=np.float32).reshape(-1)
-        raw_drqn_action = int(np.argmax(raw_q_np))
-        raw_drqn_band = int(band_of_action(raw_drqn_action, self.n_modes))
-        raw_drqn_mode = int(mode_of_action(raw_drqn_action, self.n_modes))
         final_action = int(action)
         final_band = int(band_of_action(final_action, self.n_modes))
         final_mode = int(mode_of_action(final_action, self.n_modes))
-        action_was_overridden = bool(final_action != raw_drqn_action)
         override_source = str(reason) if action_was_overridden else None
         exploration_source = "cognitive_exploration" if reason == "Cognitive_exploration" else ("force_exploration" if force_exploration else "none")
         q_selected = float(raw_q_np[final_action]) if 0 <= final_action < len(raw_q_np) else 0.0
@@ -807,7 +950,6 @@ class SmartScanMoE(nn.Module):
         attribution["q_max"] = q_max
         attribution["q_mean"] = q_mean
         attribution["q_std"] = q_std
-
 
         # Cognitive Decision Explanation fields for telemetry & dashboard
         attribution["guarded_arrival_active"] = float(has_guarded_arrival)
