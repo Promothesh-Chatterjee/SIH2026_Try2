@@ -1,4 +1,4 @@
-﻿"""
+"""
 One-Click Master Launcher for Cognitive EW SmartScan SIH Demonstration.
 
 Starts:
@@ -90,8 +90,8 @@ def main() -> int:
     parser.add_argument(
         "--backend-port",
         type=int,
-        default=8000,
-        help="FastAPI backend port (default: 8000).",
+        default=8080,
+        help="FastAPI backend port (default: 8080).",
     )
     parser.add_argument(
         "--frontend-port",
