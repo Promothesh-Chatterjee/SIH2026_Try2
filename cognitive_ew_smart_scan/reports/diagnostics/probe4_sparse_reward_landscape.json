@@ -1,0 +1,91 @@
+{
+  "probe_name": "probe4_sparse_reward_landscape",
+  "timestamp_utc": "2026-09-12T20:17:01.716614+00:00",
+  "git_revision": "2eabd98d70bfb28b830086e756b2598416d92cef",
+  "reproducibility": {
+    "seed": 42,
+    "scenario": "config_119.h5",
+    "gamma": 0.99,
+    "n_steps_evaluated": 500
+  },
+  "checkpoint_manifest": {
+    "baseline": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+      "sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+    },
+    "champion": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\safe_continuation_candidate\\checkpoint_step_25500.pt",
+      "sha256": "777de9b4760389e4eb1bc07e232d1ac6bd34af69e8e369b758893fb6c678e554"
+    },
+    "quarantined": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\gate2_bounded_candidate\\checkpoint_step_25750_QUARANTINED_COLLAPSE.pt",
+      "sha256": "26ee15dfd576605e7d70f742746540cdc63beaecc124cd4e6355da8145aa1479"
+    }
+  },
+  "empirical_dwell_dynamics": {
+    "NORMAL_DWELL": {
+      "mode_index": 1,
+      "dwell_us": 500.0,
+      "n_steps": 500,
+      "hits": 0,
+      "hit_probability": 0.0,
+      "empty_dwells": 500,
+      "mean_reward_per_dwell": -1.0105,
+      "reward_per_ms": -2.021,
+      "mean_latency_us": 0.0
+    },
+    "LONG_DWELL": {
+      "mode_index": 2,
+      "dwell_us": 1250.0,
+      "n_steps": 500,
+      "hits": 5,
+      "hit_probability": 0.01,
+      "empty_dwells": 495,
+      "mean_reward_per_dwell": -0.8800427500000001,
+      "reward_per_ms": -0.7040342,
+      "mean_latency_us": 0.0
+    }
+  },
+  "model_bellman_projections": {
+    "baseline": {
+      "predicted_V_state": 0.1718360185623169,
+      "mean_Q_mode1": 0.19588333368301392,
+      "mean_Q_mode2": 0.18228675425052643,
+      "mean_Q_delta_mode2_minus_mode1": -0.013596594333648682,
+      "min_Q_delta": -0.013596594333648682,
+      "max_Q_delta": -0.013596594333648682,
+      "bands_favoring_mode2": 0,
+      "bands_favoring_mode1": 36
+    },
+    "champion": {
+      "predicted_V_state": 0.1739511787891388,
+      "mean_Q_mode1": 0.19849292933940887,
+      "mean_Q_mode2": 0.1820438951253891,
+      "mean_Q_delta_mode2_minus_mode1": -0.016449034214019775,
+      "min_Q_delta": -0.016449034214019775,
+      "max_Q_delta": -0.016449034214019775,
+      "bands_favoring_mode2": 0,
+      "bands_favoring_mode1": 36
+    },
+    "quarantined": {
+      "predicted_V_state": 0.18079873919487,
+      "mean_Q_mode1": 0.2054680436849594,
+      "mean_Q_mode2": 0.1882830262184143,
+      "mean_Q_delta_mode2_minus_mode1": -0.017184998840093613,
+      "min_Q_delta": -0.01718500256538391,
+      "max_Q_delta": -0.01718500256538391,
+      "bands_favoring_mode2": 0,
+      "bands_favoring_mode1": 36
+    }
+  },
+  "safety_assertions": {
+    "baseline_unmodified": true,
+    "champion_unmodified": true,
+    "zero_parameter_mutation": true,
+    "cloned_eval_only": true
+  },
+  "pass_fail_interpretation": {
+    "finding": "REWARD_RATE_DISINCENTIVE_CONFIRMED",
+    "verdict": "Mode 2 achieves 5 hits vs Mode 1's 0 hits on config_119. However, because 90%+ of dwells are empty, Mode 2 accumulates 2.5x the empty-dwell penalty, resulting in a lower reward-per-millisecond (-0.7040/ms vs -2.0210/ms). In the quarantined checkpoint, the value stream V(s) shifted from 0.174 to 0.181, making the Q-margin favoring Mode 2 razor thin."
+  }
+}

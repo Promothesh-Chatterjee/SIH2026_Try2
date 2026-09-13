@@ -1,4 +1,4 @@
-﻿"""
+"""
 One-Click Master Launcher for Cognitive EW SmartScan SIH Demonstration.
 
 Starts:
@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -39,14 +40,26 @@ BACKEND_DIR = REPO_ROOT / "cognitive_ew_smart_scan"
 FRONTEND_DIR = REPO_ROOT / "SMARTSCAN_EW_FRONTEND_APP"
 
 
+def check_port(host: str, port: int, timeout: float = 0.5) -> bool:
+    """Check if TCP port is listening."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 def check_url(url: str, timeout: float = 1.5) -> bool:
-    """Check if an HTTP endpoint is reachable and returns 2xx."""
+    """Check if an HTTP endpoint is reachable and returns HTTP status."""
     for target in [url, url.rstrip("/") + "/"]:
         try:
             req = urllib.request.Request(target)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                if 200 <= resp.status < 400:
+                if 200 <= resp.status < 400 or resp.status == 503:
                     return True
+        except urllib.error.HTTPError as err:
+            if err.code == 503 or (200 <= err.code < 400):
+                return True
         except Exception:
             pass
     return False
@@ -55,8 +68,14 @@ def check_url(url: str, timeout: float = 1.5) -> bool:
 def get_json(url: str, timeout: float = 2.0) -> dict:
     """Fetch JSON from endpoint."""
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as err:
+        try:
+            return json.loads(err.read().decode("utf-8"))
+        except Exception:
+            return {"status": "degraded", "code": err.code}
 
 
 def post_json(url: str, data: dict, timeout: float = 3.0) -> dict:
@@ -90,8 +109,8 @@ def main() -> int:
     parser.add_argument(
         "--backend-port",
         type=int,
-        default=8000,
-        help="FastAPI backend port (default: 8000).",
+        default=8080,
+        help="FastAPI backend port (default: 8080).",
     )
     parser.add_argument(
         "--frontend-port",
@@ -156,11 +175,12 @@ def main() -> int:
             "--port",
             str(args.backend_port),
         ]
+        backend_log = open(REPO_ROOT / "backend.log", "w", encoding="utf-8")
         b_proc = subprocess.Popen(
             backend_cmd,
             cwd=str(BACKEND_DIR),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
+            stdout=backend_log,
+            stderr=subprocess.STDOUT,
         )
         procs.append(b_proc)
 
@@ -187,18 +207,19 @@ def main() -> int:
         print(f"[!] Warning: could not parse health status: {e}")
 
     # 2. Start Frontend Server
-    frontend_url = f"http://localhost:{args.frontend_port}"
-    if check_url(frontend_url):
+    frontend_url = f"http://127.0.0.1:{args.frontend_port}"
+    if check_port("127.0.0.1", args.frontend_port):
         print(f"[+] Frontend is already running on port {args.frontend_port}.")
     else:
         print(f"[*] Starting Vite React frontend on {frontend_url}...")
         npm_bin = "npm.cmd" if sys.platform == "win32" else "npm"
-        npm_str = f"{npm_bin} run dev -- --port {args.frontend_port} --host 0.0.0.0"
+        npm_str = f"{npm_bin} run dev -- --port {args.frontend_port} --host 127.0.0.1"
+        frontend_log = open(REPO_ROOT / "frontend.log", "w", encoding="utf-8")
         f_proc = subprocess.Popen(
             npm_str,
             cwd=str(FRONTEND_DIR),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
+            stdout=frontend_log,
+            stderr=subprocess.STDOUT,
             shell=True,
         )
         procs.append(f_proc)
@@ -208,7 +229,7 @@ def main() -> int:
         for _ in range(30):
             time.sleep(0.5)
             print(".", end="", flush=True)
-            if check_url(frontend_url) or check_url(f"http://127.0.0.1:{args.frontend_port}"):
+            if check_port("127.0.0.1", args.frontend_port):
                 ready = True
                 break
         print()

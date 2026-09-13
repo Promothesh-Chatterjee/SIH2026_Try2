@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   BandMatrix,
   CmdBadge,
@@ -26,30 +27,53 @@ function fmtScore(v) {
   return !isNaN(n) && isFinite(n) ? n.toFixed(3) : "0.000";
 }
 
-// Connection status pill
-function ConnectionPill({ wsStatus, live }) {
-  const color =
-    wsStatus === "ONLINE" && live
-      ? "#49df9d"
-      : wsStatus === "ONLINE"
-      ? "#f59e0b"
-      : "#ef4444";
-  const label =
-    wsStatus === "ONLINE" && live
-      ? "LIVE · WS CONNECTED"
-      : wsStatus === "ONLINE"
-      ? "WS CONNECTED · WAITING FOR DATA"
-      : `WS ${wsStatus}`;
+// ── Connection State Badge ───────────────────────────────────────────────────
+
+function ConnectionStateBadge({ state, pollingIntervalMs }) {
+  let color;
+  let label;
+  let isPulsing = false;
+
+  switch (state) {
+    case "POLLING_LIVE":
+      color = "#49df9d";
+      label = `Polling live telemetry (${pollingIntervalMs}ms)`;
+      isPulsing = true;
+      break;
+    case "BACKEND_CONNECTED":
+      color = "#38bdf8";
+      label = "Backend connected";
+      break;
+    case "MISSION_INACTIVE":
+      color = "#f59e0b";
+      label = "Mission inactive";
+      break;
+    case "STREAM_INACTIVE":
+      color = "#f59e0b";
+      label = "Stream inactive";
+      break;
+    case "BACKEND_UNAVAILABLE":
+      color = "#ef4444";
+      label = "Backend unavailable";
+      break;
+    default:
+      color = "#908f9e";
+      label = state || "Connecting...";
+  }
+
   return (
     <span
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 5,
+        gap: 6,
         fontSize: 11,
         color,
         fontWeight: 700,
         letterSpacing: "0.04em",
+        background: "rgba(0,0,0,0.3)",
+        border: `1px solid ${color}40`,
+        padding: "2px 8px",
       }}
     >
       <span
@@ -59,17 +83,335 @@ function ConnectionPill({ wsStatus, live }) {
           background: color,
           display: "inline-block",
           borderRadius: 2,
-          boxShadow: live ? `0 0 6px ${color}` : "none",
-          animation: live ? "st-pulse 1.5s ease-in-out infinite" : "none",
+          boxShadow: isPulsing ? `0 0 6px ${color}` : "none",
+          animation: isPulsing ? "st-pulse 1.5s ease-in-out infinite" : "none",
         }}
       />
-      {label}
+      {label.toUpperCase()}
     </span>
   );
 }
 
-// Scheduler decision panel - all live
-function SchedulerPanel({ scheduler, live, decisionReason, moeGating }) {
+// ── Mission Control Toolbar ──────────────────────────────────────────────────
+
+function MissionControls({
+  t,
+  isOperating,
+  setIsOperating,
+  controlError,
+  setControlError,
+}) {
+  const [selectedScenario, setSelectedScenario] = useState("config_96");
+  const [selectedSpeed, setSelectedSpeed] = useState(15.0);
+
+  const {
+    streamRunning,
+    missionActive,
+    connectionState,
+    pollingIntervalMs,
+    setPollingInterval,
+    startStream,
+    stopStream,
+    startMission,
+    stepMission,
+    stopMission,
+    resetMission,
+    lastError,
+  } = t;
+
+  const handleAction = async (fn, desc) => {
+    setIsOperating(true);
+    setControlError("");
+    try {
+      await fn();
+    } catch (err) {
+      setControlError(`Failed to ${desc}: ${err.message || String(err)}`);
+    } finally {
+      setIsOperating(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        background: "var(--panel, #121316)",
+        border: "1px solid var(--border, #2e3038)",
+        padding: "10px 14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 10,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              color: "var(--accent, #bdc2ff)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+              play_circle
+            </span>
+            MISSION CONTROLLER:
+          </span>
+
+          {/* Stream Start / Stop */}
+          {!streamRunning ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <select
+                value={selectedScenario}
+                onChange={(e) => setSelectedScenario(e.target.value)}
+                disabled={isOperating}
+                style={{
+                  background: "#1c1d22",
+                  color: "#e2e2e8",
+                  border: "1px solid #454653",
+                  fontSize: 11,
+                  padding: "3px 6px",
+                  cursor: "pointer",
+                }}
+                title="Select emitter scenario for streaming"
+              >
+                <option value="config_96">Scenario 96 (Agile Hopper 11 Bands)</option>
+                <option value="config_64">Scenario 64 (Dense Agile Threat)</option>
+                <option value="config_29">Scenario 29 (Periodic Pulse Baseline)</option>
+              </select>
+
+              <select
+                value={selectedSpeed}
+                onChange={(e) => setSelectedSpeed(Number(e.target.value))}
+                disabled={isOperating}
+                style={{
+                  background: "#1c1d22",
+                  color: "#e2e2e8",
+                  border: "1px solid #454653",
+                  fontSize: 11,
+                  padding: "3px 6px",
+                  cursor: "pointer",
+                }}
+                title="Simulation speed in Hz"
+              >
+                <option value={10.0}>10 Hz</option>
+                <option value={15.0}>15 Hz (Standard)</option>
+                <option value={25.0}>25 Hz</option>
+                <option value={50.0}>50 Hz (Fast)</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleAction(
+                    () => startStream({ scenario: selectedScenario, speed_hz: selectedSpeed }),
+                    "start stream",
+                  )
+                }
+                disabled={isOperating}
+                style={{
+                  background: "#0a2a18",
+                  border: "1px solid #49df9d",
+                  color: "#49df9d",
+                  fontWeight: 700,
+                  fontSize: 11,
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  boxShadow: "0 0 8px rgba(73, 223, 157, 0.2)",
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                  play_arrow
+                </span>
+                START STREAM
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span
+                style={{
+                  color: "#49df9d",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  animation: "st-pulse 1.5s ease-in-out infinite",
+                }}
+              >
+                ● STREAM ACTIVE ({t.streamStatus?.scenario || "config_96"})
+              </span>
+              <button
+                type="button"
+                onClick={() => handleAction(() => stopStream(), "stop stream")}
+                disabled={isOperating}
+                style={{
+                  background: "#2a0a0a",
+                  border: "1px solid #ef4444",
+                  color: "#ef4444",
+                  fontWeight: 700,
+                  fontSize: 11,
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                  stop
+                </span>
+                STOP STREAM
+              </button>
+            </div>
+          )}
+
+          {/* Discrete Mission Controls */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {!missionActive ? (
+              <button
+                type="button"
+                onClick={() => handleAction(() => startMission(0.0), "start mission")}
+                disabled={isOperating}
+                style={{
+                  background: "#161d2a",
+                  border: "1px solid #38bdf8",
+                  color: "#38bdf8",
+                  fontWeight: 600,
+                  fontSize: 11,
+                  padding: "4px 8px",
+                  cursor: "pointer",
+                }}
+                title="Start manual discrete mission via POST /mission/start"
+              >
+                START MISSION
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleAction(() => stopMission(), "stop mission")}
+                disabled={isOperating}
+                style={{
+                  background: "#2a1616",
+                  border: "1px solid #f87171",
+                  color: "#f87171",
+                  fontWeight: 600,
+                  fontSize: 11,
+                  padding: "4px 8px",
+                  cursor: "pointer",
+                }}
+                title="Stop discrete mission via POST /mission/stop"
+              >
+                STOP MISSION
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => handleAction(() => stepMission(), "step mission")}
+              disabled={isOperating}
+              style={{
+                background: "#1a1c22",
+                border: "1px solid #8e9099",
+                color: "#e2e2e8",
+                fontWeight: 600,
+                fontSize: 11,
+                padding: "4px 8px",
+                cursor: "pointer",
+              }}
+              title="Step exactly 1 dwell via POST /mission/step"
+            >
+              STEP (1 DWELL)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleAction(() => resetMission(), "reset mission")}
+              disabled={isOperating}
+              style={{
+                background: "#1a1c22",
+                border: "1px solid #8e9099",
+                color: "#908f9e",
+                fontWeight: 600,
+                fontSize: 11,
+                padding: "4px 8px",
+                cursor: "pointer",
+              }}
+              title="Reset mission clock, metrics, and memory via POST /reset"
+            >
+              RESET
+            </button>
+          </div>
+        </div>
+
+        {/* Polling Interval Config */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "#908f9e" }}>POLL RATE:</span>
+          {[500, 1000, 2000].map((rate) => (
+            <button
+              key={rate}
+              type="button"
+              onClick={() => setPollingInterval(rate)}
+              style={{
+                background: pollingIntervalMs === rate ? "#2b3040" : "#16171b",
+                border: `1px solid ${pollingIntervalMs === rate ? "#bdc2ff" : "#3b3d48"}`,
+                color: pollingIntervalMs === rate ? "#bdc2ff" : "#908f9e",
+                fontWeight: pollingIntervalMs === rate ? 700 : 500,
+                fontSize: 10,
+                padding: "2px 6px",
+                cursor: "pointer",
+              }}
+            >
+              {rate}ms{rate === 1000 ? " (DEF)" : ""}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Error & Cold Start Warnings */}
+      {(controlError || (connectionState === "BACKEND_UNAVAILABLE" && lastError)) && (
+        <div
+          style={{
+            background: "#260e0e",
+            border: "1px solid #ef4444",
+            padding: "6px 10px",
+            color: "#ffb4ab",
+            fontSize: 11,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 16, color: "#ef4444" }}>
+            warning
+          </span>
+          <span>
+            {controlError ||
+              `Backend connection notice: ${lastError}. (Render free-tier instances may sleep after inactivity; retrying with exponential backoff).`}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Scheduler Decision Panel ──────────────────────────────────────────────────
+
+function SchedulerPanel({ scheduler, live }) {
   const rows = [
     [
       "CHOSEN TARGET",
@@ -98,128 +440,98 @@ function SchedulerPanel({ scheduler, live, decisionReason, moeGating }) {
         icon="psychology"
         title="CURRENT SCHEDULER DECISION"
         badge={live ? "DRQN + MoE ACTIVE" : "AWAITING DATA"}
-        badgeColor={live ? "#bdc2ff" : "#f59e0b"}
       />
-      <div
-        style={{
-          background: "#1a1c20",
-          border: "1px solid #454653",
-          padding: 6,
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-        }}
-      >
-        {rows.map(([key, val, color, badge]) => (
-          <div key={key} style={{ display: "flex", justifyContent: "space-between" }}>
+      <div className="st-body">
+        {rows.map(([label, val, color, isBold], i) => (
+          <div key={i} className="st-row">
             <span className="st-tsm" style={{ color: "#908f9e" }}>
-              {key}
+              {label}
             </span>
-            {badge ? (
-              <CmdBadge color={color}>{val}</CmdBadge>
-            ) : (
-              <strong className="st-tmd" style={{ color }}>
-                {val}
-              </strong>
-            )}
+            <span
+              className="st-tmd"
+              style={{
+                color: color ?? "#e2e2e8",
+                fontWeight: isBold ? 700 : 500,
+                letterSpacing: "0.02em",
+              }}
+            >
+              {val}
+            </span>
           </div>
         ))}
+        <div style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 6 }}>
+          <div className="st-row">
+            <span className="st-tsm" style={{ color: "#908f9e" }}>
+              POLICY MODE
+            </span>
+            <span className="st-tmd" style={{ color: "#bdc2ff", fontWeight: 700 }}>
+              OPERATIONAL CANDIDATE
+            </span>
+          </div>
+          <div className="st-row">
+            <span className="st-tsm" style={{ color: "#908f9e" }}>
+              DECISION REASON
+            </span>
+            <span className="st-tsm" style={{ color: "#bdc2ff", fontStyle: "italic", textAlign: "right" }}>
+              {scheduler.decisionReason}
+            </span>
+          </div>
+          <div className="st-row">
+            <span className="st-tsm" style={{ color: "#908f9e" }}>
+              EXPLORATION PRESSURE
+            </span>
+            <span className="st-tmd" style={{ color: "#f59e0b" }}>
+              {pct(scheduler.explorationPressure)}
+            </span>
+          </div>
+          <div className="st-row">
+            <span className="st-tsm" style={{ color: "#908f9e" }}>
+              Q-MARGIN
+            </span>
+            <span className="st-tmd" style={{ color: "#6afcb8" }}>
+              {fmtScore(scheduler.qMargin)}
+            </span>
+          </div>
+          <div className="st-row">
+            <span className="st-tsm" style={{ color: "#908f9e" }}>
+              MoE GATING
+            </span>
+            <span className="st-tmd" style={{ color: "#96ccff" }}>
+              {pct(scheduler.moeGating)}
+            </span>
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Cognitive reasoning section */}
-      <div
-        className="st-tsm"
-        style={{ display: "flex", justifyContent: "space-between", color: "#908f9e" }}
-      >
-        <span className="st-headline">REASONING & UTILITY DECOMPOSITION</span>
-        <span>MoE GATING {live ? (Number(moeGating) * 100).toFixed(0) : "0.0"}%</span>
-      </div>
-      <div
-        style={{
-          background: "#1a1c20",
-          border: "1px solid #454653",
-          padding: 6,
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-        }}
-      >
-        <div className="st-body" style={{ color: "#c6c5d5" }}>
-          <strong style={{ color: "#e2e2e8" }}>Decision Reason: </strong>
-          <CmdBadge color="#bdc2ff">{live && decisionReason && decisionReason !== "—" ? decisionReason : "0.0"}</CmdBadge>
-        </div>
-        <div className="st-body" style={{ color: "#c6c5d5" }}>
-          <strong style={{ color: "#e2e2e8" }}>Exploration Pressure: </strong>
-          <strong style={{ color: "#96ccff" }}>
-            {live ? `${(Number(scheduler.explorationPressure) * 100).toFixed(1)}%` : "0.0%"}
-          </strong>
-          {live && (
-            <div
-              style={{ height: 4, background: "#333539", marginTop: 4, borderRadius: 2 }}
-            >
-              <div
-                style={{
-                  width: `${Number(scheduler.explorationPressure) * 100}%`,
-                  height: "100%",
-                  background: "#96ccff",
-                  borderRadius: 2,
-                  transition: "width 0.3s ease",
-                }}
-              />
-            </div>
-          )}
-        </div>
-        <div className="st-body" style={{ color: "#c6c5d5" }}>
-          <strong style={{ color: "#e2e2e8" }}>Q Margin: </strong>
-          <strong style={{ color: "#49df9d" }}>
-            {live ? Number(scheduler.qMargin).toFixed(4) : "0.0000"}
-          </strong>
-        </div>
-      </div>
+// ── Environment Spectrum Status ───────────────────────────────────────────────
 
-      {/* DRQN LSTM Memory bar */}
-      <div
-        className="st-tsm"
-        style={{ background: "#1a1c20", border: "1px solid #454653", padding: 6 }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span style={{ color: "#908f9e" }}>DRQN LSTM MEMORY</span>
-          <span style={{ color: "#49df9d" }}>
-            {live ? "WARM STATE [L-HIDDEN 256]" : "COLD STATE"}
-          </span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-          <span>MoE ACTIVE WEIGHT</span>
-          <strong style={{ color: "#bdc2ff" }}>
-            {live ? `W: ${Number(moeGating).toFixed(2)}` : "0.00"}
-          </strong>
-        </div>
-        <div style={{ height: 6, background: "#333539", marginTop: 2 }}>
-          <div
-            style={{
-              width: live ? `${Number(moeGating) * 100}%` : "0%",
-              height: "100%",
-              background: "#bdc2ff",
-              transition: "width 0.3s ease",
-            }}
-          />
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-          <span>EXPLORATION WEIGHT</span>
-          <strong style={{ color: "#96ccff" }}>
-            {live ? `W: ${Number(scheduler.explorationPressure).toFixed(2)}` : "0.00"}
-          </strong>
-        </div>
-        <div style={{ height: 6, background: "#333539", marginTop: 2 }}>
-          <div
-            style={{
-              width: live ? `${Number(scheduler.explorationPressure) * 100}%` : "0%",
-              height: "100%",
-              background: "#96ccff",
-              transition: "width 0.3s ease",
-            }}
-          />
-        </div>
+function EnvironmentSpectrum({ activeBands, quietBands, currentBand, currentFreqMHz, currentDwellUs }) {
+  const rows = [
+    ["TOTAL SPECTRUM", "18.00 GHz (36 × 500 MHz)", "#e2e2e8"],
+    ["INSTANTANEOUS BW", "1,000 MHz (IBW)", "#96ccff"],
+    ["CURRENT BAND", `B${String(Number(currentBand) + 1).padStart(2, "0")} (${currentFreqMHz.toLocaleString()} MHz)`, "#bdc2ff"],
+    ["ACTIVE BANDS", String(activeBands), "#49df9d"],
+    ["QUIET BANDS", String(quietBands), "#908f9e"],
+    ["RECEIVER DWELL", fmtUs(currentDwellUs), "#bdc2ff"],
+  ];
+
+  return (
+    <div className="st-panel">
+      <PanelHead icon="analytics" title="ENVIRONMENT SPECTRUM" badge="36 BANDS" />
+      <div className="st-body">
+        {rows.map(([label, val, color], i) => (
+          <div key={i} className="st-row">
+            <span className="st-tsm" style={{ color: "#908f9e" }}>
+              {label}
+            </span>
+            <span className="st-tmd" style={{ color: color ?? "#e2e2e8" }}>
+              {val}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -229,11 +541,13 @@ function SchedulerPanel({ scheduler, live, decisionReason, moeGating }) {
 
 export default function MissionOverview() {
   const t = useOverviewTelemetry();
+  const [isOperating, setIsOperating] = useState(false);
+  const [controlError, setControlError] = useState("");
 
   const {
-    wsStatus,
+    connectionState,
+    pollingIntervalMs,
     live,
-    source,
     activeBands,
     quietBands,
     currentBand,
@@ -246,38 +560,47 @@ export default function MissionOverview() {
     rollingMedianLatencyUs,
     missionClockUs,
     missionActive,
+    streamRunning,
     bandHeights,
     bandStates,
     scheduler,
     dwellHistory,
-    cognitiveExplanation,
   } = t;
 
   const freqLabel = `${currentFreqMHz.toLocaleString()} MHz`;
   const bandLabel = `B${String(Number(currentBand) + 1).padStart(2, "0")}`;
   const ibwRange = `${(currentFreqMHz - 500).toLocaleString()}–${(currentFreqMHz + 500).toLocaleString()} MHz`;
 
-  // Session average Pd = cumulative hits / cumulative dwells (whole session, not rolling window)
+  // Session average Pd = cumulative hits / cumulative dwells
   const sessionAvgPd = totalDwells > 0 ? totalHits / totalDwells : 0;
-  // Session ended = we have data but mission is no longer active
-  const sessionEnded = !missionActive && totalDwells > 0 && live;
+  // Session ended = we have data but mission/stream is no longer active
+  const sessionEnded = !missionActive && !streamRunning && totalDwells > 0 && live;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {/* Header */}
       <div className="st-panel">
-        <PanelHead icon="grid_view" title="SMART SCAN MISSION OVERVIEW" badge="SUM" />
-        <div className="st-body" style={{ color: "#c6c5d5", display: "flex", alignItems: "center", gap: 12 }}>
-          Intelligent frequency and dwell selection across a wideband RF environment.
+        <PanelHead icon="grid_view" title="SMART SCAN MISSION OVERVIEW" badge="OPERATIONAL" />
+        <div className="st-body" style={{ color: "#c6c5d5", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span>Intelligent frequency and dwell selection across wideband RF environment (36 bands × 500 MHz).</span>
           <DataSourceBadge connected={live} />
-          <ConnectionPill wsStatus={wsStatus} live={live} />
-          {missionActive && (
-            <span style={{ color: "#49df9d" }}>
-              ● MISSION ACTIVE · {totalDwells} DWELLS · T={Number(missionClockUs).toFixed(0)} µs
+          <ConnectionStateBadge state={connectionState} pollingIntervalMs={pollingIntervalMs} />
+          {(missionActive || streamRunning) && (
+            <span style={{ color: "#49df9d", fontWeight: 700 }}>
+              ● {streamRunning ? "STREAM ACTIVE" : "MISSION ACTIVE"} · {totalDwells} DWELLS · T={Number(missionClockUs).toFixed(0)} µs
             </span>
           )}
         </div>
       </div>
+
+      {/* Mission Controls Toolbar */}
+      <MissionControls
+        t={t}
+        isOperating={isOperating}
+        setIsOperating={setIsOperating}
+        controlError={controlError}
+        setControlError={setControlError}
+      />
 
       {/* Post-session summary banner — appears only when mission has stopped */}
       {sessionEnded && (
@@ -306,8 +629,7 @@ export default function MissionOverview() {
             TOTAL HITS: <strong style={{ color: "#49df9d" }}>{totalHits}</strong>
           </span>
           <span className="st-tsm" style={{ color: "#908f9e" }}>
-            INSTANTANEOUS Pd:{" "}
-            <strong style={{ color: "#6afcb8" }}>{pct(rollingPd)}</strong>
+            INSTANTANEOUS Pd: <strong style={{ color: "#6afcb8" }}>{pct(rollingPd)}</strong>
           </span>
           <span
             style={{
@@ -349,122 +671,128 @@ export default function MissionOverview() {
           value="1,000"
           unit="MHz"
           footLeft="CANONICAL IBW"
-          footRight="TUNABLE"
+          footRight={ibwRange}
           valueColor="#96ccff"
         />
         <KpiCard
-          label="ACTIVE BANDS"
-          icon="sensors"
-          value={live ? String(activeBands) : "0.0"}
-          unit="/ 36"
-          footLeft={live ? `${Math.round((activeBands / 36) * 100)}% OCCUPIED` : "0.0% OCCUPIED"}
-          footRight={live ? `${quietBands} QUIET` : "0.0"}
-          valueColor="#49df9d"
+          label="INTERCEPTION Pd"
+          icon="radar"
+          value={rollingPd > 0 ? (rollingPd * 100).toFixed(1) : "0.0"}
+          unit="%"
+          footLeft={`HITS: ${totalHits}`}
+          footRight={`DWELLS: ${totalDwells}`}
+          valueColor="#6afcb8"
         />
         <KpiCard
-          label="CURRENT TUNE"
-          icon="file_download_done"
-          value={live ? freqLabel : "0.0 MHz"}
-          unit=""
-          footLeft={live ? bandLabel : "B0"}
-          footRight={live ? ibwRange : "0.0 MHz"}
+          label="REVISIT LATENCY"
+          icon="timer"
+          value={rollingMedianLatencyUs > 0 ? rollingMedianLatencyUs.toFixed(0) : "0.0"}
+          unit="µs"
+          footLeft="P50 MEDIAN"
+          footRight={rollingMedianLatencyUs > 0 ? `${(rollingMedianLatencyUs / 1000).toFixed(2)} ms` : "0.0 ms"}
+          valueColor="#ffd700"
+        />
+        <KpiCard
+          label="SCHEDULER CONFIDENCE"
+          icon="speed"
+          value={scheduler.interceptProbability > 0 ? (scheduler.interceptProbability * 100).toFixed(1) : "0.0"}
+          unit="%"
+          footLeft={`ETA: ${fmtUs(scheduler.predictedEtaUs)}`}
+          footRight={scheduler.scanMode}
           valueColor="#bdc2ff"
         />
         <KpiCard
-          label="TOTAL HITS"
-          icon="grain"
-          value={live ? totalHits.toLocaleString() : "0.0"}
-          unit="PULSES"
-          footLeft={live ? `DWELLS: ${totalDwells}` : "DWELLS: 0.0"}
-          footRight="CONFIRMED"
-          valueColor="#e2e2e8"
-        />
-        {/* Instantaneous (rolling window) Pd */}
-        <KpiCard
-          label="INTERCEPT RATE (Pd)"
-          icon="verified"
-          value={live ? pct(rollingPd) : "0.0%"}
-          unit="INSTANT"
-          footLeft={live ? `LAT: ${Number(rollingMedianLatencyUs).toFixed(0)} µs` : "LAT: 0.0 µs"}
-          footRight="ROLLING WINDOW"
-          valueColor="#6afcb8"
-        />
-        {/* Session average Pd — cumulative over whole session */}
-        <KpiCard
-          label="SESSION AVG Pd"
-          icon="analytics"
-          value={totalDwells > 0 ? pct(sessionAvgPd) : "0.0%"}
-          unit="AVG"
-          footLeft={totalDwells > 0 ? `${totalHits} HITS / ${totalDwells}` : "0.0 HITS / 0.0"}
-          footRight={sessionEnded ? "FINAL ✓" : missionActive ? "LIVE ●" : "0.0"}
-          valueColor={sessionEnded ? "#49df9d" : "#f59e0b"}
-        />
-        <KpiCard
-          label="CURRENT MODE"
-          icon="neurology"
-          value={live ? currentMode : "0.0"}
-          unit={live ? `${Number(currentDwellUs).toFixed(0)} µs` : "0.0 µs"}
-          footLeft="SCHED: DRQN"
-          footRight="PRIO: TIER-1"
-          valueColor="#96ccff"
+          label="MISSION CLOCK"
+          icon="schedule"
+          value={missionClockUs > 0 ? (missionClockUs / 1000).toFixed(1) : "0.0"}
+          unit="ms"
+          footLeft={`T=${Number(missionClockUs).toFixed(0)} µs`}
+          footRight={live ? "LIVE CLOCK" : "INACTIVE"}
+          valueColor="#bdc2ff"
         />
       </section>
 
-      <PipelineFlow />
-
-      <div className="st-grid-12">
-        {/* Left column: Band Matrix + Dwell Timeline */}
-        <div className="st-span-8" style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+      {/* Main 2-column layout */}
+      <div className="st-main-cols">
+        {/* Left column: Dwell Timeline + 36-Band Matrix */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {/* Real Dwell Timeline */}
           <div className="st-panel">
             <PanelHead
-              icon="show_chart"
-              title="0–18 GHz WIDEBAND RF EMISSION & IBW SCANNING MAP"
-              badge="CALIBRATED FFT"
-              badgeColor="#96ccff"
+              icon="timeline"
+              title="DWELL EXECUTION TIMELINE"
+              badge={live ? `${dwellHistory.length} EVENTS RECORDED` : "AWAITING EXECUTION"}
             />
-            <div className="st-tsm" style={{ display: "flex", gap: 8, color: "#908f9e" }}>
-              <span>
-                <i style={{ display: "inline-block", width: 8, height: 8, background: "#96ccff" }} /> STABLE EMITTER
-              </span>
-              <span>
-                <i style={{ display: "inline-block", width: 8, height: 8, background: "#49df9d" }} /> INTERCEPTED
-              </span>
-              <span>
-                <i style={{ display: "inline-block", width: 8, height: 8, background: "#3097e0" }} /> AGILE TRACK
-              </span>
-              <span>
-                <i style={{ display: "inline-block", width: 8, height: 8, background: "#bdc2ff" }} /> ACTIVE TUNE
-              </span>
-              <span>
-                <i style={{ display: "inline-block", width: 8, height: 8, background: "#1e2126" }} /> QUIET
-              </span>
-            </div>
-            <BandMatrix
-              tuneBand={Number(currentBand)}
-              bandHeights={live ? bandHeights : null}
-              bandStates={live ? bandStates : null}
-              dwellUs={currentDwellUs}
-              freqMHz={currentFreqMHz}
-            />
-            <div className="st-tsm" style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#908f9e" }}>CURRENT TUNE</span>
-              <strong style={{ color: "#e2e2e8" }}>
-                {live
-                  ? `${freqLabel} · ${bandLabel} · IBW 1,000 MHz`
-                  : "Awaiting backend data..."}
-              </strong>
+            <div className="st-body">
+              <DwellTimeline entries={dwellHistory} />
             </div>
           </div>
-          <DwellTimeline entries={live && dwellHistory.length > 0 ? dwellHistory : null} />
+
+          {/* 36-Band Spectrum Allocation Matrix */}
+          <div className="st-panel">
+            <PanelHead
+              icon="grid_4x4"
+              title="36-BAND SPECTRUM MATRIX"
+              badge={`${activeBands} ACTIVE · ${quietBands} QUIET`}
+            />
+            <div className="st-body">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 8,
+                  flexWrap: "wrap",
+                  gap: 8,
+                }}
+              >
+                <span className="st-tsm" style={{ color: "#908f9e" }}>
+                  CURRENT DWELL:{" "}
+                  <strong style={{ color: "#bdc2ff" }}>{bandLabel}</strong>
+                  {" · "}
+                  <strong style={{ color: "#e2e2e8" }}>{freqLabel}</strong>
+                  {" · "}
+                  <strong style={{ color: "#96ccff" }}>{currentMode}</strong>
+                  {" · "}
+                  <strong style={{ color: "#bdc2ff" }}>{fmtUs(currentDwellUs)}</strong>
+                </span>
+                <span style={{ display: "flex", gap: 6 }}>
+                  <CmdBadge label="IBW 1 GHz" active={live} />
+                  <CmdBadge label="HOPPER ACTIVE" active={live && activeBands > 0} />
+                </span>
+              </div>
+              <BandMatrix
+                bandHeights={bandHeights}
+                bandStates={bandStates}
+                currentBand={currentBand}
+              />
+            </div>
+          </div>
+
+          {/* Pipeline Flow */}
+          <div className="st-panel">
+            <PanelHead icon="account_tree" title="PROCESSING PIPELINE" badge="5-STAGE ARCHITECTURE" />
+            <div className="st-body">
+              <PipelineFlow currentStage={live ? 2 : 0} />
+            </div>
+          </div>
         </div>
 
-        {/* Right column: Scheduler decision */}
-        <div className="st-span-4" style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+        {/* Right column: Decision Panels */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {/* Current Decision */}
           <SchedulerPanel
             scheduler={scheduler}
             live={live}
-            decisionReason={cognitiveExplanation.decision_reason ?? scheduler.decisionReason}
-            moeGating={scheduler.moeGating}
+          />
+
+          {/* Environment Status */}
+          <EnvironmentSpectrum
+            activeBands={activeBands}
+            quietBands={quietBands}
+            currentBand={currentBand}
+            currentFreqMHz={currentFreqMHz}
+            currentDwellUs={currentDwellUs}
           />
         </div>
       </div>

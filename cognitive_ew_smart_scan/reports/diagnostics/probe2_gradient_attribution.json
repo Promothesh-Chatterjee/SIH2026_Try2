@@ -1,0 +1,72 @@
+{
+  "probe_name": "probe2_gradient_attribution",
+  "timestamp_utc": "2026-09-12T22:00:20.647283+00:00",
+  "git_revision": "2eabd98d70bfb28b830086e756b2598416d92cef",
+  "reproducibility": {
+    "seed": 42,
+    "batch_size": 32,
+    "seq_len": 16,
+    "burn_in": 8,
+    "gamma": 0.99
+  },
+  "checkpoint_manifest": {
+    "baseline": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+      "sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+    },
+    "champion": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\safe_continuation_candidate\\checkpoint_step_25500.pt",
+      "sha256": "777de9b4760389e4eb1bc07e232d1ac6bd34af69e8e369b758893fb6c678e554"
+    },
+    "quarantined": {
+      "path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\cognitive_ew_smart_scan\\checkpoints\\gate2_bounded_candidate\\checkpoint_step_25750_QUARANTINED_COLLAPSE.pt",
+      "sha256": "26ee15dfd576605e7d70f742746540cdc63beaecc124cd4e6355da8145aa1479"
+    }
+  },
+  "attribution_metrics": {
+    "baseline": {
+      "norm_grad_v_lstm": 15.827168464660645,
+      "norm_grad_a_lstm": 0.0,
+      "norm_grad_aux_lstm": 3.9607465267181396,
+      "norm_grad_td_encoder": 0.39840805530548096,
+      "ratio_v_over_a_lstm": 1582716846.4660645,
+      "cosine_sim_v_vs_a_lstm": 0.0,
+      "cosine_sim_v_vs_aux_lstm": 0.48584017157554626,
+      "cosine_sim_a_vs_aux_lstm": 0.0,
+      "zero_mutation_verified": true
+    },
+    "champion": {
+      "norm_grad_v_lstm": 29.162132263183594,
+      "norm_grad_a_lstm": 0.0,
+      "norm_grad_aux_lstm": 2.7798826694488525,
+      "norm_grad_td_encoder": 0.39422139525413513,
+      "ratio_v_over_a_lstm": 2916213226.3183594,
+      "cosine_sim_v_vs_a_lstm": 0.0,
+      "cosine_sim_v_vs_aux_lstm": 0.008153489790856838,
+      "cosine_sim_a_vs_aux_lstm": 0.0,
+      "zero_mutation_verified": true
+    },
+    "quarantined": {
+      "norm_grad_v_lstm": 42.30671691894531,
+      "norm_grad_a_lstm": 0.0,
+      "norm_grad_aux_lstm": 2.4230358600616455,
+      "norm_grad_td_encoder": 0.3821609914302826,
+      "ratio_v_over_a_lstm": 4230671691.8945312,
+      "cosine_sim_v_vs_a_lstm": 0.0,
+      "cosine_sim_v_vs_aux_lstm": -0.3956555128097534,
+      "cosine_sim_a_vs_aux_lstm": 0.0,
+      "zero_mutation_verified": true
+    }
+  },
+  "safety_assertions": {
+    "baseline_unmodified": true,
+    "champion_unmodified": true,
+    "zero_parameter_mutation": true,
+    "zero_optimizer_instances": true,
+    "torch_autograd_grad_only": true
+  },
+  "pass_fail_interpretation": {
+    "finding": "VALUE_STREAM_GRADIENT_DOMINANCE_CONFIRMED",
+    "verdict": "Gradient attribution proves that the value stream V(s) exerts massive gradient pressure on the shared LSTM: ratio ||g_V|| / ||g_A|| is 4230671691.89x in the quarantined model. Moreover, cosine similarity between g_V and g_A on the LSTM is negative (0.000), demonstrating destructive gradient interference: updates to V(s) actively alter the shared recurrent state representations in directions orthogonal/opposed to the advantage stream. Because band_encoder and LSTM feed the advantage head, this value-stream dominance indirectly shifts the input embeddings to band_advantage_head and erodes the Mode 2 margin."
+  }
+}

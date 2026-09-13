@@ -389,9 +389,10 @@ def receiver_reward_components_v2(
     w_false_alarm: float = -1.0,
     w_redundant: float = -0.25,
     w_dwell_cost: float = -0.01,
+    reward_variant: str = "baseline",
     **_extra,
 ) -> dict[str, float | bool]:
-    """Phase 4 Clean Rescue Reward (reward_v2).
+    """Phase 4 Clean Rescue Reward (reward_v2) with Phase 9C configurable variants.
 
     Hierarchical design aligned directly with operational EW smart scan objectives:
       1. Primary: Successful Interception (+10.0 novel, +8.0 repeat)
@@ -400,16 +401,22 @@ def receiver_reward_components_v2(
       4. Miss penalty: -4.0 for failing to intercept active emitter
       5. False alarm penalty: -1.0 for tuning inactive spectrum
       6. Redundant revisit: -0.25 for immediate re-visit of empty spectrum
-      7. Dwell cost: -0.01 * (dwell_us / 500.0)
+      7. Dwell cost: -0.01 * (dwell_us / 500.0) [baseline] OR flat -0.01 [dwell_cost_normalized]
 
-    Zero unconditional staleness bonuses. Zero ungrounded information-gain bonuses.
-    Zero unnormalized timing subtractions on valid hits.
+    Variants:
+      - "baseline": standard reward_v2.
+      - "dwell_cost_normalized": dwell_norm is fixed to 1.0, eliminating the 2.5x penalty on unintercepted long dwells.
+      - "time_normalized": scales the total reward by (500.0 / dwell_us) to represent reward per standard time slot.
     """
     is_sel_active = bool(selected_active if selected_active is not None else ground_truth_active)
     detections = getattr(observation, "detections", []) if observation is not None else []
     is_detected = bool(detected if detected is not None else (len(detections) > 0))
     dwell_us = max(0.0, float(getattr(observation, "dwell_time_us", 500.0))) if observation is not None else 500.0
-    dwell_norm = dwell_us / 500.0 if dwell_us > 0.0 else 1.0
+
+    if reward_variant == "dwell_cost_normalized":
+        dwell_norm = 1.0
+    else:
+        dwell_norm = dwell_us / 500.0 if dwell_us > 0.0 else 1.0
 
     interception_reward = 0.0
     latency_reward = 0.0
@@ -465,6 +472,9 @@ def receiver_reward_components_v2(
         + redundant_pen
         + dwell_cost
     )
+
+    if reward_variant == "time_normalized" and dwell_us > 0.0:
+        total = total * (500.0 / dwell_us)
 
     # Dominance Check: detect if secondary shaping exceeds primary interception signal
     shaping_mag = abs(latency_reward) + abs(agility_bonus) + abs(redundant_pen) + abs(dwell_cost)

@@ -227,6 +227,52 @@ class SmartScanMoETests(unittest.TestCase):
         self.assertEqual(int(np.sum(moe._historical_hits)), 0)
         self.assertEqual(float(np.sum(moe._preemptive_urgency)), 0.0)
 
+    def test_policy_modes_operational_demo_fallback(self):
+        """Verify operational, demo, and fallback policy behaviors and attribution logging."""
+        moe = _create_moe()
+
+        # Mock high-confidence Q values with top action = 25 (band 5, mode 0)
+        target_action = encode_action(5, 0)
+        q_confident = np.zeros(CANONICAL_N_ACTIONS, dtype=np.float32)
+        q_confident[target_action] = 5.0
+        moe.eager_agent.get_q = lambda obs, hidden=None: (q_confident, hidden)
+
+        obs = np.zeros(360, dtype=np.float32)
+
+        # 1. Operational mode with confidence: direct DRQN action, no override
+        act, _, attr = moe.select_action(obs, policy_mode="operational")
+        self.assertEqual(act, target_action)
+        self.assertEqual(attr["policy_mode"], "operational")
+        self.assertEqual(attr["drqn_candidate_active"], 1.0)
+        self.assertFalse(attr["action_was_overridden"])
+        self.assertEqual(attr["fallback_triggered"], 0.0)
+        self.assertEqual(attr["fallback_reason"], "none")
+        self.assertEqual(attr["action_rejection_reason"], "none")
+        self.assertEqual(attr["operational_checkpoint"], "Gate-25k-R4.2-alpha020")
+        self.assertTrue(attr["operational_checkpoint_valid"])
+
+        # 2. Operational mode with flat zero Q values: fallback triggered legitimately
+        q_flat = np.zeros(CANONICAL_N_ACTIONS, dtype=np.float32)
+        moe.eager_agent.get_q = lambda obs, hidden=None: (q_flat, hidden)
+        act_fb, _, attr_fb = moe.select_action(obs, policy_mode="operational")
+        self.assertEqual(attr_fb["fallback_triggered"], 1.0)
+        self.assertEqual(attr_fb["fallback_reason"], "low_confidence_margin")
+        self.assertTrue(attr_fb["action_was_overridden"])
+        self.assertEqual(attr_fb["drqn_candidate_active"], 0.0)
+        self.assertIn("below threshold", attr_fb["action_rejection_reason"])
+
+        # 3. Demo mode: exploration active
+        act_demo, _, attr_demo = moe.select_action(obs, policy_mode="demo")
+        self.assertEqual(attr_demo["policy_mode"], "demo")
+        self.assertTrue(attr_demo["exploration_enabled"])
+
+        # 4. Fallback mode: forced fallback active
+        act_forced, _, attr_forced = moe.select_action(obs, policy_mode="fallback")
+        self.assertEqual(attr_forced["policy_mode"], "fallback")
+        self.assertEqual(attr_forced["fallback_triggered"], 1.0)
+        self.assertEqual(attr_forced["fallback_reason"], "forced_fallback_policy")
+        self.assertEqual(attr_forced["action_rejection_reason"], "Forced fallback policy mode active")
+
 
 if __name__ == "__main__":
     unittest.main()
