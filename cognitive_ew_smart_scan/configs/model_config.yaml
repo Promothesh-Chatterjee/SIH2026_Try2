@@ -49,7 +49,10 @@ smartscan_moe:
   k_receivers: 1
   decay_rate: 0.05
   confidence_margin_threshold: 0.020  # calibrated Gate 10k threshold
-  tau: 0.15                           # calibrated Boltzmann temperature
+  tau: 0.0                            # pure deterministic for operational candidate
+  policy_mode: "operational"
+  exploration_enabled: false
+  operational_checkpoint: "Gate-25k-R4.2-alpha020"
 
 reward:
   version: "v2"  # "v2" clean hierarchical reward signal; set to "legacy" for ablation

@@ -15,3 +15,7 @@ services:
         value: "https://sih-2026-try2.vercel.app"
       - key: EXPECTED_NORMALIZATION_HASH
         value: "bacee02ac1c29428"
+      - key: SCHEDULER_POLICY_MODE
+        value: "operational"
+      - key: SCHEDULER_EXPLORATION_ENABLED
+        value: "false"
