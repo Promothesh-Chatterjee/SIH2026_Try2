@@ -1,11 +1,17 @@
 export function getApiBaseUrl() {
   if (typeof window !== "undefined") {
+    const isProd = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
     const override = localStorage.getItem("smartscan_api_url");
     if (override && override.trim()) {
-      return override.trim().replace(/\/+$/, "");
+      const cleanOverride = override.trim().replace(/\/+$/, "");
+      if (isProd && (cleanOverride.includes("localhost") || cleanOverride.includes("127.0.0.1"))) {
+        localStorage.removeItem("smartscan_api_url");
+      } else {
+        return cleanOverride;
+      }
     }
   }
-  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.NEXT_PUBLIC_API_BASE_URL;
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
   if (envUrl && envUrl.trim()) {
     return envUrl.trim().replace(/\/+$/, "");
   }
