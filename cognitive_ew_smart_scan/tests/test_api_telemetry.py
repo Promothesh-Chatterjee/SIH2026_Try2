@@ -13,7 +13,12 @@ class ApiTelemetryTests(unittest.TestCase):
         api_mod.telemetry._history = []
         api_mod.telemetry._n_updates = 0
         api_mod.TELEMETRY_ROOT = "runs"
-        cls.client = TestClient(api_mod.app)
+        cls._ctx = TestClient(api_mod.app)
+        cls.client = cls._ctx.__enter__()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._ctx.__exit__(None, None, None)
 
     def test_health(self):
         resp = self.client.get("/health")
