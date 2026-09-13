@@ -70,6 +70,32 @@ export default function Performance() {
 
   const isOnline = telemetry.live || Boolean(benchmarkStaticBase);
 
+  // Fetch scenarios from backend if available
+  const [availableScenarios, setAvailableScenarios] = useState(SCENARIOS);
+
+  useEffect(() => {
+    let active = true;
+    const fetchScenarios = async () => {
+      try {
+        const list = await api.getBenchmarkScenarios();
+        if (active && Array.isArray(list) && list.length > 0) {
+          setAvailableScenarios(
+            list.map((item) => ({
+              id: item.id,
+              name: `${item.id} — ${item.name} (${item.description || item.threat_class || ""})`,
+            }))
+          );
+        }
+      } catch {
+        // Fallback to static scenario definitions
+      }
+    };
+    fetchScenarios();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Fetch benchmark evaluation scenario metadata and base comparisons
   useEffect(() => {
     let active = true;
@@ -268,13 +294,14 @@ export default function Performance() {
     const tDwells = telemetry.totalDwells || 0;
 
     return modeNames.map((m, idx) => {
-      let allocPct = baseAlloc[m];
-      let yieldPct = baseYield[m];
-      let latVal = baseLats[m];
+      let allocPct;
+      let yieldPct;
+      let latVal;
 
       if (tot >= 5 && counts[m] > 0) {
         allocPct = (counts[m] / tot) * 100.0;
         yieldPct = (hits[m] / counts[m]) * 100.0;
+        latVal = baseLats[m];
       } else {
         const delta = 1.2 * Math.sin(tDwells * 0.08 + idx);
         allocPct = Math.max(5.0, baseAlloc[m] + delta);
@@ -394,6 +421,75 @@ export default function Performance() {
           </div>
         )}
 
+        {/* Dynamic Scenario Evaluation Controller */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            padding: "8px 12px",
+            background: "#1a1c20",
+            border: "1px solid #454653",
+            marginTop: 6,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 280 }}>
+            <span className="st-tsm" style={{ color: "#908f9e", textTransform: "uppercase" }}>
+              TARGET SCENARIO:
+            </span>
+            <select
+              value={selectedScenario}
+              onChange={(e) => setSelectedScenario(e.target.value)}
+              disabled={!isOnline || isEvaluating}
+              style={{
+                flex: 1,
+                maxWidth: 440,
+                background: "#282a2e",
+                color: "#e2e2e8",
+                border: "1px solid #454653",
+                padding: "4px 8px",
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: 11,
+                cursor: isOnline ? "pointer" : "not-allowed",
+              }}
+            >
+              {availableScenarios.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {scenarioMeta.execTimeMs && (
+              <span className="st-tsm" style={{ color: "#908f9e" }}>
+                LATENCY: <strong style={{ color: "#bdc2ff" }}>{scenarioMeta.execTimeMs} ms</strong>
+              </span>
+            )}
+            <button
+              onClick={handleRunEvaluation}
+              disabled={!isOnline || isEvaluating}
+              style={{
+                background: isOnline ? (isEvaluating ? "#454653" : "#3097e0") : "#282a2e",
+                color: isOnline ? "#ffffff" : "#908f9e",
+                border: "1px solid #454653",
+                padding: "4px 14px",
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                cursor: isOnline && !isEvaluating ? "pointer" : "not-allowed",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {isEvaluating ? "EVALUATING..." : "RUN BENCHMARK EVALUATION"}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Feature 1: PROTOCOL COMPARISON BENCHMARK (DYNAMIC INPUT EVALUATION) */}

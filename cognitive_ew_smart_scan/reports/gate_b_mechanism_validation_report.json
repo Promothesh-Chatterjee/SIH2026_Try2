@@ -1,0 +1,462 @@
+{
+  "arm_1_frozen_head": {
+    "arm_name": "Arm 1 (Frozen Head)",
+    "mean_drqn_loss": 1.8262291324734687,
+    "head_drift_metrics": {
+      "0.weight_max_abs": 0.0,
+      "0.weight_frobenius": 0.0,
+      "0.bias_max_abs": 0.0,
+      "0.bias_frobenius": 0.0,
+      "2.weight_max_abs": 0.0,
+      "2.weight_frobenius": 0.0,
+      "2.bias_max_abs": 0.0,
+      "2.bias_frobenius": 0.0
+    },
+    "eval_metrics": {
+      "mean_ir": 62.93000000000001,
+      "median_ir": 62.6,
+      "worst_case_ir": 17.4,
+      "agile_ir": 51.75,
+      "sparse_ir": 23.7,
+      "pd": 99.86079452946923,
+      "pfa": 0.0,
+      "mode_selection_totals": {
+        "0": 0,
+        "1": 211,
+        "2": 9789,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_overall_fraction": 0.9789,
+      "scenario_results": {
+        "config_117": {
+          "intercept_rate": 0.994,
+          "hits": 994,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 4,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_119": {
+          "intercept_rate": 0.3,
+          "hits": 300,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 211,
+            "2": 789,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 0.789
+        },
+        "config_143": {
+          "intercept_rate": 0.174,
+          "hits": 174,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_194": {
+          "intercept_rate": 0.887,
+          "hits": 887,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 6,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_195": {
+          "intercept_rate": 0.979,
+          "hits": 979,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 7,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_241": {
+          "intercept_rate": 0.201,
+          "hits": 201,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_29": {
+          "intercept_rate": 0.59,
+          "hits": 590,
+          "steps": 1000,
+          "pd": 0.9966216216216216,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_42": {
+          "intercept_rate": 0.657,
+          "hits": 657,
+          "steps": 1000,
+          "pd": 0.9894578313253012,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_64": {
+          "intercept_rate": 0.595,
+          "hits": 595,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_96": {
+          "intercept_rate": 0.916,
+          "hits": 916,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        }
+      }
+    },
+    "promotion_verdict": "PROMOTED: Candidate Mean IR (62.93%) exceeds baseline (60.45%) by +2.48%",
+    "promoted": true,
+    "last_mode_telemetry": {
+      "step": 999,
+      "modes": {
+        "mode_0": {
+          "valid_samples": 3,
+          "masked_td_loss": 2.0319926738739014,
+          "masked_grad_norm": 0.0,
+          "has_zero_gradient": true
+        },
+        "mode_1": {
+          "valid_samples": 245,
+          "masked_td_loss": 1.3645826578140259,
+          "masked_grad_norm": 0.0,
+          "has_zero_gradient": true
+        },
+        "mode_2": {
+          "valid_samples": 2,
+          "masked_td_loss": 0.08750130981206894,
+          "masked_grad_norm": 0.0,
+          "has_zero_gradient": true
+        },
+        "mode_3": {
+          "valid_samples": 3,
+          "masked_td_loss": 0.059583861380815506,
+          "masked_grad_norm": 0.0,
+          "has_zero_gradient": true
+        },
+        "mode_4": {
+          "valid_samples": 3,
+          "masked_td_loss": 2.4066951274871826,
+          "masked_grad_norm": 0.0,
+          "has_zero_gradient": true
+        }
+      }
+    }
+  },
+  "arm_3_stratified_replay": {
+    "arm_name": "Arm 3 (Stratified Replay)",
+    "mean_drqn_loss": 2.2926477432250976,
+    "head_drift_metrics": {
+      "0.weight_max_abs": 0.024220824241638184,
+      "0.weight_frobenius": 0.1937544047832489,
+      "0.bias_max_abs": 0.004683424718677998,
+      "0.bias_frobenius": 0.0132466871291399,
+      "2.weight_max_abs": 0.020836040377616882,
+      "2.weight_frobenius": 0.06378137320280075,
+      "2.bias_max_abs": 0.0071321772411465645,
+      "2.bias_frobenius": 0.011423495598137379
+    },
+    "eval_metrics": {
+      "mean_ir": 57.0,
+      "median_ir": 62.6,
+      "worst_case_ir": 0.0,
+      "agile_ir": 37.375,
+      "sparse_ir": 7.8,
+      "pd": 79.85596827464298,
+      "pfa": 0.0,
+      "mode_selection_totals": {
+        "0": 0,
+        "1": 1979,
+        "2": 8021,
+        "3": 0,
+        "4": 0
+      },
+      "mode2_overall_fraction": 0.8021,
+      "scenario_results": {
+        "config_117": {
+          "intercept_rate": 0.994,
+          "hits": 994,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 4,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_119": {
+          "intercept_rate": 0.0,
+          "hits": 0,
+          "steps": 1000,
+          "pd": 0.0,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 856,
+            "2": 144,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 0.144
+        },
+        "config_143": {
+          "intercept_rate": 0.156,
+          "hits": 156,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 143,
+            "2": 857,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 0.857
+        },
+        "config_194": {
+          "intercept_rate": 0.887,
+          "hits": 887,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 6,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_195": {
+          "intercept_rate": 0.979,
+          "hits": 979,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 7,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_241": {
+          "intercept_rate": 0.0,
+          "hits": 0,
+          "steps": 1000,
+          "pd": 0.0,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 856,
+            "2": 144,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 0.144
+        },
+        "config_29": {
+          "intercept_rate": 0.516,
+          "hits": 516,
+          "steps": 1000,
+          "pd": 0.9961389961389961,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 124,
+            "2": 876,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 0.876
+        },
+        "config_42": {
+          "intercept_rate": 0.657,
+          "hits": 657,
+          "steps": 1000,
+          "pd": 0.9894578313253012,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_64": {
+          "intercept_rate": 0.595,
+          "hits": 595,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        },
+        "config_96": {
+          "intercept_rate": 0.916,
+          "hits": 916,
+          "steps": 1000,
+          "pd": 1.0,
+          "pfa": 0.0,
+          "distinct_bands": 36,
+          "mode_distribution": {
+            "0": 0,
+            "1": 0,
+            "2": 1000,
+            "3": 0,
+            "4": 0
+          },
+          "mode2_fraction": 1.0
+        }
+      }
+    },
+    "promotion_verdict": "REJECT: Candidate Mean IR (57.00%) below baseline (60.45%) without required robustness offset",
+    "promoted": false,
+    "last_mode_telemetry": {
+      "step": 999,
+      "modes": {
+        "mode_0": {
+          "valid_samples": 12,
+          "masked_td_loss": 3.5023880004882812,
+          "masked_grad_norm": 0.3781239092350006,
+          "has_zero_gradient": false
+        },
+        "mode_1": {
+          "valid_samples": 222,
+          "masked_td_loss": 0.8568057417869568,
+          "masked_grad_norm": 0.9287102222442627,
+          "has_zero_gradient": false
+        },
+        "mode_2": {
+          "valid_samples": 10,
+          "masked_td_loss": 2.1144750118255615,
+          "masked_grad_norm": 0.09754408895969391,
+          "has_zero_gradient": false
+        },
+        "mode_3": {
+          "valid_samples": 6,
+          "masked_td_loss": 5.681662082672119,
+          "masked_grad_norm": 0.8308871984481812,
+          "has_zero_gradient": false
+        },
+        "mode_4": {
+          "valid_samples": 6,
+          "masked_td_loss": 4.3326826095581055,
+          "masked_grad_norm": 0.5096962451934814,
+          "has_zero_gradient": false
+        }
+      }
+    }
+  }
+}

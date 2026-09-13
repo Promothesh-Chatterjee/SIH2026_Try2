@@ -1,6 +1,52 @@
-const WS_BASE_URL =
-  import.meta.env.VITE_WS_BASE_URL ||
-  "ws://localhost:8080";
+export function getWsBaseUrl() {
+  if (typeof window !== "undefined") {
+    const isProd = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+    const override = localStorage.getItem("smartscan_ws_url");
+    if (override && override.trim()) {
+      const clean = override.trim().replace(/\/+$/, "");
+      if (isProd && (clean.includes("localhost") || clean.includes("127.0.0.1"))) {
+        localStorage.removeItem("smartscan_ws_url");
+      } else {
+        return clean;
+      }
+    }
+    const apiOverride = localStorage.getItem("smartscan_api_url");
+    if (apiOverride && apiOverride.trim()) {
+      const clean = apiOverride.trim().replace(/\/+$/, "");
+      if (isProd && (clean.includes("localhost") || clean.includes("127.0.0.1"))) {
+        localStorage.removeItem("smartscan_api_url");
+      } else {
+        if (clean.startsWith("https://")) {
+          return clean.replace(/^https:\/\//, "wss://");
+        }
+        if (clean.startsWith("http://")) {
+          return clean.replace(/^http:\/\//, "ws://");
+        }
+      }
+    }
+  }
+
+  const envWs = import.meta.env.VITE_WS_BASE_URL;
+  if (envWs && envWs.trim()) {
+    return envWs.trim().replace(/\/+$/, "");
+  }
+
+  const envApi = import.meta.env.VITE_API_BASE_URL;
+  if (envApi && envApi.trim()) {
+    const clean = envApi.trim().replace(/\/+$/, "");
+    if (clean.startsWith("https://")) {
+      return clean.replace(/^https:\/\//, "wss://");
+    }
+    if (clean.startsWith("http://")) {
+      return clean.replace(/^http:\/\//, "ws://");
+    }
+  }
+
+  const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  return isLocal ? "ws://localhost:8080" : "wss://smartscan-backend-q6ay.onrender.com";
+}
+
+const WS_BASE_URL = getWsBaseUrl();
 
 export function createWebSocket(
   path,
@@ -49,8 +95,9 @@ export function createWebSocket(
     }
 
     try {
+      const base = getWsBaseUrl();
       socket = new WebSocket(
-        `${WS_BASE_URL}${path}`,
+        `${base}${path}`,
       );
     } catch (error) {
       handlers.onError?.(error);
