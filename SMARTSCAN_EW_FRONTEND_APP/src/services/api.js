@@ -32,41 +32,54 @@ const API_BASE_URL = getApiBaseUrl();
 
 async function request(path, options = {}) {
   const base = getApiBaseUrl();
-  const response = await fetch(
-    `${base}${path}`,
-    {
+  let response;
+
+  try {
+    response = await fetch(`${base}${path}`, {
       headers: {
         Accept: "application/json",
-        ...(options.body
-          ? {
-              "Content-Type":
-                "application/json",
-            }
-          : {}),
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
         ...(options.headers || {}),
       },
       ...options,
-    },
-  );
+    });
+  } catch (netErr) {
+    if (netErr.name === "AbortError") {
+      throw netErr;
+    }
+    const isNetwork = netErr.message?.includes("Failed to fetch") || netErr.message?.includes("NetworkError");
+    const errMsg = isNetwork
+      ? `Render backend may be spinning up from cold start or unreachable (${netErr.message}).`
+      : `Network request to backend failed: ${netErr.message}`;
+    const err = new Error(errMsg);
+    err.name = "NetworkError";
+    err.isNetworkError = true;
+    err.original = netErr;
+    throw err;
+  }
 
   if (!response.ok) {
-    let detail = `HTTP ${response.status}`;
+    let detail = `HTTP ${response.status} (${response.statusText || "Error"})`;
 
     try {
       const body = await response.json();
-
-      if (
-        body &&
-        typeof body === "object" &&
-        body.detail
-      ) {
-        detail = body.detail;
+      if (body && typeof body === "object") {
+        if (body.detail) {
+          detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+        } else if (body.message) {
+          detail = typeof body.message === "string" ? body.message : JSON.stringify(body.message);
+        } else if (body.error) {
+          detail = typeof body.error === "string" ? body.error : JSON.stringify(body.error);
+        }
       }
     } catch {
       // Non-JSON error response.
     }
 
-    throw new Error(detail);
+    const httpErr = new Error(detail);
+    httpErr.status = response.status;
+    httpErr.statusText = response.statusText;
+    throw httpErr;
   }
 
   if (response.status === 204) {
@@ -77,102 +90,104 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  getSystemStatus() {
-    return request("/health");
+  getSystemStatus(options = {}) {
+    return request("/health", options);
   },
 
-  getMetrics() {
-    return request("/metrics");
+  getMetrics(options = {}) {
+    return request("/metrics", options);
   },
 
-  getLatestTelemetry() {
-    return request("/telemetry/latest");
+  getLatestTelemetry(options = {}) {
+    return request("/telemetry/latest", options);
   },
 
-  getTelemetryHistory(limit = 200) {
+  getTelemetryHistory(limit = 200, options = {}) {
     const parsedLimit = Number(limit);
-
     const safeLimit = Math.max(
       1,
-      Math.min(
-        1000,
-        Number.isFinite(parsedLimit)
-          ? parsedLimit
-          : 200,
-      ),
+      Math.min(1000, Number.isFinite(parsedLimit) ? parsedLimit : 200),
     );
 
-    return request(
-      `/telemetry/history?limit=${encodeURIComponent(
-        safeLimit,
-      )}`,
-    );
+    return request(`/telemetry/history?limit=${encodeURIComponent(safeLimit)}`, options);
   },
 
-  getTelemetryRuns() {
-    return request("/telemetry/runs");
+  getTelemetryRuns(options = {}) {
+    return request("/telemetry/runs", options);
   },
 
-  getEmitterMemory() {
-    return request("/memory/emitters");
+  getEmitterMemory(options = {}) {
+    return request("/memory/emitters", options);
   },
 
-  startMission(initialTimeUs = 0.0) {
+  startMission(initialTimeUs = 0.0, options = {}) {
     return request("/mission/start", {
       method: "POST",
-      body: JSON.stringify({ initial_time_us: initialTimeUs }),
+      body: JSON.stringify({ initial_time_us: Number(initialTimeUs) || 0.0 }),
+      ...options,
     });
   },
 
-  stepMission(pdws = null, obs = null) {
+  stepMission(pdws = null, obs = null, options = {}) {
     return request("/mission/step", {
       method: "POST",
       body: JSON.stringify({ pdws, obs }),
+      ...options,
     });
   },
 
-  stopMission() {
+  stopMission(options = {}) {
     return request("/mission/stop", {
       method: "POST",
+      ...options,
     });
   },
 
-  getMissionStatus() {
-    return request("/mission/status");
+  getMissionStatus(options = {}) {
+    return request("/mission/status", options);
   },
 
-  startMissionStream(params = {}) {
+  startMissionStream(params = {}, options = {}) {
+    const payload = {
+      scenario: params.scenario ?? "config_96",
+      speed_hz: Number(params.speed_hz) || 15.0,
+      max_dwells: params.max_dwells ?? null,
+    };
     return request("/mission/stream/start", {
       method: "POST",
-      body: JSON.stringify(params),
+      body: JSON.stringify(payload),
+      ...options,
     });
   },
 
-  stopMissionStream() {
+  stopMissionStream(options = {}) {
     return request("/mission/stream/stop", {
       method: "POST",
+      ...options,
     });
   },
 
-  getMissionStreamStatus() {
-    return request("/mission/stream/status");
+  getMissionStreamStatus(options = {}) {
+    return request("/mission/stream/status", options);
   },
 
-  resetMission() {
+  resetMission(options = {}) {
     return request("/reset", {
       method: "POST",
+      ...options,
     });
   },
 
-  evaluateBenchmark(params = {}) {
+  evaluateBenchmark(params = {}, options = {}) {
     return request("/benchmark/evaluate", {
       method: "POST",
       body: JSON.stringify(params),
+      ...options,
     });
   },
 
-  getLatestBenchmark() {
-    return request("/benchmark/latest");
+  getLatestBenchmark(options = {}) {
+    return request("/benchmark/latest", options);
   },
 
   /**
@@ -185,21 +200,26 @@ export const api = {
    *
    * @param {Array<number>} obs - Exactly 360 numeric values.
    * @param {string} [policyMode="default"] - Policy mode ('default', 'operational', 'demo', 'fallback').
+   * @param {Object} [options={}] - Fetch options like signal.
    * @returns {Promise<Object>} Real model output (selected_action, selected_band, selected_mode, etc.)
    */
-  predictBands(obs, policyMode = "default") {
+  predictBands(obs, policyMode = "default", options = {}) {
     if (!Array.isArray(obs)) {
       return Promise.reject(new Error("Observation must be an array of numeric values."));
     }
     if (obs.length !== 360) {
       return Promise.reject(
-        new Error(`Invalid observation dimension: expected exactly 360 numeric values (36 bands × 10 features), got ${obs.length}.`)
+        new Error(
+          `Invalid observation dimension: expected exactly 360 numeric values (36 bands × 10 features), got ${obs.length}.`,
+        ),
       );
     }
     for (let i = 0; i < obs.length; i++) {
       const val = Number(obs[i]);
       if (!Number.isFinite(val)) {
-        return Promise.reject(new Error(`Invalid observation value at index ${i}: must be a finite number, got ${obs[i]}.`));
+        return Promise.reject(
+          new Error(`Invalid observation value at index ${i}: must be a finite number, got ${obs[i]}.`),
+        );
       }
     }
     return request("/predict_bands", {
@@ -208,11 +228,12 @@ export const api = {
         obs: obs.map(Number),
         policy_mode: policyMode,
       }),
+      ...options,
     });
   },
 
-  getBenchmarkScenarios() {
-    return request("/benchmark/scenarios");
+  getBenchmarkScenarios(options = {}) {
+    return request("/benchmark/scenarios", options);
   },
 };
 
