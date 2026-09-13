@@ -41,7 +41,7 @@ load_dotenv()
 
 import torch
 import yaml
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 hidden_lock = Lock()
 try:
     from fastapi.middleware.base import BaseHTTPMiddleware  # type: ignore
@@ -711,7 +711,7 @@ app.add_middleware(TimingMiddleware)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
-def health() -> HealthResponse:
+def health(response: Response) -> HealthResponse:
     """Report liveness plus explicit model availability and verification flags."""
     scheduler_loaded = STATE.get("scheduler") is not None or "scheduler_onnx" in STATE and STATE.get("scheduler_onnx") is not None
     deinterleaver_loaded = STATE.get("deinterleaver") is not None or "deinterleaver_onnx" in STATE and STATE.get("deinterleaver_onnx") is not None
@@ -725,8 +725,22 @@ def health() -> HealthResponse:
         except Exception:
             git_rev = "unknown"
 
+    overall_healthy = bool(
+        scheduler_loaded
+        and STATE.get("controller") is not None
+        and bool(STATE.get("dimension_check_passed"))
+    )
+    if not overall_healthy:
+        response.status_code = 503
+        logger.error(
+            "Health check degraded: scheduler_loaded=%s, controller=%s, dimension_check=%s",
+            scheduler_loaded,
+            STATE.get("controller") is not None,
+            STATE.get("dimension_check_passed"),
+        )
+
     return HealthResponse(
-        status="ok",
+        status="ok" if overall_healthy else "degraded",
         device=str(STATE.get("device", "cpu")),
         models_loaded={
             "deinterleaver": deinterleaver_loaded,

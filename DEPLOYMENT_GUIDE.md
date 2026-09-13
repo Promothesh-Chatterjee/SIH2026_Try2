@@ -1,4 +1,4 @@
-﻿# Cloud Deployment Guide: Render (Backend) + Vercel (Frontend)
+# Cloud Deployment Guide: Render (Backend) + Vercel (Frontend)
 
 This guide walks you through deploying the **Cognitive EW SmartScan Backend** to **Render** and connecting it to your **Frontend** already running on **Vercel** (`https://sih-2026-try2.vercel.app/`).
 
@@ -57,7 +57,7 @@ If you prefer creating the Web Service manually:
    - Add Environment Variable:
      - `PYTHON_VERSION` = `3.11.9`
      - `DEVICE` = `cpu`
-     - `CORS_ORIGINS` = `*`
+     - `CORS_ORIGINS` = `https://sih-2026-try2.vercel.app`
    - **Health Check Path**: `/health`
 5. Click **Create Web Service**.
 
