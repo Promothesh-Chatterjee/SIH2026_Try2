@@ -1,4 +1,4 @@
-﻿services:
+services:
   - type: web
     name: smartscan-backend
     runtime: python
@@ -13,3 +13,5 @@
         value: cpu
       - key: CORS_ORIGINS
         value: "https://sih-2026-try2.vercel.app"
+      - key: EXPECTED_NORMALIZATION_HASH
+        value: "bacee02ac1c29428"
