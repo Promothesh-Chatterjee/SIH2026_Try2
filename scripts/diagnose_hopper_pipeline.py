@@ -16,16 +16,16 @@ import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
-sys.path.insert(0, str(REPO_ROOT / "cognitive_ew_smart_scan"))
-sys.path.insert(0, str(REPO_ROOT / "cognitive_ew_smart_scan" / "src"))
+sys.path.insert(0, str(REPO_ROOT / "ew_core"))
+sys.path.insert(0, str(REPO_ROOT / "ew_core" / "src"))
 sys.path.insert(0, str(REPO_ROOT / "receiver_env"))
 
 from receiver_env.pdw.models import PDW
 from receiver_env.deinterleaver.models import DeinterleaverConfig
 from receiver_env.deinterleaver.deinterleaver import PDWDeinterleaver
-from src.contracts import CANONICAL_N_BANDS
-from src.operational.state_builder import OperationalStateBuilder
-from src.perception.emitter_tracker import EmitterTracker
+from ew_core.contracts import CANONICAL_N_BANDS
+from ew_core.operational.state_builder import OperationalStateBuilder
+from ew_core.perception.emitter_tracker import EmitterTracker
 
 
 def run_diagnostic():

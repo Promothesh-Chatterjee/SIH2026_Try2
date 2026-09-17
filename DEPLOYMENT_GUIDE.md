@@ -25,8 +25,8 @@ git push origin main
 4. Render will automatically read `render.yaml` from the repository:
    - **Service Name**: `smartscan-backend`
    - **Runtime**: Python 3.11
-   - **Build Command**: `pip install --upgrade pip && pip install -r cognitive_ew_smart_scan/requirements-render.txt`
-   - **Start Command**: `python -m uvicorn src.deployment.api:app --app-dir cognitive_ew_smart_scan --host 0.0.0.0 --port $PORT`
+   - **Build Command**: `pip install --upgrade pip && pip install -e ".[render]"`
+   - **Start Command**: `python -m uvicorn ew_core.deployment.api:app --host 0.0.0.0 --port $PORT`
    - **Health Check Path**: `/health`
    - **Plan**: Free
 5. Click **Apply**.
@@ -46,11 +46,11 @@ If you prefer creating the Web Service manually:
    - **Runtime**: `Python 3`
    - **Build Command**:
      ```bash
-     pip install --upgrade pip && pip install -r cognitive_ew_smart_scan/requirements-render.txt
+     pip install --upgrade pip && pip install -e ".[render]"
      ```
    - **Start Command**:
      ```bash
-     python -m uvicorn src.deployment.api:app --app-dir cognitive_ew_smart_scan --host 0.0.0.0 --port $PORT
+     python -m uvicorn ew_core.deployment.api:app --host 0.0.0.0 --port $PORT
      ```
    - **Instance Type**: `Free`
 4. Under **Advanced**:
