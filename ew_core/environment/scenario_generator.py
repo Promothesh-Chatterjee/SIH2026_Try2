@@ -1,0 +1,694 @@
+"""Scenario generator: build PulseRecord lists for CognitiveRFScanEnv.
+
+Reads TSRD-style .h5 pulse trains (datasets "data" (n,5) = [toa, cf, pw, aoa,
+amp] and "labels" (n,) emitter ids) into PulseRecord lists, or falls back to a
+synthetic scenario when no real files are present. This keeps the receiver-driven
+CognitiveRFScanEnv data source agnostic (TSRD or synthetic) and file-local
+emitter-id scoped per file (labels must never be mixed across files).
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Optional, Sequence
+
+import numpy as np
+
+from .radio_environment import PulseRecord
+
+logger = logging.getLogger(__name__)
+
+SYN_COLUMNS = ["toa_us", "frequency_mhz", "pulse_width_us", "amplitude_db", "aoa_deg"]
+
+
+def records_from_array(
+    data: np.ndarray,
+    labels: Optional[np.ndarray] = None,
+    source_id: str = "tsrd",
+    freq_min_mhz: float = 0.0,
+    freq_max_mhz: float = 18000.0,
+    time_horizon_us: Optional[float] = None,
+) -> list[PulseRecord]:
+    """Convert a pulse train array into PulseRecord objects.
+
+    Args:
+        data: Array shape (n, 5) with columns [toa, cf, pw, aoa, amp].
+        labels: Array shape (n,) of per-pulse emitter ids (file-local).
+        source_id: Source identifier stored on each record.
+        freq_min_mhz: Lower spectral edge; pulses outside are clipped.
+        freq_max_mhz: Upper spectral edge; pulses outside are clipped.
+        time_horizon_us: If set, pulses with toa beyond this are dropped.
+
+    Returns:
+        List of PulseRecord, dropped pulses (out of band / beyond horizon) are
+        excluded so the radio world only contains physically valid pulses.
+    """
+    records: list[PulseRecord] = []
+    if data is None or data.size == 0:
+        return records
+
+    toa = np.asarray(data[:, 0], dtype=np.float64).flatten()
+    cf = np.asarray(data[:, 1], dtype=np.float64).flatten()
+    pw = np.asarray(data[:, 2], dtype=np.float64).flatten()
+    aoa = np.asarray(data[:, 3], dtype=np.float64).flatten()
+    amp = np.asarray(data[:, 4], dtype=np.float64).flatten()
+    lbl = np.asarray(labels, dtype=np.int64).flatten() if labels is not None and labels.size else np.zeros(len(toa), dtype=np.int64)
+    if len(lbl) < len(toa):
+        lbl = np.concatenate([lbl, np.zeros(len(toa) - len(lbl), dtype=np.int64)])
+
+    valid = np.isfinite(toa) & np.isfinite(cf)
+    valid &= (cf >= freq_min_mhz) & (cf <= freq_max_mhz)
+    if time_horizon_us is not None:
+        valid &= toa <= float(time_horizon_us)
+
+    for i in np.where(valid)[0]:
+        records.append(
+            PulseRecord(
+                toa_us=float(toa[i]),
+                frequency_mhz=float(cf[i]),
+                pulse_width_us=float(pw[i]),
+                amplitude_db=float(amp[i]),
+                aoa_deg=float(aoa[i]),
+                emitter_id=int(lbl[i]),
+                source_id=source_id,
+            )
+        )
+    return records
+
+
+def load_h5_records(
+    path: str | Path,
+    freq_min_mhz: float = 0.0,
+    freq_max_mhz: float = 18000.0,
+    time_horizon_us: Optional[float] = None,
+    max_pulses: int = 50000,
+) -> list[PulseRecord]:
+    """Load a single TSRD-style .h5 file into PulseRecords (file-local labels).
+
+    Args:
+        path: Path to .h5 file containing "data" (n,5) and "labels" (n,).
+        freq_min_mhz / freq_max_mhz: Spectral clipping range (forwarded to
+            :func:`records_from_array` so out-of-band pulses are actually dropped).
+        time_horizon_us: Optional toa upper bound (also forwarded).
+        max_pulses: Cap on pulses loaded (keeps episodes bounded).
+
+    Returns:
+        List of PulseRecord. ToA is normalised so the earliest surviving pulse
+        sits at t=0 — normalisation happens per single file, never across files.
+        Zero-pulse trains return an empty list.
+    """
+    import h5py
+
+    path = Path(path)
+    with h5py.File(str(path), "r") as handle:
+        data = handle["data"][:max_pulses]
+        labels = handle["labels"][:max_pulses] if "labels" in handle else None
+    records = records_from_array(
+        data,
+        labels,
+        source_id=f"tsrd:{path.stem}",
+        freq_min_mhz=freq_min_mhz,
+        freq_max_mhz=freq_max_mhz,
+        time_horizon_us=time_horizon_us,
+    )
+    if not records:
+        return records
+    # Normalise ToA so the scenario starts at t=0. TSRD ToA are absolute relative
+    # timestamps with an arbitrary per-file offset; only the relative spacing
+    # matters for the receiver simulation. Keep the earliest pulse at 0.
+    t0 = min(r.toa_us for r in records)
+    for r in records:
+        r.toa_us -= t0
+    records.sort(key=lambda r: r.toa_us)
+    return records
+
+
+# ---------------------------------------------------------------------------
+# GNU RF Parsed Dataset Loader
+# ---------------------------------------------------------------------------
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_GNU_DIR = _REPO_ROOT / "rf_simulation" / "p3ac_50k" / "episodes"
+DEFAULT_GNU_DATA_PATH = (
+    DEFAULT_GNU_DIR / "EP000001.gt.json"
+    if DEFAULT_GNU_DIR.exists()
+    else Path("C:/HACKATHONS/SIH2026_Try2/rf_simulation/p3ac_50k/episodes/EP000001.gt.json")
+)
+
+
+def load_gnu_records(
+    path: str | Path | None = None,
+    time_horizon_us: float = 600_000.0,
+    seed: int = 42,
+    max_pulses: int = 50000,
+) -> list[PulseRecord]:
+    """Load PulseRecords from GNU parsed ground truth data (.gt.json, .npz, or episode dir)."""
+    import json
+
+    if path is None:
+        p = DEFAULT_GNU_DATA_PATH
+    else:
+        p = Path(path)
+
+    if p.is_dir():
+        cands = sorted(p.glob("*.gt.json"))
+        if cands:
+            p = cands[0]
+        else:
+            raise FileNotFoundError(f"No .gt.json found in GNU directory {path}")
+    elif p.suffix == ".npz":
+        gt_cand = p.parent / (p.stem + ".gt.json")
+        if gt_cand.exists():
+            p = gt_cand
+        else:
+            gt_cand2 = p.with_suffix(".gt.json")
+            if gt_cand2.exists():
+                p = gt_cand2
+
+    if not p.exists():
+        # Try finding in default GNU directory
+        alt = DEFAULT_GNU_DIR / f"{p.name}"
+        if not alt.exists() and not str(p).endswith(".gt.json"):
+            alt = DEFAULT_GNU_DIR / f"{p.stem}.gt.json"
+        if alt.exists():
+            p = alt
+
+    if not p.exists():
+        raise FileNotFoundError(f"GNU parsed scenario file not found: {path} (checked {p})")
+
+    with open(p, "r", encoding="utf-8") as f:
+        gt = json.load(f)
+
+    # Check if this is a hopping scenario where different dwells have different emitter frequencies
+    has_hopping_dwells = False
+    if "dwells" in gt and len(gt["dwells"]) > 1:
+        first_freqs = {round(em["rf_frequency_mhz"], 2) for em in gt["dwells"][0].get("emitters", []) if "rf_frequency_mhz" in em}
+        for d in gt["dwells"][1:15]:
+            d_freqs = {round(em["rf_frequency_mhz"], 2) for em in d.get("emitters", []) if "rf_frequency_mhz" in em}
+            if d_freqs != first_freqs:
+                has_hopping_dwells = True
+                break
+
+    records: list[PulseRecord] = []
+    if has_hopping_dwells:
+        for dwell in gt["dwells"]:
+            d_start = float(dwell.get("start_time_us", 0.0))
+            d_end = float(dwell.get("end_time_us", time_horizon_us))
+            if d_start >= time_horizon_us:
+                break
+            d_limit = min(d_end, time_horizon_us)
+            for em in dwell.get("emitters", []):
+                pri = float(em.get("pri_us", 100.0))
+                pw = float(em.get("pulse_width_us", 10.0))
+                freq = float(em.get("rf_frequency_mhz", 3500.0))
+                amp = float(em.get("amplitude", 1.0)) * -50.0
+                jitter_frac = float(em.get("jitter_fraction", 0.01))
+                eid_str = str(em.get("id", "E1"))
+                eid = int("".join(c for c in eid_str if c.isdigit()) or 1)
+
+                t = d_start
+                while t < d_limit:
+                    records.append(
+                        PulseRecord(
+                            toa_us=float(t),
+                            frequency_mhz=float(freq),
+                            pulse_width_us=float(pw),
+                            amplitude_db=float(amp),
+                            aoa_deg=15.0,
+                            emitter_id=eid,
+                            source_id=f"gnu:{p.stem}",
+                        )
+                    )
+                    t += pri
+    else:
+        emitters = []
+        if "dwells" in gt and len(gt["dwells"]) > 0:
+            emitters = gt["dwells"][0].get("emitters", [])
+        if not emitters:
+            emitters = gt.get("emitters", [])
+
+        for em in emitters:
+            rng = np.random.default_rng(em.get("configured_seed", seed))
+            pri = float(em["pri_us"])
+            pw = float(em["pulse_width_us"])
+            freq = float(em["rf_frequency_mhz"])
+            amp = float(em.get("amplitude", 1.0)) * -50.0  # Linear to rough dBm
+            jitter_frac = float(em.get("jitter_fraction", 0.01))
+            eid_str = str(em.get("id", "E1"))
+            eid = int("".join(c for c in eid_str if c.isdigit()) or 1)
+
+            t = float(rng.uniform(0.0, pri))
+            while t < time_horizon_us:
+                j = float(rng.uniform(-jitter_frac, jitter_frac)) * pri
+                t_pulse = t + j
+                if 0.0 <= t_pulse < time_horizon_us:
+                    records.append(
+                        PulseRecord(
+                            toa_us=float(t_pulse),
+                            frequency_mhz=float(freq),
+                            pulse_width_us=float(pw),
+                            amplitude_db=float(amp),
+                            aoa_deg=15.0,
+                            emitter_id=eid,
+                            source_id=f"gnu:{p.stem}",
+                        )
+                    )
+                t += pri
+
+    records.sort(key=lambda r: r.toa_us)
+    if max_pulses and len(records) > max_pulses:
+        records = records[:max_pulses]
+    return records
+
+
+
+# Map our {mode}/{split} names onto the official TSRD repo directory naming.
+# Official layout: <mode>/<mode>_<split>/config_*.h5  (e.g. scan/train_scan/).
+# split aliases: train|train_scan|train_stare, val|validation|val_scan|val_stare,
+#                test|test_scan|test_stare.
+_SPLIT_DIR_ALIASES = {
+    "train": {"train", "train_scan", "train_stare"},
+    "val": {"val", "val_scan", "val_stare", "validation"},
+    "test": {"test", "test_scan", "test_stare"},
+    "validation": {"validation", "val", "val_scan", "val_stare"},
+}
+
+
+def _search_subdirs(data_root: Path, mode: str, split: str) -> list[Path]:
+    """Search candidate subdirectories for the mode/split combo."""
+    desired = _SPLIT_DIR_ALIASES.get(split, {split})
+    base_dir = data_root / mode
+    candidates: list[Path] = []
+    if base_dir.exists():
+        for sub in base_dir.iterdir():
+            if sub.is_dir() and sub.name in desired:
+                candidates.append(sub)
+    # Also try data_root directly (some dumps flatten): data_root/<mode>/<split>
+    plain = data_root / mode / split
+    if plain.is_dir() and plain not in candidates:
+        candidates.append(plain)
+    files: list[Path] = []
+    for cand in candidates:
+        files.extend(sorted(cand.glob("*.h5")))
+    return files
+
+
+def discover_h5_files(data_root: str | Path, mode: str = "scan", subset: str = "train") -> list[Path]:
+    """Discover .h5 files under a TSRD-compatible layout.
+
+    Handles both the official ``<mode>/<mode>_<split>`` layout (e.g.
+    ``scan/train_scan``) and the simpler ``<mode>/<split>`` layout.
+    """
+    data_root = Path(data_root)
+    if not data_root.exists():
+        return []
+    found = _search_subdirs(data_root, mode, subset)
+    return sorted(set(found))
+
+
+def classify_h5_files(files: Sequence[str | Path]) -> tuple[list[Path], list[Path], list[Path]]:
+    """Classify TSRD .h5 files by usability (header-only scan).
+
+    Returns ``(eligible, empty, unreadable)``:
+        eligible   — readable ``data`` dataset with > 0 rows
+        empty      — readable ``data`` dataset with exactly 0 rows (a legit
+                     official-TSRD empty scene; structurally valid but unusable)
+        unreadable — could not be opened / has no ``data`` dataset
+
+    An empty scene must be SKIPPED for episodes, not crash a run.
+    """
+    import h5py
+
+    eligible: list[Path] = []
+    empty: list[Path] = []
+    unreadable: list[Path] = []
+    for f in sorted(Path(x) for x in files):
+        try:
+            with h5py.File(str(f), "r") as handle:
+                if "data" not in handle:
+                    unreadable.append(f)
+                    continue
+                rows = handle["data"].shape[0]
+        except Exception:
+            unreadable.append(f)
+            continue
+        (empty if rows == 0 else eligible).append(f)
+    return eligible, empty, unreadable
+
+
+def synthetic_records(
+    n_pulses: int = 800,
+    n_emitters: int = 6,
+    freq_min_mhz: float = 0.0,
+    freq_max_mhz: float = 18000.0,
+    time_horizon_us: float = 50000.0,
+    seed: int = 42,
+) -> list[PulseRecord]:
+    """Generate a synthetic, multi-emitter pulse scenario.
+
+    Each emitter emits a contiguous train (PriT-staggered bursts) with a distinct
+    frequency so the scheduler can learn band selectivity. Visible spans are spread
+    across the time horizon so a scanning receiver must revisit over time.
+    """
+    rng = np.random.default_rng(seed)
+    records: list[PulseRecord] = []
+    total = 0
+    for emitter_id in range(n_emitters):
+        bursts = int(np.clip(3 + emitter_id, 2, 8))
+        for b in range(bursts):
+            cf = freq_min_mhz + (freq_max_mhz - freq_min_mhz) * (
+                (emitter_id + 0.5) / n_emitters + rng.uniform(-0.03, 0.03)
+            )
+            cf = float(np.clip(cf, freq_min_mhz, freq_max_mhz))
+            burst_start = time_horizon_us * ((b + rng.uniform(0.1, 0.9)) / bursts)
+            pri = rng.uniform(300.0, 1500.0)
+            n_pulses_here = int(np.clip(n_pulses // (n_emitters * bursts), 1, 40))
+            pw = rng.uniform(0.5, 8.0)
+            for k in range(n_pulses_here):
+                toa = burst_start + k * pri
+                if toa > time_horizon_us:
+                    break
+                records.append(
+                    PulseRecord(
+                        toa_us=float(toa),
+                        frequency_mhz=cf,
+                        pulse_width_us=pw,
+                        amplitude_db=float(rng.uniform(-90, -50)),
+                        aoa_deg=float(rng.uniform(-60, 60)),
+                        emitter_id=emitter_id,
+                        source_id="synthetic",
+                    )
+                )
+                total += 1
+    records.sort(key=lambda r: r.toa_us)
+    return records
+
+
+def build_scenario(
+    data_root: str | Path | None = None,
+    mode: str = "scan",
+    subset: str = "train",
+    freq_min_mhz: float = 0.0,
+    freq_max_mhz: float = 18000.0,
+    time_horizon_us: Optional[float] = None,
+    max_pulses: int = 50000,
+    seed: int = 42,
+    allow_synthetic_fallback: bool = True,
+) -> tuple[list[PulseRecord], str, list[Path]]:
+    """Build a PulseRecord scenario from TSRD .h5 files.
+
+    Args:
+        data_root: Root data dir (contains mode/subset). If None or no .h5 files
+            found, falls back to synthetic ONLY if allow_synthetic_fallback=True.
+        mode / subset: Dataset split layout.
+        freq_min_mhz / freq_max_mhz: Spectral clip range.
+        time_horizon_us: Optional toa cap.
+        max_pulses: Cap per file.
+        seed: RNG seed for synthetic fallback.
+        allow_synthetic_fallback: If False, raise FileNotFoundError when no TSRD data found.
+
+    Returns:
+        Tuple (records, source_label, file_paths_used).
+        source_label is "tsrd" or "synthetic".
+
+    Raises:
+        FileNotFoundError: If no TSRD files found and allow_synthetic_fallback=False.
+    """
+    files: list[Path] = []
+    if data_root is not None:
+        files = discover_h5_files(data_root, mode=mode, subset=subset)
+
+    if files:
+        eligible, empty, unreadable = classify_h5_files(files)
+        if empty or unreadable:
+            logger.info(
+                "Scenario[tsrd]: skipping %d empty scenario(s) and %d unreadable file(s) in %s/%s",
+                len(empty), len(unreadable), mode, subset,
+            )
+        if not eligible:
+            # Files exist but NONE are usable: fail loudly in real-TSRD mode,
+            # and never silently telescope to an empty episode.
+            if not allow_synthetic_fallback:
+                raise FileNotFoundError(
+                    f"Directory {data_root}/{mode}/{subset} contains {len(files)} .h5 "
+                    f"file(s) but none are eligible for episodes "
+                    f"({len(empty)} empty, {len(unreadable)} unreadable) and "
+                    f"allow_synthetic_fallback=False"
+                )
+            records = synthetic_records(
+                freq_min_mhz=freq_min_mhz, freq_max_mhz=freq_max_mhz, seed=seed
+            )
+            logger.warning(
+                "Scenario[synthetic]: no eligible %s/%s .h5 files (%d empty, %d "
+                "unreadable); using synthetic per allow_synthetic_fallback",
+                mode, subset, len(empty), len(unreadable),
+            )
+            return records, "synthetic", []
+        records: list[PulseRecord] = []
+        for f in eligible:
+            try:
+                records.extend(
+                    load_h5_records(
+                        f,
+                        freq_min_mhz=freq_min_mhz,
+                        freq_max_mhz=freq_max_mhz,
+                        time_horizon_us=time_horizon_us,
+                        max_pulses=max_pulses,
+                    )
+                )
+            except Exception as exc:
+                logger.warning("Scenario[tsrd]: load failed for %s — skipped: %s", f, exc)
+        logger.info("Scenario[tsrd]: %d pulses from %d eligible file(s) in %s/%s", len(records), len(eligible), mode, subset)
+        return records, "tsrd", eligible
+
+    if not allow_synthetic_fallback:
+        raise FileNotFoundError(
+            f"No TSRD .h5 files found in {data_root}/{mode}/{subset}. "
+            f"Set allow_synthetic_fallback=True to use synthetic data, or provide valid TSRD data."
+        )
+
+    records = synthetic_records(freq_min_mhz=freq_min_mhz, freq_max_mhz=freq_max_mhz, seed=seed)
+    logger.warning("Scenario[synthetic]: %d pulses (no %s/%s .h5 found; using synthetic fallback)", len(records), mode, subset)
+    return records, "synthetic", []
+
+
+def build_world_scenario(
+    data_root: str | Path,
+    subset: str = "train",
+    freq_min_mhz: float = 0.0,
+    freq_max_mhz: float = 18000.0,
+    time_horizon_us: Optional[float] = None,
+    max_pulses: int = 50000,
+    seed: int = 42,
+) -> tuple[list[PulseRecord], str, list[Path]]:
+    """Build RF world scenario from TSRD STARE data (latent truth).
+
+    This is the ground-truth RF world that the scheduler's receiver observes through
+    its limited IBW. Uses STARE mode exclusively - no synthetic fallback.
+
+    Args:
+        data_root: Root data dir containing stare/ subdirectories.
+        subset: Dataset split (train/val/test).
+        freq_min_mhz / freq_max_mhz: Spectral clip range.
+        time_horizon_us: Optional toa cap.
+        max_pulses: Cap per file.
+        seed: RNG seed (unused for STARE, kept for interface consistency).
+
+    Returns:
+        Tuple (records, source_label, file_paths_used).
+        source_label is always "tsrd_stare".
+
+    Raises:
+        FileNotFoundError: If no STARE .h5 files found.
+    """
+    return build_scenario(
+        data_root=data_root,
+        mode="stare",
+        subset=subset,
+        freq_min_mhz=freq_min_mhz,
+        freq_max_mhz=freq_max_mhz,
+        time_horizon_us=time_horizon_us,
+        max_pulses=max_pulses,
+        seed=seed,
+        allow_synthetic_fallback=False,
+    )
+
+
+def build_observation_scenario(
+    data_root: str | Path,
+    subset: str = "train",
+    freq_min_mhz: float = 0.0,
+    freq_max_mhz: float = 18000.0,
+    time_horizon_us: Optional[float] = None,
+    max_pulses: int = 50000,
+    seed: int = 42,
+) -> tuple[list[PulseRecord], str, list[Path]]:
+    """Build observation scenario from TSRD SCAN data (realistic observed data).
+
+    This represents what a real narrowband receiver would observe. Used for:
+    - Deinterleaver validation
+    - Realistic observed-data comparison
+    - Benchmark evaluation
+
+    Args:
+        data_root: Root data dir containing scan/ subdirectories.
+        subset: Dataset split (train/val/test).
+        freq_min_mhz / freq_max_mhz: Spectral clip range.
+        time_horizon_us: Optional toa cap.
+        max_pulses: Cap per file.
+        seed: RNG seed (unused for SCAN, kept for interface consistency).
+
+    Returns:
+        Tuple (records, source_label, file_paths_used).
+        source_label is always "tsrd_scan".
+
+    Raises:
+        FileNotFoundError: If no SCAN .h5 files found.
+    """
+    return build_scenario(
+        data_root=data_root,
+        mode="scan",
+        subset=subset,
+        freq_min_mhz=freq_min_mhz,
+        freq_max_mhz=freq_max_mhz,
+        time_horizon_us=time_horizon_us,
+        max_pulses=max_pulses,
+        seed=seed,
+        allow_synthetic_fallback=False,
+    )
+
+
+class ScenarioSource:
+    """Providers of per-episode PulseRecords from a local TSRD split.
+
+    Each call to :meth:`sample` loads ONE randomly-chosen .h5 file's records
+    (capped to ``max_pulses``, ToA-normalised) so that an RL episode gets a
+    single, diverse, memory-bounded scenario — unlike concatenating every file.
+    Falls back to a fresh synthetic scenario ONLY if allow_synthetic_fallback=True
+    and no usable .h5 files are present. This prevents silent synthetic fallback
+    during real TSRD experiments.
+
+    Zero-pulse trains are skipped for episodes: discovered files are partitioned
+    at construction into ``eligible_files`` (>0 pulses), ``empty_files`` (0
+    pulses) and ``unreadable_files``. :meth:`sample` draws ONLY from
+    ``eligible_files``, so an unusable empty scene can never silently become an
+    empty episode.
+    """
+
+    def __init__(
+        self,
+        data_root: str | Path | None = None,
+        mode: str = "scan",
+        subset: str = "train",
+        freq_min_mhz: float = 0.0,
+        freq_max_mhz: float = 18000.0,
+        time_horizon_us: Optional[float] = None,
+        max_pulses: int = 50000,
+        seed: int = 42,
+        synthetic: bool = False,
+        source_type: str = "observation",  # "world" (STARE) or "observation" (SCAN)
+        allow_synthetic_fallback: bool = True,
+    ) -> None:
+        self.freq_min_mhz = freq_min_mhz
+        self.freq_max_mhz = freq_max_mhz
+        self.time_horizon_us = time_horizon_us
+        self.max_pulses = max_pulses
+        self._rng = np.random.default_rng(seed)
+        self.files: list[Path] = []
+        self.eligible_files: list[Path] = []
+        self.empty_files: list[Path] = []
+        self.unreadable_files: list[Path] = []
+        self.source_type = source_type
+        self.source_mode = "stare" if source_type == "world" else "scan"
+        self.allow_synthetic_fallback = allow_synthetic_fallback
+
+        if data_root is not None and not synthetic:
+            self.files = sorted(discover_h5_files(data_root, mode=self.source_mode, subset=subset))
+            self.eligible_files, self.empty_files, self.unreadable_files = classify_h5_files(self.files)
+        self.source_label = f"tsrd_{self.source_mode}" if self.files else "synthetic"
+        if self.files:
+            logger.info(
+                "ScenarioSource[%s]: %d files in %s/%s "
+                "(%d eligible, %d empty skipped, %d unreadable)",
+                self.source_label, len(self.files), self.source_mode, subset,
+                len(self.eligible_files), len(self.empty_files), len(self.unreadable_files),
+            )
+        else:
+            if synthetic:
+                logger.info("ScenarioSource[synthetic]: explicit synthetic mode")
+            elif self.allow_synthetic_fallback:
+                logger.warning("ScenarioSource[synthetic]: no %s/%s .h5 found — using synthetic fallback (allow_synthetic_fallback=True)", self.source_mode, subset)
+            else:
+                logger.error("ScenarioSource[ERROR]: no %s/%s .h5 found and allow_synthetic_fallback=False", self.source_mode, subset)
+                raise FileNotFoundError(
+                    f"No TSRD .h5 files found in {data_root}/{self.source_mode}/{subset}. "
+                    f"Set allow_synthetic_fallback=True to use synthetic data, or provide valid TSRD data."
+                )
+        # Fail fast when files exist but none are usable (all empty/unreadable).
+        if self.files and not self.eligible_files and not synthetic and not self.allow_synthetic_fallback:
+            raise FileNotFoundError(
+                f"All {len(self.files)} discovered files in {data_root}/{self.source_mode}/{subset} "
+                f"are unusable for episodes ({len(self.empty_files)} empty, "
+                f"{len(self.unreadable_files)} unreadable) and allow_synthetic_fallback=False"
+            )
+
+    def __len__(self) -> int:
+        return len(self.eligible_files)
+
+    @property
+    def n_empty_scenarios(self) -> int:
+        """Number of structurally valid zero-pulse trains skipped for episodes."""
+        return len(self.empty_files)
+
+    def sample(self) -> list[PulseRecord]:
+        """Return records for one episode (a single random ELIGIBLE file, or synthetic).
+
+        One call == one episode == exactly ONE eligible .h5 pulse train (never a
+        concatenation of several files). Empty (zero-pulse) scenarios are never
+        returned — they are skipped. If an eligible file is corrupt or loads to
+        zero records after clipping filters, it is reported and skipped and we
+        retry other eligible files; exhausting all retries raises rather than
+        silently producing an empty episode.
+        """
+        if not self.eligible_files:
+            if not self.allow_synthetic_fallback:
+                raise FileNotFoundError(
+                    "No usable TSRD .h5 files available for sampling "
+                    f"(discovered {len(self.files)}, "
+                    f"empty {len(self.empty_files)}, unreadable {len(self.unreadable_files)}) "
+                    "and allow_synthetic_fallback=False"
+                )
+            return synthetic_records(
+                freq_min_mhz=self.freq_min_mhz,
+                freq_max_mhz=self.freq_max_mhz,
+                seed=int(self._rng.integers(0, 2**31)),
+            )
+        candidates = list(self.eligible_files)
+        attempts = min(10, max(1, len(candidates)))
+        for _ in range(attempts):
+            fpath = Path(self._rng.choice(candidates))
+            try:
+                records = load_h5_records(
+                    fpath,
+                    freq_min_mhz=self.freq_min_mhz,
+                    freq_max_mhz=self.freq_max_mhz,
+                    time_horizon_us=self.time_horizon_us,
+                    max_pulses=self.max_pulses,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "ScenarioSource: corrupt/unreadable eligible file %s (%s) — "
+                    "reported and skipped for this episode",
+                    fpath, exc,
+                )
+                continue
+            if records:
+                return records
+            logger.warning(
+                "ScenarioSource: file %s yielded 0 records after filters — retrying",
+                fpath,
+            )
+        raise RuntimeError(
+            "All sampled TSRD files yielded empty episodes (unusable or corrupt "
+            "after filtering); refusing to fabricate an episode."
+        )

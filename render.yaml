@@ -2,8 +2,8 @@ services:
   - type: web
     name: smartscan-backend
     runtime: python
-    buildCommand: pip install --upgrade pip && pip install -r cognitive_ew_smart_scan/requirements-render.txt
-    startCommand: python -m uvicorn src.deployment.api:app --app-dir cognitive_ew_smart_scan --host 0.0.0.0 --port $PORT
+    buildCommand: pip install --upgrade pip && pip install -e ".[render]"
+    startCommand: python -m uvicorn ew_core.deployment.api:app --host 0.0.0.0 --port $PORT
     plan: free
     healthCheckPath: /health
     envVars:
