@@ -25,8 +25,8 @@ import torch
 
 # Paths
 REPO_ROOT = Path(__file__).resolve().parents[1]
-GNU_RF_DIR = REPO_ROOT / "GNU_RF_ENV"
-COGNITIVE_EW_DIR = REPO_ROOT / "cognitive_ew_smart_scan"
+GNU_RF_DIR = REPO_ROOT / "rf_simulation"
+COGNITIVE_EW_DIR = REPO_ROOT / "ew_core"
 RECEIVER_ENV_DIR = REPO_ROOT / "receiver_env"
 
 sys.path.insert(0, str(REPO_ROOT))
@@ -52,12 +52,12 @@ from receiver_env.deinterleaver.deinterleaver import PDWDeinterleaver
 from receiver_env.validation.validation_runner import ValidationRunner
 
 # Cognitive Controller & Scheduler components
-from src.contracts import CANONICAL_N_BANDS, CANONICAL_N_MODES, band_of_action, mode_of_action
-from src.environment.scenario_generator import load_gnu_records, PulseRecord
-from src.operational.receiver_controller import OperationalReceiverController
-from src.operational.receiver_adapter import ReceiverAdapter
-from src.operational.state_builder import OperationalStateBuilder
-from src.receiver.mission_clock import MissionClock
+from ew_core.contracts import CANONICAL_N_BANDS, CANONICAL_N_MODES, band_of_action, mode_of_action
+from ew_core.environment.scenario_generator import load_gnu_records, PulseRecord
+from ew_core.operational.receiver_controller import OperationalReceiverController
+from ew_core.operational.receiver_adapter import ReceiverAdapter
+from ew_core.operational.state_builder import OperationalStateBuilder
+from ew_core.receiver.mission_clock import MissionClock
 
 
 def run_full_bottom_up_verification():

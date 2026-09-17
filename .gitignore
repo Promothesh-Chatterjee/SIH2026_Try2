@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
 
 # Virtual environments
 .venv/
@@ -20,6 +21,12 @@ checkpoints/
 runs/
 **/runs/
 results/
+experiments/checkpoints/
+experiments/runs/
+
+# CI / Test artefacts & patch scripts
+*_output.txt
+patch*.py
 
 # Dataset / large archives (anchored to repo root so src/data/ is never ignored)
 /data/
@@ -41,3 +48,4 @@ Thumbs.db
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
