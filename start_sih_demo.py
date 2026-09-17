@@ -3,7 +3,7 @@ One-Click Master Launcher for Cognitive EW SmartScan SIH Demonstration.
 
 Starts:
   1. FastAPI Backend (port 8000) with frozen candidate Gate-25k-R4.2-alpha020
-  2. Vite React Frontend (port 5173) SMARTSCAN_EW_FRONTEND_APP
+  2. Vite React Frontend (port 5173) frontend
   3. Live Closed-Loop RF Stream feeding real TSRD scenario data dwell-by-dwell
      with progressive score convergence (non-staged, causal evaluation).
 
@@ -36,8 +36,8 @@ if hasattr(sys.stdout, "reconfigure"):
         pass
 
 REPO_ROOT = Path(__file__).resolve().parent
-BACKEND_DIR = REPO_ROOT / "cognitive_ew_smart_scan"
-FRONTEND_DIR = REPO_ROOT / "SMARTSCAN_EW_FRONTEND_APP"
+BACKEND_DIR = REPO_ROOT / "ew_core"
+FRONTEND_DIR = REPO_ROOT / "frontend"
 
 
 def check_port(host: str, port: int, timeout: float = 0.5) -> bool:
@@ -169,7 +169,7 @@ def main() -> int:
             sys.executable,
             "-m",
             "uvicorn",
-            "src.deployment.api:app",
+            "ew_core.deployment.api:app",
             "--host",
             "0.0.0.0",
             "--port",
