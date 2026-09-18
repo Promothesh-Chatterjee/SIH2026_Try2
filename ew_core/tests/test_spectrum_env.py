@@ -1,4 +1,11 @@
-"""Unit and property tests for Phase 1: SpectrumEnvironment and Emitter Models."""
+"""Unit and property tests for Phase 1: SpectrumEnvironment, Emitter Models, and Simulator Integration."""
+
+import sys
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 import numpy as np
 import pytest
@@ -12,6 +19,9 @@ from ew_core.environment.emitter_models import (
 )
 from ew_core.environment.spectrum_env import SpectrumEnvironment
 from ew_core.environment.simulator_adapter import SimulatorAdapter
+from rf_simulation.band_energy_estimator import BandEnergyEstimator
+from rf_simulation.flowgraphs.freq_hopping_emitter import FrequencyHoppingEmitter
+
 
 
 class TestEmitterModels:
@@ -23,7 +33,6 @@ class TestEmitterModels:
         assert emitter.get_band(100) == 5
 
         # pri=4, duty_cycle=0.5 -> active on slots 0, 1; inactive on 2, 3
-        # for t in 0..7
         expected_active = [True, True, False, False, True, True, False, False]
         actual_active = [emitter.step(t) for t in range(8)]
         assert actual_active == expected_active
@@ -230,6 +239,28 @@ class TestSpectrumEnvironment:
         assert len(log["chosen_bands"]) == t_steps
         assert len(log["active_bands_per_step"]) == t_steps
 
+    def test_all_three_emitters_mixed_episode(self):
+        """Phase 1 Gate Condition: Episode with all 3 emitter types runs and accurately tracks truth matrix."""
+        emitters = [
+            StaticEmitter(band_idx=1, duty_cycle=1.0, pri=1, emitter_id=1),
+            FreqAgileEmitter(hop_set=[3, 4], hop_interval=2, pattern="fixed", emitter_id=2),
+            PeriodicScanEmitter(scan_period=6, dwell_time=2, scan_pattern=[6, 7], emitter_id=3),
+        ]
+        env = SpectrumEnvironment(n_bands=10, t_steps=12, emitter_configs=emitters)
+        obs, info = env.reset(seed=99)
+        truth = env.get_truth_matrix()
+
+        assert truth.shape == (10, 12)
+        # Check static emitter at band 1
+        assert np.all(truth[1, :])
+
+        # Step through episode and verify each step
+        for t in range(12):
+            active_truth = [b for b in range(10) if truth[b, t]]
+            obs, reward, terminated, truncated, step_info = env.step(1)
+            assert sorted(step_info["active_bands"]) == sorted(active_truth)
+            assert reward == 1.0  # Tuned to band 1 which is always active
+
 
 class TestSimulatorAdapter:
     def test_simulator_adapter_python_mode(self):
@@ -241,3 +272,110 @@ class TestSimulatorAdapter:
         assert obs.shape == (16,)
         obs, reward, terminated, truncated, info = env.step(3)
         assert "hit" in info
+
+    def test_simulator_adapter_gnuradio_mode_fallback(self):
+        """SimulatorAdapter in 'gnuradio' mode falls back gracefully when ZMQ stream is offline."""
+        adapter = SimulatorAdapter(
+            mode="gnuradio",
+            n_bands=16,
+            t_steps=20,
+            zmq_endpoint="tcp://127.0.0.1:55599",
+            timeout_ms=50,
+        )
+        env = adapter.get_env()
+        obs, info = env.reset(seed=42)
+        assert obs.shape == (16,)
+        obs, reward, terminated, truncated, info = env.step(0)
+        assert obs.shape == (16,)
+        env.close()
+
+    def test_simulator_adapter_gnuradio_live_zmq(self):
+        """SimulatorAdapter in 'gnuradio' mode receives live energy vectors over ZMQ."""
+        import zmq
+        import time
+
+        port = 55566
+        pub_endpoint = f"tcp://127.0.0.1:{port}"
+        sub_endpoint = f"tcp://127.0.0.1:{port}"
+
+        ctx = zmq.Context.instance()
+        pub = ctx.socket(zmq.PUB)
+        pub.bind(pub_endpoint)
+
+        adapter = SimulatorAdapter(
+            mode="gnuradio",
+            n_bands=8,
+            t_steps=10,
+            zmq_endpoint=sub_endpoint,
+            timeout_ms=500,
+        )
+        env = adapter.get_env()
+        env.reset(seed=1)
+
+        # Allow ZMQ connection handshake
+        time.sleep(0.1)
+
+        # Publish a synthetic energy vector with distinct high energy on band 5
+        test_energy = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 99.5, 0.1, 0.1], dtype=np.float32)
+        pub.send(test_energy.tobytes())
+        time.sleep(0.05)
+
+        obs, reward, terminated, truncated, info = env.step(2)
+        assert obs.shape == (8,)
+        assert np.isclose(obs[5], 99.5, atol=1e-3)
+
+        env.close()
+        pub.close()
+
+
+class TestBandEnergyEstimator:
+    def test_band_energy_computation(self):
+        """BandEnergyEstimator accurately resolves tones into their respective frequency slices."""
+        n_bands = 8
+        sample_rate = 8000.0
+        samples_per_slot = 256
+        estimator = BandEnergyEstimator(
+            n_bands=n_bands,
+            sample_rate=sample_rate,
+            samples_per_slot=samples_per_slot,
+        )
+
+        # Generate a tone centered in band index 6
+        # Frequency bins: [-4000 .. +4000], band 6 is in positive frequency region
+        freq = 2500.0
+        t = np.arange(samples_per_slot) / sample_rate
+        tone = np.exp(1j * 2 * np.pi * freq * t).astype(np.complex64)
+
+        energy = estimator.compute_energy_vector(tone)
+        assert energy.shape == (n_bands,)
+        assert energy.dtype == np.float32
+        # Highest energy must be in band 6
+        assert np.argmax(energy) == 6
+
+    def test_band_energy_process_stream(self):
+        """BandEnergyEstimator process_stream chunks continuous IQ correctly."""
+        estimator = BandEnergyEstimator(n_bands=4, sample_rate=1000.0, samples_per_slot=50)
+        total_samples = 200  # 4 slots
+        iq = (np.random.randn(total_samples) + 1j * np.random.randn(total_samples)).astype(np.complex64)
+
+        matrix = estimator.process_stream(iq)
+        assert matrix.shape == (4, 4)
+        assert matrix.dtype == np.float32
+
+
+class TestFrequencyHoppingFlowgraph:
+    def test_frequency_hopping_sample_generation(self):
+        """FrequencyHoppingEmitter synthesizes expected IQ samples and hops."""
+        emitter = FrequencyHoppingEmitter(
+            samp_rate=1e5,
+            hop_frequencies=[-20e3, 0.0, 20e3],
+            hop_interval_s=0.01,
+            pulse_width_s=0.005,
+            pri_s=0.01,
+            pattern="fixed",
+        )
+        samples = emitter.generate_samples(duration_s=0.03)  # 3 hops
+        assert len(samples) == 3000
+        assert samples.dtype == np.complex64
+        # Assert non-zero RF energy was generated
+        assert np.max(np.abs(samples)) > 0.0
