@@ -11,6 +11,7 @@ world_mode: "stare"
 observation_mode: "scan"
 training_mode: "real_tsrd"
 deinterleaver_ckpt: "experiments/checkpoints/deinterleaver/best.pt"
+scheduler_ckpt: "experiments/checkpoints/scheduler/checkpoint_step_26000_arme.pt"
 normalization_stats: "experiments/checkpoints/deinterleaver/normalization_stats.json"
 deinterleaver:
   batch_size: 8
@@ -26,15 +27,20 @@ deinterleaver:
   val_mode: "scan"
 
 scheduler:
+  version: "v2"
   action_selection_mode: "flat_argmax"
-  total_timesteps: 500000
+  start_step: 26000
+  total_timesteps: 40000
+  freeze_advantage_head: true
+  learning_rate: 2.5e-5
   replay_buffer_size: 50000
   batch_size: 32
   seq_len: 16                   # DRQN sequence length for BPTT
   burn_in: 8                    # leading window steps: LSTM warm-up, excluded from loss
   update_freq: 4
-  target_update_freq: 1000
-  thompson_warmup_steps: 5000   # Use Thompson Sampling before DRQN exploitation
+  target_update_freq: 250
+  thompson_warmup_steps: 0      # Post-warmup continuation (v2 state already trained)
+
 
 environment:
   n_bands: 36

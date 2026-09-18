@@ -2,7 +2,7 @@
 
 ## 1. Executive Statement of Architectural Causality
 
-This document provides a formal audit proving that the **47.45% canonical interception rate** ($+682$ hits / $+16.8\%$ relative lift over Phase 6) achieved by the **Gate-110k Cognitive Champion** is strictly causal, mathematically sound, and free of future-data or oracle leakage.
+This document provides a formal audit proving that the **62.10% standalone interception rate** achieved by the **v2 DRQN Champion** is strictly causal, mathematically sound, and free of future-data or oracle leakage.
 
 ### **Operational Designation**:
 $$\mathbf{ALL\ SOFTWARE\ OPERATIONAL-READINESS\ GATES\ PASSED\ —\ OPERATIONAL\ DEMONSTRATION\ READY}$$
@@ -29,7 +29,7 @@ graph LR
         TP --> RM["Reservation Manager<br/>(Deadline t_deadline)"]
         PDW --> ST["Spatial Tracker<br/>(Circular Mean & R)"]
         
-        Q["Frozen DRQN (110k)<br/>Q(s, a)"] --> Arb["SmartScanMoE Arbitration<br/>(Stochastic Expected Utility)"]
+        Q["Frozen DRQN (v2)<br/>Q(s, a)"] --> Arb["SmartScanMoE Arbitration<br/>(Stochastic Expected Utility)"]
         ABM --> Arb
         TP --> Arb
         RM --> Arb
@@ -108,10 +108,10 @@ Consider an active track (Track 1) following a 1st-order Markov transition with 
 
 A critical architectural invariant of the Phase 7 scheduler is the strict separation between learned neural representations and deterministic post-network arbitration:
 
-$$\mathbb{E}[U(b, m)] = \underbrace{Q(b, m)}_{\text{Learned Neural (Frozen 110k)}} - \underbrace{\lambda_d C_{\text{dwell}}(m)}_{\text{Deterministic Resource Cost}} + \underbrace{\sum_{p \in \text{preds}} \left[ P_p(b) \cdot U_{\text{hit}, p}(b, m) - (1 - P_p(b)) \cdot \lambda_t \cdot 0.15 \right]}_{\text{Deterministic Post-Network Predictive & Spatial Arbitration}}$$
+$$\mathbb{E}[U(b, m)] = \underbrace{Q(b, m)}_{\text{Learned Neural (Frozen v2)}} - \underbrace{\lambda_d C_{\text{dwell}}(m)}_{\text{Deterministic Resource Cost}} + \underbrace{\sum_{p \in \text{preds}} \left[ P_p(b) \cdot U_{\text{hit}, p}(b, m) - (1 - P_p(b)) \cdot \lambda_t \cdot 0.15 \right]}_{\text{Deterministic Post-Network Predictive & Spatial Arbitration}}$$
 
 1. **Learned Neural Component ($Q(b, m)$)**:
-   - Evaluated by the frozen DRQN network ($\theta_{\text{frozen}}$ from `checkpoint_gate_110000.pt`, SHA-256: `43617494...`).
+   - Evaluated by the frozen DRQN network ($\theta_{\text{frozen}}$ from `checkpoint_gate_25000_frozen.pt` / `best.pt`, SHA-256: `7a99c659...`).
    - Receives the canonical 360-dimensional observation vector $s_t$ (synthesized from channel occupancy, cumulative detection counts, and recurrent hidden state $h_{t-1}$).
    - Generates raw uncalibrated Q-values across all 180 canonical actions (36 bands $\times$ 5 dwell modes).
    - Undergoes **zero backpropagation, zero fine-tuning, and zero gradient updates** during inference.

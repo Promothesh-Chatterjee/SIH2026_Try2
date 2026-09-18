@@ -403,7 +403,8 @@ def evaluate_canonical_gate(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate canonical gate")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/scheduler/checkpoint_gate_110000.pt")
+    parser.add_argument("--checkpoint", type=str, default="experiments/checkpoints/scheduler/best.pt")
+
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--output", type=str, default="results/canonical_gate_phase6.json")
     parser.add_argument("--policy", type=str, default="all", help="all | gate100k_ar | t1_predictive_utility | <policy_name>")

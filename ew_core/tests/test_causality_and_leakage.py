@@ -76,10 +76,13 @@ def test_future_pulse_invariance_leakage_audit():
         "base_dwell_time_us": 500.0,
     }
 
-    ckpt_path = Path("experiments/checkpoints/scheduler/checkpoint_gate_110000.pt")
+    ckpt_path = Path("experiments/checkpoints/scheduler/best.pt")
     if not ckpt_path.exists():
-        ckpt_path = Path("checkpoints/scheduler/checkpoint_gate_110000.pt")
+        ckpt_path = Path("experiments/checkpoints/scheduler/checkpoint_step_25500.pt")
+    if not ckpt_path.exists():
+        ckpt_path = Path("experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt")
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+
     drqn = DRQNScheduler(obs_dim=360, n_bands=36, n_modes=5, n_actions=180, lstm_hidden=256, lstm_layers=2)
     drqn.load_state_dict(ckpt["state_dict"])
     drqn.eval()

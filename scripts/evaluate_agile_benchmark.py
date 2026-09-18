@@ -637,7 +637,8 @@ def evaluate_policy_on_agile(
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate Agile Benchmark Suite (AG-01 to AG-10)")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/scheduler/checkpoint_gate_110000.pt")
+    parser.add_argument("--checkpoint", type=str, default="experiments/checkpoints/scheduler/best.pt")
+
     parser.add_argument("--steps", type=int, default=500)
     parser.add_argument("--policy", type=str, default="gate100k_ar", help="gate100k_ar | round_robin | drqn | t0_predictive_candidates | t1_predictive_utility | all")
     parser.add_argument("--predictor-only", action="store_true", help="Run offline causal evaluation of TemporalPredictor")

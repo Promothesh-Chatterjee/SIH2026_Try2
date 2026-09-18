@@ -194,11 +194,11 @@ def build_dashboard():
 <header>
   <div class="logo-title">
     <h2>COGNITIVE EW SMART SCAN SCHEDULER</h2>
-    <span class="badge">Gate-110k-Phase7 Operational Candidate</span>
+    <span class="badge">v2 DRQN Operational Candidate</span>
     <span class="badge badge-green">ALL SOFTWARE GATES PASSED -- DEMO READY</span>
   </div>
   <div style="color: var(--text-muted); font-size: 11px;">
-    Frozen Neural DRQN (110k) + Deterministic Cognitive Arbitration
+    Frozen Neural DRQN (v2) + Dynamic Cognitive Scanning
   </div>
 </header>
 

@@ -7,7 +7,7 @@ Verifies:
   3.  Blind Interception: Zero ground-truth emitter_ids ingested or accessed.
   4.  Timebase Monotonicity: Single authoritative MissionClock for retune and dwell apertures.
   5.  Observation State Contract: 360-D vector, all features bounded in [0.0, 1.0].
-  6.  Frozen 110k Model Gate: Exact SHA-256 hash match on checkpoint_gate_110000.pt.
+  6.  Frozen v2 Model Gate: Exact SHA-256 hash match on checkpoint_gate_25000_frozen.pt.
   7.  Model Failure Refusal: Missing model returns HTTP 503 / refuses fallback.
   8.  Receiver Disconnect / Hardware Fault: Graceful degraded state without crash.
   9.  Malformed / Out-of-Spec PDW Handling: Robust rejection of NaN/Inf without crash.
@@ -53,10 +53,12 @@ from ew_core.operational.receiver_adapter import ReceiverHardwareError
 @pytest.fixture
 def frozen_checkpoint_path() -> Path:
     candidates = [
-        Path("experiments/checkpoints/scheduler/checkpoint_gate_110000.pt"),
-        Path("checkpoints/scheduler/checkpoint_gate_110000.pt"),
+        Path("experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt"),
+        Path("checkpoints/scheduler/checkpoint_gate_25000_frozen.pt"),
+        Path("experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt"),
     ]
     return next((p for p in candidates if p.exists()), candidates[0])
+
 
 
 @pytest.fixture
@@ -193,17 +195,17 @@ def test_05_observation_state_contract():
     assert builder.validate_state(obs) is True
 
 
-# ── Criterion 6: Frozen 110k Model Gate ──────────────────────────────────────
-
-def test_06_frozen_110k_model_integrity(frozen_checkpoint_path: Path):
-    """Criterion 6: Checkpoint matches exact Phase 7 SHA-256 hash (frozen network)."""
+# ── Criterion 6: Frozen v2 Model Gate ─────────────────────────────────────────
+ 
+def test_06_frozen_v2_model_integrity(frozen_checkpoint_path: Path):
+    """Criterion 6: Checkpoint matches exact v2 frozen SHA-256 hash (frozen network)."""
     assert frozen_checkpoint_path.exists(), f"Missing {frozen_checkpoint_path}"
     hasher = hashlib.sha256()
     with open(frozen_checkpoint_path, "rb") as f:
         while chunk := f.read(65536):
             hasher.update(chunk)
     actual_hash = hasher.hexdigest()
-    expected_hash = "43617494a8b0655ec272fc16c05c6ec2c1ca45ad150780b858ce37f9df38fd67"
+    expected_hash = "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
     assert actual_hash == expected_hash, f"Checkpoint hash mismatch! Retraining or modification detected: {actual_hash}"
 
 

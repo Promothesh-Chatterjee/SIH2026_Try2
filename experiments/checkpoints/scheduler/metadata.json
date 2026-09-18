@@ -1,0 +1,42 @@
+{
+  "arch": "DRQNScheduler_v2_BandAdvantageRouting",
+  "version": "v2.0-canonical",
+  "artifacts": [
+    "best.pt",
+    "checkpoint_step_25500.pt",
+    "checkpoint_gate_25000_frozen.pt",
+    "checkpoint_step_26000_arme.pt"
+  ],
+  "feature_order_per_band": [
+    "occupancy",
+    "det_rate",
+    "miss_rate",
+    "uncertainty",
+    "revisit_age",
+    "emitter_count",
+    "deint_confidence",
+    "pri_stability",
+    "agility",
+    "priority"
+  ],
+  "routing": "band_localized_advantage_routing",
+  "belief_miss_decay": {
+    "ema_alpha": 0.30,
+    "ema_alpha_miss_confirmed": 0.20
+  },
+  "metrics": {
+    "canonical_mean_ir_10scenarios": 0.6210,
+    "agile_ir": 0.4997,
+    "sparse_ir": 0.2070,
+    "worst_case_ir": 0.1620,
+    "decision_pd": 0.9984,
+    "pfa": 0.0000
+  },
+  "n_bands": 36,
+  "n_modes": 5,
+  "n_actions": 180,
+  "obs_dim": 360,
+  "seed": 42,
+  "champion_step": 25500,
+  "continuation_step": 26000
+}

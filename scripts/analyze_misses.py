@@ -4,7 +4,7 @@ from pathlib import Path
 from ew_core.evaluation.miss_classifier import HierarchicalMissClassifier
 from ew_core.evaluation.miss_logger import DecisionRecord
 
-def analyze_all_misses(telemetry_dir: str = 'results/post110k/telemetry') -> None:
+def analyze_all_misses(telemetry_dir: str = 'results/operational/telemetry') -> None:
     p_dir = Path(telemetry_dir)
     files = list(p_dir.glob('*.json'))
     if not files:
@@ -72,10 +72,10 @@ def analyze_all_misses(telemetry_dir: str = 'results/post110k/telemetry') -> Non
         pct = (count / max(1, total_misses)) * 100
         md_lines.append(f'| {sc} | {count} | {pct:.1f}% |')
 
-    out_md = Path('results/post110k/MISS_ROOT_CAUSE_SUMMARY.md')
+    out_md = Path('results/operational/MISS_ROOT_CAUSE_SUMMARY.md')
     out_md.parent.mkdir(parents=True, exist_ok=True)
     out_md.write_text('\n'.join(md_lines), encoding='utf-8')
-    print('Generated results/post110k/MISS_ROOT_CAUSE_SUMMARY.md successfully')
+    print('Generated results/operational/MISS_ROOT_CAUSE_SUMMARY.md successfully')
 
 if __name__ == '__main__':
     analyze_all_misses()

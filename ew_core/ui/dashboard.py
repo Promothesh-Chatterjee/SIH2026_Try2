@@ -172,7 +172,7 @@ def build_dashboard_html(telemetry_json_str: str, summary_metrics: Dict[str, Any
 <header>
   <div class="logo-title">
     <h2>COGNITIVE EW SMART SCAN SCHEDULER</h2>
-    <span class="badge">Gate-110k Champion</span>
+    <span class="badge">v2 DRQN Champion</span>
     <span class="badge" style="border-color: rgba(16,185,129,0.4); color: var(--green);">Spatial & Agile Active</span>
   </div>
   <div style="color: var(--text-muted);">
@@ -512,9 +512,10 @@ updateUI(0);
 
 
 def run_operational_scenario(
-    checkpoint_path: str = "checkpoints/scheduler/checkpoint_gate_110000.pt",
+    checkpoint_path: str = "experiments/checkpoints/scheduler/best.pt",
     scenario_id: str = "config_194",
     n_steps: int = 150,
+
     export_html_path: Optional[str] = "results/operational_dashboard.html",
 ) -> List[Dict[str, Any]]:
     """Execute scenario through the OperationalReceiverController and export interactive dashboard."""
@@ -651,7 +652,8 @@ def run_operational_scenario(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Operational Dashboard")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/scheduler/checkpoint_gate_110000.pt")
+    parser.add_argument("--checkpoint", type=str, default="experiments/checkpoints/scheduler/best.pt")
+
     parser.add_argument("--scenario", type=str, default="config_194")
     parser.add_argument("--steps", type=int, default=150)
     parser.add_argument("--export", type=str, default="results/operational_dashboard.html")

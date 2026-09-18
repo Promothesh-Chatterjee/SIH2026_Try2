@@ -1,7 +1,7 @@
-﻿"""Prediction-vs-Exploration Arbitration Ablation.
+"""Prediction-vs-Exploration Arbitration Ablation.
 
-Evaluates 4 configurations on Gate-110k Champion:
-  A: Baseline 110k (T1 predictive utility)
+Evaluates configurations on v2 Champion:
+  A: Baseline v2 (T1 predictive utility)
   B: + Dirichlet smoothing (alpha=0.1, evidence-grounded)
   C: + Cognitive exploration guard (conf=0.45, eta=500us)
   D: + Both (Dirichlet + Guard)
@@ -149,8 +149,9 @@ def run_episode(
 
 
 def main():
-    checkpoint_path = "checkpoints/scheduler/checkpoint_gate_110000.pt"
+    checkpoint_path = "experiments/checkpoints/scheduler/best.pt"
     ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+
 
     drqn = DRQNScheduler(
         n_bands=CANONICAL_N_BANDS,
@@ -254,11 +255,11 @@ def main():
         }
 
     print("\n" + "="*80, flush=True)
-    print("PREDICTION-VS-EXPLORATION ARBITRATION ABLATION (GATE-110K)", flush=True)
+    print("PREDICTION-VS-EXPLORATION ARBITRATION ABLATION (v2 CHAMPION)", flush=True)
     print("="*80, flush=True)
 
     configs = [
-        ("A: Baseline 110k (T1)", 0.0, False, 0.45, 500.0),
+        ("A: Baseline v2 (T1)", 0.0, False, 0.45, 500.0),
         ("B: + Dirichlet (a=0.1)", 0.1, False, 0.45, 500.0),
         ("C: + Guard (c=0.45, eta=500)", 0.0, True, 0.45, 500.0),
         ("D: + Both (Dirichlet + Guard)", 0.1, True, 0.45, 500.0),
@@ -306,8 +307,8 @@ def main():
             "metrics": best_res,
         }
     }
-    Path("results/post110k").mkdir(parents=True, exist_ok=True)
-    with open("results/post110k/arbitration_ablation_results.json", "w") as f:
+    Path("results").mkdir(parents=True, exist_ok=True)
+    with open("results/arbitration_ablation_results.json", "w") as f:
         json.dump(out_dict, f, indent=2)
 
 
