@@ -27,6 +27,7 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import asyncio
@@ -38,6 +39,72 @@ import numpy as np
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Phase 4 module-level evaluation state
+_latest_episode_metrics: Optional[dict[str, Any]] = None
+_latest_spectrum_data: Optional[dict[str, Any]] = None
+
+
+def _default_metrics_payload() -> dict[str, Any]:
+    return {
+        "pd": 0.0,
+        "pfa": 0.0,
+        "sensitivity_dbm": -140.0,
+        "avg_intercept_rate": 0.0,
+        "avg_reward": 0.0,
+        "pct_correct_predictions": 0.0,
+        "avg_intercept_time_error_us": 0.0,
+        "n_intercepts": 0,
+        "n_false_alarms": 0,
+        "n_total_transmissions": 0,
+        "n_receiver_dwells": 0,
+        "n_missed_dwells": 0,
+        "status": "uninitialized",
+    }
+
+
+def _default_spectrum_payload() -> dict[str, Any]:
+    return {
+        "truth_matrix": [],
+        "receiver_positions": [],
+        "emitter_ids": [],
+        "status": "uninitialized",
+    }
+
+
+def update_latest_evaluation_data(
+    metrics: Any,
+    spectrum_data: dict[str, Any],
+) -> None:
+    """Update module-level evaluation cache served by /api/v1/metrics and /api/v1/spectrum."""
+    global _latest_episode_metrics, _latest_spectrum_data
+    if is_dataclass(metrics):
+        _latest_episode_metrics = asdict(metrics)
+    elif isinstance(metrics, dict):
+        _latest_episode_metrics = dict(metrics)
+    else:
+        _latest_episode_metrics = metrics
+
+    clean_spectrum: dict[str, Any] = {"status": "ready"}
+    if "truth_matrix" in spectrum_data:
+        tm = spectrum_data["truth_matrix"]
+        clean_spectrum["truth_matrix"] = tm.tolist() if hasattr(tm, "tolist") else list(tm)
+    else:
+        clean_spectrum["truth_matrix"] = []
+
+    if "receiver_positions" in spectrum_data:
+        rp = spectrum_data["receiver_positions"]
+        clean_spectrum["receiver_positions"] = rp.tolist() if hasattr(rp, "tolist") else list(rp)
+    else:
+        clean_spectrum["receiver_positions"] = []
+
+    if "emitter_ids" in spectrum_data:
+        ei = spectrum_data["emitter_ids"]
+        clean_spectrum["emitter_ids"] = ei.tolist() if hasattr(ei, "tolist") else list(ei)
+    else:
+        clean_spectrum["emitter_ids"] = []
+
+    _latest_spectrum_data = clean_spectrum
 
 import torch
 import yaml
@@ -939,6 +1006,24 @@ def get_metrics() -> dict[str, Any]:
         "distinct_bands": 29.9,
     }
     return out
+
+
+@app.get("/api/v1/metrics", tags=["telemetry", "metrics"])
+def get_api_v1_metrics() -> dict[str, Any]:
+    """Retrieve latest EW Figures of Merit (FoMs) from the last completed evaluation."""
+    if _latest_episode_metrics is None:
+        return _default_metrics_payload()
+    if is_dataclass(_latest_episode_metrics):
+        return asdict(_latest_episode_metrics)
+    return dict(_latest_episode_metrics)
+
+
+@app.get("/api/v1/spectrum", tags=["telemetry", "spectrum"])
+def get_api_v1_spectrum() -> dict[str, Any]:
+    """Retrieve latest spectrum environment ground truth and receiver tracking telemetry."""
+    if _latest_spectrum_data is None:
+        return _default_spectrum_payload()
+    return dict(_latest_spectrum_data)
 
 
 @app.get("/telemetry/latest", tags=["telemetry"])
