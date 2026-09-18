@@ -617,25 +617,22 @@ async def lifespan(app: FastAPI):  # type: ignore
     scheduler_ckpts = [
         PACKAGE_ROOT / "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt",
         Path("experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"),
+        PACKAGE_ROOT / "experiments/checkpoints/scheduler/best.pt",
+        Path("experiments/checkpoints/scheduler/best.pt"),
+        PACKAGE_ROOT / "checkpoints/scheduler/best.pt",
+        Path("checkpoints/scheduler/best.pt"),
+        PACKAGE_ROOT / "experiments/checkpoints/scheduler/checkpoint_step_25500.pt",
+        Path("experiments/checkpoints/scheduler/checkpoint_step_25500.pt"),
+        PACKAGE_ROOT / "experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt",
+        Path("experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt"),
         Path("checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"),
         PACKAGE_ROOT / "checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt",
         PACKAGE_ROOT / "experiments/checkpoints/onnx/scheduler.onnx",
         Path("experiments/checkpoints/onnx/scheduler.onnx"),
         Path("checkpoints/onnx/scheduler.onnx"),
         PACKAGE_ROOT / "checkpoints/onnx/scheduler.onnx",
-        PACKAGE_ROOT / "experiments/checkpoints/scheduler/checkpoint_gate_110000.pt",
-        Path("experiments/checkpoints/scheduler/checkpoint_gate_110000.pt"),
-        Path("checkpoints/scheduler/checkpoint_gate_110000.pt"),
-        PACKAGE_ROOT / "checkpoints/scheduler/checkpoint_gate_110000.pt",
-        PACKAGE_ROOT / "experiments/checkpoints/scheduler/best.pt",
-        Path("experiments/checkpoints/scheduler/best.pt"),
-        Path("checkpoints/scheduler/best.pt"),
-        PACKAGE_ROOT / "checkpoints/scheduler/best.pt",
-        PACKAGE_ROOT / "experiments/checkpoints/scheduler/final.pt",
-        Path("experiments/checkpoints/scheduler/final.pt"),
-        Path("checkpoints/scheduler/final.pt"),
-        PACKAGE_ROOT / "checkpoints/scheduler/final.pt",
     ]
+
     ckpt_env = os.getenv("SCHEDULER_CHECKPOINT")
     if ckpt_env:
         scheduler_ckpts.insert(0, Path(ckpt_env))
@@ -1415,7 +1412,7 @@ async def mission_start(req: MissionStartRequest, request: Request) -> dict[str,
     if controller is None:
         raise HTTPException(
             status_code=503,
-            detail="OperationalReceiverController not initialised (trained Gate-110k scheduler required)",
+            detail="OperationalReceiverController not initialised (trained v2 scheduler required)",
         )
     try:
         controller.start_mission(initial_time_us=req.initial_time_us)
@@ -1454,7 +1451,7 @@ def mission_step(req: MissionStepRequest, request: Request) -> MissionStepRespon
     if controller is None:
         raise HTTPException(
             status_code=503,
-            detail="OperationalReceiverController not initialised (trained Gate-110k scheduler required)",
+            detail="OperationalReceiverController not initialised (trained v2 scheduler required)",
         )
     if not controller.is_mission_active:
         controller.start_mission(initial_time_us=controller.clock_us)

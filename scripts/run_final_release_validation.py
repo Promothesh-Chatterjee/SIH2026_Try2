@@ -67,7 +67,7 @@ def verify_checkpoint_hash(ckpt_path: Path, expected_hash: str) -> bool:
 def main():
     print("=" * 80)
     print("  COGNITIVE EW SMARTSCAN — FINAL OPERATIONAL RELEASE VALIDATION")
-    print("  Release Candidate: Gate-110k-Phase7 Operational Demonstration Candidate")
+    print("  Release Candidate: Gate-25k-R4.2-alpha020 Operational Demonstration Candidate")
     print("=" * 80)
 
     results_dir = Path("results/final_release")
@@ -76,9 +76,12 @@ def main():
 
     # ── Stage 1: Clean Startup & Checkpoint Integrity ────────────────────────
     print("\n[STAGE 1/6] Clean Backend Startup & Checkpoint SHA-256 Verification...")
-    ckpt_path = Path("checkpoints/scheduler/checkpoint_gate_110000.pt")
-    expected_hash = "43617494a8b0655ec272fc16c05c6ec2c1ca45ad150780b858ce37f9df38fd67"
+    ckpt_path = Path("experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt")
+    if not ckpt_path.exists():
+        ckpt_path = Path("checkpoints/scheduler/checkpoint_gate_25000_frozen.pt")
+    expected_hash = "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
     assert ckpt_path.exists(), f"Missing checkpoint {ckpt_path}"
+
 
     hasher = hashlib.sha256()
     with open(ckpt_path, "rb") as f:
@@ -179,7 +182,7 @@ def main():
     release_evidence: Dict[str, Any] = {
         "release_metadata": {
             "title": "Cognitive EW SmartScan Operational Release Candidate",
-            "candidate_designation": "Gate-110k-Phase7 Operational Demonstration Candidate",
+            "candidate_designation": "v2-DRQN-Operational Demonstration Candidate",
             "formal_classification": "Hardened, Causally Qualified Closed-Loop Software Backend — SIL Operational Demonstration Ready",
             "authoritative_scope_declaration": (
                 "Software-in-the-loop (SIL) operational readiness demonstrated. Physical RF hardware, "

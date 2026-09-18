@@ -1,7 +1,7 @@
 """
 Phase 7 Operational Readiness Gate Runner.
 
-Comprehensive test suite evaluating the Gate-110k Champion under deterministic
+Comprehensive test suite evaluating the v2 DRQN Champion under deterministic
 cognitive arbitration across 4 formal operational gates:
 - Gate A: Canonical Held-Out Gate (Pd >= 40.63%, Latency <= 27.0 us, H2H >= 7/10, Pfa=0, Escape=100%)
 - Gate B: Agile Stress Battery (AG-01 to AG-10, non-inferiority on AG-04/08/10, lift on AG-01/02/05/06)
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 def run_gate_a(checkpoint_path: str, seed: int = 42) -> Dict[str, Any]:
     """Evaluate Gate A: Canonical Held-Out Validation Suite."""
     logger.info("=== EVALUATING GATE A: CANONICAL HELD-OUT GATE ===")
-    report_path = Path("results/post110k/canonical_gate_phase7.json")
+    report_path = Path("results/canonical_gate_v2.json")
     if report_path.exists():
         with open(report_path) as f:
             report = json.load(f)
@@ -279,8 +279,9 @@ def run_gate_d(checkpoint_path: str, n_cycles: int = 1000, seed: int = 42) -> Di
 
 def main():
     parser = argparse.ArgumentParser(description="Phase 7 Operational Readiness Gate Runner")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/scheduler/checkpoint_gate_110000.pt")
-    parser.add_argument("--output", type=str, default="results/post110k/operational_readiness_report.json")
+    parser.add_argument("--checkpoint", type=str, default="experiments/checkpoints/scheduler/best.pt")
+    parser.add_argument("--output", type=str, default="results/operational_readiness_report.json")
+
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -295,7 +296,7 @@ def main():
     all_passed = gate_a["passed"] and gate_b["passed"] and gate_c["passed"] and gate_d["passed"]
 
     report = {
-        "benchmark_designation": "Gate-110k-Phase6-Cognitive-Champion Operational Readiness",
+        "benchmark_designation": "v2-DRQN-Champion Operational Readiness",
         "checkpoint": args.checkpoint,
         "seed": args.seed,
         "all_gates_passed": all_passed,
@@ -317,7 +318,7 @@ def main():
 
     # Print clean summary table
     print("\n" + "=" * 90)
-    print("PHASE 7 OPERATIONAL READINESS GATE SUMMARY: GATE-110K COGNITIVE CHAMPION")
+    print("PHASE 7 OPERATIONAL READINESS GATE SUMMARY: v2 DRQN CHAMPION")
     print("=" * 90)
     print(f"{'Gate':<35} | {'Status':<10} | {'Key Metric / Target':<40}")
     print("-" * 90)

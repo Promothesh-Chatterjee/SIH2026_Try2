@@ -2,7 +2,7 @@
 Interactive / Automated Operational Demonstration of the Cognitive EW Smart Scan Pipeline.
 
 Demonstrates the complete end-to-end operational pipeline for the
-Gate-110k-Phase7 Operational Demonstration Candidate:
+v2 DRQN Operational Demonstration Candidate:
   PDW Ingest -> Tracker -> ABM -> Predictor / Reservation -> Spatial Tracker ->
   Arbitration ("WHY THIS BAND?" Attribution) -> Receiver Actuation -> Intercept.
 
@@ -101,7 +101,7 @@ def render_step_card(step: int, t_now: float, obs_summary: dict, action: int,
 def run_demo(
     scenario_type: str = "canonical",
     scenario_id: str = "config_194",
-    checkpoint_path: str = "checkpoints/scheduler/checkpoint_gate_110000.pt",
+    checkpoint_path: str = "experiments/checkpoints/scheduler/best.pt",
     n_steps: int = 50,
     interactive: bool = False,
     pause_sec: float = 0.05,
@@ -111,8 +111,9 @@ def run_demo(
     """Execute the end-to-end operational pipeline demonstration."""
     print("=" * 80)
     print("  COGNITIVE EW SMART SCAN SCHEDULER -- OPERATIONAL PIPELINE DEMONSTRATION")
-    print("  Reference: Gate-110k-Phase7 Operational Demonstration Candidate")
+    print("  Reference: Gate-25k-R4.2-alpha020 / Gate-25.5k Champion")
     print(f"  Checkpoint: {checkpoint_path}")
+
     print(f"  Scenario  : {scenario_type.upper()} ({scenario_id}) | Steps: {n_steps} | Seed: {seed}")
     print("=" * 80)
 
@@ -319,7 +320,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Operational Demonstration of Cognitive EW Smart Scan Pipeline")
     parser.add_argument("--scenario-type", choices=["canonical", "agile"], default="canonical", help="Scenario family")
     parser.add_argument("--scenario-id", default="config_194", help="Specific scenario ID (e.g. config_194, AG-04, AG-08)")
-    parser.add_argument("--checkpoint", default="checkpoints/scheduler/checkpoint_gate_110000.pt", help="Frozen checkpoint")
+    parser.add_argument("--checkpoint", default="experiments/checkpoints/scheduler/best.pt", help="Frozen checkpoint")
+
     parser.add_argument("--steps", type=int, default=30, help="Number of demonstration cycles")
     parser.add_argument("--interactive", action="store_true", help="Step through one cycle at a time")
     parser.add_argument("--pause", type=float, default=0.02, help="Pause seconds between cycles in non-interactive mode")

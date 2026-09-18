@@ -2,14 +2,14 @@
 End-to-End Operational Receiver Controller for Cognitive EW Scanning.
 
 Architectural Contract:
-    MissionClock -> OperationalStateBuilder (360-D) -> SmartScanMoE (Frozen 110k) ->
+    MissionClock -> OperationalStateBuilder (360-D) -> SmartScanMoE (Frozen v2) ->
     ReceiverAdapter (Retune + Dwell) -> Physical RF Extraction ->
     EmitterTracker (Unsupervised Association) -> Temporal & Spatial Feedback -> Telemetry
 
 CRITICAL GOVERNANCE RULES:
     1. The controller MUST NOT contain an independent scheduling policy.
        Scheduling authority is strictly:
-           TemporalPredictor + SpatialTracker + Gate-110k SmartScanMoE
+           TemporalPredictor + SpatialTracker + v2 DRQN Scheduler
     2. ZERO dependence on ground-truth emitter IDs during live operation.
        Interception, association, and tracking operate purely on measured physical attributes:
            (frequency_mhz, time_us, pulse_width_us, amplitude_db, aoa_deg)

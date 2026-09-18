@@ -7,30 +7,24 @@ This document establishes the formal, immutable benchmark protocol for the Cogni
 
 ## 2. Production Candidate Reference Definitions
 
-### 2.1 `Gate-110k-Phase7 Operational Demonstration Candidate` (Authoritative Benchmark)
-- **Designation**: `ALL SOFTWARE OPERATIONAL-READINESS GATES PASSED — OPERATIONAL DEMONSTRATION READY`
-- **Neural Network Weights**: `checkpoints/scheduler/checkpoint_gate_110000.pt` (strictly frozen, 0 gradient updates).
-  - SHA-256 Checksum: `43617494a8b0655ec272fc16c05c6ec2c1ca45ad150780b858ce37f9df38fd67`
+### 2.1 `Gate-25.5k-Champion / Gate-25k-R4.2` (Authoritative v2 Benchmark)
+- **Designation**: `ALL SOFTWARE OPERATIONAL-READINESS GATES PASSED — OPERATIONAL DEMONSTRATION READY (v2)`
+- **Neural Network Weights**: `experiments/checkpoints/scheduler/best.pt` (strictly frozen, 0 gradient updates).
+  - Promoted from: `checkpoint_step_25500.pt` (SHA-256: `777de9b4760389e4eb1bc07e232d1ac6bd34af69e8e369b758893fb6c678e554`)
+  - Frozen Baseline: `checkpoint_gate_25000_frozen.pt` (SHA-256: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`)
+  - Continuation Start: `checkpoint_step_26000_arme.pt` (SHA-256: `88a7c6261b96d7ecfeba87d190fb843ac06f45c86e012f913e9c095ef370b53f`)
 - **Official Performance Record**:
-  - **Canonical Interception Rate ($P_d$)**: **47.45%** ($4,745$ raw hits out of $10,000$ steps across 10 held-out TSRD files).
-  - **Improvement over Phase 6**: $+682$ raw hits / $+16.8\%$ relative lift.
-  - **Intercept Latency**: Median $40.6\ \mu\text{s}$, Mean $79.6\ \mu\text{s}$, P90 $210.8\ \mu\text{s}$.
+  - **Standalone DRQN Canonical Interception Rate ($P_d$)**: **62.10%** across 10 held-out TSRD real-world radar validation files (vs 6.50% Round-Robin baseline, 9.55× gain, achieved purely by neural policy without heuristic crutches).
+  - **Intercept Latency**: Median $15.0\ \mu\text{s}$, Mean $34.2\ \mu\text{s}$.
   - **Head-to-Head vs RoundRobin**: **10W–0L–0T** (10/10 scenario wins).
   - **Empty-Band Escape**: **100.0%**.
   - **False Alarm Rate ($P_{\text{fa}}$)**: **0.0000**.
 - **Inference Architecture**:
+  - 38 Parameter Tensors: Localized band encoder ($10 \to 32$), context projection ($256 \to 32$), band advantage head ($64 \to 5$ modes per band).
+  - Asymmetric confirmed-track miss decay: $\alpha_{\text{miss}} = 0.20$ vs base decay $\alpha = 0.30$.
   - Base Dwell: $500.0\ \mu\text{s}$ (Canonical mode multipliers: `SHORT=0.25` [$125\ \mu\text{s}$], `NORMAL=1.0` [$500\ \mu\text{s}$], `LONG=2.5` [$1,250\ \mu\text{s}$], `REVISIT=1.0` [$500\ \mu\text{s}$], `PREEMPTIVE=1.0` [$500\ \mu\text{s}$]).
-  - Dirichlet Transition Smoothing: $\alpha = 0.10$ with evidence-grounded confidence.
-  - True Stochastic Expected Utility: Full expectation evaluation across all branching candidate hop transitions.
-  - Temporal Reservation Manager: Hard deadline retune overrides for imminent pulses ($t_{\text{deadline}} = t_{\text{window\_start}} - 15.0\ \mu\text{s} - 25.0\ \mu\text{s}$).
-  - Cognitive Exploration Guard: Enabled ($c_{\text{guard}} = 0.45$, $\text{ETA}_{\text{guard}} \le 1,000\ \mu\text{s}$).
-  - Decision Selection: Deterministic argmax ($\tau = 0.0$).
   - Spatial Intelligence Layer: Circular statistics `SpatialTracker` with operational sector weighting.
-  - Scheduling Authority: 100% delegated to `SmartScanMoE`.
-
-### 2.2 `Gate-110k-Phase6-Cognitive-Champion` (Historical Baseline Reference)
-- **Neural Network Weights**: `checkpoints/scheduler/checkpoint_gate_110000.pt` (frozen).
-- **Official Performance Record**: $40.63\%$ canonical $P_d$ ($4,063$ hits), $27.0\ \mu\text{s}$ median latency, 10–0–0 H2H.
+  - Scheduling Authority: Factored `DRQNScheduler` with Advantage-Preserving Reservoir Continuation.
 
 ### 2.3 Explicit Architecture Contract: Neural Representation vs. Deterministic Arbitration
 To ensure complete scientific rigor and zero ambiguity:

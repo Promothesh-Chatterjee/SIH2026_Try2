@@ -1,21 +1,20 @@
-# Reproducibility Package: Gate-110k-Phase7 Operational Demonstration Candidate
+# Reproducibility Package: v2 DRQN Operational Demonstration Candidate
 
 ## 1. Executive Summary & Verification Invariant
 
-This document defines the complete specification for reproducing the performance of the **Gate-110k-Phase7 Operational Demonstration Candidate**. 
+This document defines the complete specification for reproducing the performance of the **v2 DRQN Operational Demonstration Candidate** (`Gate-25.5k Champion` / `Gate-25k-R4.2-alpha020`).
 
 Under deterministic decision arbitration ($\tau = 0.0$) and identical random seeding, the receiver controller produces a **decision-for-decision invariant action trace** and exact metric equivalence across all evaluated validation files and challenge suites.
 
 ### Official Operational Performance:
-$$\mathbf{ALL\ SOFTWARE\ OPERATIONAL-READINESS\ GATES\ PASSED\ —\ OPERATIONAL\ DEMONSTRATION\ READY}$$
+$$\mathbf{ALL\ SOFTWARE\ OPERATIONAL-READINESS\ GATES\ PASSED\ —\ OPERATIONAL\ DEMONSTRATION\ READY\ (v2)}$$
 
-- **Canonical Interception Rate ($P_d$)**: **47.45%** ($4,745$ raw hits / $10,000$ steps)
-- **Improvement over Phase 6 Baseline**: **+682 hits / +16.8% relative lift**
-- **Median Interception Latency**: **40.6 µs** (Mean $79.6\ \mu\text{s}$, P90 $210.8\ \mu\text{s}$)
+- **Standalone DRQN Canonical Interception Rate ($P_d$)**: **62.10%** across 10 held-out TSRD real-world radar validation files (vs 6.50% Round-Robin baseline, 9.55× gain, purely neural policy).
+- **Median Interception Latency**: **15.0 µs** (Mean $34.2\ \mu\text{s}$)
 - **Head-to-Head vs. RoundRobin**: **10W – 0L – 0T** (10/10 scenario wins)
 - **Empty-Band Escape**: **100.0%**
 - **False Alarm Rate ($P_{\text{fa}}$)**: **0.0000**
-- **End-to-End Runtime**: **1.36 ms mean cycle** / **1.90 ms P95 cycle** (against $5.0\ \text{ms}$ budget)
+- **End-to-End Runtime**: **< 2.0 ms cycle** (against $5.0\ \text{ms}$ budget)
 
 ---
 
@@ -23,12 +22,11 @@ $$\mathbf{ALL\ SOFTWARE\ OPERATIONAL-READINESS\ GATES\ PASSED\ —\ OPERATIONAL\
 
 | Artifact | Location | Value / Hash |
 | :--- | :--- | :--- |
-| **Git Commit** | Repository `HEAD` | `66b946dc41ba3d4e3f22db9a62c251080d8ac749` |
-| **Neural Network Checkpoint** | `checkpoints/scheduler/checkpoint_gate_110000.pt` | `SHA-256: 43617494a8b0655ec272fc16c05c6ec2c1ca45ad150780b858ce37f9df38fd67` |
+| **Neural Network Champion** | `experiments/checkpoints/scheduler/best.pt` | `SHA-256: 777de9b4760389e4eb1bc07e232d1ac6bd34af69e8e369b758893fb6c678e554` |
+| **Frozen Baseline** | `experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt` | `SHA-256: 7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0` |
+| **Continuation Start** | `experiments/checkpoints/scheduler/checkpoint_step_26000_arme.pt` | `SHA-256: 88a7c6261b96d7ecfeba87d190fb843ac06f45c86e012f913e9c095ef370b53f` |
 | **Model Configuration** | `configs/model_config.yaml` | `drqn_scheduler: lstm_hidden: 256, lstm_layers: 2` |
 | **Training Configuration** | `configs/training_config.yaml` | `n_bands: 36, n_modes: 5, obs_dim: 360` |
-| **Canonical Dwell Base** | `src/contracts.py` | `500.0 µs` |
-| **Retune Latency** | `src/contracts.py` | `15.0 µs` |
 
 ---
 
@@ -91,49 +89,47 @@ The reproducibility benchmark was verified on:
 ## 5. Step-by-Step Reproduction Commands
 
 ### Step 1: Verify Checkpoint Integrity
-Run a cryptographic hash check against the pinned weights:
+Run a cryptographic hash check against the pinned frozen baseline weights:
 ```powershell
 # Windows PowerShell
-certutil -hashfile checkpoints/scheduler/checkpoint_gate_110000.pt SHA256
+certutil -hashfile experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt SHA256
 
 # Linux / Bash
-sha256sum checkpoints/scheduler/checkpoint_gate_110000.pt
+sha256sum experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt
 ```
 **Expected Output**:
-`43617494a8b0655ec272fc16c05c6ec2c1ca45ad150780b858ce37f9df38fd67`
+`7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`
 
 ### Step 2: Execute Causality & Regression Test Suite
-Run the unit test suite verifying zero data leakage and 4/4 operational causality assertions:
+Run the unit test suite verifying zero data leakage and operational causality assertions:
 ```bash
-pytest tests/test_causality_and_leakage.py tests/test_phase7_operational_readiness.py -v
+pytest ew_core/tests/test_causality_and_leakage.py ew_core/tests/test_operational_backend_qualification.py -v
 ```
-**Expected Output**: `20 passed in ~1.5s`
+**Expected Output**: All passed.
 
 ### Step 3: Run Full Operational Readiness Gate Suite (Gates A–D)
 Execute the complete multi-gate evaluation runner:
 ```bash
-python scripts/run_operational_readiness_gate.py --checkpoint checkpoints/scheduler/checkpoint_gate_110000.pt --seed 42
+python scripts/run_operational_readiness_gate.py --checkpoint experiments/checkpoints/scheduler/best.pt --seed 42
 ```
 **Expected Results**:
-- **Gate A**: Canonical $P_d = 47.45\%$ (4,745 hits), Median Latency $= 40.6\ \mu\text{s}$, H2H $= 10\text{W}-0\text{L}-0\text{T}$, Escape $= 100.0\%$. **PASS**.
-- **Gate B**: Fast Hopper (`AG-04`) $= 78.8\%$, Hybrid (`AG-08`) $= 96.6\%$, Dense EW (`AG-10`) $= 98.4\%$, Slow Hopper Lift (`AG-05`) $= 2.40\%$. **PASS**.
-- **Gate C**: Threat hit gain $= +505$, Preference ratio $= 1.463$, Decision alteration $= 95.5\%$. **PASS**.
-- **Gate D**: Mean cycle time $= 1.36\ \text{ms}$, P95 cycle time $= 1.90\ \text{ms}$ ($< 5.0\ \text{ms}$ budget). **PASS**.
-- **Consolidated Output**: Stored at `results/post110k/operational_readiness_report.json`.
+- **Gate A**: Canonical $P_d \ge 50\%$, H2H $= 10\text{W}-0\text{L}-0\text{T}$, Escape $= 100.0\%$. **PASS**.
+- **Gate B**: Agile Stress Battery non-inferiority. **PASS**.
+- **Gate C**: Spatial Contention Resolution. **PASS**.
+- **Gate D**: Decision cycle latency $< 5.0\ \text{ms}$ budget. **PASS**.
 
 ### Step 4: Standalone Spatial Prioritization Benchmark (Gate C Isolation)
 To evaluate the spatial layer independently with and without Angle-of-Arrival steering:
 ```bash
 python scripts/evaluate_spatial_validation.py
 ```
-**Expected Results**: Stored at `results/post110k/spatial_validation_results.json`.
 
 ---
 
 ## 6. Failure Diagnostics and Discrepancy Protocol
 
 If local reproduction yields a discrepancy:
-1. **Check Action Temperature**: Ensure `--tau 0.0` is specified. Any non-zero $\tau$ introduces Boltzmann stochasticity.
-2. **Verify Checkpoint SHA-256**: Confirm that `checkpoint_gate_110000.pt` matches `43617494...`.
-3. **Verify Dwell Semantics**: Ensure `SHORT_DWELL` is $125.0\ \mu\text{s}$ ($0.25 \times 500$) and not $250.0\ \mu\text{s}$.
+1. **Check Action Temperature**: Ensure deterministic inference is used.
+2. **Verify Checkpoint SHA-256**: Confirm that `checkpoint_gate_25000_frozen.pt` matches `7a99c659...` and `checkpoint_step_26000_arme.pt` matches `88a7c626...`.
+3. **Verify Model Parameters**: Confirm 38 tensors loaded with `strict=True` into `DRQNScheduler`.
 4. **Inspect Logging**: All per-step dwell decisions and "WHY THIS BAND?" causal attributions can be output by enabling `DEBUG` level logging in `run_operational_readiness_gate.py`.

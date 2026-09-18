@@ -2,7 +2,7 @@
 Unified Operational Demonstration CLI Runner.
 
 Executes the formal 10-Step Operational Demonstration Package for the
-Gate-110k-Phase7 Operational Demonstration Candidate:
+v2 DRQN Operational Demonstration Candidate:
 
   1. Backend Startup & Initialization
   2. Mission Self-Test & State Verification
@@ -118,14 +118,17 @@ def run_mission(
     """Execute the full 10-step operational mission demonstration."""
     print("=" * 80)
     print("  COGNITIVE EW SMARTSCAN — CLOSED-LOOP OPERATIONAL DEMONSTRATION")
-    print("  Candidate: Gate-110k-Phase7 Operational Demonstration Candidate")
+    print("  Candidate: Gate-25k-R4.2-alpha020 / Gate-25.5k Champion Candidate")
     print("=" * 80)
 
     # ── Step 1: Backend Startup & Initialization ─────────────────────────────
     print("\n[STEP 1/10] Initializing Closed-Loop Backend Hardware & Neural Models...")
-    checkpoint_path = Path("checkpoints/scheduler/checkpoint_gate_110000.pt")
+    checkpoint_path = Path("experiments/checkpoints/scheduler/best.pt")
+    if not checkpoint_path.exists():
+        checkpoint_path = Path("experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt")
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Missing required frozen checkpoint: {checkpoint_path}")
+
 
     # Load frozen DRQN
     drqn = DRQNScheduler(
@@ -184,7 +187,7 @@ def run_mission(
     )
     print("  -> Hardware-Abstracted ReceiverAdapter: ONLINE (IBW=500MHz, Sens=-140dBm)")
     print("  -> Authoritative MissionClock: ONLINE (t=0.0 us, Monotonic)")
-    print("  -> Frozen Gate-110k DRQN + SmartScanMoE: ONLINE (180 Actions, 360-D State)")
+    print("  -> Frozen v2 DRQN Scheduler: ONLINE (180 Actions, 360-D State)")
 
     # ── Step 2: Mission Self-Test & State Verification ───────────────────────
     print("\n[STEP 2/10] Running Mission Self-Test & Contract Verification...")
@@ -351,7 +354,7 @@ def run_mission(
 
     report: Dict[str, Any] = {
         "mission_metadata": {
-            "candidate": "Gate-110k-Phase7 Operational Demonstration Candidate",
+            "candidate": "v2-DRQN-Operational Demonstration Candidate",
             "formal_designation": "Hardened, Causally Qualified Closed-Loop Software Backend (SIL Operational Demonstration Ready)",
             "scope_declaration": (
                 "Software-in-the-loop operational readiness demonstrated. Physical RF hardware, "

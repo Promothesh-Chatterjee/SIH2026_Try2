@@ -122,13 +122,13 @@ def get_or_load_eval_drqn(custom_drqn: Optional[DRQNScheduler] = None) -> Option
         return _CACHED_DRQN
 
     for p in [
-        Path("checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"),
-        Path("experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"),
-        Path("checkpoints/scheduler/checkpoint_gate_100000.pt"),
-        Path("checkpoints/scheduler/checkpoint_gate_110000.pt"),
+        Path("experiments/checkpoints/scheduler/best.pt"),
+        Path("experiments/checkpoints/scheduler/checkpoint_step_25500.pt"),
+        Path("experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt"),
+        Path("experiments/checkpoints/scheduler/checkpoint_step_26000_arme.pt"),
         Path("checkpoints/scheduler/best.pt"),
-        Path("checkpoints/scheduler/final.pt"),
-        Path("checkpoints/scheduler_smoke/best.pt"),
+        Path("checkpoints/scheduler/checkpoint_step_25500.pt"),
+        Path("checkpoints/scheduler/checkpoint_gate_25000_frozen.pt"),
     ]:
         if p.exists():
             try:

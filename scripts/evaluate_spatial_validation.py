@@ -119,7 +119,8 @@ def generate_frequency_overlap_scenario(
 
 
 def evaluate_spatial_pairing(
-    checkpoint_path: str = "checkpoints/scheduler/checkpoint_gate_110000.pt",
+    checkpoint_path: str = "experiments/checkpoints/scheduler/best.pt",
+
     n_steps: int = 1000,
     seed: int = 42,
 ) -> Dict[str, Any]:
@@ -262,7 +263,7 @@ def evaluate_spatial_pairing(
     print(f"{'Decision Alteration Rate':<35} | {'—':<20} | {alteration_rate*100:<19.1f}% | {alteration_rate*100:.1f}%")
     print("=" * 90)
 
-    out_p = Path("results/post110k/spatial_validation_results.json")
+    out_p = Path("results/spatial_validation_results.json")
     out_p.parent.mkdir(parents=True, exist_ok=True)
     with open(out_p, "w") as f:
         json.dump(results, f, indent=2)
@@ -272,7 +273,8 @@ def evaluate_spatial_pairing(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate spatial validation")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/scheduler/checkpoint_gate_110000.pt")
+    parser.add_argument("--checkpoint", type=str, default="experiments/checkpoints/scheduler/best.pt")
+
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()

@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-A core operational requirement for the **Gate-110k-Phase7 Operational Demonstration Candidate** is complete failure transparency. Rather than concealing misses behind aggregate metrics, the scheduler provides real-time causal telemetry explaining:
+A core operational requirement for the **v2 DRQN Operational Demonstration Candidate** is complete failure transparency. Rather than concealing misses behind aggregate metrics, the scheduler provides real-time causal telemetry explaining:
 1. Why an intercept succeeded (which neural and deterministic factors produced the hit).
 2. Why an intercept was missed (identifying primary and secondary root causes within partial observability limits).
 
