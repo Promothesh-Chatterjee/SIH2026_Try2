@@ -13,6 +13,21 @@ dependencies = [
     "hdbscan>=0.8.33",
     "scikit-learn>=1.4",
     "stable-baselines3>=2.3",
+
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+    "httpx>=0.27.0",
+
+    "pyyaml>=6.0",
+    "h5py>=3.10.0",
+    "matplotlib>=3.8.0",
+    "pandas>=2.2.0",
+
+    "python-dotenv>=1.0.0",
+    "websockets>=12.0",
+    "pydantic>=2.7.0",
+    "psutil>=5.9.0",
+    "pyzmq>=26.0.0"
 ]
 
 [project.optional-dependencies]
