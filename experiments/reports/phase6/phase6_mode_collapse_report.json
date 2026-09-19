@@ -90,6 +90,7 @@
       "status": "PASS",
       "details": {
         "checks": {
+          "false_alarm_does_not_populate_first_hit": true,
           "total_mission_time_us": true,
           "ir_per_dwell": true,
           "ir_per_ms": true,
@@ -102,8 +103,8 @@
           "ir_per_ms": 1.0416666666666667,
           "first_hit_latency_us": 50.0,
           "mission_time_to_first_intercept_ms": 0.655,
-          "reward_per_dwell": 7.166666666666667,
-          "reward_per_ms": 11.197916666666668
+          "reward_per_dwell": 7.0,
+          "reward_per_ms": 10.9375
         }
       }
     },

@@ -167,6 +167,58 @@ def test_gate_6_2_no_hit_timing_defaults_to_none():
     assert canon.ir_per_ms == 0.0
 
 
+def test_gate_6_2_false_alarm_does_not_populate_first_hit():
+    """Verify that false alarms (FP) do not populate first-hit metrics, while a subsequent true hit (TP) does."""
+    fom = FiguresOfMerit()
+
+    # Step 1: Dwell 125 us, Retune 15 us => total mission time = 140 us
+    # False alarm on inactive band 0 (spurious detection)
+    fom.record_reward_components({
+        "dwell_time_us": 125.0,
+        "retune_latency_us": 15.0,
+        "physical_step_time_us": 140.0,
+    })
+    fom.update(
+        band_chosen=0,
+        ground_truth_active=False,
+        pred_active=True,
+        intercept_time_error_us=30.0,
+        reward=-1.0,
+    )
+
+    # Step 1 asserts: false alarm must NOT register as a hit or populate first-hit metrics
+    assert fom.fp == 1
+    assert fom.n_false_alarms == 1
+    assert fom.tp == 0
+    assert fom.n_hits == 0
+    assert fom.first_hit_mission_time_us is None
+    assert fom.first_hit_latency_us is None
+    assert fom.mission_time_to_first_intercept_ms is None
+
+    # Step 2: Dwell 500 us, Retune 15 us => total physical time = 140 + 515 = 655 us
+    # Genuine hit on active band 1 with real intercept latency of 42.0 us
+    fom.record_reward_components({
+        "dwell_time_us": 500.0,
+        "retune_latency_us": 15.0,
+        "physical_step_time_us": 515.0,
+    })
+    fom.update(
+        band_chosen=1,
+        ground_truth_active=True,
+        pred_active=True,
+        intercept_time_error_us=42.0,
+        reward=10.0,
+    )
+
+    # Step 2 asserts: genuine hit MUST populate first-hit metrics matching step 2 timing
+    assert fom.tp == 1
+    assert fom.n_hits == 1
+    assert fom.fp == 1
+    assert fom.first_hit_mission_time_us == pytest.approx(655.0, abs=1e-5)
+    assert fom.first_hit_latency_us == pytest.approx(42.0, abs=1e-5)
+    assert fom.mission_time_to_first_intercept_ms == pytest.approx(0.655, abs=1e-5)
+
+
 # ==============================================================================
 # Gate 6.3: Counterfactual Dwell Analysis & Minimum Sufficient Dwell
 # ==============================================================================
