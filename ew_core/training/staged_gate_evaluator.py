@@ -423,6 +423,9 @@ class StagedGateEvaluator:
                     spectrum_active_opportunities=int(fom.get("spectrum_active_opportunities", 0)),
                     total_reward=float(ep_reward),
                     manifest=manifest,
+                    total_mission_time_us=env.fom.total_mission_time_us,
+                    first_hit_latency_us=env.fom.first_hit_latency_us,
+                    mission_time_to_first_intercept_ms=env.fom.mission_time_to_first_intercept_ms,
                 )
 
                 res = {
@@ -447,6 +450,18 @@ class StagedGateEvaluator:
                     "mode_entropy": canon.mode_entropy,
                     "top_band_fraction": canon.top_band_fraction,
                     "top_action_fraction": canon.top_action_fraction,
+                    "short_fraction": canon.short_fraction,
+                    "normal_fraction": canon.normal_fraction,
+                    "long_fraction": canon.long_fraction,
+                    "revisit_fraction": canon.revisit_fraction,
+                    "preemptive_fraction": canon.preemptive_fraction,
+                    "ir_per_dwell": canon.ir_per_dwell,
+                    "ir_per_ms": canon.ir_per_ms,
+                    "reward_per_dwell": canon.reward_per_dwell,
+                    "reward_per_ms": canon.reward_per_ms,
+                    "first_hit_latency_us": canon.first_hit_latency_us,
+                    "mission_time_to_first_intercept_ms": canon.mission_time_to_first_intercept_ms,
+                    "total_mission_time_ms": canon.total_mission_time_ms,
                     "manifest": manifest.to_dict(),
                 }
                 all_policy_results[policy_name].append(res)
@@ -501,6 +516,18 @@ class StagedGateEvaluator:
                 "pfa": float(np.mean([r["pfa"] for r in records_list if r["pfa"] is not None])) if any(r["pfa"] is not None for r in records_list) else None,
                 "avg_intercept_time_us": float(np.mean([r["avg_intercept_time_us"] for r in records_list if r["avg_intercept_time_us"] is not None])) if any(r["avg_intercept_time_us"] is not None for r in records_list) else None,
                 "band_entropy": float(np.mean([r["band_entropy"] for r in records_list if r["band_entropy"] is not None])) if any(r["band_entropy"] is not None for r in records_list) else None,
+                "mode_entropy": float(np.mean([r["mode_entropy"] for r in records_list if r.get("mode_entropy") is not None])) if any(r.get("mode_entropy") is not None for r in records_list) else None,
+                "short_fraction": float(np.mean([r["short_fraction"] for r in records_list])),
+                "normal_fraction": float(np.mean([r["normal_fraction"] for r in records_list])),
+                "long_fraction": float(np.mean([r["long_fraction"] for r in records_list])),
+                "revisit_fraction": float(np.mean([r["revisit_fraction"] for r in records_list])),
+                "preemptive_fraction": float(np.mean([r["preemptive_fraction"] for r in records_list])),
+                "ir_per_dwell": float(np.mean([r["ir_per_dwell"] for r in records_list])),
+                "ir_per_ms": float(np.mean([r["ir_per_ms"] for r in records_list])),
+                "reward_per_dwell": float(np.mean([r["reward_per_dwell"] for r in records_list])),
+                "reward_per_ms": float(np.mean([r["reward_per_ms"] for r in records_list])),
+                "first_hit_latency_us": float(np.mean([r["first_hit_latency_us"] for r in records_list if r.get("first_hit_latency_us") is not None])) if any(r.get("first_hit_latency_us") is not None for r in records_list) else None,
+                "mission_time_to_first_intercept_ms": float(np.mean([r["mission_time_to_first_intercept_ms"] for r in records_list if r.get("mission_time_to_first_intercept_ms") is not None])) if any(r.get("mission_time_to_first_intercept_ms") is not None for r in records_list) else None,
                 "scenario_breakdown": records_list,
             }
 
@@ -731,6 +758,14 @@ class StagedGateEvaluator:
 
         target_gap_val = float(abs(max_q_val - mean_q_std)) if np.isfinite(max_q_val) else None
         mode_ent_val = float(drqn_p.get("mode_entropy", 0.0)) if "mode_entropy" in drqn_p else None
+        mode_fractions = {
+            "SHORT": float(drqn_p.get("short_fraction", 0.0)),
+            "NORMAL": float(drqn_p.get("normal_fraction", 0.0)),
+            "LONG": float(drqn_p.get("long_fraction", 0.0)),
+            "REVISIT": float(drqn_p.get("revisit_fraction", 0.0)),
+            "PREEMPTIVE": float(drqn_p.get("preemptive_fraction", 0.0)),
+        }
+        base_p = policies_agg.get("baseline", getattr(self, "baseline_metrics", {}) or {})
 
         collapse_diag = self.collapse_detector.evaluate_eval_run(
             step=global_step,
@@ -749,6 +784,13 @@ class StagedGateEvaluator:
             latency_us=float(drqn_p.get("avg_intercept_time_us", 0.0) or 0.0),
             mode_entropy=mode_ent_val,
             target_online_gap=target_gap_val,
+            mode_fractions=mode_fractions,
+            candidate_ir_per_ms=float(drqn_p.get("ir_per_ms", 0.0)),
+            baseline_ir_per_ms=float(base_p.get("ir_per_ms", 0.0)) if base_p else None,
+            candidate_time_to_first_intercept_ms=drqn_p.get("mission_time_to_first_intercept_ms"),
+            baseline_time_to_first_intercept_ms=base_p.get("mission_time_to_first_intercept_ms") if base_p else None,
+            candidate_first_hit_latency_us=drqn_p.get("first_hit_latency_us"),
+            baseline_first_hit_latency_us=base_p.get("first_hit_latency_us") if base_p else None,
         )
 
         checkpoint_tag = collapse_diag.tag

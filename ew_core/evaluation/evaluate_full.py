@@ -614,12 +614,13 @@ def run_full_evaluation(
     controllers_summary: dict[str, dict[str, float]] = {}
     if scheduler is not None:
         controllers_summary["Learned (SmartScanMoE)"] = global_fom.summary()
+        agg.update({f"sched_{k}": (float("nan") if v is None else float(v)) for k, v in global_fom.summary().items()})
 
     for b_name, b_fom in baseline_foms.items():
         summary_dict = b_fom.summary()
         controllers_summary[b_name] = summary_dict
         for k, v in summary_dict.items():
-            agg[f"bl_{b_name}_{k}"] = float(v)
+            agg[f"bl_{b_name}_{k}"] = float("nan") if v is None else float(v)
 
     agg["n_files"] = len(files)
     agg["n_empty_scenarios"] = n_empty_scenarios

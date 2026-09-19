@@ -201,6 +201,16 @@ def compute_canonical_deint_confidence(
     return float(np.clip(np.mean(valid_confs), 0.0, 1.0))
 
 
+def _clip01(val: float) -> float:
+    """Fast scalar clamp to [0.0, 1.0] handling NaN and inf without numpy overhead."""
+    f = float(val)
+    if math.isnan(f) or f <= 0.0:
+        return 0.0
+    if math.isinf(f) or f >= 1.0:
+        return 1.0
+    return f
+
+
 def compute_canonical_pri_stability(
     toas: Optional[Sequence[float]] = None,
     pri_cv: Optional[float] = None,
@@ -216,8 +226,8 @@ def compute_canonical_pri_stability(
         if mean_diff > 0.0:
             std_diff = float(np.std(diffs))
             cv = std_diff / mean_diff
-            return float(np.clip(1.0 / (1.0 + cv), 0.0, 1.0))
-    return float(np.clip(default_stability, 0.0, 1.0))
+            return _clip01(1.0 / (1.0 + cv))
+    return _clip01(default_stability)
 
 
 def compute_canonical_agility(
@@ -229,12 +239,12 @@ def compute_canonical_agility(
     if agility_scores:
         valid_scores = [float(s) for s in agility_scores if math.isfinite(s) and s >= 0.0]
         if valid_scores:
-            return float(np.clip(np.mean(valid_scores), 0.0, 1.0))
+            return _clip01(float(np.mean(valid_scores)))
     if freqs is not None and len(freqs) >= 2:
         f_arr = np.asarray(freqs, dtype=np.float64)
         std_f = float(np.std(f_arr))
-        return float(np.clip(std_f / 100.0, 0.0, 1.0))
-    return float(np.clip(default_agility, 0.0, 1.0))
+        return _clip01(std_f / 100.0)
+    return _clip01(default_agility)
 
 
 def compute_canonical_priority(
@@ -258,14 +268,14 @@ def compute_canonical_priority(
     w_pred = float(w.get("predictive_weight", w.get("periodic_weight", 0.10)))
     w_spat = float(w.get("spatial_weight", w.get("semantic_weight", 0.10)))
 
-    age = float(np.clip(revisit_age_norm, 0.0, 1.0))
-    occ = float(np.clip(occupancy, 0.0, 1.0))
-    unc = float(np.clip(uncertainty, 0.0, 1.0))
-    pred = float(np.clip(predictive_urgency, 0.0, 1.0))
-    spat = float(np.clip(max(spatial_priority, semantic_boost), 0.0, 1.0))
+    age = _clip01(revisit_age_norm)
+    occ = _clip01(occupancy)
+    unc = _clip01(uncertainty)
+    pred = _clip01(predictive_urgency)
+    spat = _clip01(max(spatial_priority, semantic_boost))
 
     score = w_st * age + w_occ * occ + w_unc * unc + w_pred * pred + w_spat * spat
-    return float(np.clip(score, 0.0, 1.0))
+    return _clip01(score)
 
 
 def assemble_canonical_band_features(

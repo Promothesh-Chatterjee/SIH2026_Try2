@@ -1,0 +1,294 @@
+{
+  "phase": 6,
+  "title": "Phase 6: Eliminate Long-Dwell Mode Collapse Qualification Report",
+  "overall_status": "PASS",
+  "passed_gates_count": 6,
+  "total_gates_count": 6,
+  "gates": {
+    "6.1": {
+      "gate": "6.1",
+      "name": "Per-Scenario Mode Diagnostics (SHORT, NORMAL, LONG, REVISIT, PREEMPTIVE)",
+      "status": "PASS",
+      "details": {
+        "config_119": {
+          "short_fraction": 0.25,
+          "normal_fraction": 0.45,
+          "long_fraction": 0.1,
+          "revisit_fraction": 0.15,
+          "preemptive_fraction": 0.05,
+          "sum_fractions": 1.0,
+          "valid": true
+        },
+        "config_241": {
+          "short_fraction": 0.4,
+          "normal_fraction": 0.3,
+          "long_fraction": 0.1,
+          "revisit_fraction": 0.1,
+          "preemptive_fraction": 0.1,
+          "sum_fractions": 0.9999999999999999,
+          "valid": true
+        },
+        "config_29": {
+          "short_fraction": 0.15,
+          "normal_fraction": 0.5,
+          "long_fraction": 0.15,
+          "revisit_fraction": 0.1,
+          "preemptive_fraction": 0.1,
+          "sum_fractions": 1.0,
+          "valid": true
+        },
+        "config_195": {
+          "short_fraction": 0.1,
+          "normal_fraction": 0.2,
+          "long_fraction": 0.5,
+          "revisit_fraction": 0.1,
+          "preemptive_fraction": 0.1,
+          "sum_fractions": 1.0,
+          "valid": true
+        },
+        "AG-01": {
+          "short_fraction": 0.05,
+          "normal_fraction": 0.15,
+          "long_fraction": 0.1,
+          "revisit_fraction": 0.4,
+          "preemptive_fraction": 0.3,
+          "sum_fractions": 1.0,
+          "valid": true
+        },
+        "AG-04": {
+          "short_fraction": 0.5,
+          "normal_fraction": 0.25,
+          "long_fraction": 0.05,
+          "revisit_fraction": 0.1,
+          "preemptive_fraction": 0.1,
+          "sum_fractions": 1.0,
+          "valid": true
+        },
+        "AG-06": {
+          "short_fraction": 0.2,
+          "normal_fraction": 0.2,
+          "long_fraction": 0.2,
+          "revisit_fraction": 0.2,
+          "preemptive_fraction": 0.2,
+          "sum_fractions": 1.0,
+          "valid": true
+        },
+        "AG-07": {
+          "short_fraction": 0.15,
+          "normal_fraction": 0.35,
+          "long_fraction": 0.2,
+          "revisit_fraction": 0.15,
+          "preemptive_fraction": 0.15,
+          "sum_fractions": 1.0,
+          "valid": true
+        }
+      }
+    },
+    "6.2": {
+      "gate": "6.2",
+      "name": "Dwell- vs Physical Time-Normalized Metrics",
+      "status": "PASS",
+      "details": {
+        "checks": {
+          "total_mission_time_us": true,
+          "ir_per_dwell": true,
+          "ir_per_ms": true,
+          "first_hit_latency_us": true,
+          "mission_time_to_first_intercept_ms": true
+        },
+        "measured_values": {
+          "total_mission_time_us": 1920.0,
+          "ir_per_dwell": 0.6666666666666666,
+          "ir_per_ms": 1.0416666666666667,
+          "first_hit_latency_us": 50.0,
+          "mission_time_to_first_intercept_ms": 0.655,
+          "reward_per_dwell": 7.166666666666667,
+          "reward_per_ms": 11.197916666666668
+        }
+      }
+    },
+    "6.3": {
+      "gate": "6.3",
+      "name": "Counterfactual Dwell Analysis (Minimum Sufficient Dwell & Value Inflation)",
+      "status": "PASS",
+      "details": {
+        "audit_a_early_pulse": {
+          "step": 10,
+          "band": 2,
+          "selected_mode": "LONG",
+          "selected_action": 12,
+          "q_values_by_mode": {
+            "SHORT": 4.0,
+            "NORMAL": 0.0,
+            "LONG": 12.0,
+            "REVISIT": 0.0,
+            "PREEMPTIVE": 0.0
+          },
+          "belief_uncertainty": 0.20000000298023224,
+          "belief_revisit_age": 0,
+          "belief_occupancy": 0.0,
+          "outcomes": {
+            "SHORT": {
+              "mode_name": "SHORT",
+              "dwell_us": 125.0,
+              "q_value": 4.0,
+              "intercepted": true,
+              "intercept_latency_us": 35.0,
+              "reward": 12.649999999999999,
+              "reward_per_ms": 90.35714285714283
+            },
+            "NORMAL": {
+              "mode_name": "NORMAL",
+              "dwell_us": 500.0,
+              "q_value": 0.0,
+              "intercepted": true,
+              "intercept_latency_us": 35.0,
+              "reward": 12.649999999999999,
+              "reward_per_ms": 24.5631067961165
+            },
+            "LONG": {
+              "mode_name": "LONG",
+              "dwell_us": 1250.0,
+              "q_value": 12.0,
+              "intercepted": true,
+              "intercept_latency_us": 35.0,
+              "reward": 12.649999999999999,
+              "reward_per_ms": 10.0
+            },
+            "REVISIT": {
+              "mode_name": "REVISIT",
+              "dwell_us": 500.0,
+              "q_value": 0.0,
+              "intercepted": true,
+              "intercept_latency_us": 35.0,
+              "reward": 12.649999999999999,
+              "reward_per_ms": 24.5631067961165
+            },
+            "PREEMPTIVE": {
+              "mode_name": "PREEMPTIVE",
+              "dwell_us": 500.0,
+              "q_value": 0.0,
+              "intercepted": true,
+              "intercept_latency_us": 35.0,
+              "reward": 12.649999999999999,
+              "reward_per_ms": 24.5631067961165
+            }
+          },
+          "minimum_sufficient_mode": "SHORT",
+          "classification": "VALUE_INFLATION",
+          "justification_detail": "LONG chosen despite SHORT being physically sufficient with superior reward/ms (90.4 vs 10.0)"
+        },
+        "audit_b_late_pulse": {
+          "step": 20,
+          "band": 2,
+          "selected_mode": "LONG",
+          "selected_action": 12,
+          "q_values_by_mode": {
+            "SHORT": 4.0,
+            "NORMAL": 0.0,
+            "LONG": 12.0,
+            "REVISIT": 0.0,
+            "PREEMPTIVE": 0.0
+          },
+          "belief_uncertainty": 0.20000000298023224,
+          "belief_revisit_age": 0,
+          "belief_occupancy": 0.0,
+          "outcomes": {
+            "SHORT": {
+              "mode_name": "SHORT",
+              "dwell_us": 125.0,
+              "q_value": 4.0,
+              "intercepted": false,
+              "intercept_latency_us": null,
+              "reward": -1.26,
+              "reward_per_ms": -9.0
+            },
+            "NORMAL": {
+              "mode_name": "NORMAL",
+              "dwell_us": 500.0,
+              "q_value": 0.0,
+              "intercepted": false,
+              "intercept_latency_us": null,
+              "reward": -1.26,
+              "reward_per_ms": -2.4466019417475726
+            },
+            "LONG": {
+              "mode_name": "LONG",
+              "dwell_us": 1250.0,
+              "q_value": 12.0,
+              "intercepted": true,
+              "intercept_latency_us": 785.0,
+              "reward": 8.0,
+              "reward_per_ms": 6.32411067193676
+            },
+            "REVISIT": {
+              "mode_name": "REVISIT",
+              "dwell_us": 500.0,
+              "q_value": 0.0,
+              "intercepted": false,
+              "intercept_latency_us": null,
+              "reward": -1.26,
+              "reward_per_ms": -2.4466019417475726
+            },
+            "PREEMPTIVE": {
+              "mode_name": "PREEMPTIVE",
+              "dwell_us": 500.0,
+              "q_value": 0.0,
+              "intercepted": false,
+              "intercept_latency_us": null,
+              "reward": -1.26,
+              "reward_per_ms": -2.4466019417475726
+            }
+          },
+          "minimum_sufficient_mode": "LONG",
+          "classification": "LEGITIMATE_PHYSICAL_NEED",
+          "justification_detail": "LONG is minimum sufficient dwell (SHORT and NORMAL both miss)"
+        },
+        "trajectory_summary": {
+          "total_decisions": 2,
+          "long_selections": 2,
+          "long_fraction": 1.0,
+          "long_legitimate_count": 1,
+          "long_inflated_count": 1,
+          "long_empty_count": 0,
+          "long_inflation_ratio": 0.5,
+          "diagnostics": "Evaluated 2 steps: 2 LONG dwells (1 value-inflated, 1 legitimate, inflation ratio = 50.0%)"
+        }
+      }
+    },
+    "6.4": {
+      "gate": "6.4",
+      "name": "Behaviorally Justified Mode Diversity Promotion Gate",
+      "status": "PASS",
+      "details": {
+        "justified_dominance_severity": "WARNING",
+        "unjustified_ir_drop_severity": "CRITICAL",
+        "unjustified_lat_degradation_severity": "CRITICAL",
+        "promotion_decision_justified": true,
+        "promotion_decision_unjustified_ir": false,
+        "promotion_decision_unjustified_lat": false
+      }
+    },
+    "6.5": {
+      "gate": "6.5",
+      "name": "Offline Diagnostic Boundary Invariant (Ground Truth Quarantined)",
+      "status": "PASS",
+      "details": {
+        "q_values_unmodified": true,
+        "belief_unmodified": true,
+        "audit_generated_offline": true
+      }
+    },
+    "6.6": {
+      "gate": "6.6",
+      "name": "Frozen Production Baseline SHA-256 Immutability Verification",
+      "status": "PASS",
+      "details": {
+        "checkpoint_path": "experiments\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+        "expected_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+        "actual_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+        "bit_identical": true
+      }
+    }
+  }
+}

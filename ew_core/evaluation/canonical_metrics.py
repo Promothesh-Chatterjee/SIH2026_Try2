@@ -87,6 +87,20 @@ class CanonicalMetrics:
     total_reward: float
     # 7. Manifest Sidecar
     manifest: EvaluationManifest | None = None
+    # 8. Phase 6 Dwell-Mode Distribution Diagnostics (Task 6.1)
+    short_fraction: float = 0.0
+    normal_fraction: float = 0.0
+    long_fraction: float = 0.0
+    revisit_fraction: float = 0.0
+    preemptive_fraction: float = 0.0
+    # 9. Phase 6 Dwell- vs Physical Time-Normalized Throughput & Latency (Task 6.2)
+    ir_per_dwell: float = 0.0
+    ir_per_ms: float = 0.0
+    reward_per_dwell: float = 0.0
+    reward_per_ms: float = 0.0
+    first_hit_latency_us: float | None = None
+    mission_time_to_first_intercept_ms: float | None = None
+    total_mission_time_ms: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -125,6 +139,9 @@ def compute_canonical_metrics(
     spectrum_active_opportunities: int = 0,
     total_reward: float = 0.0,
     manifest: EvaluationManifest | None = None,
+    total_mission_time_us: float | None = None,
+    first_hit_latency_us: float | None = None,
+    mission_time_to_first_intercept_ms: float | None = None,
 ) -> CanonicalMetrics:
     """Authoritative canonical calculation of all EW evaluation figures of merit.
 
@@ -186,6 +203,29 @@ def compute_canonical_metrics(
 
     avg_rew = float(total_reward / steps)
 
+    # Phase 6: Mode fractions (Task 6.1)
+    tot_m = max(1, int(np.sum(m_counts)))
+    short_f = float(m_counts[0] / tot_m) if len(m_counts) > 0 else 0.0
+    normal_f = float(m_counts[1] / tot_m) if len(m_counts) > 1 else 0.0
+    long_f = float(m_counts[2] / tot_m) if len(m_counts) > 2 else 0.0
+    revisit_f = float(m_counts[3] / tot_m) if len(m_counts) > 3 else 0.0
+    preempt_f = float(m_counts[4] / tot_m) if len(m_counts) > 4 else 0.0
+
+    # Phase 6: Dwell- vs Physical Time-Normalized metrics (Task 6.2)
+    tot_ms = max(1e-6, float(total_mission_time_us / 1000.0)) if total_mission_time_us is not None else float(steps * 0.5)
+    ir_dwell = ir
+    ir_ms = float(hits / tot_ms)
+    rew_dwell = avg_rew
+    rew_ms = float(total_reward / tot_ms)
+
+    # First hit metrics (None if 0 hits per Phase 6 specification)
+    if hits <= 0:
+        f_hit_lat = None
+        f_hit_ms = None
+    else:
+        f_hit_lat = first_hit_latency_us
+        f_hit_ms = mission_time_to_first_intercept_ms
+
     return CanonicalMetrics(
         interception_rate=ir,
         hits=hits,
@@ -214,4 +254,16 @@ def compute_canonical_metrics(
         avg_reward=avg_rew,
         total_reward=float(total_reward),
         manifest=manifest,
+        short_fraction=short_f,
+        normal_fraction=normal_f,
+        long_fraction=long_f,
+        revisit_fraction=revisit_f,
+        preemptive_fraction=preempt_f,
+        ir_per_dwell=ir_dwell,
+        ir_per_ms=ir_ms,
+        reward_per_dwell=rew_dwell,
+        reward_per_ms=rew_ms,
+        first_hit_latency_us=f_hit_lat,
+        mission_time_to_first_intercept_ms=f_hit_ms,
+        total_mission_time_ms=tot_ms,
     )

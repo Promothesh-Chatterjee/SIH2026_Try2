@@ -45,6 +45,11 @@ class CollapseThresholds:
     crit_action_entropy: float = 1.0              # Critical if action entropy < this
     min_mode_entropy: float = 0.8                 # Warning if mode entropy < this
     crit_mode_entropy: float = 0.4                # Critical if mode entropy < this
+    # Phase 6 Mode Dominance & Behavioral Justification (Task 6.4)
+    warn_mode_dominance_fraction: float = 0.70    # Warning if any single mode >= 70%
+    crit_mode_dominance_fraction: float = 0.85    # Candidate for collapse if any single mode >= 85%
+    max_allowable_latency_degradation: float = 0.25 # Critical if latency worsens by > 25% relative to baseline
+    max_allowable_ir_ms_drop: float = 0.05        # Critical if IR/ms drops by > 5% relative to baseline
 
     # Latency
     warn_max_latency_us: float = 3500.0           # Warning if mean latency >= this
@@ -199,6 +204,13 @@ class PolicyCollapseDetector:
         latency_us: float | None = None,
         mode_entropy: float | None = None,
         target_online_gap: float | None = None,
+        mode_fractions: dict[str, float] | None = None,
+        candidate_ir_per_ms: float | None = None,
+        baseline_ir_per_ms: float | None = None,
+        candidate_time_to_first_intercept_ms: float | None = None,
+        baseline_time_to_first_intercept_ms: float | None = None,
+        candidate_first_hit_latency_us: float | None = None,
+        baseline_first_hit_latency_us: float | None = None,
     ) -> CollapseDiagnostics:
         """Evaluate full evaluation battery results across scenarios and diversity metrics."""
         reasons: list[str] = []
@@ -233,7 +245,7 @@ class PolicyCollapseDetector:
             is_warn = True
             reasons.append(f"Warning top-action concentration: {top_action_fraction*100:.1f}% >= {self.thresholds.max_top_action_fraction*100:.1f}%")
 
-        # 3. Action Entropy & Mode Entropy
+        # 3. Action Entropy & Mode Entropy / Mode Dominance
         if action_entropy < self.thresholds.crit_action_entropy:
             is_crit = True
             reasons.append(f"Critical low action entropy: {action_entropy:.3f} < {self.thresholds.crit_action_entropy:.3f}")
@@ -241,7 +253,50 @@ class PolicyCollapseDetector:
             is_warn = True
             reasons.append(f"Warning low action entropy: {action_entropy:.3f} < {self.thresholds.min_action_entropy:.3f}")
 
-        if mode_entropy is not None:
+        # Phase 6 Mode Dominance & Behavioral Justification Gate (Task 6.4)
+        if mode_fractions:
+            max_mode, max_frac = max(mode_fractions.items(), key=lambda x: x[1])
+            is_mode_dominant = (max_frac >= self.thresholds.crit_mode_dominance_fraction)
+            is_mode_warning = (max_frac >= self.thresholds.warn_mode_dominance_fraction)
+
+            # Check relative degradation against baseline if baseline provided
+            has_ir_degraded = False
+            has_time_to_intercept_degraded = False
+            has_dwell_latency_degraded = False
+
+            if baseline_ir_per_ms is not None and baseline_ir_per_ms > 0 and candidate_ir_per_ms is not None:
+                delta_ir = (candidate_ir_per_ms - baseline_ir_per_ms) / baseline_ir_per_ms
+                if delta_ir < -self.thresholds.max_allowable_ir_ms_drop:
+                    has_ir_degraded = True
+
+            if (baseline_time_to_first_intercept_ms is not None and baseline_time_to_first_intercept_ms > 0 
+                    and candidate_time_to_first_intercept_ms is not None):
+                delta_t = (candidate_time_to_first_intercept_ms - baseline_time_to_first_intercept_ms) / baseline_time_to_first_intercept_ms
+                if delta_t > self.thresholds.max_allowable_latency_degradation:
+                    has_time_to_intercept_degraded = True
+
+            if (baseline_first_hit_latency_us is not None and baseline_first_hit_latency_us > 0
+                    and candidate_first_hit_latency_us is not None):
+                delta_lat = (candidate_first_hit_latency_us - baseline_first_hit_latency_us) / baseline_first_hit_latency_us
+                if delta_lat > self.thresholds.max_allowable_latency_degradation:
+                    has_dwell_latency_degraded = True
+
+            if is_mode_dominant:
+                # Mode dominance alone is NOT a failure. It is pathological ONLY if unjustified by throughput/latency
+                if has_ir_degraded or has_time_to_intercept_degraded or has_dwell_latency_degraded:
+                    is_crit = True
+                    reasons.append(
+                        f"Pathological mode collapse: {max_mode} dominates ({max_frac*100:.1f}%) with unjustified performance degradation "
+                        f"(IR/ms degraded={has_ir_degraded}, time-to-first-intercept degraded={has_time_to_intercept_degraded}, dwell latency degraded={has_dwell_latency_degraded})"
+                    )
+                else:
+                    is_warn = True
+                    reasons.append(f"Behaviorally justified mode concentration: {max_mode} accounts for {max_frac*100:.1f}% while preserving time-normalized performance")
+            elif is_mode_warning:
+                is_warn = True
+                reasons.append(f"Warning mode concentration: {max_mode} accounts for {max_frac*100:.1f}%")
+
+        elif mode_entropy is not None:
             if mode_entropy < self.thresholds.crit_mode_entropy:
                 is_crit = True
                 reasons.append(f"Critical low mode entropy: {mode_entropy:.3f} < {self.thresholds.crit_mode_entropy:.3f}")
