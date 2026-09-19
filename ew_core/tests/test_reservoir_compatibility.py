@@ -120,13 +120,15 @@ class TestReservoirCompatibility:
         # Populate a mock continuation buffer with 500 transitions
         cont_buf = SequenceReplayBuffer(capacity=10000, seq_len=16, burn_in=8)
         rng = np.random.default_rng(42)
+        curr_obs = rng.standard_normal(360).astype(np.float32)
         for t in range(500):
-            obs = rng.standard_normal(360).astype(np.float32)
+            obs = curr_obs
             act = int(rng.integers(0, 180))
             rew = float(rng.uniform(-1, 1))
             next_obs = rng.standard_normal(360).astype(np.float32)
             done = bool((t + 1) % 100 == 0)
             cont_buf.add(obs, act, rew, next_obs, done, scenario_id="mock_scen")
+            curr_obs = rng.standard_normal(360).astype(np.float32) if done else next_obs
 
         sampler = MultiSourceReplaySampler(
             baseline_buffer=base_buf,

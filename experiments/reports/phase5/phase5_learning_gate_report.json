@@ -1,0 +1,205 @@
+{
+  "phase": 5,
+  "title": "DRQN v2 Learning Algorithm Correction Qualification",
+  "overall_status": "PASS",
+  "gates_total": 10,
+  "gates_passed": 10,
+  "gates": [
+    {
+      "gate": "5.1",
+      "name": "DRQN Architecture (360 -> LayerNorm -> LSTM(2x256) -> Band-Routed Dueling 180-Q + 2 Aux)",
+      "status": "PASS",
+      "details": {
+        "obs_dim": 360,
+        "n_actions": 180,
+        "lstm_hidden": 256,
+        "lstm_layers": 2,
+        "band_routing_active": true,
+        "output_q_shape": [
+          2,
+          16,
+          180
+        ],
+        "aux_prob_shape": [
+          2,
+          16,
+          180
+        ],
+        "aux_time_shape": [
+          2,
+          16,
+          180
+        ]
+      }
+    },
+    {
+      "gate": "5.2",
+      "name": "True Double-DQN Argmax/Evaluation Separation",
+      "status": "PASS",
+      "details": {
+        "online_selected_action": 12,
+        "target_evaluated_q": 4.199999809265137,
+        "target_max_q": 20.0,
+        "maximization_bias_prevented": true
+      }
+    },
+    {
+      "gate": "5.3",
+      "name": "Time-Aware Bellman Target Discount (gamma_eff = gamma^(dt/500))",
+      "status": "PASS",
+      "details": {
+        "SHORT_125us": {
+          "dwell_us": 125.0,
+          "exponent": 0.25,
+          "gamma_eff": 0.9974905699336811,
+          "expected": 0.9974905699336811,
+          "match": true
+        },
+        "NORMAL_500us": {
+          "dwell_us": 500.0,
+          "exponent": 1.0,
+          "gamma_eff": 0.99,
+          "expected": 0.99,
+          "match": true
+        },
+        "LONG_1250us": {
+          "dwell_us": 1250.0,
+          "exponent": 2.5,
+          "gamma_eff": 0.9751871871081982,
+          "expected": 0.9751871871081982,
+          "match": true
+        },
+        "REVISIT_500us": {
+          "dwell_us": 500.0,
+          "exponent": 1.0,
+          "gamma_eff": 0.99,
+          "expected": 0.99,
+          "match": true
+        },
+        "PREEMPTIVE_HOLD_750us": {
+          "dwell_us": 750.0,
+          "exponent": 1.5,
+          "gamma_eff": 0.9850375627355538,
+          "expected": 0.9850375627355538,
+          "match": true
+        }
+      }
+    },
+    {
+      "gate": "5.4",
+      "name": "Replay Transition Alignment, Episode Integrity, and Burn-in Masking",
+      "status": "PASS",
+      "details": {
+        "hit_prob_hardening_verified": true,
+        "adjacent_transition_alignment_verified": true,
+        "single_episode_per_sequence_verified": true,
+        "burn_in_masking_verified": true
+      }
+    },
+    {
+      "gate": "5.5",
+      "name": "Deterministic 8-Class Scenario Classification",
+      "status": "PASS",
+      "details": {
+        "AG-04": {
+          "classified": "fast_agile",
+          "expected": "fast_agile",
+          "match": true
+        },
+        "config_241": {
+          "classified": "fast_agile",
+          "expected": "fast_agile",
+          "match": true
+        },
+        "config_29": {
+          "classified": "slow_agile",
+          "expected": "slow_agile",
+          "match": true
+        },
+        "AG-01": {
+          "classified": "periodic",
+          "expected": "periodic",
+          "match": true
+        },
+        "AG-06": {
+          "classified": "markov_hopper",
+          "expected": "markov_hopper",
+          "match": true
+        },
+        "AG-07": {
+          "classified": "mixed",
+          "expected": "mixed",
+          "match": true
+        },
+        "config_119": {
+          "classified": "sparse",
+          "expected": "sparse",
+          "match": true
+        },
+        "config_195": {
+          "classified": "dense",
+          "expected": "dense",
+          "match": true
+        }
+      }
+    },
+    {
+      "gate": "5.6",
+      "name": "Mode-Balanced Sampling from Real Transitions",
+      "status": "PASS",
+      "details": {
+        "modes_represented": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "all_5_modes_present": true,
+        "no_synthetic_labels": true
+      }
+    },
+    {
+      "gate": "5.7",
+      "name": "Q / TD / Gradient / Target-Online Stabilization Telemetry",
+      "status": "PASS",
+      "details": {
+        "normal_step_healthy": true,
+        "runaway_step_halted": true,
+        "halt_ceiling": 50.0
+      }
+    },
+    {
+      "gate": "5.8",
+      "name": "Collapse Detector with Mode Entropy, Latency, and Target-Online Gap",
+      "status": "PASS",
+      "details": {
+        "healthy_severity": "NORMAL",
+        "low_mode_entropy_severity": "CRITICAL",
+        "high_latency_severity": "CRITICAL"
+      }
+    },
+    {
+      "gate": "5.9",
+      "name": "CRITICAL => can_promote=False and Checkpoint Quarantine",
+      "status": "PASS",
+      "details": {
+        "severity": "CRITICAL",
+        "can_promote": false,
+        "promotion_blocked": true,
+        "quarantine_enforced": true
+      }
+    },
+    {
+      "gate": "5.10",
+      "name": "Frozen Production Baseline SHA-256 Immutability Verification",
+      "status": "PASS",
+      "details": {
+        "checkpoint_path": "experiments\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+        "expected_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+        "actual_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+        "bit_identical": true
+      }
+    }
+  ]
+}

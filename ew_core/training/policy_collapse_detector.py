@@ -43,6 +43,16 @@ class CollapseThresholds:
     crit_top_action_fraction: float = 0.75        # Critical if single action fraction > this
     min_action_entropy: float = 1.8               # Warning if action entropy < this
     crit_action_entropy: float = 1.0              # Critical if action entropy < this
+    min_mode_entropy: float = 0.8                 # Warning if mode entropy < this
+    crit_mode_entropy: float = 0.4                # Critical if mode entropy < this
+
+    # Latency
+    warn_max_latency_us: float = 3500.0           # Warning if mean latency >= this
+    crit_max_latency_us: float = 6000.0           # Critical if mean latency >= this
+
+    # Target-Online Q Gap (|Q_target - Q_online|)
+    warn_target_online_gap: float = 15.0          # Warning if |target - online| >= this
+    crit_target_online_gap: float = 30.0          # Critical if |target - online| >= this
 
     # Q-Value & TD Error Explosions (Bellman compounding under low epsilon)
     warn_q_max: float = 120.0                     # Warning if Qmax exceeds ~15 consecutive hits
@@ -95,6 +105,7 @@ class PolicyCollapseDetector:
         rolling_td_error_p90: float,
         consecutive_same_band: int = 0,
         epsilon: float = 1.0,
+        target_online_gap: float | None = None,
     ) -> CollapseDiagnostics:
         """Evaluate rolling training diagnostics for value drift and dwell-locking."""
         reasons: list[str] = []
@@ -133,6 +144,16 @@ class PolicyCollapseDetector:
             is_warn = True
             reasons.append(f"Warning consecutive same-band dwell: {consecutive_same_band} >= {self.thresholds.warn_max_consecutive_same_band}")
 
+        # Check target-online Q gap (|Q_target - Q_online|)
+        if target_online_gap is not None:
+            abs_gap = abs(float(target_online_gap))
+            if abs_gap >= self.thresholds.crit_target_online_gap:
+                is_crit = True
+                reasons.append(f"Critical target-online Q gap: {abs_gap:.2f} >= {self.thresholds.crit_target_online_gap:.2f}")
+            elif abs_gap >= self.thresholds.warn_target_online_gap:
+                is_warn = True
+                reasons.append(f"Warning target-online Q gap: {abs_gap:.2f} >= {self.thresholds.warn_target_online_gap:.2f}")
+
         if is_crit:
             sev = CollapseSeverity.CRITICAL
             tag = "collapsed"
@@ -153,6 +174,7 @@ class PolicyCollapseDetector:
                 "rolling_td_error_p90": float(rolling_td_error_p90),
                 "consecutive_same_band": int(consecutive_same_band),
                 "epsilon": float(epsilon),
+                "target_online_gap": float(abs(target_online_gap)) if target_online_gap is not None else None,
             },
             tag=tag,
         )
@@ -175,6 +197,8 @@ class PolicyCollapseDetector:
         pd: float | None = None,
         pfa: float | None = None,
         latency_us: float | None = None,
+        mode_entropy: float | None = None,
+        target_online_gap: float | None = None,
     ) -> CollapseDiagnostics:
         """Evaluate full evaluation battery results across scenarios and diversity metrics."""
         reasons: list[str] = []
@@ -209,7 +233,7 @@ class PolicyCollapseDetector:
             is_warn = True
             reasons.append(f"Warning top-action concentration: {top_action_fraction*100:.1f}% >= {self.thresholds.max_top_action_fraction*100:.1f}%")
 
-        # 3. Action Entropy
+        # 3. Action Entropy & Mode Entropy
         if action_entropy < self.thresholds.crit_action_entropy:
             is_crit = True
             reasons.append(f"Critical low action entropy: {action_entropy:.3f} < {self.thresholds.crit_action_entropy:.3f}")
@@ -217,7 +241,34 @@ class PolicyCollapseDetector:
             is_warn = True
             reasons.append(f"Warning low action entropy: {action_entropy:.3f} < {self.thresholds.min_action_entropy:.3f}")
 
-        # 4. Q-values (if provided)
+        if mode_entropy is not None:
+            if mode_entropy < self.thresholds.crit_mode_entropy:
+                is_crit = True
+                reasons.append(f"Critical low mode entropy: {mode_entropy:.3f} < {self.thresholds.crit_mode_entropy:.3f}")
+            elif mode_entropy < self.thresholds.min_mode_entropy:
+                is_warn = True
+                reasons.append(f"Warning low mode entropy: {mode_entropy:.3f} < {self.thresholds.min_mode_entropy:.3f}")
+
+        # 4. Latency
+        if latency_us is not None:
+            if latency_us >= self.thresholds.crit_max_latency_us:
+                is_crit = True
+                reasons.append(f"Critical high latency: {latency_us:.1f} >= {self.thresholds.crit_max_latency_us:.1f} µs")
+            elif latency_us >= self.thresholds.warn_max_latency_us:
+                is_warn = True
+                reasons.append(f"Warning high latency: {latency_us:.1f} >= {self.thresholds.warn_max_latency_us:.1f} µs")
+
+        # 5. Target-Online Q Gap (|Q_target - Q_online|)
+        if target_online_gap is not None:
+            abs_gap = abs(float(target_online_gap))
+            if abs_gap >= self.thresholds.crit_target_online_gap:
+                is_crit = True
+                reasons.append(f"Critical target-online Q gap: {abs_gap:.2f} >= {self.thresholds.crit_target_online_gap:.2f}")
+            elif abs_gap >= self.thresholds.warn_target_online_gap:
+                is_warn = True
+                reasons.append(f"Warning target-online Q gap: {abs_gap:.2f} >= {self.thresholds.warn_target_online_gap:.2f}")
+
+        # 6. Q-values (if provided)
         if q_max is not None:
             if q_max >= self.thresholds.crit_q_max:
                 is_crit = True
@@ -242,7 +293,7 @@ class PolicyCollapseDetector:
                 is_warn = True
                 reasons.append(f"Warning TD-p90: {td_error_p90:.2f} >= {self.thresholds.warn_td_error_p90:.2f}")
 
-        # 5. Scenario Generalization (Worst-case & Median IR)
+        # 7. Scenario Generalization (Worst-case & Median IR)
         if worst_ir < self.thresholds.crit_worst_case_ir:
             is_crit = True
             reasons.append(f"Critical worst-scenario collapse (cold-start lockout): {worst_ir*100:.2f}% < {self.thresholds.crit_worst_case_ir*100:.2f}%")
@@ -257,7 +308,7 @@ class PolicyCollapseDetector:
             is_warn = True
             reasons.append(f"Warning median IR low: {median_ir*100:.2f}% < {self.thresholds.min_median_ir*100:.2f}%")
 
-        # 6. Agile IR
+        # 8. Agile IR
         if agile_ir is not None:
             if agile_ir < self.thresholds.crit_agile_ir:
                 is_crit = True
@@ -281,6 +332,7 @@ class PolicyCollapseDetector:
             "top_band_fraction": float(top_band_fraction),
             "top_action_fraction": float(top_action_fraction),
             "action_entropy": float(action_entropy),
+            "mode_entropy": float(mode_entropy) if mode_entropy is not None else None,
             "worst_case_ir": worst_ir,
             "median_ir": median_ir,
             "mean_ir": mean_ir,
@@ -290,6 +342,7 @@ class PolicyCollapseDetector:
             "q_max": float(q_max) if q_max is not None else None,
             "q_std": float(q_std) if q_std is not None else None,
             "td_error_p90": float(td_error_p90) if td_error_p90 is not None else None,
+            "target_online_gap": float(abs(target_online_gap)) if target_online_gap is not None else None,
             "pd": float(pd) if pd is not None else None,
             "pfa": float(pfa) if pfa is not None else None,
             "latency_us": float(latency_us) if latency_us is not None else None,
