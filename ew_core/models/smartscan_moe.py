@@ -573,6 +573,7 @@ class SmartScanMoE(nn.Module):
         eager_hidden: tuple[torch.Tensor, torch.Tensor] | None = None,
         tau: float | None = None,
         policy_mode: str | None = None,
+        diagnostic_level: int | None = None,
     ) -> tuple[int, tuple[torch.Tensor, torch.Tensor] | None, dict[str, Any]]:
         """Select action via policy gating: operational (deterministic DRQN), demo (exploration), fallback."""
         # 1. Compute components
@@ -611,6 +612,10 @@ class SmartScanMoE(nn.Module):
         occ_threshold = max(0.02, min(0.15, 0.5 * max_occ))
         occ_candidates = [int(b) for b in range(self.n_bands) if occ_vec[b] >= occ_threshold][:3]
         per_vec = np.clip(self._preemptive_urgency[: self.n_bands], 0.0, 1.0)
+        pred_candidates = []
+        pred_probs = np.zeros(self.n_bands, dtype=np.float32)
+        pred_etas = {}
+        pred_tracks = {}
 
         if self.eager_weight == 0.0 and self.semantic_weight > 0.0:
             action = int(np.argmax(fused_scores))
@@ -723,12 +728,15 @@ class SmartScanMoE(nn.Module):
             pred_candidates = []
             pred_probs = np.zeros(self.n_bands, dtype=np.float32)
             pred_etas = {}
+            pred_tracks = {}
             if self.enable_t0 or self.enable_t1:
                 curr_t = self._simulated_clock_us
                 pred_candidates = self.temporal_predictor.get_predicted_candidate_bands(current_time=curr_t, top_k=2)
                 for p in self.temporal_predictor.predict_all(curr_t):
+                    b_p = p.target_band
+                    if b_p not in pred_tracks or float(p.prediction_confidence) >= pred_probs[b_p]:
+                        pred_tracks[b_p] = int(p.track_id)
                     if p.prediction_confidence > 0.2:
-                        b_p = p.target_band
                         pred_probs[b_p] = max(pred_probs[b_p], float(p.prediction_confidence))
                         pred_etas[b_p] = min(pred_etas.get(b_p, float("inf")), float(p.eta_us))
 
@@ -917,12 +925,103 @@ class SmartScanMoE(nn.Module):
                     action, raw_drqn_action, reason, q_top1, float(fused_scores[action]),
                 )
 
-        attribution = self._attribution_for(action, obs_1d)
-        
+        diag_lvl = 0 if (diagnostic_level == 0 or (diagnostic_level is None and eff_policy == "operational")) else (1 if diagnostic_level is None else int(diagnostic_level))
+
         eager_contrib = float(self.eager_weight * eager_norm[action])
         revisit_contrib = float(self.revisit_weight * revisit_norm[band_of_action(action, self.n_modes)])
         total = eager_contrib + revisit_contrib + 1e-8
-        
+        final_action = int(action)
+        final_band = int(band_of_action(final_action, self.n_modes))
+        final_mode = int(mode_of_action(final_action, self.n_modes))
+        override_source = str(reason) if action_was_overridden else None
+        exploration_source = "cognitive_exploration" if reason == "Cognitive_exploration" else ("force_exploration" if force_exploration else "none")
+        q_selected = float(raw_q_np[final_action]) if 0 <= final_action < len(raw_q_np) else 0.0
+        q_max = float(np.max(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+        q_mean = float(np.mean(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+        q_std = float(np.std(raw_q_np)) if len(raw_q_np) > 0 else 0.0
+
+        if diag_lvl == 0:
+            if best_b in pred_tracks:
+                pred_b = best_b
+                pred_p = float(pred_probs[best_b])
+                pred_e = float(pred_etas.get(best_b, -1.0))
+                pred_tid = pred_tracks[best_b]
+            else:
+                pred_b = -1
+                pred_p = 0.0
+                pred_e = -1.0
+                pred_tid = -1
+            attribution = {
+                "selected_band": final_band,
+                "selected_mode": final_mode,
+                "mode_name": DWELL_MODES[final_mode],
+                "reason": reason,
+                "decision_reason": reason,
+                "revisit_urgency": float(age_vec[final_band]),
+                "periodic_urgency": float(per_vec[final_band]),
+                "uncertainty_urgency": float(unc_vec[final_band]),
+                "eager_pct": float(eager_contrib / total),
+                "revisit_pct": float(revisit_contrib / total),
+                "action_score": float(fused_scores[action]),
+                "action": final_action,
+                "q_margin": float(band_q_margin),
+                "fallback_triggered": float(fallback_triggered),
+                "exploration_mode_active": float(reason == "Cognitive_exploration"),
+                "drqn_candidate_active": float(drqn_candidate_active),
+                "occupancy_candidate_active": float(reason == "Occupancy_fallback"),
+                "preemptive_candidate_active": float(reason == "Preemptive_intercept"),
+                "consecutive_empty_total": int(self._consecutive_empty_total),
+                "consecutive_empty_band": int(self._consecutive_empty_band),
+                "policy_mode": str(eff_policy),
+                "exploration_enabled": bool(eff_policy == "demo" or (eff_policy == "operational" and self.exploration_enabled)),
+                "operational_checkpoint": str(self.operational_checkpoint),
+                "operational_checkpoint_valid": bool(self.operational_checkpoint_valid),
+                "confidence_threshold": float(self.confidence_margin_threshold),
+                "confidence_margin": float(band_q_margin),
+                "is_confident": bool(is_confident),
+                "drqn_candidate_score": float(q_top1),
+                "arbitration_score": float(fused_scores[action]),
+                "action_rejection_reason": str(action_rejection_reason),
+                "fallback_reason": str(fallback_reason),
+                "raw_drqn_action": raw_drqn_action,
+                "raw_drqn_band": raw_drqn_band,
+                "raw_drqn_mode": raw_drqn_mode,
+                "final_action": final_action,
+                "final_band": final_band,
+                "final_mode": final_mode,
+                "action_was_overridden": bool(action_was_overridden),
+                "override_source": override_source,
+                "exploration_source": exploration_source,
+                "decision_source": "moe_arbitration",
+                "q_selected": q_selected,
+                "q_max": q_max,
+                "q_mean": q_mean,
+                "q_std": q_std,
+                "guarded_arrival_active": float(has_guarded_arrival),
+                "dirichlet_alpha": float(self.alpha_dirichlet),
+                "predicted_track_id": -1,
+                "predicted_band": pred_b,
+                "p_next_band": pred_p,
+                "eta_us": pred_e,
+                "predicted_eta_us": max(0.0, pred_e),
+                "agility_score": 0.0,
+                "prediction_confidence": pred_p,
+                "spatial_confidence": 0.0,
+                "aoa_deg": -1.0,
+                "drqn_score": float(q_values[action]),
+                "predictive_score": float(u_scores[action]) if (u_action is not None and "u_scores" in locals()) else 0.0,
+                "spatial_score": 0.0,
+                "exploration_pressure": float(self.revisit_weight * revisit_norm[best_b] + 0.35 * unc_vec[best_b]),
+                "q_score": float(q_values[action]),
+                "fused_score": float(fused_scores[action]),
+                "drqn_rank": 1 if action == raw_drqn_action else None,
+                "moe_rank": 1,
+                "same_argmax": bool(action == raw_drqn_action),
+            }
+            return action, hidden, attribution
+
+        attribution = self._attribution_for(action, obs_1d)
+
         attribution["eager_pct"] = float(eager_contrib / total)
         attribution["revisit_pct"] = float(revisit_contrib / total)
         attribution["action_score"] = float(fused_scores[action])
@@ -936,6 +1035,7 @@ class SmartScanMoE(nn.Module):
         attribution["consecutive_empty_total"] = int(self._consecutive_empty_total)
         attribution["consecutive_empty_band"] = int(self._consecutive_empty_band)
         attribution["reason"] = reason
+        attribution["decision_reason"] = reason
 
         # Policy & Diagnostic Audit fields
         attribution["policy_mode"] = str(eff_policy)
@@ -949,17 +1049,6 @@ class SmartScanMoE(nn.Module):
         attribution["arbitration_score"] = float(fused_scores[action])
         attribution["action_rejection_reason"] = str(action_rejection_reason)
         attribution["fallback_reason"] = str(fallback_reason)
-
-        # Phase 2 runtime decision telemetry fields
-        final_action = int(action)
-        final_band = int(band_of_action(final_action, self.n_modes))
-        final_mode = int(mode_of_action(final_action, self.n_modes))
-        override_source = str(reason) if action_was_overridden else None
-        exploration_source = "cognitive_exploration" if reason == "Cognitive_exploration" else ("force_exploration" if force_exploration else "none")
-        q_selected = float(raw_q_np[final_action]) if 0 <= final_action < len(raw_q_np) else 0.0
-        q_max = float(np.max(raw_q_np)) if len(raw_q_np) > 0 else 0.0
-        q_mean = float(np.mean(raw_q_np)) if len(raw_q_np) > 0 else 0.0
-        q_std = float(np.std(raw_q_np)) if len(raw_q_np) > 0 else 0.0
 
         attribution["raw_drqn_action"] = raw_drqn_action
         attribution["raw_drqn_band"] = raw_drqn_band

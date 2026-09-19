@@ -358,8 +358,8 @@ class MoEBaseline:
         self.moe.reset()
         self.hidden = None
 
-    def act(self, observation: Any) -> tuple[int, dict[str, Any]]:
-        action, self.hidden, attr = self.moe.select_action(observation, self.hidden)
+    def act(self, observation: Any, diagnostic_level: int | None = None, **kwargs: Any) -> tuple[int, dict[str, Any]]:
+        action, self.hidden, attr = self.moe.select_action(observation, self.hidden, diagnostic_level=diagnostic_level, **kwargs)
         attr = {"source": self.source, **attr}
         return action, attr
 
@@ -367,11 +367,15 @@ class MoEBaseline:
         return self.act(observation)[0]
 
     def select_action(
-        self, obs: np.ndarray | torch.Tensor, hidden: tuple[torch.Tensor, torch.Tensor] | None = None
+        self,
+        obs: np.ndarray | torch.Tensor,
+        hidden: tuple[torch.Tensor, torch.Tensor] | None = None,
+        diagnostic_level: int | None = None,
+        **kwargs: Any,
     ) -> tuple[int, tuple[torch.Tensor, torch.Tensor] | None, dict[str, Any]]:
         if hidden is not None:
             self.hidden = hidden
-        action, attr = self.act(obs)
+        action, attr = self.act(obs, diagnostic_level=diagnostic_level, **kwargs)
         return action, self.hidden, attr
 
     def update(self, action: int) -> None:

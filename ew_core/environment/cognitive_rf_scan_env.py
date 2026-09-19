@@ -487,6 +487,9 @@ class CognitiveRFScanEnv(gym.Env):
         self.semantic_memory: SemanticMemory | None = None
         self.periodic_interceptor: PeriodicScanInterceptor | None = None
         self.records: list[PulseRecord] = list(records or [])
+        self._records_toas: np.ndarray = np.array([], dtype=np.float64)
+        self._max_pulse_width_us: float = 0.0
+        self._index_records()
         self.fom = FiguresOfMerit()
 
         self.current_step = 0
@@ -502,6 +505,19 @@ class CognitiveRFScanEnv(gym.Env):
         self._last_pulse_tracks: np.ndarray | None = None
         self._min_deinterleave_pulses = self.deinterleaver_config.get("min_pulses", 50)
         self._deinterleave_interval = self.deinterleaver_config.get("interval_steps", 10)
+
+    def _index_records(self) -> None:
+        """Build stable ToA ordering and search indexing for evaluation/reward ground truth."""
+        if not self.records:
+            self._records_toas = np.array([], dtype=np.float64)
+            self._max_pulse_width_us = 0.0
+            return
+
+        raw_toas = np.array([float(r.toa_us) for r in self.records], dtype=np.float64)
+        order = np.argsort(raw_toas, kind="stable")
+        self.records = [self.records[i] for i in order]
+        self._records_toas = raw_toas[order]
+        self._max_pulse_width_us = float(max((float(r.pulse_width_us) for r in self.records), default=0.0))
 
     # ------------------------------------------------------------------ setup
     def _build_receiver(self) -> SieveReceiver:
@@ -527,6 +543,9 @@ class CognitiveRFScanEnv(gym.Env):
             np.random.seed(seed)
         if self.records_provider is not None:
             self.records = list(self.records_provider() or [])
+            self._index_records()
+        elif not hasattr(self, "_records_toas") or len(self._records_toas) != len(self.records):
+            self._index_records()
 
         self.receiver = self._build_receiver()
         self.radio_env = self._build_radio_env()
@@ -711,8 +730,9 @@ class CognitiveRFScanEnv(gym.Env):
                     # Update temporal predictor using tracker-derived pulse assignments
                     self._update_temporal_predictor()
 
-                # Clear buffer after processing (keep last N for continuity)
-                self._pdw_buffer = self._pdw_buffer[-self._min_deinterleave_pulses:]
+                # In-place sliding buffer window (avoids full list recreation)
+                if len(self._pdw_buffer) > self._min_deinterleave_pulses:
+                    del self._pdw_buffer[:-self._min_deinterleave_pulses]
 
         # Apply semantic memory band priority boost to belief if enabled
         if self.semantic_memory_enabled and self.semantic_memory is not None:
@@ -1118,7 +1138,17 @@ class CognitiveRFScanEnv(gym.Env):
         active_emitters: set[int] = set()
         lo, hi = float(lower_us), float(upper_us)
 
-        for rec in self.records:
+        if not hasattr(self, "_records_toas") or len(self._records_toas) == 0:
+            return any_active, novel, active_bands, active_emitters
+
+        # Binary search for records that could overlap [lo, hi)
+        # Any pulse with exit_us > lo has toa_us > lo - pulse_width_us >= lo - max_pulse_width_us.
+        # Any pulse with toa_us < hi has toa_us < hi.
+        left_idx = int(np.searchsorted(self._records_toas, lo - self._max_pulse_width_us, side="left"))
+        right_idx = int(np.searchsorted(self._records_toas, hi, side="left"))
+
+        for i in range(left_idx, right_idx):
+            rec = self.records[i]
             toa = float(rec.toa_us)
             exit_us = toa + float(rec.pulse_width_us)
             if toa < hi and exit_us > lo:

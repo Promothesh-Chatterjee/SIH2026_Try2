@@ -171,6 +171,8 @@ class OperationalReceiverController:
     Owns the full operational loop without simulation shortcuts or oracle truth.
     """
 
+    ROLLING_WINDOW_SIZE: int = 100
+
     def __init__(
         self,
         scheduler: Any = None,
@@ -469,7 +471,7 @@ class OperationalReceiverController:
 
         # 7. Construct Standardized Telemetry Frame
         rolling_pd = float(self.total_hits / self.total_dwells) if self.total_dwells > 0 else 0.0
-        rolling_med_lat = float(np.median(self.latencies)) if self.latencies else 0.0
+        rolling_med_lat = float(np.median(self.latencies[-self.ROLLING_WINDOW_SIZE:])) if self.latencies else 0.0
 
         eff_flat = np.asarray(effective_obs, dtype=np.float32).flatten() if effective_obs is not None else np.zeros(0, dtype=np.float32)
         if len(eff_flat) >= self.n_bands * 10:

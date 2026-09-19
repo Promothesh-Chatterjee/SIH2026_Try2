@@ -723,6 +723,46 @@ class EmitterTracker:
     # ------------------------------------------------------------------
     # Association
     # ------------------------------------------------------------------
+    @staticmethod
+    def _can_associate_prefilter(
+        track: EmitterTrack,
+        report: _ClusterReport,
+        band: int,
+        config: AssociationConfig,
+    ) -> bool:
+        """Conservative superset prefilter for association candidates.
+
+        Strict mathematical guarantee: if this returns False, the pair is
+        provably impossible to pass `_association_score` hard gates.
+        """
+        # 1. AoA gate: regardless of whether agile hop is triggered,
+        # gate_aoa <= max(config.agile_hop_aoa_gate_deg, config.max_aoa_diff_deg)
+        if track.current_aoa_deg is not None:
+            max_aoa = max(config.agile_hop_aoa_gate_deg, config.max_aoa_diff_deg)
+            if abs(report.mean_aoa_deg - track.current_aoa_deg) > max_aoa:
+                return False
+
+        # 2. PW ratio gate: regardless of agile hop,
+        # max_pw_ratio <= max(1.0 + config.agile_hop_pw_tolerance, config.max_pw_ratio)
+        if track.current_pw_us is not None and track.current_pw_us > 0 and report.mean_pw_us > 0:
+            max_pw = max(1.0 + config.agile_hop_pw_tolerance, config.max_pw_ratio)
+            pw_ratio = report.mean_pw_us / track.current_pw_us
+            if pw_ratio > max_pw or pw_ratio < (1.0 / max_pw):
+                return False
+
+        # 3. For strictly non-agile tracks, agile hop cannot be triggered.
+        # Thus band jump and frequency envelope are strictly binding.
+        if config.agile_hop_requires_prior_agility and not (track.frequency_hopping_detected or track.agility_score > 0.2):
+            if track.last_band is not None:
+                if abs(int(band) - int(track.last_band)) > config.max_band_jump_fixed:
+                    return False
+            low, high = track.get_frequency_envelope(config)
+            if low is not None and high is not None:
+                if report.mean_freq_mhz < low or report.mean_freq_mhz > high:
+                    return False
+
+        return True
+
     def _associate(
         self,
         reports: List[_ClusterReport],
@@ -744,6 +784,8 @@ class EmitterTracker:
             for tid, track in self.tracks.items():
                 if track.consecutive_misses >= self.max_misses:
                     continue  # effectively dead until pruned
+                if not self._can_associate_prefilter(track, report, band, config):
+                    continue
                 score, ok, _comps, _reason = self._association_score(
                     track, report, band, current_time, config
                 )
