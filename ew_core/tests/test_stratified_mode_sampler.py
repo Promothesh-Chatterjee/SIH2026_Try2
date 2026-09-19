@@ -1,18 +1,27 @@
 """Unit tests for StratifiedModeSampler."""
 
 import unittest
+from pathlib import Path
 import numpy as np
 import pickle
+import pytest
 
 from ew_core.training.replay_buffer import SequenceReplayBuffer
 from ew_core.training.stratified_mode_sampler import StratifiedModeSampler
 
+RESERVOIR_PATH = Path("experiments/checkpoints/production_baseline/baseline_reservoir_5k.pkl")
+requires_baseline = pytest.mark.skipif(
+    not RESERVOIR_PATH.exists(),
+    reason="Production baseline reservoir checkpoint not available in CI"
+)
 
+
+@requires_baseline
 class TestStratifiedModeSampler(unittest.TestCase):
     def setUp(self):
         self.buffer = SequenceReplayBuffer(capacity=10000, seq_len=16, obs_dim=360, burn_in=8, seed=42)
         # Load baseline reservoir episodes into buffer
-        res = pickle.load(open("experiments/checkpoints/production_baseline/baseline_reservoir_5k.pkl", "rb"))
+        res = pickle.load(open(RESERVOIR_PATH, "rb"))
         for ep in res["episodes"]:
             self.buffer._episodes.append(ep)
             self.buffer._total += int(ep["length"])

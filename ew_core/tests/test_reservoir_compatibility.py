@@ -18,6 +18,10 @@ import numpy as np
 import pytest
 
 RESERVOIR_PATH = Path("experiments/checkpoints/production_baseline/baseline_reservoir_5k.pkl")
+requires_baseline = pytest.mark.skipif(
+    not RESERVOIR_PATH.exists(),
+    reason="Production baseline reservoir checkpoint not available in CI"
+)
 
 
 def allocate_exact_counts(batch_size: int, weights: dict[str, float]) -> dict[str, int]:
@@ -40,6 +44,7 @@ def allocate_exact_counts(batch_size: int, weights: dict[str, float]) -> dict[st
     return int_counts
 
 
+@requires_baseline
 class TestReservoirCompatibility:
     """Rigorous contract compliance tests for baseline reservoir."""
 

@@ -6,6 +6,7 @@ the real-TSRD no-synthetic-substitution guard.
 """
 
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -60,6 +61,7 @@ class ResolverPrecedenceTests(unittest.TestCase):
 
 
 class PathNormalisationTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "win32", "Windows path separator test only")
     def test_win_and_posix_separators_are_equivalent(self):
         self.assertEqual(Path("D:/TSRD"), Path("D:" + os.sep + "TSRD") if os.sep == "\\" else Path("D:\\TSRD"))
         win = resolve_tsrd_root("D:\\TSRD\\scan")

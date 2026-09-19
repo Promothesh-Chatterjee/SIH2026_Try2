@@ -39,6 +39,16 @@ DEFAULT_DATA_DIR = "data"
 SPLIT_KEYS = ("train", "val", "test")
 
 
+def _expand_path_str(val: str) -> str:
+    if val.startswith("${") and val.endswith("}"):
+        content = val[2:-1]
+        if ":-" in content:
+            var_name, default_val = content.split(":-", 1)
+            return os.environ.get(var_name, default_val)
+        return os.environ.get(content, "")
+    return os.path.expandvars(val)
+
+
 def resolve_tsrd_root(
     cli_value: str | os.PathLike | None = None,
     config: dict | None = None,
@@ -52,7 +62,7 @@ def resolve_tsrd_root(
     if config:
         data_dir = config.get("data_dir")
         if data_dir:
-            return Path(str(data_dir))
+            return Path(_expand_path_str(str(data_dir)))
     return Path(DEFAULT_DATA_DIR)
 
 

@@ -113,7 +113,10 @@ python scripts/validate_pipeline.py
 ```bash
 pytest ew_core/tests/ --cov=ew_core --cov-fail-under=70
 ```
-*Executes all 773 unit, integration, and regression tests with strict coverage enforcement ($\ge 81\%$ achieved).*
+*Executes all 774 unit, integration, and regression tests with strict coverage enforcement ($\ge 81\%$ achieved).*
+
+> [!NOTE]
+> Baseline-immutability and reservoir tests skip in CI environments where checkpoint files are not hosted locally — Sprint 4 closes this gap with hosted artifact downloads.
 
 ### 4. Launch Backend API Server
 ```bash
