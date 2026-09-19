@@ -34,6 +34,7 @@ jobs:
           pip install -e .
           pip install pytest pytest-cov
 
+      # Note: Baseline-immutability tests skip in CI until checkpoint is hosted — Sprint 4 closes this.
       - name: Run test suite with coverage
         run: |
           pytest ew_core/tests/ --cov=ew_core --cov-report=term-missing

@@ -1,4 +1,4 @@
-data_dir: "C:/HACKATHONS/SIH2026_Try2/rf_simulation/p3ac_50k"
+data_dir: "${DATA_DIR:-data/stare}"
 # Phase 17: the root-level `output_dir` is intentionally REMOVED — writing both
 # models into `checkpoints` would create ambiguous root-level best.pt/final.pt.
 # Trainers ALWAYS resolve to their canonical subdirectory

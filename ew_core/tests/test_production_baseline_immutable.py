@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import unittest
+import pytest
 
 from scripts.verify_baseline_gate import (
     CANONICAL_CKPT_SHA256,
@@ -16,10 +17,17 @@ from scripts.verify_baseline_gate import (
     run_verification,
 )
 
+BASELINE_DIR = Path("experiments/checkpoints/production_baseline")
+requires_baseline = pytest.mark.skipif(
+    not BASELINE_DIR.exists(),
+    reason="Production baseline checkpoint not available in CI"
+)
 
+
+@requires_baseline
 class TestProductionBaselineImmutable(unittest.TestCase):
     def setUp(self):
-        self.base_dir = Path("experiments/checkpoints/production_baseline")
+        self.base_dir = BASELINE_DIR
 
     def test_checkpoint_hash_matches_canonical(self):
         ckpt_path = self.base_dir / "checkpoint_gate_25000_frozen.pt"

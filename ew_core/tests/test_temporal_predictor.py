@@ -195,8 +195,10 @@ class TestTemporalPredictor(unittest.TestCase):
 
         elapsed = time.perf_counter() - start
         us_per_pulse = (elapsed / n_pulses) * 1e6
+        import os
+        time_limit_us = 25.0 if not os.getenv("CI") else 100.0
         self.assertLess(
-            us_per_pulse, 25.0, f"Predictor update too slow: {us_per_pulse:.2f} µs/pulse (limit 25 µs)"
+            us_per_pulse, time_limit_us, f"Predictor update too slow: {us_per_pulse:.2f} µs/pulse (limit {time_limit_us} µs)"
         )
 
 

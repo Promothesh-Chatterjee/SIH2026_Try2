@@ -201,17 +201,31 @@ class SpectrumEnvironment(gymnasium.Env):
 
 # Register with Gymnasium
 try:
+    if "SmartScanEW-SimpleSim-v0" not in gymnasium.envs.registry:
+        gymnasium.register(
+            id="SmartScanEW-SimpleSim-v0",
+            entry_point="ew_core.environment.spectrum_env:SpectrumEnvironment",
+        )
     if "SmartScanEW-v0" not in gymnasium.envs.registry:
         gymnasium.register(
             id="SmartScanEW-v0",
-            entry_point="ew_core.environment.spectrum_env:SpectrumEnvironment",
+            entry_point="ew_core.environment.cognitive_rf_scan_env:CognitiveRFScanEnv",
         )
+    else:
+        gymnasium.envs.registry["SmartScanEW-v0"].entry_point = "ew_core.environment.cognitive_rf_scan_env:CognitiveRFScanEnv"
 except Exception:
-    # If registration already exists or registry access differs by gymnasium version
     try:
         gymnasium.register(
-            id="SmartScanEW-v0",
+            id="SmartScanEW-SimpleSim-v0",
             entry_point="ew_core.environment.spectrum_env:SpectrumEnvironment",
         )
     except Exception:
         pass
+    try:
+        gymnasium.register(
+            id="SmartScanEW-v0",
+            entry_point="ew_core.environment.cognitive_rf_scan_env:CognitiveRFScanEnv",
+        )
+    except Exception:
+        pass
+

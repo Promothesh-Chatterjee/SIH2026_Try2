@@ -166,8 +166,8 @@ class TestSpectrumEnvironment:
         assert "step" in info
 
     def test_gymnasium_make_registration(self):
-        """Verifies environment can be created via gymnasium.make('SmartScanEW-v0')."""
-        env = gymnasium.make("SmartScanEW-v0", n_bands=16, t_steps=50)
+        """Verifies environment can be created via gymnasium.make('SmartScanEW-SimpleSim-v0')."""
+        env = gymnasium.make("SmartScanEW-SimpleSim-v0", n_bands=16, t_steps=50)
         assert env.action_space.n == 16
         obs, info = env.reset()
         assert obs.shape == (16,)

@@ -4,6 +4,8 @@ contract (src/contracts.py) is honoured across the entire stack."""
 import numpy as np
 import torch
 import pytest
+import gymnasium as gym
+import ew_core
 
 from ew_core.contracts import (
     CANONICAL_N_BANDS,
@@ -150,3 +152,10 @@ class TestContractValidation:
         }
         env = CognitiveRFScanEnv(config)
         assert env.band_features == len(FEATURE_ORDER)
+
+    def test_gym_registry_obs_shape(self):
+        env = gym.make("SmartScanEW-v0")
+        assert env.observation_space.shape == (360,), \
+            f"SmartScanEW-v0 must have 360-D obs, got {env.observation_space.shape}"
+        assert env.action_space.n == 180, \
+            f"SmartScanEW-v0 must have 180 actions, got {env.action_space.n}"

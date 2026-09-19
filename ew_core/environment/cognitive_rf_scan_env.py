@@ -299,7 +299,7 @@ class CognitiveRFScanEnv(gym.Env):
 
     def __init__(
         self,
-        config: dict,
+        config: Optional[dict] = None,
         records: Optional[Sequence[PulseRecord]] = None,
         seed: int | None = 42,
         records_provider: Optional[Callable[[], Sequence[PulseRecord]]] = None,
@@ -308,6 +308,7 @@ class CognitiveRFScanEnv(gym.Env):
         semantic_memory_path: Optional[str] = None,
     ) -> None:
         super().__init__()
+        config = dict(config) if config is not None else {}
         self.config = config
         self.records_provider = records_provider
 

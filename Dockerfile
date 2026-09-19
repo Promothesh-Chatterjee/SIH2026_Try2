@@ -1,4 +1,4 @@
-﻿FROM python:3.11-slim
+FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -20,12 +20,12 @@ RUN pip install --upgrade pip && \
     pip install -r requirements-render.txt
 
 # Application code, configs, and models
+COPY ew_core/ ew_core/
+COPY experiments/ experiments/
 COPY configs/ configs/
-COPY src/ src/
-COPY pyproject.toml .
 COPY scripts/ scripts/
-COPY checkpoints/ checkpoints/
-COPY data/ data/
+COPY pyproject.toml .
+RUN pip install -e .
 
 EXPOSE 8000
 
@@ -33,4 +33,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD python -c "import urllib.request, os; p = os.getenv('PORT', '8000'); urllib.request.urlopen(f'http://localhost:{p}/health').read()" || exit 1
 
-CMD ["sh", "-c", "uvicorn src.deployment.api:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn ew_core.deployment.api:app --host 0.0.0.0 --port ${PORT:-8000}"]
