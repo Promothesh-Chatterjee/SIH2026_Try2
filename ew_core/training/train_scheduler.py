@@ -467,6 +467,10 @@ def train_scheduler(
         logger.info("Perception pipeline ENABLED: trained deinterleaver + EmitterTracker active")
     else:
         logger.warning("Perception pipeline DISABLED: no trained deinterleaver loaded")
+
+    # Phase 4 Critical Invariant: training strictly enforces Reward v2
+    assert env.reward_version == "v2", f"Training requires reward_version == 'v2', got '{env.reward_version}'"
+
     if training_mode == "real_tsrd":
         assert env.perception_enabled, "Strict TSRD training requires perception_enabled=True"
         assert env.emitter_tracker is not None, "Strict TSRD training requires EmitterTracker"

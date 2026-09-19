@@ -60,6 +60,31 @@ environment:
   belief:
     ema_alpha: 0.30
     ema_alpha_miss_confirmed: 0.20
+  reward:
+    version: "v2"
+    variant: "baseline"
+    w_hit_novel: 10.0
+    w_hit_repeat: 8.0
+    w_latency: 5.0
+    w_agile_bonus: 2.0
+    w_prediction: 0.5
+    w_miss: -4.0
+    w_false_alarm: -1.0
+    w_redundant: -0.25
+    w_dwell_cost: -0.01
+
+reward:
+  version: "v2"
+  variant: "baseline"
+  w_hit_novel: 10.0
+  w_hit_repeat: 8.0
+  w_latency: 5.0
+  w_agile_bonus: 2.0
+  w_prediction: 0.5
+  w_miss: -4.0
+  w_false_alarm: -1.0
+  w_redundant: -0.25
+  w_dwell_cost: -0.01
 
 # RC-2.9: fixed, reproducible validation scenario set (10 unseen scenarios for generalization gating).
 validation:

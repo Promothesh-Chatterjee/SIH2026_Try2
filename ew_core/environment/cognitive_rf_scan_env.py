@@ -68,7 +68,12 @@ from ew_core.perception import EmitterTracker, build_band_belief_from_tracks
 from ew_core.cognitive.memory import SemanticMemory, EmitterProfile
 from ew_core.cognitive.periodic_interceptor import PeriodicScanInterceptor
 from ew_core.cognitive.temporal_predictor import TemporalPredictor
-from ew_core.training.reward import bernoulli_entropy, receiver_reward_components, receiver_reward_components_v2
+from ew_core.training.reward import (
+    bernoulli_entropy,
+    receiver_reward_components,
+    receiver_reward_components_v2,
+    validate_reward_v2_dominance,
+)
 from ew_core.cognitive.canonical_belief import (
     assemble_canonical_band_features,
     assemble_canonical_observation,
@@ -406,10 +411,21 @@ class CognitiveRFScanEnv(gym.Env):
         self.w_hit_repeat_v2 = float(reward_cfg.get("w_hit_repeat", 8.0))
         self.w_latency_v2 = float(reward_cfg.get("w_latency_v2", reward_cfg.get("w_latency", 5.0)))
         self.w_agile_bonus_v2 = float(reward_cfg.get("w_agile_bonus", 2.0))
+        self.w_prediction_v2 = float(reward_cfg.get("w_prediction_v2", reward_cfg.get("w_prediction", 0.5)))
         self.w_miss_v2 = float(reward_cfg.get("w_miss_v2", reward_cfg.get("w_miss", -4.0)))
         self.w_false_alarm_v2 = float(reward_cfg.get("w_false_alarm_v2", reward_cfg.get("w_false_alarm", -1.0)))
         self.w_redundant_v2 = float(reward_cfg.get("w_redundant_v2", reward_cfg.get("w_redundant_scan", -0.25)))
         self.w_dwell_cost_v2 = float(reward_cfg.get("w_dwell_cost_v2", -0.01))
+
+        if self.reward_version == "v2":
+            validate_reward_v2_dominance(
+                w_hit_repeat=self.w_hit_repeat_v2,
+                w_latency=self.w_latency_v2,
+                w_agile_bonus=self.w_agile_bonus_v2,
+                w_prediction=self.w_prediction_v2,
+                w_redundant=self.w_redundant_v2,
+                w_dwell_cost=self.w_dwell_cost_v2,
+            )
 
         # Legacy reward weights
         self.w_hit = reward_cfg.get("w_hit", config.get("w_hit", 1.0))
@@ -809,7 +825,7 @@ class CognitiveRFScanEnv(gym.Env):
                 is_agile = True
                 break
         if not is_agile and self.belief is not None:
-            if is_predicted_band or (hasattr(self.belief, "get_band_agility") and self.belief.get_band_agility(band) > 0.25):
+            if hasattr(self.belief, "get_band_agility") and self.belief.get_band_agility(band) > 0.25:
                 is_agile = True
 
         if self.reward_version == "v2":
@@ -824,6 +840,7 @@ class CognitiveRFScanEnv(gym.Env):
                 false_detection=false_detection,
                 intercept_time_us=intercept_time_error_us,
                 is_agile=is_agile,
+                is_predicted=bool(is_predicted_band),
                 band_age=dwell_band_age,
                 band=band,
                 belief=self.belief,
@@ -831,6 +848,7 @@ class CognitiveRFScanEnv(gym.Env):
                 w_hit_repeat=self.w_hit_repeat_v2,
                 w_latency=self.w_latency_v2,
                 w_agile_bonus=self.w_agile_bonus_v2,
+                w_prediction=self.w_prediction_v2,
                 w_miss=self.w_miss_v2,
                 w_false_alarm=self.w_false_alarm_v2,
                 w_redundant=self.w_redundant_v2,
@@ -949,7 +967,7 @@ class CognitiveRFScanEnv(gym.Env):
             "receiver_time_us": self.receiver.current_time_us,
             "preemptive_band": getattr(self, "_preemptive_band", None),
             "latency_bonus": float(reward_components.get("latency_bonus", reward_components.get("latency_reward", 0.0))),
-            "prediction_bonus": float(reward_components.get("prediction_bonus", reward_components.get("agility_bonus", 0.0))),
+            "prediction_bonus": float(reward_components.get("prediction_bonus", 0.0)),
             "is_predicted": bool(is_predicted_band),
             "active_bands": [b for b, v in enumerate(active_bands_vec) if v > 0],
             "reward_components": reward_components,
@@ -961,8 +979,13 @@ class CognitiveRFScanEnv(gym.Env):
             "false_alarm_penalty": float(reward_components.get("false_alarm_penalty", 0.0)),
             "redundant_penalty": float(reward_components.get("redundant_penalty", 0.0)),
             "dwell_penalty": float(reward_components.get("dwell_cost", 0.0)),
-            "frequency_agility_bonus": float(reward_components.get("agility_bonus", reward_components.get("prediction_bonus", 0.0))),
+            "frequency_agility_bonus": float(reward_components.get("agility_bonus", 0.0)),
             "reward_component_dominance": bool(reward_components.get("dominance_warning", False)),
+            "mission_dwell_us": float(self.receiver.dwell_time_us),
+            "reward_per_dwell": float(reward_components.get("reward_per_dwell", reward)),
+            "reward_per_ms": float(reward_components.get("reward_per_ms", 0.0)),
+            "hit_reward_per_ms": float(reward_components.get("hit_reward_per_ms", 0.0)),
+            "penalty_per_ms": float(reward_components.get("penalty_per_ms", 0.0)),
             "cumulative_interceptions": int(self._cumulative_interceptions),
             "average_intercept_latency_us": float(avg_lat_us),
             "number_of_unique_emitters_intercepted": int(len(self.intercepted_emitters)),

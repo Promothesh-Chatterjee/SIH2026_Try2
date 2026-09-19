@@ -366,6 +366,38 @@ def receiver_reward_components(
     }
 
 
+def validate_reward_v2_dominance(
+    w_hit_repeat: float = 8.0,
+    w_latency: float = 5.0,
+    w_agile_bonus: float = 2.0,
+    w_prediction: float = 0.5,
+    w_redundant: float = -0.25,
+    w_dwell_cost: float = -0.01,
+    dwell_durations_us: tuple[float, ...] = (125.0, 500.0, 1250.0),
+) -> bool:
+    """Validate that shaping terms can never overpower primary repeat interception reward.
+
+    Enforces:
+      max_hit_shaping = abs(w_latency) + abs(w_agile_bonus) + abs(w_prediction) < w_hit_repeat
+    across all valid dwell durations.
+    """
+    max_hit_shaping = abs(w_latency) + abs(w_agile_bonus) + abs(w_prediction)
+    if max_hit_shaping >= w_hit_repeat:
+        raise ValueError(
+            f"Reward v2 dominance violated: max_hit_shaping ({max_hit_shaping:.2f}) "
+            f">= w_hit_repeat ({w_hit_repeat:.2f})"
+        )
+    for dwell_us in dwell_durations_us:
+        cost = abs(w_dwell_cost) * (dwell_us / 500.0)
+        total_shaping = max_hit_shaping + abs(w_redundant) + cost
+        if total_shaping >= (w_hit_repeat + 1.0):  # margin check
+            raise ValueError(
+                f"Reward v2 dominance violated for dwell {dwell_us}us: "
+                f"total_shaping ({total_shaping:.2f}) >= w_hit_repeat + margin"
+            )
+    return True
+
+
 def receiver_reward_components_v2(
     observation=None,
     ground_truth_active: bool = False,
@@ -377,6 +409,7 @@ def receiver_reward_components_v2(
     false_detection: bool | None = None,
     intercept_time_us: float | None = None,
     is_agile: bool = False,
+    is_predicted: bool = False,
     band_age: float | None = None,
     band: int | None = None,
     belief=None,
@@ -385,11 +418,13 @@ def receiver_reward_components_v2(
     w_hit_repeat: float = 8.0,
     w_latency: float = 5.0,
     w_agile_bonus: float = 2.0,
+    w_prediction: float = 0.5,
     w_miss: float = -4.0,
     w_false_alarm: float = -1.0,
     w_redundant: float = -0.25,
     w_dwell_cost: float = -0.01,
     reward_variant: str = "baseline",
+    strict_dominance: bool = False,
     **_extra,
 ) -> dict[str, float | bool]:
     """Phase 4 Clean Rescue Reward (reward_v2) with Phase 9C configurable variants.
@@ -398,10 +433,11 @@ def receiver_reward_components_v2(
       1. Primary: Successful Interception (+10.0 novel, +8.0 repeat)
       2. Secondary: Early Interception latency bonus (0.0 to +5.0)
       3. Agile bonus: +2.0 for intercepting agile/hopping emitters
-      4. Miss penalty: -4.0 for failing to intercept active emitter
-      5. False alarm penalty: -1.0 for tuning inactive spectrum
-      6. Redundant revisit: -0.25 for immediate re-visit of empty spectrum
-      7. Dwell cost: -0.01 * (dwell_us / 500.0) [baseline] OR flat -0.01 [dwell_cost_normalized]
+      4. Prediction bonus: +0.5 for intercepting a predicted arrival
+      5. Miss penalty: -4.0 for failing to intercept active emitter
+      6. False alarm penalty: -1.0 for tuning inactive spectrum
+      7. Redundant revisit: -0.25 for immediate re-visit of empty spectrum
+      8. Dwell cost: -0.01 * (dwell_us / 500.0) [baseline] OR flat -0.01 [dwell_cost_normalized]
 
     Variants:
       - "baseline": standard reward_v2.
@@ -421,6 +457,7 @@ def receiver_reward_components_v2(
     interception_reward = 0.0
     latency_reward = 0.0
     agility_bonus = 0.0
+    prediction_bonus = 0.0
     miss_penalty = 0.0
     false_alarm_pen = 0.0
     redundant_pen = 0.0
@@ -445,16 +482,20 @@ def receiver_reward_components_v2(
         if is_agile:
             agility_bonus = float(w_agile_bonus)
 
+        # 4. Predicted Arrival Interception Bonus
+        if is_predicted:
+            prediction_bonus = float(w_prediction)
+
         # Dwell cost on confirmed hit is 0 (hits are productive; dwell cost never penalizes detection)
         dwell_cost = 0.0
 
     elif is_sel_active and not is_detected:
-        # 4. Missed Active Emitter
+        # 5. Missed Active Emitter
         miss_penalty = float(w_miss)
         dwell_cost = float(w_dwell_cost * dwell_norm)
 
     else:
-        # 5. Inactive Band (False Alarm / Empty Dwell)
+        # 6. Inactive Band (False Alarm / Empty Dwell)
         false_alarm_pen = float(w_false_alarm)
         effective_age = float(band_age) if band_age is not None else (
             float(belief.revisit_age[band]) if (band is not None and belief is not None and hasattr(belief, "revisit_age")) else 10.0
@@ -467,6 +508,7 @@ def receiver_reward_components_v2(
         interception_reward
         + latency_reward
         + agility_bonus
+        + prediction_bonus
         + miss_penalty
         + false_alarm_pen
         + redundant_pen
@@ -477,25 +519,48 @@ def receiver_reward_components_v2(
         total = total * (500.0 / dwell_us)
 
     # Dominance Check: detect if secondary shaping exceeds primary interception signal
-    shaping_mag = abs(latency_reward) + abs(agility_bonus) + abs(redundant_pen) + abs(dwell_cost)
-    dominance_warning = bool(is_sel_active and is_detected and (shaping_mag > abs(interception_reward)))
-    if dominance_warning:
+    shaping_mag = abs(latency_reward) + abs(agility_bonus) + abs(prediction_bonus) + abs(redundant_pen) + abs(dwell_cost)
+    dominance_violated = bool(is_sel_active and is_detected and (shaping_mag >= abs(interception_reward)))
+    if dominance_violated:
+        if strict_dominance:
+            raise ValueError(
+                f"REWARD_OBJECTIVE_DOMINANCE_VIOLATION: shaping terms ({shaping_mag:.2f}) "
+                f">= primary interception reward ({interception_reward:.2f})"
+            )
         logger.warning(
             "REWARD_OBJECTIVE_DOMINANCE_WARNING: shaping terms (%.2f) exceed primary interception reward (%.2f)",
             shaping_mag,
             interception_reward,
         )
 
+    # Diagnostic per-ms telemetry calculations
+    dwell_ms = max(1e-6, dwell_us / 1000.0)
+    reward_per_ms = float(total / dwell_ms)
+    hit_reward_total = float(interception_reward + latency_reward + agility_bonus + prediction_bonus)
+    hit_reward_per_ms = float(hit_reward_total / dwell_ms)
+    # Preserved signed negative penalty so: reward_per_ms = hit_reward_per_ms + penalty_per_ms (or 0)
+    penalty_total = float(miss_penalty + false_alarm_pen + redundant_pen + dwell_cost)
+    penalty_per_ms = float(penalty_total / dwell_ms)
+
     return {
         "reward": float(total),
         "interception_reward": float(interception_reward),
         "latency_reward": float(latency_reward),
         "agility_bonus": float(agility_bonus),
+        "prediction_bonus": float(prediction_bonus),
+        "frequency_agility_bonus": float(agility_bonus),
         "miss_penalty": float(miss_penalty),
         "false_alarm_penalty": float(false_alarm_pen),
         "redundant_penalty": float(redundant_pen),
         "dwell_cost": float(dwell_cost),
-        "dominance_warning": dominance_warning,
+        "dominance_warning": dominance_violated,
+        "reward_component_dominance": dominance_violated,
+        # Time-aware diagnostic telemetry fields
+        "dwell_time_us": float(dwell_us),
+        "reward_per_dwell": float(total),
+        "reward_per_ms": reward_per_ms,
+        "hit_reward_per_ms": hit_reward_per_ms,
+        "penalty_per_ms": penalty_per_ms,
         # Backward-compatible aliases for legacy FiguresOfMerit accumulators
         "hit_term": float(interception_reward),
         "novel_term": float(w_hit_novel - w_hit_repeat if novel_emitter else 0.0),
@@ -507,7 +572,6 @@ def receiver_reward_components_v2(
         "active_track_bonus": 0.0,
         "pulse_bonus": 0.0,
         "latency_bonus": float(latency_reward),
-        "prediction_bonus": float(agility_bonus),
         "delay_penalty": 0.0,
         "entropy_before": 0.0,
         "entropy_after": 0.0,

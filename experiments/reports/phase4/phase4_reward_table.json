@@ -1,0 +1,64 @@
+{
+  "all_passed": true,
+  "cases": {
+    "fast_novel_intercept": {
+      "parameters": "novel=True, t_hit=10us, NORMAL (500us)",
+      "expected_reward": 14.9,
+      "observed_reward": 14.9,
+      "interception_reward": 10.0,
+      "latency_reward": 4.9,
+      "status": "PASS"
+    },
+    "fast_agile_intercept": {
+      "parameters": "repeat=True, agile=True, t_hit=20us, NORMAL (500us)",
+      "expected_reward": 14.8,
+      "observed_reward": 14.8,
+      "interception_reward": 8.0,
+      "latency_reward": 4.8,
+      "agility_bonus": 2.0,
+      "status": "PASS"
+    },
+    "late_intercept": {
+      "parameters": "repeat=True, t_hit=450us, NORMAL (500us)",
+      "expected_reward": 8.5,
+      "observed_reward": 8.5,
+      "interception_reward": 8.0,
+      "latency_reward": 0.4999999999999999,
+      "status": "PASS"
+    },
+    "empty_dwell": {
+      "parameters": "inactive, age > 1, NORMAL (500us)",
+      "expected_reward": -1.01,
+      "observed_reward": -1.01,
+      "false_alarm_penalty": -1.0,
+      "dwell_cost": -0.01,
+      "status": "PASS"
+    },
+    "active_miss": {
+      "parameters": "active=True, undetected, NORMAL (500us)",
+      "expected_reward": -4.01,
+      "observed_reward": -4.01,
+      "miss_penalty": -4.0,
+      "dwell_cost": -0.01,
+      "status": "PASS"
+    },
+    "redundant_dwell": {
+      "parameters": "inactive, age <= 1, NORMAL (500us)",
+      "expected_reward": -1.26,
+      "observed_reward": -1.26,
+      "false_alarm_penalty": -1.0,
+      "redundant_penalty": -0.25,
+      "dwell_cost": -0.01,
+      "status": "PASS"
+    },
+    "periodic_prediction_hit": {
+      "parameters": "repeat=True, predicted=True, t_hit=0us, NORMAL (500us)",
+      "expected_reward": 13.5,
+      "observed_reward": 13.5,
+      "interception_reward": 8.0,
+      "latency_reward": 5.0,
+      "prediction_bonus": 0.5,
+      "status": "PASS"
+    }
+  }
+}
