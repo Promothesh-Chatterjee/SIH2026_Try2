@@ -31,6 +31,7 @@ the ReceiverObservation + belief fields.
 from __future__ import annotations
 
 import logging
+import math
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,6 +69,20 @@ from ew_core.cognitive.memory import SemanticMemory, EmitterProfile
 from ew_core.cognitive.periodic_interceptor import PeriodicScanInterceptor
 from ew_core.cognitive.temporal_predictor import TemporalPredictor
 from ew_core.training.reward import bernoulli_entropy, receiver_reward_components, receiver_reward_components_v2
+from ew_core.cognitive.canonical_belief import (
+    assemble_canonical_band_features,
+    assemble_canonical_observation,
+    compute_canonical_agility,
+    compute_canonical_deint_confidence,
+    compute_canonical_detection_miss_rates,
+    compute_canonical_emitter_count,
+    compute_canonical_occupancy,
+    compute_canonical_pri_stability,
+    compute_canonical_priority,
+    compute_canonical_revisit_age,
+    compute_canonical_uncertainty,
+    map_tracks_to_bands,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -140,16 +155,16 @@ class BeliefState:
         self._visits[band] += 1
         if hit:
             self._hits[band] += 1
-        self.detection_rate[band] = float(self._hits[band] / max(1, self._visits[band]))
-        target = 1.0 if hit else 0.0
-        # Phase 9B-R4-2: Asymmetric miss decay for confirmed tracks.
-        # When a confirmed track (hits >= 1) experiences an empty dwell (e.g. agile radar hopped
-        # or sparse pulse paused), decay slowly (alpha=0.08) so 1-2 empty dwells do not instantly
-        # demote it below untouched priors (0.500). Unconfirmed bands decay normally (alpha=0.30).
-        alpha = ema_alpha if hit else (ema_alpha_miss_confirmed if is_confirmed_track else ema_alpha)
-        self.occupancy_prob[band] = self.occupancy_prob[band] * (1.0 - alpha) + float(target) * alpha
-        if not np.isfinite(self.occupancy_prob[band]) or self.occupancy_prob[band] < 0:
-            self.occupancy_prob[band] = 0.5  # recover from corruption
+
+        self.occupancy_prob[band] = compute_canonical_occupancy(
+            self.occupancy_prob[band],
+            hit=hit,
+            is_confirmed=is_confirmed_track,
+            ema_alpha=ema_alpha,
+            ema_alpha_miss_confirmed=ema_alpha_miss_confirmed,
+        )
+        det_rate, miss_rate = compute_canonical_detection_miss_rates(int(self._hits[band]), int(self._visits[band]))
+        self.detection_rate[band] = det_rate
 
         # Update physical observable features from detected pulses (zero truth leakage)
         if detections and len(detections) > 0:
@@ -157,30 +172,17 @@ class BeliefState:
             freqs = [float(getattr(d, "frequency_mhz", 0.0)) for d in detections]
 
             # 8. Periodicity stability via PRI consistency
-            if len(toas) >= 2:
-                toas_sorted = sorted(toas)
-                pris = np.diff(toas_sorted)
-                mean_pri = float(np.mean(pris))
-                std_pri = float(np.std(pris))
-                cv = float(std_pri / max(mean_pri, 1e-6))
-                self.periodicity_stability[band] = float(np.clip(1.0 / (1.0 + cv), 0.0, 1.0))
-            else:
-                self._band_pulse_history[band].extend(toas[-5:])
-                if len(self._band_pulse_history[band]) >= 2:
-                    pris = np.diff(sorted(self._band_pulse_history[band][-5:]))
-                    cv = float(np.std(pris) / max(float(np.mean(pris)), 1e-6))
-                    self.periodicity_stability[band] = float(np.clip(1.0 / (1.0 + cv), 0.0, 1.0))
+            self.periodicity_stability[band] = compute_canonical_pri_stability(toas=toas)
 
             # 9. Agility indicator via frequency dispersion within the band
-            if len(freqs) >= 2:
-                std_f = float(np.std(freqs))
-                self.agility_indicator[band] = float(np.clip(std_f / 100.0, 0.0, 1.0))
+            self.agility_indicator[band] = compute_canonical_agility(freqs=freqs)
 
-            # 6. Estimated emitter count & 7. Deinterleaver confidence proxy from AoA / PW
-            aoas = [float(getattr(d, "aoa_deg", 0.0)) for d in detections]
-            unique_bearings = len(set(int(a / 15.0) for a in aoas))
-            self.estimated_emitter_count[band] = float(np.clip(unique_bearings / 5.0, 0.1, 1.0))
-            self.deinterleaver_confidence[band] = float(np.clip(0.6 + 0.08 * min(len(detections), 5), 0.0, 1.0))
+            # 6. Estimated emitter count & 7. Deinterleaver confidence
+            cluster_labels = set(int(getattr(d, "cluster_label", 0)) for d in detections if getattr(d, "cluster_label", -1) != -1)
+            n_clusters = len(cluster_labels) if cluster_labels else 1
+            self.estimated_emitter_count[band] = compute_canonical_emitter_count(n_clusters)
+            confs = [float(getattr(d, "confidence", 0.8)) for d in detections]
+            self.deinterleaver_confidence[band] = compute_canonical_deint_confidence(confs, default_conf=0.7)
         elif hit:
             self.estimated_emitter_count[band] = float(np.clip(self.estimated_emitter_count[band] * 0.9 + 0.1, 0.0, 1.0))
         else:
@@ -211,8 +213,6 @@ class BeliefState:
 
         # Blend perception features with existing belief (EMA)
         alpha = 0.3
-        # Features from perception that we trust: emitter_count, deint_conf, per_stab, agility
-        # Features we keep from local belief: occupancy, detection_rate, revisit_age, priority
         self.estimated_emitter_count = (1 - alpha) * self.estimated_emitter_count + alpha * bands[:, 5]
         self.deinterleaver_confidence = (1 - alpha) * self.deinterleaver_confidence + alpha * bands[:, 6]
         self.periodicity_stability = (1 - alpha) * self.periodicity_stability + alpha * bands[:, 7]
@@ -220,6 +220,40 @@ class BeliefState:
 
         # Recompute uncertainty and priority with updated features
         self.update_uncertainty()
+        self.update_priority()
+
+    def update_from_temporal_predictions(
+        self,
+        predictions: Sequence[Any],
+        current_time_us: float = 0.0,
+    ) -> None:
+        """Causally incorporate temporal hop/arrival forecasts into predictive urgency.
+        
+        Modulates priority (feature 9) without suppressing or overwriting uncertainty (feature 3).
+        """
+        if not predictions:
+            return
+        for pred in predictions:
+            tb = getattr(pred, "target_band", None)
+            if tb is not None and 0 <= int(tb) < self.n_bands:
+                dt = max(0.0, float(getattr(pred, "eta_us", 0.0)))
+                decay = math.exp(-dt / 5000.0)
+                conf = float(getattr(pred, "prediction_confidence", 0.5))
+                urg = conf * decay
+                self.periodic_urgency[int(tb)] = float(
+                    np.clip(self.periodic_urgency[int(tb)] + 0.4 * urg, 0.0, 1.0)
+                )
+            probs = getattr(pred, "band_probabilities", None)
+            if probs is not None:
+                for b_idx, p_hop in enumerate(probs):
+                    if 0 <= b_idx < self.n_bands and p_hop > 0.0:
+                        dt = max(0.0, float(getattr(pred, "eta_us", 0.0)))
+                        decay = math.exp(-dt / 5000.0)
+                        conf = float(getattr(pred, "prediction_confidence", 0.5))
+                        urg_hop = float(p_hop * conf * decay)
+                        self.periodic_urgency[b_idx] = float(
+                            np.clip(self.periodic_urgency[b_idx] + 0.2 * urg_hop, 0.0, 1.0)
+                        )
         self.update_priority()
 
     def advance_time(self) -> None:
@@ -232,60 +266,58 @@ class BeliefState:
 
     def update_uncertainty(self) -> None:
         p = np.clip(self.occupancy_prob, 0.0, 1.0)
-        # Raw activity uncertainty: peaked around 0.5
         raw_uncertainty = 1.0 - np.abs(2.0 * p - 1.0)
-        # Evidence factor: slow accumulation over visits
-        evidence_factor = 1.0 - np.exp(-self._visits / 4.0)
-        epistemic_weight = 1.0 - evidence_factor
-        # Epistemic prior holds uncertainty high until evidence accumulates
-        self.uncertainty = 1.0 * epistemic_weight + raw_uncertainty * evidence_factor
-        never_visited = self._visits == 0
-        self.uncertainty[never_visited] = 1.0
+        dwells = self._visits.astype(np.float32)
+        evidence_factor = 1.0 - np.exp(-dwells / 4.0)
+        unc = np.where(dwells <= 0, 1.0, (1.0 - evidence_factor) * 1.0 + evidence_factor * raw_uncertainty)
+        self.uncertainty = np.clip(unc, 0.0, 1.0).astype(np.float32)
 
     def update_priority(self, semantic_boost: np.ndarray | None = None) -> None:
         if semantic_boost is not None:
             self.semantic_boost = np.asarray(semantic_boost, dtype=np.float32)
         norm_age = np.clip(self.revisit_age.astype(np.float32) / 50.0, 0.0, 1.0)
-        w_st = float(self.priority_weights.get("staleness_weight", 0.35))
-        w_occ = float(self.priority_weights.get("occupancy_weight", 0.25))
-        w_unc = float(self.priority_weights.get("uncertainty_weight", 0.20))
-        w_per = float(self.priority_weights.get("periodic_weight", 0.10))
-        w_sem = float(self.priority_weights.get("semantic_weight", 0.10))
-        # Explicit multi-term combination without repeatedly overwriting stored semantic boost
-        self.priority_score = np.clip(
-            w_st * norm_age + w_occ * self.occupancy_prob + w_unc * self.uncertainty
-            + w_per * self.periodic_urgency + w_sem * self.semantic_boost,
-            0.0,
-            1.0,
+        w = self.priority_weights or CANONICAL_DEFAULT_WEIGHTS
+        w_st = float(w.get("staleness_weight", 0.35))
+        w_occ = float(w.get("occupancy_weight", 0.25))
+        w_unc = float(w.get("uncertainty_weight", 0.20))
+        w_pred = float(w.get("predictive_weight", w.get("periodic_weight", 0.10)))
+        w_spat = float(w.get("spatial_weight", w.get("semantic_weight", 0.10)))
+
+        score = (
+            w_st * norm_age
+            + w_occ * np.clip(self.occupancy_prob, 0.0, 1.0)
+            + w_unc * np.clip(self.uncertainty, 0.0, 1.0)
+            + w_pred * np.clip(self.periodic_urgency, 0.0, 1.0)
+            + w_spat * np.clip(self.semantic_boost, 0.0, 1.0)
         )
+        self.priority_score = np.clip(score, 0.0, 1.0).astype(np.float32)
 
     def band_features(self, b: int) -> np.ndarray:
         """Return the canonical 10-feature vector for one band."""
-        p = float(np.clip(self.occupancy_prob[b], 0.0, 1.0))
-        age = float(min(float(self.revisit_age[b]), 50.0) / 50.0)
         self.update_uncertainty()
         self.update_priority()
-        det_rate = float(self.detection_rate[b])
-        miss_rate = 1.0 - det_rate
+        p = float(self.occupancy_prob[b])
+        det_rate, miss_rate = compute_canonical_detection_miss_rates(int(self._hits[b]), int(self._visits[b]))
         unc = float(self.uncertainty[b])
+        norm_age = compute_canonical_revisit_age(float(self.revisit_age[b]), 50.0)
         emit_cnt = float(self.estimated_emitter_count[b])
         deint_conf = float(self.deinterleaver_confidence[b])
         per_stab = float(self.periodicity_stability[b])
         agil = float(self.agility_indicator[b])
         prio = float(self.priority_score[b])
 
-        return np.array([
-            p,          # 1. current/estimated occupancy
-            det_rate,   # 2. recent detection/hit rate
-            miss_rate,  # 3. recent miss rate
-            unc,        # 4. uncertainty
-            age,        # 5. time since last visit (normalized)
-            emit_cnt,   # 6. estimated emitter count
-            deint_conf, # 7. deinterleaver confidence
-            per_stab,   # 8. PRI/periodicity stability
-            agil,       # 9. frequency-agility indicator
-            prio,       # 10. risk/priority score
-        ], dtype=np.float32)
+        return assemble_canonical_band_features(
+            occupancy_prob=p,
+            detection_rate=det_rate,
+            miss_rate=miss_rate,
+            uncertainty=unc,
+            revisit_age_norm=norm_age,
+            emitter_count_norm=emit_cnt,
+            deint_confidence=deint_conf,
+            pri_stability=per_stab,
+            agility=agil,
+            priority=prio,
+        )
 
 
 class CognitiveRFScanEnv(gym.Env):
@@ -428,6 +460,7 @@ class CognitiveRFScanEnv(gym.Env):
 
         self._rng = np.random.default_rng(seed)
         self._seed = seed
+        self.retune_latency_us = float(config.get("retune_latency_us", 0.0))
 
         # Components built at reset
         self.receiver: SieveReceiver | None = None
@@ -544,7 +577,10 @@ class CognitiveRFScanEnv(gym.Env):
         center = self._band_to_center(band)
         self.receiver.tune(center)
 
-        dwell_start = self.receiver.current_time_us
+        retune_latency_us = float(getattr(self, "retune_latency_us", 0.0))
+        retune_start = self.receiver.current_time_us
+        retune_end = retune_start + retune_latency_us
+        dwell_start = retune_end
         dwell_end = dwell_start + base_dwell_us
 
         # Check if the chosen band was predicted for an imminent arrival
@@ -640,14 +676,6 @@ class CognitiveRFScanEnv(gym.Env):
                     "aoa_deg": float(d.aoa_deg),
                     "emitter_id": getattr(d, "emitter_id", -1),  # GT for evaluation only
                 })
-            # Stage 3: Causal pulse ingestion into deterministic temporal & agile predictor
-            if getattr(self, "temporal_predictor", None) is not None:
-                for d in detections:
-                    eid = getattr(d, "emitter_id", 0); eid = int(eid) if eid is not None else 0
-                    t = float(getattr(d, "toa_us", getattr(d, "time_us", dwell_start)))
-                    f = float(getattr(d, "frequency_mhz", 0.0))
-                    b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))
-                    self.temporal_predictor.update_from_pulse(eid, t, f, b)
 
         # Run perception at intervals if enabled
         perception_result = None
@@ -663,6 +691,9 @@ class CognitiveRFScanEnv(gym.Env):
 
                     # Update periodic interceptor with detections
                     self._update_periodic_interceptor(detections, band, dwell_start, dwell_end)
+
+                    # Update temporal predictor using tracker-derived pulse assignments
+                    self._update_temporal_predictor()
 
                 # Clear buffer after processing (keep last N for continuity)
                 self._pdw_buffer = self._pdw_buffer[-self._min_deinterleave_pulses:]
@@ -892,6 +923,9 @@ class CognitiveRFScanEnv(gym.Env):
             "action_reason": action_reason,
             "action_score": action_score,
             "dwell_time_us": float(self.receiver.dwell_time_us),
+            "dwell_start_us": float(dwell_start),
+            "dwell_end_us": float(dwell_end),
+            "retune_latency_us": float(retune_latency_us),
             "revisit_urgency": float(revisit_urgency),
             "periodic_urgency": float(periodic_urgency),
             "revisit_sensitivity_boost_db": float(sensitivity_boost_db),
@@ -1223,6 +1257,43 @@ class CognitiveRFScanEnv(gym.Env):
                 frequency_mhz=float(p["frequency_mhz"]),
             )
 
+    def _update_temporal_predictor(self) -> None:
+        """Causally update temporal predictor using tracker-derived pulse assignments.
+
+        Consumes self._last_pulse_tracks produced by EmitterTracker from observable
+        PDW features, never privileged simulator emitter_ids.
+        """
+        if self.temporal_predictor is None or self.emitter_tracker is None:
+            return
+
+        pulse_tracks = getattr(self, "_last_pulse_tracks", None)
+        if pulse_tracks is None:
+            return
+
+        for i, p in enumerate(self._pdw_buffer):
+            if p.get("_temporal_ingested", False):
+                continue
+            track_id = int(pulse_tracks[i]) if i < len(pulse_tracks) else -1
+            if track_id < 0:
+                continue
+            t = float(p.get("time_us", 0.0))
+            f = float(p.get("frequency_mhz", 0.0))
+            b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))
+            self.temporal_predictor.update_from_pulse(track_id, t, f, b)
+            p["_temporal_ingested"] = True
+
+        # Forward temporal forecasts to belief to modulate priority of predicted arrival bands
+        if self.belief is not None:
+            try:
+                curr_t = float(self.receiver.current_time_us if self.receiver else 0.0)
+                preds = self.temporal_predictor.predict_all(
+                    current_time=curr_t,
+                    horizon_us=25000.0,
+                )
+                self.belief.update_from_temporal_predictions(preds, current_time_us=curr_t)
+            except Exception as exc:
+                logger.debug("Failed to forward temporal predictions to belief: %s", exc)
+
     def _advance_world_to(self, target_time_us: float) -> tuple[int, int]:
         """Stream the radio environment ENTRY events at-or-before target into the receiver.
 
@@ -1267,6 +1338,8 @@ class CognitiveRFScanEnv(gym.Env):
         vec = np.zeros(self.obs_dim, dtype=np.float32)
         if self.belief is None:
             return vec
+        self.belief.update_uncertainty()
+        self.belief.update_priority()
         for b in range(self.n_bands):
             f = self.belief.band_features(b)
             vec[b * self.band_features:(b + 1) * self.band_features] = f

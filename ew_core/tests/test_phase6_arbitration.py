@@ -68,11 +68,11 @@ def test_exploration_guard_preserves_impending_arrival():
     moe._consecutive_empty_total = 3
     moe._consecutive_empty_band = 0
 
-    # Simulate an established active track (6 pulses) with an arrival scheduled at ETA = 200 µs on band 15
-    for i in range(6):
+    # Simulate an established active track (8 pulses) with an arrival scheduled at ETA = 200 µs on band 15
+    for i in range(8):
         moe.temporal_predictor.update_from_pulse(track_id=99, toa_us=1000.0 + i * 1000.0, freq_mhz=7600.0, band=15)
-    moe.temporal_predictor.current_time_us = 6800.0  # Next pulse expected at 7000.0 (ETA = 200 µs)
-    moe._simulated_clock_us = 6800.0
+    moe.temporal_predictor.current_time_us = 8800.0  # Next pulse expected at 9000.0 (ETA = 200 µs)
+    moe._simulated_clock_us = 8800.0
 
     obs = np.zeros(360, dtype=np.float32)
     moe.eager_agent.get_q = lambda obs, hidden=None: (np.zeros(180, dtype=np.float32), hidden)

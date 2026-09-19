@@ -36,6 +36,7 @@ from ew_core.contracts import (
     DWELL_MODE_SEMANTICS,
     band_of_action,
     mode_of_action,
+    validate_action,
 )
 from ew_core.cognitive.spatial_tracker import SpatialTracker
 from ew_core.cognitive.temporal_predictor import TemporalPredictor
@@ -382,6 +383,7 @@ class OperationalReceiverController:
                 current_time_us=t_now,
                 active_tracks=self.emitter_tracker.tracks,
                 spatial_tracker=getattr(self.scheduler, "spatial_tracker", None),
+                temporal_predictor=getattr(self.scheduler, "temporal_predictor", None),
             )
 
         # 3. Schedule action via scheduler (DRQN or MoE)
@@ -395,7 +397,7 @@ class OperationalReceiverController:
             action = self.scheduler.step(effective_obs)
             attr = {}
         attr = attr or {}
-        action = int(action)
+        action = validate_action(action, n_actions=self.n_bands * self.n_modes)
         selected_band = band_of_action(action, self.n_modes)
         selected_mode = mode_of_action(action, self.n_modes)
         dwell_duration = self.mode_to_duration(selected_mode)
@@ -526,3 +528,19 @@ class OperationalReceiverController:
         self.telemetry_history.append(telemetry_frame)
         self.current_step += 1
         return telemetry_frame
+
+    def step(
+        self,
+        obs: Optional[np.ndarray] = None,
+        scenario_pulses: Optional[Sequence[Any]] = None,
+        external_rf_stream: Optional[Sequence[Any]] = None,
+    ) -> ReceiverTelemetryFrame:
+        """Execute one complete, closed-loop operational scan cycle.
+
+        Alias for execute_operational_step for controller interface consistency.
+        """
+        return self.execute_operational_step(
+            obs=obs,
+            scenario_pulses=scenario_pulses,
+            external_rf_stream=external_rf_stream,
+        )

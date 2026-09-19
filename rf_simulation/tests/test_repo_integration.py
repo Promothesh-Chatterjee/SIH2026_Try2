@@ -1,30 +1,26 @@
-"""Cross-repository integration test — Phase 3F.
+"""Cross-repository integration test — Phase 3F (Updated Phase 0).
 
 Proves the single-root layout works: the GNU RF subsystem (rf_simulation)
-can import the authoritative master SieveReceiver through the
-checkout-relative path, without any hardcoded absolute path or reliance
-on the current working directory.
-
-This is a minimal, focused test for Phase 3F. The deeper per-phase proofs
-(large matrices for conversion, isolation, timing, dwells) live in the
-existing Phase 3B/3C/3D test files. This test only verifies the 5
-required integration capabilities end-to-end.
+can import the authoritative master SieveReceiver through the canonical
+package layout (ew_core.receiver), without any hardcoded absolute path,
+reliance on the current working directory, or obsolete 'src/' path assumptions.
 """
 
 import sys
 import unittest
 from pathlib import Path
 
-# rf_simulation sibling scripts (this file lives at <repo_root>/rf_simulation/tests/).
+# Ensure rf_simulation sibling scripts are importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-# Authoritative master receiver (parents[2] is <repo_root>).
-_MASTER_SRC = str(Path(__file__).resolve().parents[2] / "ew_core" / "src")
-if _MASTER_SRC not in sys.path:
-    sys.path.insert(0, _MASTER_SRC)
+
+# Ensure repo root is importable for ew_core package
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 from frequency_context import FrequencyContext
 from iq_bridge import IQReceiverBridge
-from receiver import SieveReceiver
+from ew_core.receiver import SieveReceiver
 
 
 def _minimal_pdw(toa_us=10.0, local_khz=100.0, pw_us=5.0):
@@ -42,17 +38,14 @@ class TestRepoIntegration(unittest.TestCase):
     """Phase 3F: single-root integration sanity checks."""
 
     def test_master_receiver_importable(self):
-        from receiver.sieve_receiver import SieveReceiver as SR
+        from ew_core.receiver.sieve_receiver import SieveReceiver as SR
         self.assertTrue(callable(SR))
 
-    def test_master_src_is_repo_relative(self):
-        # The path must be DERIVED from this test file's location (a parents[N]
-        # relative resolution), not a hardcoded absolute constant.  On any
-        # machine, __file__ points at the repo's rf_simulation/tests/.
-        expected = str(Path(__file__).resolve().parents[2] / "ew_core" / "src")
-        self.assertEqual(_MASTER_SRC, expected)
-        self.assertTrue(_MASTER_SRC.endswith("ew_core\\src") or
-                        _MASTER_SRC.endswith("ew_core"))
+    def test_package_layout_is_canonical(self):
+        import ew_core
+        import ew_core.receiver
+        self.assertTrue(hasattr(ew_core.receiver, "SieveReceiver"))
+        self.assertTrue(callable(ew_core.receiver.SieveReceiver))
 
     def test_instantiate_real_sieve_receiver(self):
         recv = SieveReceiver()
@@ -74,7 +67,7 @@ class TestRepoIntegration(unittest.TestCase):
         bridge = IQReceiverBridge(ctx)
         recv = SieveReceiver()
         recv.tune(3200.0)
-        recv.advance(10.0)  # advance (not advance_to) to set visibility time
+        recv.advance(10.0)  # advance to set visibility time
         pulse = bridge.pdw_to_pulse(_minimal_pdw(toa_us=10.0, local_khz=100.0, pw_us=5.0))
         recv.add_pulse(pulse)
         obs = recv.process_pulse(pulse)

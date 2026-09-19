@@ -1,0 +1,263 @@
+{
+  "num_steps": 1000,
+  "total_observations_evaluated": 36000,
+  "tolerances": {
+    "max_mean_drift": 0.35,
+    "require_bounded_in_0_1": true,
+    "require_finite": true,
+    "min_variance": 1e-05
+  },
+  "all_features_compatible": true,
+  "features": {
+    "occupancy_prob": {
+      "pre_mean": 0.3265,
+      "pre_std": 0.2462,
+      "post_mean": 0.3278,
+      "post_std": 0.2457,
+      "pre_quantiles_25_50_75": [
+        0.0068,
+        0.5,
+        0.5
+      ],
+      "post_quantiles_25_50_75": [
+        0.0069,
+        0.5,
+        0.5
+      ],
+      "mean_drift": 0.0013,
+      "ks_statistic": 0.0282,
+      "ks_pvalue": 7.708211477527929e-13,
+      "frac_at_lower_bound_0": 0.0,
+      "frac_at_upper_bound_1": 0.0,
+      "nan_count": 0,
+      "inf_count": 0,
+      "in_bounds_0_1": true,
+      "status": "COMPATIBLE_WITHIN_TOLERANCE"
+    },
+    "detection_rate": {
+      "pre_mean": 0.0504,
+      "pre_std": 0.1739,
+      "post_mean": 0.0504,
+      "post_std": 0.1739,
+      "pre_quantiles_25_50_75": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "post_quantiles_25_50_75": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean_drift": 0.0,
+      "ks_statistic": 0.0,
+      "ks_pvalue": 1.0,
+      "frac_at_lower_bound_0": 0.8892,
+      "frac_at_upper_bound_1": 0.0181,
+      "nan_count": 0,
+      "inf_count": 0,
+      "in_bounds_0_1": true,
+      "status": "COMPATIBLE_WITHIN_TOLERANCE"
+    },
+    "miss_rate": {
+      "pre_mean": 0.9496,
+      "pre_std": 0.1739,
+      "post_mean": 0.9496,
+      "post_std": 0.1739,
+      "pre_quantiles_25_50_75": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "post_quantiles_25_50_75": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean_drift": 0.0,
+      "ks_statistic": 0.0,
+      "ks_pvalue": 1.0,
+      "frac_at_lower_bound_0": 0.0181,
+      "frac_at_upper_bound_1": 0.8892,
+      "nan_count": 0,
+      "inf_count": 0,
+      "in_bounds_0_1": true,
+      "status": "COMPATIBLE_WITHIN_TOLERANCE"
+    },
+    "uncertainty": {
+      "pre_mean": 0.6197,
+      "pre_std": 0.4671,
+      "post_mean": 0.6489,
+      "post_std": 0.4491,
+      "pre_quantiles_25_50_75": [
+        0.0097,
+        1.0,
+        1.0
+      ],
+      "post_quantiles_25_50_75": [
+        0.0481,
+        1.0,
+        1.0
+      ],
+      "mean_drift": 0.0291,
+      "ks_statistic": 0.11,
+      "ks_pvalue": 3.8084089182193e-190,
+      "frac_at_lower_bound_0": 0.008,
+      "frac_at_upper_bound_1": 0.5893,
+      "nan_count": 0,
+      "inf_count": 0,
+      "in_bounds_0_1": true,
+      "status": "COMPATIBLE_WITHIN_TOLERANCE"
+    },
+    "revisit_age": {
+      "pre_mean": 0.6824,
+      "pre_std": 0.3869,
+      "post_mean": 0.6824,
+      "post_std": 0.3869,
+      "pre_quantiles_25_50_75": [
+        0.3,
+        1.0,
+        1.0
+      ],
+      "post_quantiles_25_50_75": [
+        0.3,
+        1.0,
+        1.0
+      ],
+      "mean_drift": 0.0,
+      "ks_statistic": 0.0,
+      "ks_pvalue": 1.0,
+      "frac_at_lower_bound_0": 0.0278,
+      "frac_at_upper_bound_1": 0.5553,
+      "nan_count": 0,
+      "inf_count": 0,
+      "in_bounds_0_1": true,
+      "status": "COMPATIBLE_WITHIN_TOLERANCE"
+    },
+    "emitter_count": {
+      "pre_mean": 0.0007,
+      "pre_std": 0.0116,
+      "post_mean": 0.005,
+      "post_std": 0.0288,
+      "pre_quantiles_25_50_75": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "post_quantiles_25_50_75": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean_drift": 0.0043,
+      "ks_statistic": 0.1074,
+      "ks_pvalue": 2.5661673920786253e-181,
+      "frac_at_lower_bound_0": 0.8892,
+      "frac_at_upper_bound_1": 0.0,
+      "nan_count": 0,
+      "inf_count": 0,
+      "in_bounds_0_1": true,
+      "status": "COMPATIBLE_WITHIN_TOLERANCE"
+    },
+    "deint_confidence": {
+      "pre_mean": 0.0025,
+      "pre_std": 0.0434,
+      "post_mean": 0.0201,
+      "post_std": 0.1153,
+      "pre_quantiles_25_50_75": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "post_quantiles_25_50_75": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean_drift": 0.0176,
+      "ks_statistic": 0.1074,
+      "ks_pvalue": 2.5661673920786253e-181,
+      "frac_at_lower_bound_0": 0.8892,
+      "frac_at_upper_bound_1": 0.0,
+      "nan_count": 0,
+      "inf_count": 0,
+      "in_bounds_0_1": true,
+      "status": "COMPATIBLE_WITHIN_TOLERANCE"
+    },
+    "pri_stability": {
+      "pre_mean": 0.0026,
+      "pre_std": 0.0472,
+      "post_mean": 0.0072,
+      "post_std": 0.0794,
+      "pre_quantiles_25_50_75": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "post_quantiles_25_50_75": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean_drift": 0.0046,
+      "ks_statistic": 0.0244,
+      "ks_pvalue": 9.3735142230862e-10,
+      "frac_at_lower_bound_0": 0.9722,
+      "frac_at_upper_bound_1": 0.0056,
+      "nan_count": 0,
+      "inf_count": 0,
+      "in_bounds_0_1": true,
+      "status": "COMPATIBLE_WITHIN_TOLERANCE"
+    },
+    "agility": {
+      "pre_mean": 0.0,
+      "pre_std": 0.0,
+      "post_mean": 0.0,
+      "post_std": 0.0001,
+      "pre_quantiles_25_50_75": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "post_quantiles_25_50_75": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean_drift": 0.0,
+      "ks_statistic": 0.0278,
+      "ks_pvalue": 1.6878333134087675e-12,
+      "frac_at_lower_bound_0": 0.9722,
+      "frac_at_upper_bound_1": 0.0,
+      "nan_count": 0,
+      "inf_count": 0,
+      "in_bounds_0_1": true,
+      "status": "COMPATIBLE_WITHIN_TOLERANCE"
+    },
+    "priority": {
+      "pre_mean": 0.4444,
+      "pre_std": 0.2737,
+      "post_mean": 0.4578,
+      "post_std": 0.2657,
+      "pre_quantiles_25_50_75": [
+        0.1547,
+        0.675,
+        0.675
+      ],
+      "post_quantiles_25_50_75": [
+        0.1817,
+        0.675,
+        0.675
+      ],
+      "mean_drift": 0.0134,
+      "ks_statistic": 0.0797,
+      "ks_pvalue": 8.116675023149366e-100,
+      "frac_at_lower_bound_0": 0.0,
+      "frac_at_upper_bound_1": 0.0,
+      "nan_count": 0,
+      "inf_count": 0,
+      "in_bounds_0_1": true,
+      "status": "COMPATIBLE_WITHIN_TOLERANCE"
+    }
+  }
+}

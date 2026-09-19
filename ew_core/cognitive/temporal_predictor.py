@@ -84,11 +84,32 @@ class TrackTemporalState:
         self.hop_transitions: int = 0
         self.agility_score: float = 0.0
 
-    def update(self, toa: float, freq_mhz: float, band: int) -> None:
+        # Track lifetime & counts
+        self.first_toa: float = 0.0
+        self.observation_count: int = 0
+
+    @property
+    def track_age_us(self) -> float:
+        """Total observed duration for this track."""
+        if self.first_toa <= 0.0:
+            return 0.0
+        return max(0.0, self.last_toa - self.first_toa)
+
+    @property
+    def is_stationary(self) -> bool:
+        """True if multiple observations made but zero frequency hops observed."""
+        return bool(self.total_transitions > 0 and self.hop_transitions == 0)
+
+    def update(self, toa: float | None = None, freq_mhz: float = 0.0, band: int = 0, *, toa_us: float | None = None) -> None:
         """Update track with a newly observed pulse."""
         band = int(band)
-        toa = float(toa)
+        t_val = toa if toa is not None else (toa_us if toa_us is not None else 0.0)
+        toa = float(t_val)
         freq_mhz = float(freq_mhz)
+
+        self.observation_count += 1
+        if self.first_toa <= 0.0:
+            self.first_toa = toa
 
         # 1. Update PRI Tracking
         if self.toa_history:
@@ -163,17 +184,22 @@ class TrackTemporalState:
 
         # 3. Update Agility Score
         if self.total_transitions > 0:
-            raw_hop_ratio = self.hop_transitions / self.total_transitions
-            # Transition entropy over observed band distribution
-            total_b = np.sum(self.band_counts)
-            if total_b > 0:
-                p_b = self.band_counts[self.band_counts > 0] / total_b
-                entropy = -float(np.sum(p_b * np.log(p_b + 1e-12)))
-                max_entropy = math.log(max(2, np.count_nonzero(self.band_counts)))
-                norm_entropy = min(1.0, entropy / max(1e-6, max_entropy))
-                self.agility_score = float(0.6 * raw_hop_ratio + 0.4 * norm_entropy)
+            if self.hop_transitions == 0:
+                self.agility_score = 0.0
             else:
-                self.agility_score = float(raw_hop_ratio)
+                raw_hop_ratio = self.hop_transitions / self.total_transitions
+                # Transition entropy over observed band distribution
+                total_b = np.sum(self.band_counts)
+                if total_b > 0:
+                    p_b = self.band_counts[self.band_counts > 0] / total_b
+                    entropy = -float(np.sum(p_b * np.log(p_b + 1e-12)))
+                    max_entropy = math.log(max(2, np.count_nonzero(self.band_counts)))
+                    norm_entropy = min(1.0, max(0.0, entropy / max(1e-6, max_entropy)))
+                    self.agility_score = float(np.clip(0.6 * raw_hop_ratio + 0.4 * norm_entropy, 0.0, 1.0))
+                else:
+                    self.agility_score = float(np.clip(raw_hop_ratio, 0.0, 1.0))
+        else:
+            self.agility_score = 0.0
 
     def predict_next_band_distribution(
         self, alpha_dirichlet: float = 0.0
@@ -209,14 +235,15 @@ class TrackTemporalState:
                     conf = 0.0
                 else:
                     empirical_p = evidence_cnt / total
-                    evidence_weight = total / (total + 1.0)
+                    evidence_weight = total / (total + 2.0)
                     conf = min(1.0, level_factor * empirical_p * evidence_weight)
             else:
                 for b, cnt in counts_dict.items():
                     p_vec[b] = cnt / total
                 top_p = float(np.max(p_vec))
-                conf = min(1.0, top_p * level_factor)
-            return p_vec, conf
+                evidence_weight = total / (total + 2.0)
+                conf = min(1.0, top_p * level_factor * evidence_weight)
+            return p_vec, float(conf)
 
         # Level 3: Tri-gram backoff
         if len(self.band_history) >= 3:
@@ -245,17 +272,18 @@ class TrackTemporalState:
         # Level 0: Empirical occurrence prior
         total_b = int(np.sum(self.band_counts))
         if total_b > 0:
+            evidence_weight = total_b / (total_b + 2.0)
             if alpha > 0.0:
                 denom = total_b + alpha * K
                 probs = ((self.band_counts + alpha) / denom).astype(np.float32)
                 best_b = int(np.argmax(probs))
                 ev_cnt = self.band_counts[best_b]
-                conf = min(0.5, 0.5 * (ev_cnt / total_b) * (total_b / (total_b + 2.0)))
+                conf = min(0.5, 0.5 * (ev_cnt / total_b) * evidence_weight)
             else:
                 probs = (self.band_counts / total_b).astype(np.float32)
                 top_prob = float(np.max(probs))
-                conf = min(0.5, top_prob * 0.5)
-            return probs, 0, conf
+                conf = min(0.5, top_prob * 0.5 * evidence_weight)
+            return probs, 0, float(conf)
 
         # Fallback: uniform
         probs.fill(1.0 / self.n_bands)
@@ -413,6 +441,42 @@ class TemporalPredictor:
 
         predictions.sort(key=lambda p: p.eta_us)
         return predictions
+
+    def predict_track(self, track_id: int, current_time: float | None = None) -> Optional[TrackPrediction]:
+        """Generate prediction for a specific track ID."""
+        track_id = int(track_id)
+        if track_id not in self.tracks:
+            return None
+        t_state = self.tracks[track_id]
+        curr_t = float(current_time if current_time is not None else self.current_time_us)
+        profile = self.behavior_manager.classify_track(t_state)
+        next_toa, eta_us, arr_prob = t_state.predict_next_arrival(curr_t)
+        probs, level, band_conf = t_state.predict_next_band_distribution(alpha_dirichlet=self.alpha_dirichlet)
+        best_band = int(np.argmax(probs))
+        overall_conf = float(arr_prob * band_conf)
+
+        return TrackPrediction(
+            track_id=track_id,
+            target_band=best_band,
+            band_probabilities=probs,
+            next_expected_toa=next_toa,
+            eta_us=eta_us,
+            pri_estimate_us=t_state.pri_estimate,
+            pri_confidence=t_state.pri_confidence,
+            pri_variance_us=t_state.pri_variance,
+            agility_score=t_state.agility_score,
+            prediction_confidence=overall_conf,
+            target_frequency_mhz=t_state.last_freq_mhz,
+            backoff_level_used=level,
+            behavior_profile=profile,
+        )
+
+    def predict_next_band(self, track_id: int) -> Tuple[int, float]:
+        """Return (predicted_band, confidence) for track_id."""
+        pred = self.predict_track(track_id)
+        if pred is None:
+            return 0, 0.0
+        return pred.target_band, pred.prediction_confidence
 
     def get_predicted_candidate_bands(
         self,

@@ -21,9 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 # Ensure the authoritative master receiver is importable (read-only use).
 # This file lives at <repo_root>/rf_simulation/tests/test_frequency_context.py,
 # so parents[2] is <repo_root>.
-_MASTER_SRC = str(Path(__file__).resolve().parents[2] / "ew_core" / "src")
-if _MASTER_SRC not in sys.path:
-    sys.path.insert(0, _MASTER_SRC)
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 from frequency_context import (
     KHZ_TO_MHZ,

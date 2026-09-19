@@ -24,6 +24,7 @@ from ew_core.models.drqn_scheduler import DRQNScheduler
 from ew_core.models.smartscan_moe import SmartScanMoE
 from ew_core.environment.radio_environment import PulseRecord
 from ew_core.environment.cognitive_rf_scan_env import CognitiveRFScanEnv
+from ew_core.utils.checkpoint_paths import verify_production_checkpoint
 
 
 def test_future_pulse_invariance_leakage_audit():
@@ -76,11 +77,7 @@ def test_future_pulse_invariance_leakage_audit():
         "base_dwell_time_us": 500.0,
     }
 
-    ckpt_path = Path("experiments/checkpoints/scheduler/best.pt")
-    if not ckpt_path.exists():
-        ckpt_path = Path("experiments/checkpoints/scheduler/checkpoint_step_25500.pt")
-    if not ckpt_path.exists():
-        ckpt_path = Path("experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt")
+    ckpt_path = verify_production_checkpoint()
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
 
     drqn = DRQNScheduler(obs_dim=360, n_bands=36, n_modes=5, n_actions=180, lstm_hidden=256, lstm_layers=2)

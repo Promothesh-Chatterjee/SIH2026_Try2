@@ -240,11 +240,15 @@ def validate_pipeline(
 
 
 if __name__ == "__main__":
+    default_ckpt = BASE_DIR / "experiments" / "checkpoints" / "scheduler_v2_operational_candidate" / "checkpoint_gate_25000_frozen.pt"
+    if not default_ckpt.exists():
+        default_ckpt = BASE_DIR / "experiments" / "checkpoints" / "production_baseline" / "checkpoint_gate_25000_frozen.pt"
+
     parser = argparse.ArgumentParser(description="Validate End-to-End Operational Pipeline")
     parser.add_argument(
         "--checkpoint",
         type=Path,
-        default=BASE_DIR / "checkpoints" / "scheduler_v2_operational_candidate" / "checkpoint_gate_25000_frozen.pt",
+        default=default_ckpt,
         help="Path to frozen operational candidate checkpoint",
     )
     parser.add_argument("--steps", type=int, default=1000, help="Number of operational scan steps")

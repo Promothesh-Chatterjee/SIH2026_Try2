@@ -35,16 +35,12 @@ from iq_bridge import IQReceiverBridge
 from per_tune_generator import EmitterConfig
 
 try:
-    # Resolve the master repository receiver via a checkout-relative path.
-    # This file lives at <repo_root>/rf_simulation/scripts/dwell_orchestrator.py,
-    # so parents[2] is <repo_root> and the master src is
-    # <repo_root>/ew_core.
-    _MASTER_SRC = str(Path(__file__).resolve().parents[2] / "ew_core" / "src")
-    if _MASTER_SRC not in sys.path:
-        sys.path.insert(0, _MASTER_SRC)
-    from receiver import SieveReceiver
+    from ew_core.receiver import SieveReceiver
 except ImportError:
-    from SieveReceiver import SieveReceiver  # type: ignore[no-redef]
+    _REPO_ROOT = str(Path(__file__).resolve().parents[2])
+    if _REPO_ROOT not in sys.path:
+        sys.path.insert(0, _REPO_ROOT)
+    from ew_core.receiver import SieveReceiver
 
 __all__ = ["DwellConfig", "DwellResult", "DwellOrchestrator", "EmitterConfig"]
 

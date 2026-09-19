@@ -3,9 +3,19 @@
 import hashlib
 import json
 from pathlib import Path
+import tempfile
 import unittest
 import pytest
+import torch
 
+from ew_core.models.drqn_scheduler import DRQNScheduler
+from ew_core.utils.checkpoint_paths import (
+    CANONICAL_PRODUCTION_BASELINE,
+    REFERENCE_CANDIDATE_MIRROR,
+    EXPECTED_FROZEN_SHA256,
+    verify_production_baseline_checkpoint,
+)
+from scripts.validate_pipeline import load_agent
 from scripts.verify_baseline_gate import (
     CANONICAL_CKPT_SHA256,
     CANONICAL_METRICS,
@@ -68,6 +78,69 @@ class TestProductionBaselineImmutable(unittest.TestCase):
     def test_full_verification_gate(self):
         safe_output = Path("experiments/checkpoints/test_run_candidate")
         self.assertTrue(run_verification(self.base_dir, safe_output))
+
+    def test_canonical_and_candidate_mirror_byte_identity(self):
+        """Verify CANONICAL_PRODUCTION_BASELINE and REFERENCE_CANDIDATE_MIRROR are byte-identical."""
+        self.assertTrue(CANONICAL_PRODUCTION_BASELINE.exists(), f"Missing canonical baseline at {CANONICAL_PRODUCTION_BASELINE}")
+        self.assertTrue(REFERENCE_CANDIDATE_MIRROR.exists(), f"Missing candidate mirror at {REFERENCE_CANDIDATE_MIRROR}")
+
+        canonical_hash = sha256_file(CANONICAL_PRODUCTION_BASELINE)
+        mirror_hash = sha256_file(REFERENCE_CANDIDATE_MIRROR)
+        self.assertEqual(canonical_hash, EXPECTED_FROZEN_SHA256)
+        self.assertEqual(mirror_hash, EXPECTED_FROZEN_SHA256)
+
+        # Byte-by-byte comparison
+        with open(CANONICAL_PRODUCTION_BASELINE, "rb") as f1, open(REFERENCE_CANDIDATE_MIRROR, "rb") as f2:
+            self.assertEqual(f1.read(), f2.read())
+
+    def test_drqn_scheduler_loads_checkpoint_and_evaluates(self):
+        """Load frozen baseline into DRQNScheduler and verify output shapes (1, 1, 180)."""
+        ckpt = torch.load(str(CANONICAL_PRODUCTION_BASELINE), map_location="cpu", weights_only=False)
+        state_dict = ckpt.get("state_dict", ckpt)
+        model = DRQNScheduler(obs_dim=360, n_bands=36, n_modes=5)
+        model.load_state_dict(state_dict)
+        model.eval()
+
+        dummy_obs = torch.zeros(1, 1, 360)
+        with torch.no_grad():
+            q_vals, aux, hidden = model(dummy_obs)
+
+        self.assertEqual(q_vals.shape, (1, 1, 180))
+        self.assertIn("intercept_prob", aux)
+        self.assertIn("intercept_time_us", aux)
+        self.assertEqual(aux["intercept_prob"].shape, (1, 1, 180))
+        self.assertEqual(aux["intercept_time_us"].shape, (1, 1, 180))
+
+    def test_verify_checkpoint_helper_strict_failures(self):
+        """verify_production_baseline_checkpoint must succeed on valid checkpoint and fail loudly on missing or corrupted files."""
+        # Valid path
+        verified = verify_production_baseline_checkpoint(CANONICAL_PRODUCTION_BASELINE)
+        self.assertEqual(verified, CANONICAL_PRODUCTION_BASELINE)
+
+        # Missing path raises FileNotFoundError
+        with self.assertRaises(FileNotFoundError):
+            verify_production_baseline_checkpoint(Path("experiments/non_existent_file.pt"))
+
+        # Corrupted path raises ValueError
+        with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as tmp:
+            tmp.write(b"corrupted checkpoint content")
+            tmp_path = Path(tmp.name)
+        try:
+            with self.assertRaises(ValueError):
+                verify_production_baseline_checkpoint(tmp_path)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+
+    def test_validate_pipeline_load_agent_strict_failure(self):
+        """validate_pipeline.load_agent must fail loudly if checkpoint missing, not fall back."""
+        with self.assertRaises(FileNotFoundError):
+            load_agent(Path("experiments/non_existent_file.pt"))
+
+        # Valid checkpoint loads cleanly
+        agent = load_agent(CANONICAL_PRODUCTION_BASELINE)
+        self.assertIsNotNone(agent)
+        self.assertIsInstance(agent, DRQNScheduler)
 
 
 if __name__ == "__main__":

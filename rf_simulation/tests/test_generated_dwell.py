@@ -22,10 +22,9 @@ import numpy as np
 
 # Ensure scripts/ is importable.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-# Ensure the authoritative master receiver is importable (read-only use).
-_MASTER_SRC = str(Path(__file__).resolve().parents[2] / "ew_core" / "src")
-if _MASTER_SRC not in sys.path:
-    sys.path.insert(0, _MASTER_SRC)
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 from dwell_orchestrator import DwellOrchestrator, DwellResult, EmitterConfig
 from per_tune_generator import EmitterConfig as EmitterConfigDirect

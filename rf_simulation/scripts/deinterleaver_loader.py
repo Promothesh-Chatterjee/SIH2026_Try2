@@ -95,11 +95,28 @@ _DEINTERLEAVER_KEY_PREFIXES = ("input_proj.", "pos_encoding.", "transformer.", "
 
 
 def _default_checkpoint_path() -> Path:
-    return _REPO / "ew_core" / "checkpoints" / "best.pt"
+    candidates = [
+        _REPO / "checkpoints" / "deinterleaver" / "best.pt",
+        _REPO / "experiments" / "checkpoints" / "deinterleaver" / "best.pt",
+        _REPO / "ew_core" / "checkpoints" / "best.pt",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0]
 
 
 def _default_stats_path() -> Path:
-    return _REPO / "ew_core" / "checkpoints" / "normalization_stats.json"
+    candidates = [
+        _REPO / "checkpoints" / "deinterleaver" / "normalization_stats.json",
+        _REPO / "experiments" / "checkpoints" / "deinterleaver" / "normalization_stats.json",
+        _REPO / "configs" / "normalization_stats.json",
+        _REPO / "ew_core" / "checkpoints" / "normalization_stats.json",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0]
 
 
 def _validate_metadata(metadata: Any, arch_tag: str) -> None:
@@ -182,11 +199,17 @@ def load_deinterleaver(
     """
     from ew_core.models.deinterleaver import PDWTransformerEncoder
 
-    ckpt = Path(checkpoint_path) if checkpoint_path is not None else _default_checkpoint_path()
+    if checkpoint_path is None or str(checkpoint_path).strip().lower() in ("default", "none"):
+        ckpt = _default_checkpoint_path()
+    else:
+        ckpt = Path(checkpoint_path)
     if not ckpt.exists():
         raise FileNotFoundError(f"Deinterleaver checkpoint not found: {ckpt}")
 
-    stats = Path(stats_path) if stats_path is not None else _default_stats_path()
+    if stats_path is None or str(stats_path).strip().lower() in ("default", "none"):
+        stats = _default_stats_path()
+    else:
+        stats = Path(stats_path)
     if not stats.exists():
         raise FileNotFoundError(f"Normalization stats not found: {stats}")
 

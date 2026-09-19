@@ -295,9 +295,9 @@ class TestPerceptionPipelineState:
         assert len(tr._pdw_buffer) == 10
         # record_visit estimates features 5-8 from observable detections only:
         # all AoA = 0 -> one bearing -> emitter_count = clip(1/5, 0.1, 1) = 0.2
-        # deinterleaver_confidence = clip(0.6 + 0.08*min(10,5), 0, 1) = 1.0
+        # deinterleaver_confidence = canonical mean of detection confidences = 0.8
         assert _feat(obs, 6, 5) == pytest.approx(0.2, abs=1e-6)
-        assert _feat(obs, 6, 6) == pytest.approx(1.0, abs=1e-6)
+        assert _feat(obs, 6, 6) == pytest.approx(0.8, abs=1e-6)
         # Unvisited bands stay untouched by the fallback.
         assert _feat(obs, 20, 5) == 0.0
 

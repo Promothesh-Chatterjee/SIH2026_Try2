@@ -1,0 +1,19 @@
+{
+  "observed_lifecycle_sequence": [
+    "ACTIVE",
+    "COASTING",
+    "COASTING",
+    "ACTIVE",
+    "RETIRED"
+  ],
+  "expected_lifecycle_sequence": [
+    "ACTIVE",
+    "COASTING",
+    "COASTING",
+    "ACTIVE",
+    "RETIRED"
+  ],
+  "lifecycle_state_machine_valid": true,
+  "survival_under_missed_dwells": true,
+  "retirement_isolation_verified": true
+}

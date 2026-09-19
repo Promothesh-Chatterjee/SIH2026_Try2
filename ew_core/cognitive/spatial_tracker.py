@@ -38,21 +38,46 @@ class SpatialTracker:
         mean_deg = (math.degrees(mean_rad)) % 360.0
         return mean_deg, r
 
-    def update_from_track(self, track_id: int, new_aoa_deg: float, current_time_us: float) -> SpatialBelief:
+    def update_from_track(self, track_id: int, new_aoa_deg: Optional[float], current_time_us: float) -> SpatialBelief:
+        is_valid_aoa = (
+            new_aoa_deg is not None
+            and isinstance(new_aoa_deg, (int, float))
+            and math.isfinite(new_aoa_deg)
+        )
+        if not is_valid_aoa:
+            # Graceful degradation on missing or invalid AoA
+            if track_id not in self.beliefs:
+                self.beliefs[track_id] = SpatialBelief(
+                    track_id=track_id,
+                    mean_aoa_deg=0.0,
+                    circular_variance=1.0,
+                    confidence=0.0,
+                    last_update_us=current_time_us,
+                    sector_index=0,
+                    aoa_samples=[],
+                )
+                return self.beliefs[track_id]
+            sb = self.beliefs[track_id]
+            # Degrade confidence on missing observation
+            sb.confidence = max(0.0, sb.confidence * 0.9)
+            sb.circular_variance = min(1.0, 1.0 - sb.confidence)
+            return sb
+
+        aoa_clean = float(new_aoa_deg) % 360.0
         if track_id not in self.beliefs:
             self.beliefs[track_id] = SpatialBelief(
                 track_id=track_id,
-                mean_aoa_deg=new_aoa_deg % 360.0,
+                mean_aoa_deg=aoa_clean,
                 circular_variance=0.0,
                 confidence=1.0,
                 last_update_us=current_time_us,
-                sector_index=int((new_aoa_deg % 360.0) // self.sector_width_deg),
-                aoa_samples=[new_aoa_deg % 360.0],
+                sector_index=int(aoa_clean // self.sector_width_deg) % self.n_sectors,
+                aoa_samples=[aoa_clean],
             )
             return self.beliefs[track_id]
 
         sb = self.beliefs[track_id]
-        sb.aoa_samples.append(new_aoa_deg % 360.0)
+        sb.aoa_samples.append(aoa_clean)
         if len(sb.aoa_samples) > self.max_history:
             sb.aoa_samples = sb.aoa_samples[-self.max_history:]
 
