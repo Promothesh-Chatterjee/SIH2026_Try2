@@ -123,15 +123,16 @@ def evaluate_gate_6_2() -> Dict[str, Any]:
     logger.info("Evaluating Gate 6.2: Dwell- vs Time-Normalized Metrics...")
     fom = FiguresOfMerit()
 
-    # Step 1: SHORT dwell (125 us) + retune (15 us) = 140 us. Miss.
+    # Step 1: SHORT dwell (125 us) + retune (15 us) = 140 us. False alarm on inactive band.
     fom.record_reward_components({
         "dwell_time_us": 125.0,
         "retune_latency_us": 15.0,
         "physical_step_time_us": 140.0,
     })
-    fom.update(band_chosen=0, ground_truth_active=False, pred_active=False, reward=-0.5)
+    fom.update(band_chosen=0, ground_truth_active=False, pred_active=True, intercept_time_error_us=30.0, reward=-1.0)
+    fa_first_hit_none = (fom.first_hit_mission_time_us is None and fom.first_hit_latency_us is None and fom.fp == 1 and fom.tp == 0)
 
-    # Step 2: NORMAL dwell (500 us) + retune (15 us) = 515 us. Hit with 50 us latency.
+    # Step 2: NORMAL dwell (500 us) + retune (15 us) = 515 us. Genuine hit with 50 us latency.
     fom.record_reward_components({
         "dwell_time_us": 500.0,
         "retune_latency_us": 15.0,
@@ -139,7 +140,7 @@ def evaluate_gate_6_2() -> Dict[str, Any]:
     })
     fom.update(band_chosen=1, ground_truth_active=True, pred_active=True, intercept_time_error_us=50.0, reward=12.0)
 
-    # Step 3: LONG dwell (1250 us) + retune (15 us) = 1265 us. Hit with 100 us latency.
+    # Step 3: LONG dwell (1250 us) + retune (15 us) = 1265 us. Genuine hit with 100 us latency.
     fom.record_reward_components({
         "dwell_time_us": 1250.0,
         "retune_latency_us": 15.0,
@@ -148,7 +149,7 @@ def evaluate_gate_6_2() -> Dict[str, Any]:
     fom.update(band_chosen=2, ground_truth_active=True, pred_active=True, intercept_time_error_us=100.0, reward=10.0)
 
     # Total physical time = 140 + 515 + 1265 = 1920 us = 1.92 ms
-    # Total hits = 2, steps = 3, total reward = 21.5
+    # Total hits = 2, steps = 3, total reward = 21.0
     expected_total_time_us = 1920.0
     expected_ir_dwell = 2 / 3
     expected_ir_ms = 2.0 / 1.92
@@ -156,6 +157,7 @@ def evaluate_gate_6_2() -> Dict[str, Any]:
     expected_first_hit_mission_time_ms = 0.655  # 140 + 515 = 655 us = 0.655 ms
 
     checks = {
+        "false_alarm_does_not_populate_first_hit": fa_first_hit_none,
         "total_mission_time_us": math.isclose(fom.total_mission_time_us, expected_total_time_us, abs_tol=1e-3),
         "ir_per_dwell": math.isclose(fom.ir_per_dwell, expected_ir_dwell, abs_tol=1e-5),
         "ir_per_ms": math.isclose(fom.ir_per_ms, expected_ir_ms, abs_tol=1e-5),

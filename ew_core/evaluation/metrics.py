@@ -527,12 +527,6 @@ class FiguresOfMerit:
         elif not is_active and pred_active:
             self.fp += 1
             self.n_false_alarms += 1
-            if self.first_hit_mission_time_us is None:
-                self.first_hit_mission_time_us = float(self.total_mission_time_us)
-                if intercept_time_error_us is not None and intercept_time_error_us == intercept_time_error_us and np.isfinite(intercept_time_error_us):
-                    self.first_hit_latency_us = float(intercept_time_error_us)
-                else:
-                    self.first_hit_latency_us = None
         else:
             self.tn += 1
 
