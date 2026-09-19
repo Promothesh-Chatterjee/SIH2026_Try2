@@ -1,6 +1,6 @@
 {
   "n_steps": 500,
-  "mean_step_latency_us": 25768.8,
+  "mean_step_latency_us": 1764.3,
   "feature_distributions": {
     "occupancy": {
       "index": 0,
@@ -40,7 +40,7 @@
     },
     "uncertainty": {
       "index": 3,
-      "min": 2.0763825887115672e-05,
+      "min": 2.074231451842934e-05,
       "max": 1.0,
       "mean": 0.6281,
       "std": 0.3198,
@@ -112,7 +112,7 @@
     },
     "priority": {
       "index": 9,
-      "min": 0.025133704766631126,
+      "min": 0.025133710354566574,
       "max": 0.675000011920929,
       "mean": 0.4396,
       "std": 0.1609,
