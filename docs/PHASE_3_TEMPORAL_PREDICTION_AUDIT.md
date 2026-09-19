@@ -72,12 +72,12 @@ From `experiments/reports/phase3/phase3_temporal_prediction.json`:
 | **Stationary Emitter** | 25 | 22 | **100.0%** | **100.0%** | **0.0 µs** | 0.0 µs | 0.8500 | **PASS** |
 | **Periodic Hopper** | 30 | 26 | **100.0%** | **100.0%** | **0.0 µs** | 0.0 µs | 0.7820 | **PASS** |
 | **Deterministic 5-Hop Cycle** | 40 | 34 | **100.0%** | **100.0%** | **0.0 µs** | 0.0 µs | 0.6940 | **PASS** |
-| **Irregular Agile Emitter** | 40 | 36 | **25.0%** | **33.3%** | N/A | N/A | **0.2966** | **PASS** |
+| **Irregular Agile Emitter** | 40 | 36 | **25.0%** | **33.3%** | N/A | N/A | **0.2375** | **PASS** |
 
 ### Critical Behavioral Observations:
 1. **Deterministic Scenarios**: The predictor cleanly converges to 100% Accuracy@1 and 0.0 µs ETA error once the transition order is established.
-2. **Irregular Agile Scenarios**: In accordance with User Amendment 5, the predictor does not fabricate high confidence when transitions are inherently stochastic (mean confidence = $0.2966$). It remains conservative and calibrated.
+2. **Irregular Agile Scenarios**: In accordance with User Amendment 5, the predictor does not fabricate high confidence when transitions are inherently stochastic (mean confidence = $0.2375$). It remains conservative and calibrated.
 3. **Execution Latency**:
-   - Single track temporal prediction: **6.28 microseconds**.
-   - Spatial tracker update: **6.86 microseconds**.
+   - Single track temporal prediction: **6.42 microseconds**.
+   - Spatial tracker update: **7.01 microseconds**.
    - Both are well below the real-time operational budget ($< 500\text{ µs}$).

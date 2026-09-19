@@ -105,12 +105,12 @@ From `experiments/reports/phase3/phase3_temporal_prediction.json`:
 | **Stationary Emitter** | 25 | 22 | **100.0%** | **100.0%** | **0.0 µs** | 0.0 µs | 0.8500 | **PASS** |
 | **Periodic Hopper** | 30 | 26 | **100.0%** | **100.0%** | **0.0 µs** | 0.0 µs | 0.7820 | **PASS** |
 | **Deterministic 5-Hop Cycle** | 40 | 34 | **100.0%** | **100.0%** | **0.0 µs** | 0.0 µs | 0.6940 | **PASS** |
-| **Irregular Agile Emitter** | 40 | 36 | **25.0%** | **33.3%** | N/A | N/A | **0.2966** | **PASS** |
+| **Irregular Agile Emitter** | 40 | 36 | **25.0%** | **33.3%** | N/A | N/A | **0.2375** | **PASS** |
 
 ### Execution Latencies:
-- **Belief State Full-Dwell Step Latency:** **1.25 ms**
-- **Single Track Temporal Prediction:** **6.28 µs**
-- **Spatial Tracker Update:** **6.86 µs**
+- **Belief State Full-Dwell Step Latency:** **1.76 ms** (1,764.3 µs)
+- **Single Track Temporal Prediction:** **6.42 µs**
+- **Spatial Tracker Update:** **7.01 µs**
 - All latencies operate well within the real-time operational budget ($< 25\text{ ms}$).
 
 ---
