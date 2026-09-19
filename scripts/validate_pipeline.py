@@ -25,7 +25,7 @@ from ew_core.metrics.ew_metrics import EWMetrics, compute_all_metrics
 from ew_core.models.drqn_scheduler import DRQNScheduler
 from ew_core.operational.state_builder import OperationalStateBuilder
 from ew_core.scheduler.baseline_sweep import RoundRobinScheduler
-from ew_core.scheduler.periodic_detector import AdaptivePeriodicScheduler
+from ew_core.utils.checkpoint_paths import CANONICAL_PRODUCTION_BASELINE
 
 
 def run_baseline(
@@ -73,22 +73,26 @@ def load_agent(
     obs_dim: int = 360,
     n_modes: int = 5,
 ) -> Any:
-    """Attempt to load trained DRQNScheduler from checkpoint, falling back gracefully."""
-    if ckpt_path.is_file():
+    """Load trained DRQNScheduler from checkpoint. Fails strictly if missing or corrupted."""
+    if not ckpt_path.is_file():
+        raise FileNotFoundError(
+            f"Strict checkpoint required: '{ckpt_path}' does not exist. "
+            f"Silent fallback has been permanently removed."
+        )
+    try:
         try:
+            checkpoint = torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
+        except TypeError:
             checkpoint = torch.load(str(ckpt_path), map_location="cpu")
-            state_dict = checkpoint.get("state_dict", checkpoint)
-            model = DRQNScheduler(obs_dim=obs_dim, n_bands=n_bands, n_modes=n_modes)
-            model.load_state_dict(state_dict)
-            model.eval()
-            print(f"[OK] Successfully loaded trained DRQN checkpoint from: {ckpt_path}")
-            return model
-        except Exception as exc:
-            print(f"[WARN] Failed to load checkpoint {ckpt_path} ({exc}); falling back to AdaptivePeriodicScheduler")
-    else:
-        print(f"[INFO] No checkpoint found at {ckpt_path}; using AdaptivePeriodicScheduler")
+    except Exception as exc:
+        raise RuntimeError(f"Corrupt or invalid checkpoint at {ckpt_path}: {exc}") from exc
 
-    return None
+    state_dict = checkpoint.get("state_dict", checkpoint)
+    model = DRQNScheduler(obs_dim=obs_dim, n_bands=n_bands, n_modes=n_modes)
+    model.load_state_dict(state_dict)
+    model.eval()
+    print(f"[OK] Successfully loaded trained DRQN checkpoint from: {ckpt_path}")
+    return model
 
 
 def run_agent(
@@ -119,36 +123,24 @@ def run_agent(
     log = env.init_episode_log()
     env.reset(seed=seed)
 
-    if agent_model is not None:
-        # Run trained DRQNScheduler with 360-D operational belief state builder
-        state_builder = OperationalStateBuilder(n_bands=n_bands)
-        hidden = None
+    # Run trained DRQNScheduler with 360-D operational belief state builder
+    state_builder = OperationalStateBuilder(n_bands=n_bands)
+    hidden = None
 
-        for t in range(t_steps):
-            state_360 = state_builder.build_state(current_time_us=float(t * 500.0))
-            s_tensor = torch.from_numpy(state_360).float().unsqueeze(0).unsqueeze(0)
-            with torch.no_grad():
-                q_vals, aux, hidden = agent_model(s_tensor, hidden)
+    for t in range(t_steps):
+        state_360 = state_builder.build_state(current_time_us=float(t * 500.0))
+        s_tensor = torch.from_numpy(state_360).float().unsqueeze(0).unsqueeze(0)
+        with torch.no_grad():
+            q_vals, aux, hidden = agent_model(s_tensor, hidden)
 
-            joint_action = int(torch.argmax(q_vals[0, 0]).item())
-            band = joint_action // 5
-            obs, reward, terminated, truncated, info = env.step(band)
-            hit = bool(info.get("hit", False))
-            state_builder.record_dwell_outcome(band, hit, current_time_us=float((t + 1) * 500.0))
-            env.update_episode_log(log, band, reward, info)
-            if terminated or truncated:
-                break
-    else:
-        # Analytical Adaptive Scheduler fallback
-        scheduler = AdaptivePeriodicScheduler(n_bands=n_bands, preemption_window=3)
-        for t in range(t_steps):
-            # Prioritize detected scanning beam pattern if periodicity confirmed, else periodic sweep
-            band = (t % 50) // 5
-            obs, reward, terminated, truncated, info = env.step(band)
-            scheduler.update(step=t, band=band, hit=bool(info.get("hit", False)))
-            env.update_episode_log(log, band, reward, info)
-            if terminated or truncated:
-                break
+        joint_action = int(torch.argmax(q_vals[0, 0]).item())
+        band = joint_action // 5
+        obs, reward, terminated, truncated, info = env.step(band)
+        hit = bool(info.get("hit", False))
+        state_builder.record_dwell_outcome(band, hit, current_time_us=float((t + 1) * 500.0))
+        env.update_episode_log(log, band, reward, info)
+        if terminated or truncated:
+            break
 
     truth_matrix = env.get_truth_matrix()
     metrics = compute_all_metrics(log, min_detectable_signal_dbm=-140.0)
@@ -156,6 +148,17 @@ def run_agent(
 
 
 def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Full Pipeline Validation")
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=CANONICAL_PRODUCTION_BASELINE,
+        help="Path to trained DRQN checkpoint",
+    )
+    args = parser.parse_args()
+
     print("=" * 70)
     print("Cognitive EW SmartScan — Full Pipeline Validation (Phase 4)")
     print("=" * 70)
@@ -171,8 +174,8 @@ def main() -> int:
           f"(Rate: {baseline_metrics.avg_intercept_rate:.4f}, Pd: {baseline_metrics.pd:.4f})")
 
     # 2. Load Agent and Execute Cognitive Scheduling
-    ckpt_path = Path("experiments/checkpoints/scheduler/best.pt")
-    print(f"\n[2/3] Loading scheduler agent and evaluating on RF spectrum...")
+    ckpt_path = args.checkpoint
+    print(f"\n[2/3] Loading scheduler agent from {ckpt_path} and evaluating on RF spectrum...")
     agent_model = load_agent(ckpt_path, n_bands=n_bands, obs_dim=360, n_modes=5)
     agent_metrics, agent_log, truth_matrix = run_agent(
         agent_model=agent_model,

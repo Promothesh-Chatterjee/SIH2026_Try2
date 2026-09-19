@@ -57,6 +57,8 @@ if _MASTER_PKG not in sys.path:
 
 from ew_core.environment.cognitive_rf_scan_env import BeliefState, STATE_FEATURES_PER_BAND  # noqa: E402
 from ew_core.perception.emitter_tracker import EmitterTracker  # noqa: E402
+from ew_core.cognitive.temporal_predictor import TemporalPredictor  # noqa: E402
+from ew_core.cognitive.periodic_interceptor import PeriodicScanInterceptor  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +144,11 @@ class GnuRfSchedulerTranslation:
 
         if self.perception_enabled:
             self.emitter_tracker = EmitterTracker(n_bands=self.n_bands)
+            self.temporal_predictor = TemporalPredictor(n_bands=self.n_bands)
+            self.periodic_interceptor = PeriodicScanInterceptor(min_observations=20)
+        else:
+            self.temporal_predictor = None
+            self.periodic_interceptor = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -154,6 +161,12 @@ class GnuRfSchedulerTranslation:
         self._step_count = 0
         self.emitter_tracker = (
             EmitterTracker(n_bands=self.n_bands) if self.perception_enabled else None
+        )
+        self.temporal_predictor = (
+            TemporalPredictor(n_bands=self.n_bands) if self.perception_enabled else None
+        )
+        self.periodic_interceptor = (
+            PeriodicScanInterceptor(min_observations=20) if self.perception_enabled else None
         )
 
     def update(self, observation) -> np.ndarray:
@@ -208,6 +221,33 @@ class GnuRfSchedulerTranslation:
                     self.belief.update_from_perception(perception_result)
                 # Trim buffer exactly like the production env
                 self._pdw_buffer = self._pdw_buffer[-self._min_deinterleave_pulses:]
+
+        self._current_dwell_start = float(getattr(observation, "time_us", 0.0))
+        self._current_dwell_time = float(getattr(observation, "dwell_time_us", 500.0))
+
+        # Check periodic interceptor for preemptive schedule recommendation
+        preemptive_band = None
+        preemptive_urgency = 0.0
+        if self.periodic_interceptor is not None:
+            curr_t = self._current_dwell_start + self._current_dwell_time
+            schedule = self.periodic_interceptor.get_preemptive_schedule(
+                current_time_us=curr_t,
+                horizon_us=self._current_dwell_time * 10,
+            )
+            if schedule:
+                next_pred = schedule[0]
+                if next_pred["confidence"] > 0.7:
+                    preemptive_band = next_pred["expected_band"]
+                    preemptive_urgency = float(next_pred.get("confidence", 0.8))
+
+        if preemptive_band is not None and self.belief is not None:
+            _b = int(preemptive_band)
+            if 0 <= _b < self.belief.n_bands:
+                self.belief.periodic_urgency[_b] = float(
+                    np.clip(self.belief.periodic_urgency[_b] + 0.4 * preemptive_urgency, 0.0, 1.0)
+                )
+        if self.belief is not None:
+            self.belief.periodic_urgency *= 0.9
 
         # 3. Causal belief update (from observation only)
         self.belief.record_visit(band, any_hit, detections=detections)
@@ -287,6 +327,39 @@ class GnuRfSchedulerTranslation:
                 band=band,
                 min_cluster_size=min_cluster_size,
             )
+
+            pulse_tracks = self.emitter_tracker.get_pulse_track_assignment(labels)
+            if pulse_tracks is not None and self.temporal_predictor is not None:
+                for i, p in enumerate(self._pdw_buffer):
+                    if p.get("_temporal_ingested", False):
+                        continue
+                    track_id = int(pulse_tracks[i]) if i < len(pulse_tracks) else -1
+                    if track_id < 0:
+                        continue
+                    t = float(p.get("time_us", 0.0))
+                    f = float(p.get("frequency_mhz", 0.0))
+                    b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))
+                    self.temporal_predictor.update_from_pulse(track_id, t, f, b)
+                    p["_temporal_ingested"] = True
+                preds = self.temporal_predictor.predict_all(current_time=current_time_us, horizon_us=25000.0)
+                self.belief.update_from_temporal_predictions(preds, current_time_us=current_time_us)
+
+            if self.periodic_interceptor is not None and pulse_tracks is not None:
+                dwell_start = float(getattr(self, "_current_dwell_start", 0.0))
+                dwell_end = dwell_start + float(getattr(self, "_current_dwell_time", 500.0))
+                for i, p in enumerate(self._pdw_buffer):
+                    t = float(p["time_us"])
+                    if t < dwell_start or t >= dwell_end:
+                        continue
+                    track_id = int(pulse_tracks[i]) if i < len(pulse_tracks) else -1
+                    if track_id < 0:
+                        continue
+                    self.periodic_interceptor.record_intercept(
+                        track_id=f"track_{track_id}",
+                        toa_us=t,
+                        band_idx=band,
+                        frequency_mhz=float(p["frequency_mhz"]),
+                    )
 
             perception_result = self.emitter_tracker.get_band_belief(
                 freq_min=self.freq_min,

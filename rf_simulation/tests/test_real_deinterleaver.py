@@ -67,7 +67,12 @@ from iq_bridge import IQReceiverBridge  # noqa: E402
 from iq_to_pdw import PDWDetector  # noqa: E402
 from per_tune_generator import EmitterConfig, PerTuneGenerator  # noqa: E402
 
-CHECKPOINTS = _ROOT / "ew_core" / "checkpoints"
+_DEINT_CANDIDATES = [
+    _ROOT / "checkpoints" / "deinterleaver",
+    _ROOT / "experiments" / "checkpoints" / "deinterleaver",
+    _ROOT / "ew_core" / "checkpoints",
+]
+CHECKPOINTS = next((p for p in _DEINT_CANDIDATES if (p / "best.pt").exists()), _DEINT_CANDIDATES[0])
 BEST_PT = CHECKPOINTS / "best.pt"
 FINAL_PT = CHECKPOINTS / "final.pt"
 STATS_JSON = CHECKPOINTS / "normalization_stats.json"

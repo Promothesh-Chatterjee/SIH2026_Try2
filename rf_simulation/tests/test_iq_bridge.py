@@ -23,16 +23,16 @@ from pathlib import Path
 
 # Ensure scripts/ is importable.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-# Ensure the authoritative master receiver is importable (read-only use).
-# This file lives at <repo_root>/rf_simulation/tests/test_iq_bridge.py, so
-# parents[2] is <repo_root>.
-_MASTER_SRC = str(Path(__file__).resolve().parents[2] / "ew_core" / "src")
-if _MASTER_SRC not in sys.path:
-    sys.path.insert(0, _MASTER_SRC)
+try:
+    from ew_core.receiver import SieveReceiver
+except ImportError:
+    _REPO_ROOT = str(Path(__file__).resolve().parents[2])
+    if _REPO_ROOT not in sys.path:
+        sys.path.insert(0, _REPO_ROOT)
+    from ew_core.receiver import SieveReceiver
 
 from frequency_context import FrequencyContext, local_frequency_to_rf_frequency
 from iq_bridge import AMP_PLACEHOLDER_DB, AOA_UNKNOWN_DEG, IQReceiverBridge
-from receiver import SieveReceiver
 
 
 def _make_pdw(toa_us, local_khz, pw_us, amp=1.0):

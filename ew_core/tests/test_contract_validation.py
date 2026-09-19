@@ -13,6 +13,17 @@ from ew_core.contracts import (
     CANONICAL_OBS_DIM,
     CANONICAL_N_MODES,
     CANONICAL_N_ACTIONS,
+    DEFAULT_DWELL_MULTIPLIERS,
+    DWELL_MODES,
+    RF_FREQ_MIN_MHZ,
+    RF_FREQ_MAX_MHZ,
+    RF_IBW_MHZ,
+    RF_BASE_DWELL_TIME_US,
+    validate_action,
+    encode_action,
+    band_of_action,
+    mode_of_action,
+    dwell_us_for,
     validate_environment_config,
     require_environment_config,
 )
@@ -159,3 +170,104 @@ class TestContractValidation:
             f"SmartScanEW-v0 must have 360-D obs, got {env.observation_space.shape}"
         assert env.action_space.n == 180, \
             f"SmartScanEW-v0 must have 180 actions, got {env.action_space.n}"
+
+    def test_validate_action_bounds_and_types(self):
+        """Test validate_action rejects invalid types, booleans, and out-of-range actions."""
+        # Valid actions
+        assert validate_action(0) == 0
+        assert validate_action(179) == 179
+        assert validate_action(np.int64(42)) == 42
+
+        # Invalid bounds
+        with pytest.raises(ValueError, match="out of range"):
+            validate_action(-1)
+        with pytest.raises(ValueError, match="out of range"):
+            validate_action(180)
+        with pytest.raises(ValueError, match="out of range"):
+            validate_action(999)
+
+        # Invalid types: booleans are subclasses of int in Python but must be rejected
+        with pytest.raises(TypeError, match="must be an integer"):
+            validate_action(True)
+        with pytest.raises(TypeError, match="must be an integer"):
+            validate_action(False)
+        with pytest.raises(TypeError, match="must be an integer"):
+            validate_action(12.5)
+        with pytest.raises(TypeError, match="must be an integer"):
+            validate_action("42")
+        with pytest.raises(TypeError, match="must be an integer"):
+            validate_action(None)
+
+    def test_encode_action_bounds_and_types(self):
+        """Test encode_action validates band, mode, bounds, and types."""
+        assert encode_action(0, 0) == 0
+        assert encode_action(35, 4) == 179
+        assert encode_action(10, 2) == 10 * 5 + 2
+
+        # Out-of-bounds bands
+        with pytest.raises(ValueError, match="Band -1 out of range"):
+            encode_action(-1, 0)
+        with pytest.raises(ValueError, match="Band 36 out of range"):
+            encode_action(36, 0)
+
+        # Out-of-bounds modes
+        with pytest.raises(ValueError, match="Mode -1 out of range"):
+            encode_action(0, -1)
+        with pytest.raises(ValueError, match="Mode 5 out of range"):
+            encode_action(0, 5)
+
+        # Reject booleans and non-integers
+        with pytest.raises(TypeError, match="Band must be an integer"):
+            encode_action(True, 0)
+        with pytest.raises(TypeError, match="Mode must be an integer"):
+            encode_action(0, False)
+        with pytest.raises(TypeError, match="Band must be an integer"):
+            encode_action(2.5, 0)
+
+    def test_band_and_mode_of_action_decoding(self):
+        """Test band_of_action and mode_of_action roundtrip and validate actions."""
+        for b in range(CANONICAL_N_BANDS):
+            for m in range(CANONICAL_N_MODES):
+                act = encode_action(b, m)
+                assert band_of_action(act) == b
+                assert mode_of_action(act) == m
+
+        # Out-of-range action indices
+        with pytest.raises(ValueError, match="out of range"):
+            band_of_action(-1)
+        with pytest.raises(ValueError, match="out of range"):
+            mode_of_action(180)
+
+        # Type errors
+        with pytest.raises(TypeError, match="must be an integer"):
+            band_of_action(True)
+        with pytest.raises(TypeError, match="must be an integer"):
+            mode_of_action(12.5)
+
+    def test_dwell_multipliers_and_durations(self):
+        """Verify the 5 canonical dwell modes and exact dwell durations at base 500 µs."""
+        assert len(DWELL_MODES) == 5
+        assert DEFAULT_DWELL_MULTIPLIERS == (0.25, 1.0, 2.5, 1.0, 1.0)
+
+        expected_durations = [125.0, 500.0, 1250.0, 500.0, 500.0]
+        for mode_idx, expected_us in enumerate(expected_durations):
+            actual_us = dwell_us_for(RF_BASE_DWELL_TIME_US, mode_idx)
+            assert actual_us == pytest.approx(expected_us), f"Mode {mode_idx} duration mismatch"
+
+    def test_rf_frequency_range_and_band_centers(self):
+        """Verify RF frequency parameters and 36-band layout covering 0-18,000 MHz."""
+        assert RF_FREQ_MIN_MHZ == 0.0
+        assert RF_FREQ_MAX_MHZ == 18_000.0
+        assert RF_IBW_MHZ == 500.0
+
+        for b in range(CANONICAL_N_BANDS):
+            low = b * RF_IBW_MHZ
+            high = (b + 1) * RF_IBW_MHZ
+            center = low + RF_IBW_MHZ / 2.0
+            assert low >= RF_FREQ_MIN_MHZ
+            assert high <= RF_FREQ_MAX_MHZ
+            assert high - low == pytest.approx(500.0)
+
+        # First and last band centers
+        assert 0 * RF_IBW_MHZ + 250.0 == 250.0
+        assert 35 * RF_IBW_MHZ + 250.0 == 17750.0

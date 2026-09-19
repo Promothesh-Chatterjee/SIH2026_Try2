@@ -1,0 +1,130 @@
+{
+  "n_steps": 500,
+  "mean_step_latency_us": 25768.8,
+  "feature_distributions": {
+    "occupancy": {
+      "index": 0,
+      "min": 0.014123762957751751,
+      "max": 0.9999935626983643,
+      "mean": 0.3441,
+      "std": 0.2805,
+      "p25": 0.12,
+      "p50": 0.245,
+      "p75": 0.5,
+      "all_finite": true,
+      "bounded_in_0_1": true
+    },
+    "det_rate": {
+      "index": 1,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.1216,
+      "std": 0.3087,
+      "p25": 0.0,
+      "p50": 0.0,
+      "p75": 0.0,
+      "all_finite": true,
+      "bounded_in_0_1": true
+    },
+    "miss_rate": {
+      "index": 2,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.8784,
+      "std": 0.3087,
+      "p25": 1.0,
+      "p50": 1.0,
+      "p75": 1.0,
+      "all_finite": true,
+      "bounded_in_0_1": true
+    },
+    "uncertainty": {
+      "index": 3,
+      "min": 2.0763825887115672e-05,
+      "max": 1.0,
+      "mean": 0.6281,
+      "std": 0.3198,
+      "p25": 0.4064,
+      "p50": 0.6533,
+      "p75": 0.9336,
+      "all_finite": true,
+      "bounded_in_0_1": true
+    },
+    "revisit_age": {
+      "index": 4,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.6512,
+      "std": 0.384,
+      "p25": 0.26,
+      "p50": 0.84,
+      "p75": 1.0,
+      "all_finite": true,
+      "bounded_in_0_1": true
+    },
+    "emitter_count": {
+      "index": 5,
+      "min": 0.0,
+      "max": 0.2800000011920929,
+      "mean": 0.0271,
+      "std": 0.0687,
+      "p25": 0.0,
+      "p50": 0.0,
+      "p75": 0.0,
+      "all_finite": true,
+      "bounded_in_0_1": true
+    },
+    "deint_confidence": {
+      "index": 6,
+      "min": 0.0,
+      "max": 0.800000011920929,
+      "mean": 0.1074,
+      "std": 0.2716,
+      "p25": 0.0,
+      "p50": 0.0,
+      "p75": 0.0,
+      "all_finite": true,
+      "bounded_in_0_1": true
+    },
+    "pri_stability": {
+      "index": 7,
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.1347,
+      "std": 0.3407,
+      "p25": 0.0,
+      "p50": 0.0,
+      "p75": 0.0,
+      "all_finite": true,
+      "bounded_in_0_1": true
+    },
+    "agility": {
+      "index": 8,
+      "min": 0.0,
+      "max": 0.1967751532793045,
+      "mean": 0.0096,
+      "std": 0.0277,
+      "p25": 0.0,
+      "p50": 0.0,
+      "p75": 0.0,
+      "all_finite": true,
+      "bounded_in_0_1": true
+    },
+    "priority": {
+      "index": 9,
+      "min": 0.025133704766631126,
+      "max": 0.675000011920929,
+      "mean": 0.4396,
+      "std": 0.1609,
+      "p25": 0.3079,
+      "p50": 0.444,
+      "p75": 0.5711,
+      "all_finite": true,
+      "bounded_in_0_1": true
+    }
+  },
+  "all_finite": true,
+  "exact_contract_shape": [
+    360
+  ]
+}

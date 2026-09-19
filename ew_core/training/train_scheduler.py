@@ -598,47 +598,52 @@ def train_scheduler(
     eps = eps_start
     reward_baseline = -0.39
 
+    if resume_checkpoint is None:
+        resume_checkpoint = train_cfg.get("scheduler_ckpt") or sched_cfg.get("scheduler_ckpt")
+
     if resume_checkpoint:
         resume_path = Path(resume_checkpoint)
-        if resume_path.exists():
+        if not resume_path.exists():
+            raise FileNotFoundError(
+                f"Configured resume checkpoint not found: {resume_path}. "
+                f"Silent fallback to fresh training is permanently disabled in Phase 0."
+            )
+        try:
+            ckpt = torch.load(resume_path, map_location=device, weights_only=False)
+        except TypeError:
+            ckpt = torch.load(resume_path, map_location=device)
+        if "state_dict" in ckpt:
+            online_drqn.load_state_dict(ckpt["state_dict"])
+            target_drqn.load_state_dict(ckpt.get("target_state_dict", ckpt["state_dict"]))
+        if "optimizer_state_dict" in ckpt and optimizer is not None:
             try:
-                ckpt = torch.load(resume_path, map_location=device, weights_only=False)
-            except TypeError:
-                ckpt = torch.load(resume_path, map_location=device)
-            if "state_dict" in ckpt:
-                online_drqn.load_state_dict(ckpt["state_dict"])
-                target_drqn.load_state_dict(ckpt.get("target_state_dict", ckpt["state_dict"]))
-            if "optimizer_state_dict" in ckpt and optimizer is not None:
-                try:
-                    optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-                except Exception as exc:
-                    logger.warning("Could not restore optimizer state: %s", exc)
-            if "rng_state" in ckpt:
-                try:
-                    torch.set_rng_state(ckpt["rng_state"])
-                except Exception:
-                    pass
-            if "np_rng_state" in ckpt:
-                try:
-                    np.random.set_state(ckpt["np_rng_state"])
-                except Exception:
-                    pass
-            global_step = int(ckpt.get("global_step", 0))
-            episode = int(ckpt.get("episode", 0)) + 1
-            eps = float(ckpt.get("epsilon", eps_start))
-            if "reward_baseline" in ckpt:
-                reward_baseline = float(ckpt["reward_baseline"])
-            elif "reward_baseline" in ckpt.get("metadata", {}).get("extra", {}):
-                reward_baseline = float(ckpt["metadata"]["extra"]["reward_baseline"])
-            else:
-                reward_baseline = -0.39
-            best_reward = float(ckpt.get("metadata", {}).get("metrics", {}).get("best_episode_reward", -float("inf")))
-            logger.info("Resumed state: global_step=%d, episode=%d, eps=%.4f, reward_baseline=%.4f", global_step, episode, eps, reward_baseline)
-            for g in gate_evaluator.gates:
-                if g <= global_step:
-                    gate_evaluator.completed_gates.add(g)
+                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+            except Exception as exc:
+                logger.warning("Could not restore optimizer state: %s", exc)
+        if "rng_state" in ckpt:
+            try:
+                torch.set_rng_state(ckpt["rng_state"])
+            except Exception:
+                pass
+        if "np_rng_state" in ckpt:
+            try:
+                np.random.set_state(ckpt["np_rng_state"])
+            except Exception:
+                pass
+        global_step = int(ckpt.get("global_step", 0))
+        episode = int(ckpt.get("episode", 0)) + 1
+        eps = float(ckpt.get("epsilon", eps_start))
+        if "reward_baseline" in ckpt:
+            reward_baseline = float(ckpt["reward_baseline"])
+        elif "reward_baseline" in ckpt.get("metadata", {}).get("extra", {}):
+            reward_baseline = float(ckpt["metadata"]["extra"]["reward_baseline"])
         else:
-            logger.warning("Resume checkpoint not found: %s — starting fresh", resume_path)
+            reward_baseline = -0.39
+        best_reward = float(ckpt.get("metadata", {}).get("metrics", {}).get("best_episode_reward", -float("inf")))
+        logger.info("Resumed state: global_step=%d, episode=%d, eps=%.4f, reward_baseline=%.4f", global_step, episode, eps, reward_baseline)
+        for g in gate_evaluator.gates:
+            if g <= global_step:
+                gate_evaluator.completed_gates.add(g)
 
     from .eval_batch import get_or_create_fixed_eval_batch, evaluate_q_diagnostics
     fixed_eval_batch = get_or_create_fixed_eval_batch(data_dir=str(canonical_root), device=device)

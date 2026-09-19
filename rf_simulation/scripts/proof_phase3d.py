@@ -5,7 +5,9 @@ from pathlib import Path
 # Checkout-relative path resolution so this works regardless of where the
 # repository is extracted.  This file lives at <repo_root>/rf_simulation/scripts/.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ew_core" / "src"))
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 from dwell_orchestrator import DwellOrchestrator
 

@@ -36,6 +36,20 @@ from ew_core.contracts import (
     CANONICAL_N_BANDS,
     CANONICAL_OBS_DIM,
 )
+from ew_core.cognitive.canonical_belief import (
+    assemble_canonical_band_features,
+    assemble_canonical_observation,
+    compute_canonical_agility,
+    compute_canonical_deint_confidence,
+    compute_canonical_detection_miss_rates,
+    compute_canonical_emitter_count,
+    compute_canonical_occupancy,
+    compute_canonical_pri_stability,
+    compute_canonical_priority,
+    compute_canonical_revisit_age,
+    compute_canonical_uncertainty,
+    map_tracks_to_bands,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,13 +110,16 @@ class OperationalStateBuilder:
         self.dwell_counts[band] += 1
         if hit:
             self.hit_counts[band] += 1
-            # Update EMA occupancy toward 1.0
-            self.ema_occupancy[band] = (1.0 - self.ema_alpha) * self.ema_occupancy[band] + self.ema_alpha * 1.0
         else:
             self.miss_counts[band] += 1
-            # Asymmetric miss decay: confirmed tracks decay with ema_alpha_miss_confirmed (0.20)
-            eff_alpha = self.ema_alpha_miss_confirmed if is_confirmed else self.ema_alpha
-            self.ema_occupancy[band] = (1.0 - eff_alpha) * self.ema_occupancy[band]
+
+        self.ema_occupancy[band] = compute_canonical_occupancy(
+            self.ema_occupancy[band],
+            hit=hit,
+            is_confirmed=is_confirmed,
+            ema_alpha=self.ema_alpha,
+            ema_alpha_miss_confirmed=self.ema_alpha_miss_confirmed,
+        )
 
         self.revisit_age += 1
         self.revisit_age[band] = 0
@@ -113,6 +130,7 @@ class OperationalStateBuilder:
         current_time_us: float,
         active_tracks: Optional[Dict[Any, Any]] = None,
         spatial_tracker: Optional[Any] = None,
+        temporal_predictor: Optional[Any] = None,
     ) -> np.ndarray:
         """Assemble the canonical 360-feature vector from current system state.
         
@@ -120,147 +138,112 @@ class OperationalStateBuilder:
             current_time_us: Current mission clock in microseconds.
             active_tracks: Active tracks from EmitterTracker.
             spatial_tracker: Optional SpatialTracker for sector weighting.
+            temporal_predictor: Optional TemporalPredictor for arrival/hop forecasts.
             
         Returns:
             np.ndarray of shape (360,), dtype float32, bounded in [0.0, 1.0].
         """
         obs = np.zeros((self.n_bands, self.n_features), dtype=np.float32)
 
-        # 1. Base channel statistics (strictly mirroring BeliefState contract)
-        w_st = 0.35
-        w_occ = 0.25
-        w_unc = 0.20
+        # 1. Authoritative mapping of tracks to bands
+        band_tracks = map_tracks_to_bands(
+            active_tracks,
+            n_bands=self.n_bands,
+            current_time_us=current_time_us,
+            recent_hop_window_us=self.recent_hop_window_us,
+        )
 
-        for b in range(self.n_bands):
-            dwells = self.dwell_counts[b]
-            hits = self.hit_counts[b]
+        # 2. Predictive urgency from TemporalPredictor (modulates priority only, not uncertainty)
+        predictive_urgency = np.zeros(self.n_bands, dtype=np.float32)
+        if temporal_predictor is not None:
+            try:
+                preds = temporal_predictor.predict_all(current_time=current_time_us, horizon_us=25000.0)
+                for pred in preds:
+                    tb = int(pred.target_band)
+                    if 0 <= tb < self.n_bands:
+                        dt = max(0.0, float(pred.eta_us))
+                        decay = math.exp(-dt / 5000.0)
+                        urg = float(pred.prediction_confidence * decay)
+                        predictive_urgency[tb] = max(predictive_urgency[tb], urg)
+                    # Also fold in hop distribution
+                    probs = getattr(pred, "band_probabilities", None)
+                    if probs is not None:
+                        for b_idx, p_hop in enumerate(probs):
+                            if 0 <= b_idx < self.n_bands and p_hop > 0.0:
+                                urg_hop = float(p_hop * pred.prediction_confidence * decay)
+                                predictive_urgency[b_idx] = max(predictive_urgency[b_idx], urg_hop)
+            except Exception as exc:
+                logger.debug("TemporalPredictor forecast failed in state builder: %s", exc)
 
-            # [0] Occupancy
-            p = float(np.clip(self.ema_occupancy[b], 0.0, 1.0))
-            obs[b, 0] = p
-
-            # [1] Detection rate
-            det_rate = float(hits / dwells) if dwells > 0 else 0.0
-            obs[b, 1] = det_rate
-
-            # [2] Miss rate
-            obs[b, 2] = 1.0 - det_rate
-
-            # [3] Uncertainty: max-entropy 1.0 initially, evidence-weighted posterior
-            if dwells == 0:
-                unc = 1.0
-            else:
-                raw_unc = 1.0 - abs(2.0 * p - 1.0)
-                ev_factor = 1.0 - float(np.exp(-dwells / 4.0))
-                unc = float((1.0 - ev_factor) * 1.0 + ev_factor * raw_unc)
-            obs[b, 3] = float(np.clip(unc, 0.0, 1.0))
-
-            # [4] Revisit age: normalized time/steps since last tuned (cap at 50)
-            norm_age = float(min(float(self.revisit_age[b]), 50.0) / 50.0)
-            obs[b, 4] = norm_age
-
-            # [9] Composite cognitive priority
-            obs[b, 9] = float(np.clip(w_st * norm_age + w_occ * p + w_unc * unc, 0.0, 1.0))
-
-        # 2. Track-derived perception features
-        if active_tracks:
-            band_tracks: Dict[int, List[Any]] = {b: [] for b in range(self.n_bands)}
-            for tid, trk in active_tracks.items():
-                is_hopping = bool(
-                    getattr(trk, "frequency_hopping_detected", False)
-                    or getattr(trk, "agility_score", 0.0) > 0.3
-                    or getattr(trk, "frequency_span_mhz", 0.0) > 2.0
-                    or getattr(trk, "frequency_range_mhz", 0.0) > 2.0
-                )
-
-                if is_hopping:
-                    cutoff_us = current_time_us - self.recent_hop_window_us
-                    visited_bands = set()
-
-                    toa_hist = getattr(trk, "toa_history", None)
-                    freq_hist = getattr(trk, "frequency_history", None)
-
-                    if toa_hist and freq_hist and len(toa_hist) == len(freq_hist):
-                        for t_p, f in zip(toa_hist, freq_hist):
-                            if t_p >= cutoff_us and math.isfinite(f):
-                                b = int(np.clip(f // 500.0, 0, self.n_bands - 1))
-                                visited_bands.add(b)
-                    elif hasattr(trk, "history") and hasattr(trk.history, "recent_frequency_mhz"):
-                        rh = trk.history
-                        for t_p, f in zip(rh.recent_toas, rh.recent_frequency_mhz):
-                            if t_p >= cutoff_us and math.isfinite(f):
-                                b = int(np.clip(f // 500.0, 0, self.n_bands - 1))
-                                visited_bands.add(b)
-                    elif freq_hist:
-                        for f in freq_hist:
-                            if math.isfinite(f):
-                                b = int(np.clip(f // 500.0, 0, self.n_bands - 1))
-                                visited_bands.add(b)
-
-                    # Fallback to latest frequency if no pulses within window or empty
-                    if not visited_bands:
-                        latest_f = getattr(trk, "latest_frequency_mhz", None)
-                        if latest_f is None and freq_hist:
-                            latest_f = freq_hist[-1]
-                        if latest_f is not None and math.isfinite(latest_f):
-                            visited_bands.add(int(np.clip(latest_f // 500.0, 0, self.n_bands - 1)))
-
-                    for b in visited_bands:
-                        band_tracks[b].append(trk)
-                else:
-                    # Stable / fixed frequency emitter: strictly preserve mean / current frequency
-                    freq = getattr(trk, "mean_frequency_mhz", None)
-                    if freq is None:
-                        freq = getattr(trk, "current_frequency_mhz", None)
-                    if freq is None:
-                        fh = getattr(trk, "frequency_history", [])
-                        if fh:
-                            freq = fh[-1]
-                    if freq is not None and math.isfinite(freq):
-                        b = int(np.clip(freq // 500.0, 0, self.n_bands - 1))
-                        band_tracks[b].append(trk)
-
+        # 3. Spatial sector priority from SpatialTracker
+        spatial_priorities = np.zeros(self.n_bands, dtype=np.float32)
+        if spatial_tracker is not None and active_tracks:
             for b in range(self.n_bands):
-                trks = band_tracks[b]
-                if not trks:
-                    continue
-
-                # [5] Emitter count (capped at 5 emitters -> [0, 1])
-                obs[b, 5] = float(np.clip(len(trks) / 5.0, 0.0, 1.0))
-
-                # [6] Deinterleaver confidence
-                confs = [float(getattr(t, "confidence", 0.8)) for t in trks]
-                obs[b, 6] = float(np.clip(np.mean(confs), 0.0, 1.0))
-
-                # [7] PRI stability
-                stabs = []
-                for t in trks:
-                    cv = getattr(t, "pri_cv", None)
-                    if cv is not None and math.isfinite(cv):
-                        stabs.append(1.0 / (1.0 + float(cv)))
-                    else:
-                        stabs.append(0.5)
-                obs[b, 7] = float(np.clip(np.mean(stabs), 0.0, 1.0))
-
-                # [8] Frequency dispersion / agility
-                agils = []
-                for t in trks:
-                    frange = getattr(t, "frequency_span_mhz", getattr(t, "frequency_range_mhz", 0.0))
-                    agils.append(float(np.clip(frange / 500.0, 0.0, 1.0)))
-                obs[b, 8] = float(np.clip(np.mean(agils), 0.0, 1.0))
-
-                # [9] Spatial sector priority
-                if spatial_tracker is not None:
-                    prios = []
-                    for t in trks:
-                        tid = getattr(t, "track_id", None)
-                        if tid is not None:
+                prios = []
+                for trk in band_tracks[b]:
+                    tid = getattr(trk, "track_id", None)
+                    if tid is not None:
+                        try:
                             sp = spatial_tracker.get_spatial_priority(tid, current_time_us)
                             prios.append(float(sp))
-                    if prios:
-                        obs[b, 9] = float(np.clip(obs[b, 9] + 0.10 * float(np.max(prios)), 0.0, 1.0))
+                        except Exception:
+                            pass
+                if prios:
+                    spatial_priorities[b] = float(np.max(prios))
 
-        flat_obs = obs.reshape(-1)
+        # 4. Assemble canonical features across all bands
+        for b in range(self.n_bands):
+            dwells = int(self.dwell_counts[b])
+            hits = int(self.hit_counts[b])
+            p = float(self.ema_occupancy[b])
+
+            det_rate, miss_rate = compute_canonical_detection_miss_rates(hits, dwells)
+            unc = compute_canonical_uncertainty(p, dwells)
+            norm_age = compute_canonical_revisit_age(float(self.revisit_age[b]), 50.0)
+
+            trks = band_tracks[b]
+            emit_cnt = compute_canonical_emitter_count(len(trks))
+
+            confs = [
+                float(t.get_cluster_confidence() if hasattr(t, "get_cluster_confidence") else getattr(t, "confidence", 0.8))
+                for t in trks
+            ]
+            deint_conf = compute_canonical_deint_confidence(confs, default_conf=0.0)
+
+            pri_cvs = [getattr(t, "pri_cv", None) for t in trks if getattr(t, "pri_cv", None) is not None]
+            pri_stab = compute_canonical_pri_stability(
+                pri_cv=float(np.mean(pri_cvs)) if pri_cvs else None,
+                default_stability=0.0,
+            )
+
+            agils = [
+                float(getattr(t, "agility_score", getattr(t, "frequency_span_mhz", getattr(t, "frequency_range_mhz", 0.0)) / 500.0))
+                for t in trks
+            ]
+            agil = compute_canonical_agility(agility_scores=agils, default_agility=0.0)
+
+            prio = compute_canonical_priority(
+                revisit_age_norm=norm_age,
+                occupancy=p,
+                uncertainty=unc,
+                predictive_urgency=predictive_urgency[b],
+                spatial_priority=spatial_priorities[b],
+            )
+
+            obs[b] = assemble_canonical_band_features(
+                occupancy_prob=p,
+                detection_rate=det_rate,
+                miss_rate=miss_rate,
+                uncertainty=unc,
+                revisit_age_norm=norm_age,
+                emitter_count_norm=emit_cnt,
+                deint_confidence=deint_conf,
+                pri_stability=pri_stab,
+                agility=agil,
+                priority=prio,
+            )
+
+        flat_obs = assemble_canonical_observation(obs)
         self.validate_state(flat_obs)
         return flat_obs
 

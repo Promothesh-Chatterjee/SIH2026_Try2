@@ -18,6 +18,20 @@ from __future__ import annotations
 import numpy as np
 
 from ew_core.contracts import CANONICAL_BAND_FEATURES
+from ew_core.cognitive.canonical_belief import (
+    assemble_canonical_band_features,
+    assemble_canonical_observation,
+    compute_canonical_agility,
+    compute_canonical_deint_confidence,
+    compute_canonical_detection_miss_rates,
+    compute_canonical_emitter_count,
+    compute_canonical_occupancy,
+    compute_canonical_pri_stability,
+    compute_canonical_priority,
+    compute_canonical_revisit_age,
+    compute_canonical_uncertainty,
+    map_tracks_to_bands,
+)
 
 BAND_FEATURES = CANONICAL_BAND_FEATURES
 DEFAULT_BAND_FEATURE = np.array(
@@ -34,24 +48,13 @@ def _band_index(freq_mhz: np.ndarray | float, freq_min: float, freq_max: float, 
 
 
 def _pri_stability(toas: np.ndarray) -> float:
-    """PRI coefficient-of-variation inverse (1 regardless for < 2 pulses)."""
-    t = np.sort(np.asarray(toas, dtype=np.float64))
-    if t.size < 2:
-        return 0.0
-    pris = np.diff(t)
-    mean_pri = float(np.mean(pris))
-    if mean_pri <= 0:
-        return 0.0
-    cv = float(np.std(pris)) / mean_pri
-    return float(np.clip(1.0 / (1.0 + cv), 0.0, 1.0))
+    """PRI coefficient-of-variation inverse."""
+    return compute_canonical_pri_stability(toas=toas)
 
 
 def _agility(freqs: np.ndarray) -> float:
     """Frequency dispersion within the band (MHz), normalised to ~0-1."""
-    f = np.asarray(freqs, dtype=np.float64)
-    if f.size < 2:
-        return 0.0
-    return float(np.clip(np.std(f) / 100.0, 0.0, 1.0))
+    return compute_canonical_agility(freqs=freqs)
 
 
 def build_band_belief_from_tracks(
@@ -127,40 +130,70 @@ def build_band_belief_from_tracks(
         sel_labels = labels[sel]
         sel_clustered = sel_labels != -1
 
-        # 1. Occupancy (EMA over whether clustered tracks exist this window).
+        # 1. Occupancy (EMA over whether clustered tracks exist this window)
         occ_evidence = 1.0 if np.any(sel_clustered) else 0.0
-        bands[b, 0] = priors[b] * (1.0 - ema_alpha) + occ_evidence * ema_alpha
-        # 2. Det rate / 3. Miss rate from clustered presence.
-        clustered_frac = float(np.mean(sel_clustered)) if sel.size else 0.0
-        det_rate = np.clip(clustered_frac, 0.0, 1.0)
-        bands[b, 1] = det_rate
-        bands[b, 2] = 1.0 - det_rate
-        # 4. Uncertainty peaks when occupancy is ambiguous (~0.5) or no evidence.
-        occ = float(bands[b, 0])
-        if occ == 0.0:
-            bands[b, 3] = 1.0
-        else:
-            bands[b, 3] = 1.0 - abs(2.0 * occ - 1.0)
-        # 6. Emitter count = distinct deinterleaver clusters in band (model output).
-        unique_clusters = set(sel_labels.tolist())
-        unique_clusters.discard(-1)
-        bands[b, 5] = float(np.clip(len(unique_clusters) / 5.0, 0.0, 1.0))
-        # 7. Deinterleaver confidence = fraction of band pulses clustered, weighted by track confidence.
-        # Track confidence incorporates observation count, consistency, PRI regularity, and recency.
-        track_confidences = []
-        if tracks is not None:
-            for track in tracks:
-                if track.last_band == b and track.observation_count > 0:
-                    track_confidences.append(track.get_cluster_confidence())
-        if track_confidences:
-            bands[b, 6] = float(np.mean(track_confidences))
-        else:
-            bands[b, 6] = clustered_frac
-        # 8. PRI stability / 9. agility from observable toa/freq.
-        bands[b, 7] = _pri_stability(sel_toas[sel_clustered] if sel_clustered.any() else sel_toas)
-        bands[b, 8] = _agility(sel_freqs)
-        # 10. Priority composite (age term is drop-in 0 here).
-        bands[b, 9] = float(np.clip(0.4 * occ + 0.2 * bands[b, 3] + 0.4 * clustered_frac, 0.0, 1.0))
+        occ = compute_canonical_occupancy(
+            priors[b],
+            hit=bool(occ_evidence > 0.0),
+            is_confirmed=bool(priors[b] >= 0.7),
+            ema_alpha=ema_alpha,
+            ema_alpha_miss_confirmed=0.20,
+        )
+        bands[b, 0] = occ
 
+        # 2. Det rate / 3. Miss rate from clustered presence
+        clustered_frac = float(np.mean(sel_clustered)) if sel.size else 0.0
+        det_rate, miss_rate = compute_canonical_detection_miss_rates(
+            hits=int(np.sum(sel_clustered)),
+            dwells=max(1, sel.size),
+        )
+        bands[b, 1] = det_rate
+        bands[b, 2] = miss_rate
+
+        # 4. Uncertainty
+        unc = compute_canonical_uncertainty(occ, dwells=1 if sel.size else 0)
+        bands[b, 3] = unc
+
+        # [4] Revisit age: drop-in 0.0 for window adapter
+        bands[b, 4] = 0.0
+
+        # [5] Emitter count & [6] Deinterleaver confidence & [8] Agility
+        if tracks is not None:
+            trks = [t for t in tracks if getattr(t, "last_band", None) == b and getattr(t, "is_active", True)]
+            emit_cnt = compute_canonical_emitter_count(len(trks))
+            confs = [
+                float(t.get_cluster_confidence() if hasattr(t, "get_cluster_confidence") else getattr(t, "confidence", 0.8))
+                for t in trks
+            ]
+            deint_conf = compute_canonical_deint_confidence(confs, default_conf=clustered_frac)
+            agils = [float(getattr(t, "agility_score", 0.0)) for t in trks]
+            agil = compute_canonical_agility(agility_scores=agils, freqs=sel_freqs)
+        else:
+            unique_clusters = set(sel_labels.tolist())
+            unique_clusters.discard(-1)
+            emit_cnt = compute_canonical_emitter_count(len(unique_clusters))
+            deint_conf = compute_canonical_deint_confidence([], default_conf=clustered_frac)
+            agil = compute_canonical_agility(freqs=sel_freqs)
+
+        bands[b, 5] = emit_cnt
+        bands[b, 6] = deint_conf
+
+        # [7] PRI stability
+        pri_toas = sel_toas[sel_clustered] if sel_clustered.any() else sel_toas
+        pri_stab = compute_canonical_pri_stability(toas=pri_toas)
+        bands[b, 7] = pri_stab
+        bands[b, 8] = agil
+
+        # [9] Composite priority
+        prio = compute_canonical_priority(
+            revisit_age_norm=0.0,
+            occupancy=occ,
+            uncertainty=unc,
+            predictive_urgency=0.0,
+            semantic_boost=clustered_frac,
+        )
+        bands[b, 9] = prio
+
+    bands = np.clip(np.nan_to_num(bands, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0).astype(np.float32)
     obs = bands.reshape(-1).astype(np.float32)
     return {"obs": obs, "bands": bands, "n_clustered": n_clustered, "n_noise": n_noise}

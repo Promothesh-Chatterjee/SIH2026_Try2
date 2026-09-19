@@ -13,6 +13,9 @@ all agree with these constants.
 
 from __future__ import annotations
 
+from typing import Any
+import numpy as np
+
 CANONICAL_N_BANDS = 36
 CANONICAL_BAND_FEATURES = 10
 CANONICAL_OBS_DIM = CANONICAL_N_BANDS * CANONICAL_BAND_FEATURES
@@ -145,34 +148,80 @@ def require_environment_config(config: dict | None) -> None:
         raise ValueError("Non-canonical environment config:\n- " + "\n- ".join(errors))
 
 
-def encode_action(band: int, mode: int | None = None, n_modes: int | None = None) -> int:
+def validate_action(action: Any, n_actions: int | None = None) -> int:
+    """Validate that action is a valid integer action index within [0, n_actions).
+
+    Rejects booleans (subclasses of int in Python), non-integers,
+    and out-of-range action indices.
+
+    Args:
+        action: Candidate action index.
+        n_actions: Total valid actions (defaults to CANONICAL_N_ACTIONS = 180).
+
+    Returns:
+        The validated action as an int.
+
+    Raises:
+        TypeError: If action is a bool or non-integer.
+        ValueError: If action is < 0 or >= n_actions.
+    """
+    total = CANONICAL_N_ACTIONS if n_actions is None else int(n_actions)
+    if isinstance(action, bool) or not isinstance(action, (int, np.integer)):
+        raise TypeError(f"Action must be an integer, got {type(action).__name__}: {action!r}")
+    act_int = int(action)
+    if act_int < 0 or act_int >= total:
+        raise ValueError(f"Action {act_int} out of range [0, {total})")
+    return act_int
+
+
+def encode_action(
+    band: int,
+    mode: int | None = None,
+    n_modes: int | None = None,
+    n_bands: int | None = None,
+) -> int:
     """Encode a (band, mode) selection into a flat action index.
 
     Args:
         band: Band index in [0, n_bands).
         mode: Mode index in [0, n_modes). Defaults to NORMAL_DWELL.
         n_modes: Override for the number of modes (defaults to canonical).
+        n_bands: Override for the number of bands (defaults to canonical).
 
     Returns:
         Flat action = band * n_modes + mode.
     """
+    if isinstance(band, bool) or not isinstance(band, (int, np.integer)):
+        raise TypeError(f"Band must be an integer, got {type(band).__name__}: {band!r}")
+    nb = int(n_bands if n_bands is not None else CANONICAL_N_BANDS)
+    b = int(band)
+    if b < 0 or b >= nb:
+        raise ValueError(f"Band {b} out of range [0, {nb})")
+
     m = int(n_modes if n_modes is not None else len(DWELL_MODES))
-    mode = NORMAL_DWELL if mode is None else int(mode)
-    if mode < 0 or mode >= m:
-        raise ValueError(f"mode {mode} out of range [0, {m})")
-    return int(band) * m + mode
+    if mode is not None and (isinstance(mode, bool) or not isinstance(mode, (int, np.integer))):
+        raise TypeError(f"Mode must be an integer, got {type(mode).__name__}: {mode!r}")
+    mode_val = NORMAL_DWELL if mode is None else int(mode)
+    if mode_val < 0 or mode_val >= m:
+        raise ValueError(f"Mode {mode_val} out of range [0, {m})")
+
+    return b * m + mode_val
 
 
-def band_of_action(action: int, n_modes: int | None = None) -> int:
+def band_of_action(action: int, n_modes: int | None = None, n_actions: int | None = None) -> int:
     """Decode a flat action into the selected band."""
     m = int(n_modes if n_modes is not None else len(DWELL_MODES))
-    return int(action) // m
+    total = n_actions if n_actions is not None else (CANONICAL_N_BANDS * m)
+    valid_act = validate_action(action, n_actions=total)
+    return valid_act // m
 
 
-def mode_of_action(action: int, n_modes: int | None = None) -> int:
+def mode_of_action(action: int, n_modes: int | None = None, n_actions: int | None = None) -> int:
     """Decode a flat action into the selected dwell-mode index."""
     m = int(n_modes if n_modes is not None else len(DWELL_MODES))
-    return int(action) % m
+    total = n_actions if n_actions is not None else (CANONICAL_N_BANDS * m)
+    valid_act = validate_action(action, n_actions=total)
+    return valid_act % m
 
 
 def mode_name(mode: int) -> str:

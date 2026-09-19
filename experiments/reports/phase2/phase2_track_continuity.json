@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-09-19T10:14:39Z",
+  "stationary_5_window": {
+    "identity_switches": 0,
+    "comparisons": 8,
+    "continuity_pct": 100.0,
+    "track_survival_rate": 1.0
+  },
+  "agile_multi_band_continuity": {
+    "bands_hopped": [
+      4,
+      9,
+      17,
+      6,
+      14
+    ],
+    "track_ids_sequence": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "distinct_tracks_count": 1,
+    "single_track_preserved": true
+  },
+  "lifecycle_pruning_verified": true,
+  "ground_truth_isolation_verified": true,
+  "qualification_status": "PASS"
+}

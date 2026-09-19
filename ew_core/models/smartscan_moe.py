@@ -361,17 +361,20 @@ class SmartScanMoE(nn.Module):
                 t = float(d.get("toa_us", d.get("time_us", self._simulated_clock_us)))
                 f = float(d.get("frequency_mhz", 0.0))
                 b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))
-                eid = int(d.get("emitter_id", 0))
+                tid = d.get("track_id")
                 aoa = d.get("aoa_deg", d.get("angle_deg"))
             else:
                 t = float(getattr(d, "toa_us", getattr(d, "time_us", self._simulated_clock_us)))
                 f = float(getattr(d, "frequency_mhz", 0.0))
                 b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))
-                eid = int(getattr(d, "emitter_id", 0))
+                tid = getattr(d, "track_id", None)
                 aoa = getattr(d, "aoa_deg", getattr(d, "angle_deg", None))
-            self.temporal_predictor.update_from_pulse(eid, t, f, b)
+            if tid is None:
+                continue
+            tid = int(tid)
+            self.temporal_predictor.update_from_pulse(tid, t, f, b)
             if aoa is not None and np.isfinite(aoa):
-                self.spatial_tracker.update_from_track(eid, float(aoa), t)
+                self.spatial_tracker.update_from_track(tid, float(aoa), t)
 
     def update_result(
         self, hit: bool, band: int, detections: list | None = None, current_time: float | None = None

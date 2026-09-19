@@ -24,7 +24,9 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def plot_comparative_benchmark(output_png: Path) -> None:
     # 1. Load canonical Gate-25k-R4.2-alpha020 report data
-    report_path = BASE_DIR / "checkpoints" / "scheduler_v2_operational_candidate" / "gate_25k_r4_2_alpha020_report.json"
+    report_path = BASE_DIR / "experiments" / "checkpoints" / "scheduler_v2_operational_candidate" / "gate_25k_r4_2_alpha020_report.json"
+    if not report_path.exists():
+        report_path = BASE_DIR / "checkpoints" / "scheduler_v2_operational_candidate" / "gate_25k_r4_2_alpha020_report.json"
     with open(report_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 

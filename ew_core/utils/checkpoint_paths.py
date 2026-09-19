@@ -97,3 +97,33 @@ def resolve_checkpoint_dir(
         )
         return Path(canonical_dir)
     return p
+
+
+# Phase 0 Canonical Production Baseline and Candidate Mirror Contracts
+CANONICAL_PRODUCTION_BASELINE = Path("experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt")
+REFERENCE_CANDIDATE_MIRROR = Path("experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt")
+EXPECTED_FROZEN_SHA256 = "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+
+
+def verify_production_baseline_checkpoint(path: Path | str | None = None) -> Path:
+    """Verify that the production baseline checkpoint exists and matches canonical SHA-256."""
+    import hashlib
+
+    p = Path(path) if path is not None else CANONICAL_PRODUCTION_BASELINE
+    if not p.is_file():
+        raise FileNotFoundError(f"Production baseline checkpoint not found: {p}")
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        while chunk := f.read(65536):
+            h.update(chunk)
+    actual_sha = h.hexdigest()
+    if actual_sha != EXPECTED_FROZEN_SHA256:
+        raise ValueError(
+            f"Checkpoint SHA-256 mismatch for {p}:\n"
+            f"  Expected: {EXPECTED_FROZEN_SHA256}\n"
+            f"  Actual:   {actual_sha}"
+        )
+    return p
+
+
+verify_production_checkpoint = verify_production_baseline_checkpoint

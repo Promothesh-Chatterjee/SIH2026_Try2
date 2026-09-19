@@ -64,11 +64,9 @@ _GNU_RF_SCRIPTS = str(Path(__file__).resolve().parent)
 if _GNU_RF_SCRIPTS not in sys.path:
     sys.path.insert(0, _GNU_RF_SCRIPTS)
 
-_MASTER_SRC = str(
-    Path(__file__).resolve().parents[2] / "ew_core" / "src"
-)
-if _MASTER_SRC not in sys.path:
-    sys.path.insert(0, _MASTER_SRC)
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 from dwell_orchestrator import DwellOrchestrator, EmitterConfig  # noqa: E402
 from scheduler_translation import (  # noqa: E402

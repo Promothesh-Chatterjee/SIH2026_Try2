@@ -43,3 +43,8 @@ render = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["ew_core*", "scripts*"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "rf_simulation/scripts"]
+testpaths = ["ew_core/tests", "rf_simulation/tests"]
+addopts = "-ra -q"

@@ -76,6 +76,22 @@ class AssociationConfig:
     # clusters share the track's PRI and their ToA records interleave).
     allow_track_split: bool = False
 
+    # Agile multi-band gating parameters (conditional / adaptive)
+    allow_agile_multi_band_association: bool = True
+    agile_hop_requires_prior_agility: bool = True
+    agile_hop_aoa_gate_deg: float = 12.0
+    agile_hop_pw_tolerance: float = 0.5
+    agile_hop_pri_tolerance: float = 0.20
+
+
+from enum import Enum
+
+class TrackLifecycleState(str, Enum):
+    """Lifecycle states for persistent emitter tracks."""
+    ACTIVE = "ACTIVE"        # Actively observed in recent dwell
+    COASTING = "COASTING"    # Missed in recent dwell; propagating kinematic/temporal state
+    RETIRED = "RETIRED"      # Exceeded maximum consecutive misses; pruned from active state
+
 
 @dataclass
 class EmitterTrack:
@@ -112,11 +128,20 @@ class EmitterTrack:
     cluster_confidence: float = 0.0
     embedding_centroid: Optional[np.ndarray] = None
 
-    # Track management
+    # Track management & lifecycle
     observation_count: int = 0
     consecutive_misses: int = 0
     last_band: Optional[int] = None
     is_active: bool = True
+    state: TrackLifecycleState = TrackLifecycleState.ACTIVE
+    first_seen_time: float = 0.0
+
+    @property
+    def track_age_us(self) -> float:
+        """Total elapsed track lifetime in microseconds."""
+        if self.first_seen_time <= 0.0:
+            return 0.0
+        return max(0.0, self.last_seen_time - self.first_seen_time)
 
     # ------------------------------------------------------------------
     # Update
@@ -138,9 +163,15 @@ class EmitterTrack:
         """
         if not detections:
             self.consecutive_misses += 1
+            if self.consecutive_misses >= 1:
+                self.state = TrackLifecycleState.COASTING
             return
 
         self.consecutive_misses = 0
+        self.state = TrackLifecycleState.ACTIVE
+        self.is_active = True
+        if self.first_seen_time <= 0.0:
+            self.first_seen_time = current_time
         self.last_seen_time = current_time
         self.last_band = band
         self.observation_count += len(detections)
@@ -153,13 +184,18 @@ class EmitterTrack:
                 pw = float(d.pulse_width_us)
                 amp = float(d.amplitude_db)
                 toa = float(getattr(d, "time_us", getattr(d, "toa_us", current_time)))
-            else:
-                # Dict from update_from_deinterleaver
+            elif isinstance(d, dict):
                 freq = float(d["frequency_mhz"])
                 aoa = float(d["aoa_deg"])
                 pw = float(d["pulse_width_us"])
                 amp = float(d["amplitude_db"])
-                toa = float(d["time_us"])
+                toa = float(d.get("time_us", d.get("toa_us", current_time)))
+            else:
+                freq = float(getattr(d, "frequency_mhz", getattr(d, "carrier_frequency_mhz", 0.0)))
+                aoa = float(getattr(d, "aoa_deg", getattr(d, "aoa", 0.0)))
+                pw = float(getattr(d, "pulse_width_us", getattr(d, "pw_us", 0.0)))
+                amp = float(getattr(d, "amplitude_db", getattr(d, "power_dbm", 0.0)))
+                toa = float(getattr(d, "time_us", getattr(d, "toa_us", current_time)))
 
             self.frequency_history.append(freq)
             self.aoa_history.append(aoa)
@@ -515,10 +551,11 @@ class EmitterTracker:
         max_misses_before_drop: int = 10,
         cluster_match_threshold: float = 0.7,
         association_config: AssociationConfig | None = None,
+        max_misses: int | None = None,
     ) -> None:
         self.n_bands = n_bands
         self.max_tracks = max_tracks
-        self.max_misses = max_misses_before_drop
+        self.max_misses = max_misses if max_misses is not None else max_misses_before_drop
         self.cluster_match_threshold = cluster_match_threshold
         self.config = association_config or AssociationConfig(score_threshold=cluster_match_threshold)
 
@@ -791,31 +828,84 @@ class EmitterTracker:
         # ---- Hard gates -------------------------------------------------
         low, high = track.get_frequency_envelope(config)
         det_freq = cluster.mean_freq_mhz
-        if low is not None and high is not None and not (low <= det_freq <= high):
-            return 0.0, False, {}, f"freq {det_freq:.1f} outside [{low:.1f},{high:.1f}]"
+        freq_in_envelope = bool(low is None or high is None or (low <= det_freq <= high))
 
         agility = track.agility_score
         band_jump = 0
         if track.last_band is not None:
             band_jump = abs(int(band) - int(track.last_band))
-            max_jump = config.max_band_jump_agile if agility > 0.3 else config.max_band_jump_fixed
-            if band_jump > max_jump:
-                return 0.0, False, {}, f"band jump {band_jump} > {max_jump}"
+        max_jump = config.max_band_jump_agile if (agility > 0.3 or track.frequency_hopping_detected) else config.max_band_jump_fixed
+        band_in_limit = bool(track.last_band is None or band_jump <= max_jump)
+
+        is_agile_hop = False
+        if not (freq_in_envelope and band_in_limit):
+            # Conditional / adaptive agile frequency gating:
+            # We permit large frequency hops / band jumps ONLY when supported by
+            # multiple independent observable physical continuity signals.
+            if config.allow_agile_multi_band_association:
+                is_track_agile = bool(track.frequency_hopping_detected or track.agility_score > 0.2)
+                if not config.agile_hop_requires_prior_agility:
+                    is_track_agile = True
+
+                if is_track_agile:
+                    # 1. Spatial bearing (AoA match within agile tolerance)
+                    aoa_match = False
+                    if track.current_aoa_deg is not None:
+                        aoa_diff = abs(cluster.mean_aoa_deg - track.current_aoa_deg)
+                        aoa_match = (aoa_diff <= config.agile_hop_aoa_gate_deg)
+
+                    # 2. Pulse duration (PW match within agile tolerance)
+                    pw_match = False
+                    if track.current_pw_us is not None and track.current_pw_us > 0 and cluster.mean_pw_us > 0:
+                        pw_ratio = cluster.mean_pw_us / track.current_pw_us
+                        pw_match = (1.0 / (1.0 + config.agile_hop_pw_tolerance) <= pw_ratio <= (1.0 + config.agile_hop_pw_tolerance))
+
+                    # 3. Temporal rhythm / PRI alignment
+                    pri_match = False
+                    if track.pri_estimate_us is not None and cluster.pri_estimate_us is not None and track.pri_estimate_us > 0:
+                        rel_pri = abs(cluster.pri_estimate_us - track.pri_estimate_us) / track.pri_estimate_us
+                        pri_match = (rel_pri <= config.agile_hop_pri_tolerance)
+                    elif track.pri_estimate_us is not None and track.pri_estimate_us > 0:
+                        gap = max(0.0, cluster.toa_min_us - track.last_seen_time)
+                        pri = track.pri_estimate_us
+                        k = max(0, int(round(gap / pri)))
+                        residual = abs(gap - k * pri)
+                        pri_match = (residual <= 0.25 * pri)
+
+                    # 4. Optional embedding centroid similarity
+                    emb_match = False
+                    if (config.use_embedding_similarity and track.embedding_centroid is not None
+                            and cluster.embedding_centroid is not None):
+                        emb_match = (_cosine(track.embedding_centroid, cluster.embedding_centroid) >= 0.85)
+
+                    # Agile hop requires spatial bearing (AoA) AND pulse duration (PW) AND
+                    # (PRI / temporal continuity OR embedding match OR established track agility)
+                    if aoa_match and pw_match and (pri_match or emb_match or track.frequency_hopping_detected or track.agility_score > 0.2):
+                        is_agile_hop = True
+
+            if not is_agile_hop:
+                if not freq_in_envelope:
+                    return 0.0, False, {}, f"freq {det_freq:.1f} outside [{low:.1f},{high:.1f}]"
+                else:
+                    return 0.0, False, {}, f"band jump {band_jump} > {max_jump}"
 
         if track.current_aoa_deg is not None:
             aoa_diff = abs(cluster.mean_aoa_deg - track.current_aoa_deg)
-            if aoa_diff > config.max_aoa_diff_deg:
+            gate_aoa = config.agile_hop_aoa_gate_deg if is_agile_hop else config.max_aoa_diff_deg
+            if aoa_diff > gate_aoa:
                 return 0.0, False, {}, f"aoa diff {aoa_diff:.1f} deg"
 
         if track.current_pw_us is not None and track.current_pw_us > 0:
             pw_ratio = cluster.mean_pw_us / track.current_pw_us
-            if not (1.0 / config.max_pw_ratio <= pw_ratio <= config.max_pw_ratio):
+            gate_ratio = (1.0 + config.agile_hop_pw_tolerance) if is_agile_hop else config.max_pw_ratio
+            if not (1.0 / gate_ratio <= pw_ratio <= gate_ratio):
                 return 0.0, False, {}, f"pw ratio {pw_ratio:.2f}"
 
         if (track.pri_estimate_us is not None and track.pri_confidence >= 0.3
                 and cluster.pri_estimate_us is not None):
             rel = abs(cluster.pri_estimate_us - track.pri_estimate_us) / max(track.pri_estimate_us, 1e-6)
-            if rel > config.max_pri_rel_diff:
+            gate_pri = config.agile_hop_pri_tolerance if is_agile_hop else config.max_pri_rel_diff
+            if rel > gate_pri:
                 return 0.0, False, {}, f"pri rel diff {rel:.2f}"
 
         if (config.use_embedding_similarity and track.embedding_centroid is not None
@@ -828,18 +918,23 @@ class EmitterTracker:
         comps: Dict[str, float] = {}
 
         # 1. Frequency similarity (normalized by predicted envelope width).
-        if low is not None and high is not None:
+        if low is not None and high is not None and not is_agile_hop:
             center_pred = track.predict_next_frequency(now_toa=current_time)
             center = (low + high) / 2.0
             if center_pred is not None and track.agility_score <= 0.3:
                 center = center_pred
             half = max(high - center, center - low, 1e-6)
             comps["freq"] = float(np.clip(1.0 - abs(det_freq - center) / half, 0.0, 1.0))
+        elif is_agile_hop:
+            # Frequency agility hop confirmed by independent observables:
+            # Do not penalize frequency difference; agility similarity reflects compatibility.
+            pass
 
         # 2. AoA similarity.
         if track.current_aoa_deg is not None:
+            max_aoa = config.agile_hop_aoa_gate_deg if is_agile_hop else config.max_aoa_diff_deg
             comps["aoa"] = float(np.clip(
-                1.0 - abs(cluster.mean_aoa_deg - track.current_aoa_deg) / config.max_aoa_diff_deg,
+                1.0 - abs(cluster.mean_aoa_deg - track.current_aoa_deg) / max_aoa,
                 0.0, 1.0,
             ))
 
@@ -872,7 +967,9 @@ class EmitterTracker:
         comps["recency"] = float(np.exp(-gap_time / max(config.recency_tau_us, 1e-6)))
 
         # 7. Agility compatibility (band adjacency for the emitter's agility class).
-        if track.last_band is not None:
+        if is_agile_hop or track.frequency_hopping_detected or track.agility_score > 0.3:
+            comps["agility"] = 1.0
+        elif track.last_band is not None:
             comps["agility"] = 1.0 if band_jump == 0 else (0.5 if band_jump == 1 else 0.2)
         else:
             comps["agility"] = 1.0
@@ -914,7 +1011,9 @@ class EmitterTracker:
             track_id=track_id,
             cluster_label=report.label,
             last_seen_time=current_time,
+            first_seen_time=current_time,
             last_band=band,
+            state=TrackLifecycleState.ACTIVE,
         )
         track.update(report.detections, current_time, band,
                      embedding_centroid=report.embedding_centroid)
@@ -926,16 +1025,28 @@ class EmitterTracker:
 
     def _prune_stale_tracks(self, matched_tracks: Set[int]) -> None:
         """Remove tracks that have missed too many consecutive dwells."""
+        if not hasattr(self, "_retired_tracks"):
+            self._retired_tracks: Dict[int, EmitterTrack] = {}
+
         to_remove = []
         for track_id, track in self.tracks.items():
             if track_id not in matched_tracks:
                 track.consecutive_misses += 1
                 if track.consecutive_misses >= self.max_misses:
+                    track.state = TrackLifecycleState.RETIRED
+                    track.is_active = False
                     to_remove.append(track_id)
+                else:
+                    track.state = TrackLifecycleState.COASTING
+            else:
+                track.consecutive_misses = 0
+                track.state = TrackLifecycleState.ACTIVE
+                track.is_active = True
 
         for track_id in to_remove:
+            self._retired_tracks[track_id] = self.tracks[track_id]
             del self.tracks[track_id]
-            logger.debug("Dropped stale track %d", track_id)
+            logger.debug("Dropped stale track %d (transitioned to RETIRED)", track_id)
 
     # ------------------------------------------------------------------
     # Belief + introspection
