@@ -211,26 +211,29 @@ class TestRewardV2Unit(unittest.TestCase):
             for detected in [True, False]:
                 for novel in [True, False]:
                     for agile in [True, False]:
-                        obs = self._make_obs(500.0, [SimpleNamespace(time_us=100.0)])
-                        res = receiver_reward_components_v2(
-                            observation=obs,
-                            ground_truth_active=active,
-                            novel_emitter=novel,
-                            detected=detected,
-                            is_agile=agile,
-                            intercept_time_us=100.0,
-                            band_age=0.5,
-                        )
-                        computed_sum = (
-                            res["interception_reward"]
-                            + res["latency_reward"]
-                            + res["agility_bonus"]
-                            + res["miss_penalty"]
-                            + res["false_alarm_penalty"]
-                            + res["redundant_penalty"]
-                            + res["dwell_cost"]
-                        )
-                        self.assertAlmostEqual(res["reward"], computed_sum, places=7)
+                        for predicted in [True, False]:
+                            obs = self._make_obs(500.0, [SimpleNamespace(time_us=100.0)])
+                            res = receiver_reward_components_v2(
+                                observation=obs,
+                                ground_truth_active=active,
+                                novel_emitter=novel,
+                                detected=detected,
+                                is_agile=agile,
+                                is_predicted=predicted,
+                                intercept_time_us=100.0,
+                                band_age=0.5,
+                            )
+                            computed_sum = (
+                                res["interception_reward"]
+                                + res["latency_reward"]
+                                + res["agility_bonus"]
+                                + res["prediction_bonus"]
+                                + res["miss_penalty"]
+                                + res["false_alarm_penalty"]
+                                + res["redundant_penalty"]
+                                + res["dwell_cost"]
+                            )
+                            self.assertAlmostEqual(res["reward"], computed_sum, places=7)
 
     def test_11_no_ground_truth_leakage_in_observation(self):
         """11. Ground-truth emitter identity does not enter observation."""

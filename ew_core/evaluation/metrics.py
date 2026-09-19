@@ -354,6 +354,8 @@ class FiguresOfMerit:
         self.reward_staleness_bonus: float = 0.0
         self.reward_latency_bonus: float = 0.0
         self.reward_prediction_bonus: float = 0.0
+        self.reward_agility_bonus: float = 0.0
+        self.total_mission_time_us: float = 0.0
         self._reward_count: int = 0
 
         # Auxiliary prediction metrics (time-frequency contract): interception
@@ -392,8 +394,10 @@ class FiguresOfMerit:
         self.reward_redundant_penalty += float(components.get("redundant_penalty", 0.0))
         self.reward_delay_penalty += float(components.get("delay_penalty", 0.0))
         self.reward_staleness_bonus += float(components.get("staleness_bonus", 0.0))
-        self.reward_latency_bonus += float(components.get("latency_bonus", 0.0))
+        self.reward_latency_bonus += float(components.get("latency_bonus", components.get("latency_reward", 0.0)))
         self.reward_prediction_bonus += float(components.get("prediction_bonus", 0.0))
+        self.reward_agility_bonus += float(components.get("agility_bonus", components.get("frequency_agility_bonus", 0.0)))
+        self.total_mission_time_us += float(components.get("dwell_time_us", 500.0))
         # Phase 10 true entropy reduction (scheduler-observable belief, not GT).
         ig = components.get("information_gain")
         if ig is not None and ig == ig:
@@ -561,6 +565,31 @@ class FiguresOfMerit:
         return float(np.mean(self.rewards)) if self.rewards else 0.0
 
     @property
+    def reward_per_dwell(self) -> float:
+        """Mean reward per dwell step."""
+        return float(np.mean(self.rewards)) if self.rewards else 0.0
+
+    @property
+    def reward_per_ms(self) -> float:
+        """Mean reward per millisecond of operational mission time."""
+        total_ms = max(1e-6, self.total_mission_time_us / 1000.0)
+        return float(sum(self.rewards) / total_ms) if self.rewards else 0.0
+
+    @property
+    def hit_reward_per_ms(self) -> float:
+        """Gross hit reward contribution per millisecond of mission time."""
+        total_ms = max(1e-6, self.total_mission_time_us / 1000.0)
+        hit_sum = self.reward_hit_term + self.reward_latency_bonus + self.reward_agility_bonus + self.reward_prediction_bonus
+        return float(hit_sum / total_ms)
+
+    @property
+    def penalty_per_ms(self) -> float:
+        """Total penalties (signed negative) per millisecond of mission time."""
+        total_ms = max(1e-6, self.total_mission_time_us / 1000.0)
+        pen_sum = self.reward_miss_penalty + self.reward_false_alarm_penalty + self.reward_redundant_penalty + self.reward_dwell_cost
+        return float(pen_sum / total_ms)
+
+    @property
     def band_selection_coverage(self) -> float:
         """Fraction of spectrum-active-band dwells that the scheduler selected.
 
@@ -651,6 +680,11 @@ class FiguresOfMerit:
             "avg_reward_staleness_bonus": self._avg_component(self.reward_staleness_bonus),
             "avg_reward_latency_bonus": self._avg_component(self.reward_latency_bonus),
             "avg_reward_prediction_bonus": self._avg_component(self.reward_prediction_bonus),
+            "reward_per_dwell": float(self.reward_per_dwell),
+            "reward_per_ms": float(self.reward_per_ms),
+            "hit_reward_per_ms": float(self.hit_reward_per_ms),
+            "penalty_per_ms": float(self.penalty_per_ms),
+            "total_mission_time_ms": float(self.total_mission_time_us / 1000.0),
             "brier_score_intercept_prob": float(self.brier_score),
             "avg_intercept_time_pred_error_us": float(self.avg_intercept_time_pred_error_us),
             "discovery_rate": float(self.unique_emitter_discovery_rate),

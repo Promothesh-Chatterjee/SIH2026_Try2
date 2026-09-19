@@ -1,4 +1,4 @@
-﻿# Phase 4A: Comprehensive Reward Pipeline & Objective Dilution Audit
+# Phase 4A: Comprehensive Reward Pipeline & Objective Dilution Audit
 
 ## 1. Executive Summary
 This document provides an exhaustive audit of the reward pipeline for the Cognitive EW Smart Scan scheduler. We trace the complete runtime path from raw TSRD pulse stream ground truth to receiver observations, belief formation, DRQN action execution, reward signal formulation, replay buffer storage, and loss backpropagation.
@@ -137,3 +137,41 @@ To eliminate objective dilution while keeping full backwards compatibility for a
    - Normalized dwell cost: $-0.01 \cdot (\text{dwell\_us} / 500.0)$ (range $[-0.0025, -0.025]$)
    - **Zero unconditional staleness bonus**.
    - **Zero ungrounded information gain bonus**.
+
+---
+
+## 7. Sealed Reward v2 Contract & Invariants
+
+Under Phase 4 qualification, the v2 reward formulation is finalized and enforced:
+
+$$R_{\text{total}} = R_{\text{intercept}} + R_{\text{latency}} + R_{\text{agile}} + R_{\text{prediction}} + R_{\text{miss}} + R_{\text{false\_alarm}} + R_{\text{redundant}} + R_{\text{dwell\_cost}}$$
+
+### Dominance Invariant:
+$$\max |R_{\text{shaping}}| = 5.0 (\text{latency}) + 2.0 (\text{agile}) + 0.5 (\text{prediction}) = 7.5 < 8.0 (\text{repeat intercept}) \le 10.0 (\text{novel intercept})$$
+
+### Time-Normalized Diagnostic Telemetry:
+- `reward_per_dwell = total_reward / steps`
+- `reward_per_ms = total_reward / total_mission_ms`
+- `hit_reward_per_ms = total_hit_reward / total_mission_ms`
+- `penalty_per_ms = total_penalty / total_mission_ms` (signed negative)
+
+---
+
+## 8. Final Canonical Verification Table
+
+| Benchmark Case | Event Parameters | Target Reward | Observed Reward | Dominance & Isolation | Status |
+|---|---|:---:|:---:|:---:|:---:|
+| **Fast Novel** | `novel=True`, $t_{\text{hit}}=10\,\mu\text{s}$, NORMAL | **`+14.90`** | `14.90` | $10.0 > 4.90$ | **PASS** |
+| **Fast Agile** | `repeat=True`, `agile=True`, $t_{\text{hit}}=20\,\mu\text{s}$, NORMAL | **`+14.80`** | `14.80` | $8.0 > 6.80$ | **PASS** |
+| **Late Intercept** | `repeat=True`, $t_{\text{hit}}=450\,\mu\text{s}$, NORMAL | **`+8.50`** | `8.50` | $8.0 > 0.50$ | **PASS** |
+| **Empty Dwell** | `inactive`, $\text{age} > 1$, NORMAL | **`-1.01`** | `-1.01` | No staleness offset | **PASS** |
+| **Active Miss** | `active=True`, undetected, NORMAL | **`-4.01`** | `-4.01` | Full negative signal | **PASS** |
+| **Redundant Dwell** | `inactive`, $\text{age} \le 1$, NORMAL | **`-1.26`** | `-1.26` | Redundant penalty applied | **PASS** |
+| **Prediction Hit** | `repeat=True`, `predicted=True`, $t_{\text{hit}}=0\,\mu\text{s}$, NORMAL | **`+13.50`** | `13.50` | $8.0 > 5.50$ | **PASS** |
+
+### Anti-Contamination Verification:
+- Action score mutation: **Bitwise Identical** (PASS)
+- Future pulse arrival isolation: **Identical** (PASS)
+- Hidden threat class mutation: **Identical** (PASS)
+- Emitter ID permutation: **Identical** (PASS)
+- External heuristic ranking: **Identical** (PASS)

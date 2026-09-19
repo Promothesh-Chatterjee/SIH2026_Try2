@@ -1,0 +1,8 @@
+{
+  "all_proxy_contamination_rejected": true,
+  "action_score_invariance": true,
+  "threat_class_invariance": true,
+  "emitter_id_permutation_invariance": true,
+  "external_heuristic_ranking_invariance": true,
+  "future_record_isolation": true
+}
