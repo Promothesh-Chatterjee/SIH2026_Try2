@@ -120,6 +120,10 @@ def run_full_verification() -> bool:
     assert pfa_val <= 0.0000, f"Pfa {pfa_val:.4f} > 0.0000"
 
     # 6. Promotion Sentinel Evaluation
+    git_rev = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+    config_path = Path("configs/training_25k_to_40k_safe.yaml")
+    config_sha256 = sha256_file(config_path)
+
     action_summary = {
         "action_entropy": 2.05,
         "unique_bands": 36,
@@ -127,21 +131,36 @@ def run_full_verification() -> bool:
     }
     training_diagnostics = {"q_max": 7.66}
     report_input = {
+        "checkpoint_path": str(candidate_path),
+        "checkpoint_sha256": computed_candidate_sha256,
+        "baseline_checkpoint_sha256": baseline_sha256,
+        "git_revision": git_rev,
+        "config_sha256": config_sha256,
+        "evaluation_seed": 42,
+        "metric_units": {
+            "mean_ir": "percent",
+            "agile_ir": "percent",
+            "sparse_ir": "percent",
+            "worst_case_ir": "percent",
+            "pfa": "fraction",
+        },
         "scenario_summary": eval_metrics,
         "action_summary": action_summary,
         "training_diagnostics": training_diagnostics,
     }
-    promoted, verdict_msg, promo_details = evaluate_promotion(report_input)
+    promoted, verdict_msg, promo_details = evaluate_promotion(report_input, candidate_path=candidate_path)
 
     logger.info("PROMOTION SENTINEL VERDICT: %s", verdict_msg)
     if not promoted:
         logger.error("Promotion Sentinel rejected candidate!")
         return False
 
+    # Atomically promote and update ACTIVE_CHECKPOINT.json
+    guard.promote_checkpoint(candidate_path, promo_details)
+    active_after = guard.get_active_checkpoint()
+    assert active_after == candidate_path.resolve()
+
     # 7. Deployment Manifest Generation
-    git_rev = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
-    config_path = Path("configs/training_25k_to_40k_safe.yaml")
-    config_sha256 = sha256_file(config_path)
 
     deployment_manifest = {
         "manifest_version": "1.0",

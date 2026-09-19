@@ -63,8 +63,11 @@ class BenchmarkV2CanonicalTests(unittest.TestCase):
         self.assertGreater(gate25k_mean, heuristic_mean + 10.0)
 
     def test_promotion_sentinel_logic(self):
+        units = {"mean_ir": "fraction", "agile_ir": "fraction", "sparse_ir": "fraction", "worst_case_ir": "fraction", "pfa": "fraction"}
         # 1. Collapsed candidate should be rejected
         collapsed_mock = {
+            "evaluation_type": "metric_only_diagnostic",
+            "metric_units": units,
             "training_diagnostics": {"q_max": 20.0},
             "composite_generalization_components_10scen": {
                 "overall_ir": 0.55,
@@ -74,12 +77,15 @@ class BenchmarkV2CanonicalTests(unittest.TestCase):
             },
             "baseline_hierarchy": {"drqn": {"pfa": 0.0, "distinct_bands": 25.0, "action_entropy": 2.5}},
         }
-        promoted, verdict, _ = evaluate_promotion(collapsed_mock)
+        promoted, verdict, details = evaluate_promotion(collapsed_mock)
         self.assertFalse(promoted)
+        self.assertEqual(details["promotion_status"], "REJECTED")
         self.assertIn("REJECT", verdict)
 
         # 2. Candidate with Q-explosion should be rejected (Level 0)
         q_exploded_mock = {
+            "evaluation_type": "metric_only_diagnostic",
+            "metric_units": units,
             "training_diagnostics": {"q_max": 65.0},
             "composite_generalization_components_10scen": {
                 "overall_ir": 0.65,
@@ -89,12 +95,15 @@ class BenchmarkV2CanonicalTests(unittest.TestCase):
             },
             "baseline_hierarchy": {"drqn": {"pfa": 0.0, "distinct_bands": 30.0, "action_entropy": 2.5}},
         }
-        promoted, verdict, _ = evaluate_promotion(q_exploded_mock)
+        promoted, verdict, details = evaluate_promotion(q_exploded_mock)
         self.assertFalse(promoted)
+        self.assertEqual(details["promotion_status"], "REJECTED")
         self.assertIn("Q-explosion", verdict)
 
         # 3. Superior stable candidate should be promoted (Level 1)
         superior_mock = {
+            "evaluation_type": "metric_only_diagnostic",
+            "metric_units": units,
             "training_diagnostics": {"q_max": 25.0},
             "composite_generalization_components_10scen": {
                 "overall_ir": 0.62,
@@ -104,8 +113,9 @@ class BenchmarkV2CanonicalTests(unittest.TestCase):
             },
             "baseline_hierarchy": {"drqn": {"pfa": 0.0, "distinct_bands": 30.0, "action_entropy": 2.5}},
         }
-        promoted, verdict, _ = evaluate_promotion(superior_mock)
+        promoted, verdict, details = evaluate_promotion(superior_mock)
         self.assertTrue(promoted)
+        self.assertEqual(details["promotion_status"], "APPROVED")
         self.assertIn("PROMOTED", verdict)
 
     def test_api_health_endpoint(self):

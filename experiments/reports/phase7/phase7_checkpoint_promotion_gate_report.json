@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-09-19T15:38:52.469396+00:00",
+  "phase": 7,
+  "qualification_status": "QUALIFIED",
+  "gates": {
+    "GATE_7_1": {
+      "name": "Explicit Active Promotion Resolution",
+      "passed": true,
+      "evidence": "ACTIVE_CHECKPOINT.json authored atomically, status APPROVED, on-disk SHA matches active checkpoint."
+    },
+    "GATE_7_2": {
+      "name": "Fail-Closed on Missing Manifest",
+      "passed": true,
+      "evidence": "Directory with candidate checkpoints but no ACTIVE_CHECKPOINT.json raised ExplicitPromotionRequiredError."
+    },
+    "GATE_7_3": {
+      "name": "Anti-Chronological Priority & Rejection Invariance",
+      "passed": true,
+      "evidence": "Step 30000 rejected while Step 28000 remains active; no chronological override occurred."
+    },
+    "GATE_7_4": {
+      "name": "Cryptographic Provenance & Tamper Prevention",
+      "passed": true,
+      "evidence": "Tampered on-disk checkpoint caught via CheckpointTamperedError; report replay with forged SHA caught."
+    },
+    "GATE_7_5": {
+      "name": "Rejection of Missing/Malformed Provenance & Non-Finite Metrics",
+      "passed": true,
+      "evidence": "Evaluations with missing git revision, missing seed, or NaN/Inf metrics rejected fail-closed."
+    },
+    "GATE_7_6": {
+      "name": "Baseline SHA Invariance & Production Baseline Protection",
+      "passed": true,
+      "evidence": "Production baseline SHA bit-exact (7a99c659affda277...); writes to baseline forbidden."
+    },
+    "GATE_7_7": {
+      "name": "Rollback Integrity & Authoritative Manifest Restoration",
+      "passed": true,
+      "evidence": "Rollback verified known-good SHA, quarantined failed candidate, and restored cached active manifest."
+    },
+    "GATE_7_8": {
+      "name": "Deployment API Fail-Closed Loading",
+      "passed": true,
+      "evidence": "Deployment API rejected unapproved candidate checkpoint and raised ExplicitPromotionRequiredError."
+    },
+    "GATE_7_9": {
+      "name": "Operational Baseline Manifest Bootstrap",
+      "passed": true,
+      "evidence": "Authoritative ACTIVE_CHECKPOINT.json verified in scheduler_v2_operational_candidate with baseline hash 7a99c659affda277..."
+    }
+  },
+  "baseline_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+}

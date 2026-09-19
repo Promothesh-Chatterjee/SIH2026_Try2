@@ -1,0 +1,21 @@
+{
+  "schema_version": "phase7",
+  "status": "APPROVED",
+  "promotion_status": "APPROVED",
+  "promotion_verdict": "INITIAL_APPROVED_BASELINE_BOOTSTRAP",
+  "checkpoint_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\scheduler_v2_operational_candidate\\checkpoint_gate_25000_frozen.pt",
+  "checkpoint_filename": "checkpoint_gate_25000_frozen.pt",
+  "checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+  "training_step": 25000,
+  "parent_checkpoint_sha256": "none",
+  "baseline_checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+  "git_revision": "bootstrap_phase7",
+  "config_sha256": "canonical_gate25k",
+  "benchmark_version": "v2_canonical",
+  "evaluation_seed": 42,
+  "evaluation_provenance": {
+    "bootstrap": true,
+    "baseline_mirror": true
+  },
+  "promoted_at_utc": "2026-09-19T15:24:55.709854+00:00"
+}

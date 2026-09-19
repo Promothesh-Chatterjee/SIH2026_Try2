@@ -49,7 +49,7 @@ from ew_core.training.stratified_mode_sampler import StratifiedModeSampler
 from ew_core.training.diagnostics.action_tracker import ActionTracker
 from ew_core.training.diagnostics.q_telemetry import QTelemetry
 from ew_core.training.diagnostics.reward_tracker import RewardTracker
-from ew_core.training.safety.checkpoint_guard import CheckpointGuard
+from ew_core.training.safety.checkpoint_guard import CheckpointGuard, EXPECTED_BASELINE_SHA256
 from ew_core.training.safety.safety_monitor import SafetyMonitor
 from ew_core.training.safety.rollback_manager import RollbackManager
 from ew_core.evaluation.benchmark_contract import CANONICAL_SCENARIOS
@@ -787,11 +787,20 @@ def train_bounded_gate2(
 
     # Promotion Sentinel check
     report_input = {
+        "checkpoint_path": str(saved_final_ckpt),
+        "checkpoint_sha256": final_sha256,
+        "baseline_checkpoint_sha256": EXPECTED_BASELINE_SHA256,
+        "git_revision": git_rev,
+        "config_sha256": config_sha256,
+        "evaluation_seed": 42,
+        "metric_units": {"mean_ir": "percent", "agile_ir": "percent", "sparse_ir": "percent", "worst_case_ir": "percent", "pfa": "fraction"},
         "scenario_summary": final_eval_res,
         "action_summary": action_tracker.get_diagnostics(),
         "training_diagnostics": q_diag,
     }
-    promoted, verdict_msg, promo_details = evaluate_promotion(report_input)
+    promoted, verdict_msg, promo_details = evaluate_promotion(report_input, candidate_path=saved_final_ckpt)
+    if promoted:
+        ckpt_guard.promote_checkpoint(saved_final_ckpt, promo_details)
 
     verdict_record = {
         "step": global_step,

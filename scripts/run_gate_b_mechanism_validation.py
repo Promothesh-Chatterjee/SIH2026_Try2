@@ -256,6 +256,8 @@ def run_gate_b_arm(
             "pfa": eval_metrics["pfa"],
             "scenarios": eval_metrics["scenario_results"],
         },
+        "evaluation_type": "metric_only_diagnostic",
+        "metric_units": {"mean_ir": "percent", "agile_ir": "percent", "sparse_ir": "percent", "worst_case_ir": "percent", "pfa": "fraction"},
         "action_summary": {
             "unique_bands": 29.9,
             "action_entropy": 2.1,
