@@ -900,6 +900,9 @@ class CognitiveRFScanEnv(gym.Env):
                 intercept_time_us=intercept_time_error_us,
                 disable_latency_reward=self.disable_latency_reward,
             )
+        reward_components["dwell_time_us"] = float(actual_dwell_us)
+        reward_components["retune_latency_us"] = float(retune_latency_us)
+        reward_components["physical_step_time_us"] = float(retune_latency_us + actual_dwell_us)
         reward = reward_components["reward"]
         self.fom.record_reward_components(reward_components)
 
