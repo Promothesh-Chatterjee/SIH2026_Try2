@@ -23,6 +23,7 @@ runs/
 results/
 experiments/checkpoints/
 experiments/runs/
+!**/ACTIVE_CHECKPOINT.json
 
 # CI / Test artefacts & patch scripts
 *_output.txt

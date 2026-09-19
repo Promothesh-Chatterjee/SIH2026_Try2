@@ -98,7 +98,7 @@ def run_baseline_episode(
             break
         steps += 1
     fom = env.get_fom()
-    return {f"baseline_{k}": float(v) for k, v in fom.items()}
+    return {f"baseline_{k}": (float(v) if v is not None else float("nan")) for k, v in fom.items()}
 
 
 def run_baseline_suite(

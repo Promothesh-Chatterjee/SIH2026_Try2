@@ -613,33 +613,95 @@ async def lifespan(app: FastAPI):  # type: ignore
             except Exception as exc:
                 logger.warning("Failed to load deinterleaver %s: %s", ckpt, exc)
 
-    # Scheduler / MoE
-    scheduler_ckpts = [
-        PACKAGE_ROOT / "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt",
-        Path("experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"),
-        PACKAGE_ROOT / "experiments/checkpoints/scheduler/best.pt",
-        Path("experiments/checkpoints/scheduler/best.pt"),
-        PACKAGE_ROOT / "checkpoints/scheduler/best.pt",
-        Path("checkpoints/scheduler/best.pt"),
-        PACKAGE_ROOT / "experiments/checkpoints/scheduler/checkpoint_step_25500.pt",
-        Path("experiments/checkpoints/scheduler/checkpoint_step_25500.pt"),
-        PACKAGE_ROOT / "experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt",
-        Path("experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt"),
-        Path("checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"),
-        PACKAGE_ROOT / "checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt",
+    # Scheduler / MoE (Phase 7: Explicit, provenance-bound, fail-closed promotion)
+    from ew_core.training.safety.checkpoint_guard import (
+        CheckpointGuard,
+        CheckpointSecurityError,
+        ExplicitPromotionRequiredError,
+        CheckpointTamperedError,
+        QuarantinedCheckpointError,
+    )
+
+    scheduler_ckpts: list[Path] = []
+
+    # 1. Environment variable override
+    ckpt_env = os.getenv("SCHEDULER_CHECKPOINT")
+    if ckpt_env:
+        p_env = Path(ckpt_env)
+        if p_env.is_dir():
+            guard = CheckpointGuard(p_env)
+            active_ckpt = guard.get_active_checkpoint()
+            scheduler_ckpts.append(active_ckpt)
+        else:
+            manifest_file = p_env.parent / "ACTIVE_CHECKPOINT.json"
+            if manifest_file.exists():
+                guard = CheckpointGuard(p_env.parent)
+                active_ckpt = guard.get_active_checkpoint()
+                if p_env.resolve() != active_ckpt.resolve():
+                    raise CheckpointSecurityError(
+                        f"Fail-closed: Specified checkpoint {p_env} is not the approved active checkpoint {active_ckpt}"
+                    )
+            scheduler_ckpts.append(p_env)
+
+    # 2. Check operational candidate directories via CheckpointGuard
+    candidate_dirs = [
+        PACKAGE_ROOT / "experiments/checkpoints/scheduler_v2_operational_candidate",
+        Path("experiments/checkpoints/scheduler_v2_operational_candidate"),
+        PACKAGE_ROOT / "experiments/checkpoints/safe_continuation_candidate",
+        Path("experiments/checkpoints/safe_continuation_candidate"),
+        Path("checkpoints/scheduler_v2_operational_candidate"),
+        PACKAGE_ROOT / "checkpoints/scheduler_v2_operational_candidate",
+    ]
+    seen_dirs = set()
+    for cand_dir in candidate_dirs:
+        try:
+            r_dir = cand_dir.resolve()
+        except Exception:
+            r_dir = cand_dir
+        if r_dir in seen_dirs:
+            continue
+        seen_dirs.add(r_dir)
+
+        if cand_dir.exists() and (cand_dir / "ACTIVE_CHECKPOINT.json").exists():
+            guard = CheckpointGuard(cand_dir)
+            active_ckpt = guard.get_active_checkpoint()
+            if active_ckpt not in scheduler_ckpts:
+                scheduler_ckpts.append(active_ckpt)
+
+    # 3. Fallback non-candidate discovery paths (ONNX / legacy)
+    fallback_ckpts = [
         PACKAGE_ROOT / "experiments/checkpoints/onnx/scheduler.onnx",
         Path("experiments/checkpoints/onnx/scheduler.onnx"),
         Path("checkpoints/onnx/scheduler.onnx"),
         PACKAGE_ROOT / "checkpoints/onnx/scheduler.onnx",
+        PACKAGE_ROOT / "experiments/checkpoints/scheduler/best.pt",
+        Path("experiments/checkpoints/scheduler/best.pt"),
+        PACKAGE_ROOT / "checkpoints/scheduler/best.pt",
+        Path("checkpoints/scheduler/best.pt"),
     ]
-
-    ckpt_env = os.getenv("SCHEDULER_CHECKPOINT")
-    if ckpt_env:
-        scheduler_ckpts.insert(0, Path(ckpt_env))
+    for fb in fallback_ckpts:
+        if fb not in scheduler_ckpts:
+            scheduler_ckpts.append(fb)
 
     for ckpt in scheduler_ckpts:
         if ckpt.exists():
             try:
+                # Enforce fail-closed check: if candidate directory or manifest exists, verify promotion
+                manifest = ckpt.parent / "ACTIVE_CHECKPOINT.json"
+                if manifest.exists():
+                    guard = CheckpointGuard(ckpt.parent)
+                    active_for_dir = guard.get_active_checkpoint()
+                    if ckpt.resolve() != active_for_dir.resolve():
+                        logger.error("Fail-closed: Candidate %s is not active approved checkpoint (%s)", ckpt, active_for_dir)
+                        raise CheckpointSecurityError(
+                            f"Fail-closed: Candidate {ckpt} rejected because it is not the active approved checkpoint ({active_for_dir})"
+                        )
+                elif ckpt.suffix == ".pt" and ("candidate" in str(ckpt.parent).lower()):
+                    logger.error("Fail-closed: Candidate directory %s lacks ACTIVE_CHECKPOINT.json", ckpt.parent)
+                    raise ExplicitPromotionRequiredError(
+                        f"Fail-closed: Candidate directory {ckpt.parent} lacks ACTIVE_CHECKPOINT.json"
+                    )
+
                 if ckpt.suffix == ".onnx":
                     try:
                         import onnxruntime as ort  # type: ignore
@@ -697,6 +759,9 @@ async def lifespan(app: FastAPI):  # type: ignore
                         pass
                     logger.info("Loaded scheduler PT %s", ckpt)
                     break
+            except (CheckpointSecurityError, CheckpointTamperedError, ExplicitPromotionRequiredError, QuarantinedCheckpointError) as sec_exc:
+                logger.error("Security/promotion error for scheduler %s: %s", ckpt, sec_exc)
+                raise
             except Exception as exc:
                 logger.warning("Failed to load scheduler %s: %s", ckpt, exc)
 

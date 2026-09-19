@@ -782,11 +782,20 @@ def train_continuation(
 
     # Final Promotion Sentinel check
     report_input = {
+        "checkpoint_path": str(saved_final_ckpt),
+        "checkpoint_sha256": final_sha256,
+        "baseline_checkpoint_sha256": EXPECTED_FROZEN_SHA256,
+        "git_revision": git_rev,
+        "config_sha256": config_sha256,
+        "evaluation_seed": 42,
+        "metric_units": {"mean_ir": "percent", "agile_ir": "percent", "sparse_ir": "percent", "worst_case_ir": "percent", "pfa": "fraction"},
         "scenario_summary": final_eval_res,
         "action_summary": action_tracker.get_diagnostics(),
         "training_diagnostics": q_diag,
     }
-    promoted, verdict_msg, promo_details = evaluate_promotion(report_input)
+    promoted, verdict_msg, promo_details = evaluate_promotion(report_input, candidate_path=saved_final_ckpt)
+    if promoted:
+        ckpt_guard.promote_checkpoint(saved_final_ckpt, promo_details)
 
     verdict_record = {
         "step": global_step,
