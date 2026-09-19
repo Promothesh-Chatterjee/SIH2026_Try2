@@ -504,6 +504,7 @@ class TemporalPredictor:
         lambda_t: float = 0.15,
         lambda_d: float = 0.05,
         lambda_a: float = 0.20,
+        track_priorities: Optional[Dict[int, float]] = None,
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Compute action-conditioned predictive utility U(b, m).
 
@@ -534,6 +535,7 @@ class TemporalPredictor:
             arr_conf = p.prediction_confidence
             agil = p.agility_score
             rec_mode = p.behavior_profile.recommended_mode if p.behavior_profile else None
+            p_weight = float(track_priorities.get(p.track_id, 1.0)) if track_priorities else 1.0
 
             # Over all 36 bands, evaluate transition probability P(b' | h)
             for b in range(self.n_bands):
@@ -550,7 +552,7 @@ class TemporalPredictor:
                         # Arrival inside dwell: positive expected interception utility
                         lat_ratio = eta / max(1.0, dwell)
                         hit_u = (
-                            lambda_p * p_b * arr_conf
+                            lambda_p * p_b * arr_conf * p_weight
                             - lambda_t * lat_ratio * p_b
                             + lambda_a * agil * p_b
                         )
@@ -563,7 +565,7 @@ class TemporalPredictor:
 
                     # Behavior-specific dwell alignment bonus
                     if rec_mode is not None and m == rec_mode and p.target_band == b:
-                        u_scores[idx] += 0.30 * arr_conf
+                        u_scores[idx] += 0.30 * arr_conf * p_weight
 
         # 3. Check Actionable Temporal Reservations (e.g. SLOW_HOPPER)
         act_res = self.reservation_manager.get_actionable_reservation(curr_t, dwell_duration_us=self.base_dwell_us)

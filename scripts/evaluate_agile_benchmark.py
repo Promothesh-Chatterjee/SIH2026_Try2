@@ -500,7 +500,8 @@ def evaluate_policy_on_agile(
         seed_escapes = []
 
         for s in seeds:
-            records = generate_agile_scenario(sc_id, time_horizon_us=250_000.0, seed=s)
+            agile_time_horizon = max(250_000.0, float(n_steps * 1500.0))
+            records = generate_agile_scenario(sc_id, time_horizon_us=agile_time_horizon, seed=s)
             env_cfg = {
                 "n_bands": CANONICAL_N_BANDS,
                 "n_modes": CANONICAL_N_MODES,

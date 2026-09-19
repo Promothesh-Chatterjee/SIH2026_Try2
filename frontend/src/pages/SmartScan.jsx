@@ -283,6 +283,12 @@ export default function SmartScan() {
           ) : (
             <span style={{ color: "#f59e0b" }}> Waiting for verified backend confirmation before operational deployment.</span>
           )}
+          {backendHealth?.readiness_failures && backendHealth.readiness_failures.length > 0 && (
+            <div style={{ marginTop: 8, padding: "6px 10px", background: "rgba(248, 113, 113, 0.1)", border: "1px solid #f87171", fontSize: 11 }}>
+              <strong style={{ color: "#f87171" }}>Operational Readiness Blockers ({backendHealth.readiness_failures.length}): </strong>
+              <span style={{ color: "#fca5a5" }}>{backendHealth.readiness_failures.join(" | ")}</span>
+            </div>
+          )}
         </div>
       </div>
 

@@ -24,6 +24,7 @@ import argparse
 import copy
 import json
 import logging
+import os
 from pathlib import Path
 import sys
 import numpy as np
@@ -75,7 +76,13 @@ def evaluate_canonical_gate(
 
     env_cfg = train_cfg.get("environment", {})
     val_cfg = train_cfg.get("validation", {})
-    data_dir = train_cfg.get("data_dir", "D:/TSRD")
+    raw_data_dir = train_cfg.get("data_dir", "D:/TSRD")
+    if os.getenv("DATA_DIR"):
+        data_dir = os.environ["DATA_DIR"]
+    elif not raw_data_dir or str(raw_data_dir).startswith("${"):
+        data_dir = "D:/TSRD" if Path("D:/TSRD").exists() else "data"
+    else:
+        data_dir = os.path.expandvars(str(raw_data_dir))
 
     device = torch.device("cpu")
 
@@ -257,6 +264,7 @@ def evaluate_canonical_gate(
 
             fom = env.get_fom()
             discov = float(fom.get("discovery_rate", 0.0))
+            pfa_scen = float(fom.get("Pfa", fom.get("pfa", 0.0)))
 
             scen_res = {
                 "scenario_id": scen_id,
@@ -265,6 +273,7 @@ def evaluate_canonical_gate(
                 "total_reward": float(ep_reward),
                 "distinct_bands": distinct_bands,
                 "empty_escape_rate": empty_escape_rate,
+                "pfa": pfa_scen,
                 "mean_latency_us": mean_lat,
                 "median_latency_us": median_lat,
                 "p90_latency_us": p90_lat,
@@ -302,6 +311,7 @@ def evaluate_canonical_gate(
             "mean_reward": float(np.mean(rews)),
             "mean_distinct_bands": float(np.mean(dists)),
             "mean_empty_escape_rate": float(np.mean(escs)) if escs else 1.0,
+            "pfa": float(np.mean([s.get("pfa", 0.0) for s in sc_list])),
             "mean_latency_us": mean_l,
             "median_latency_us": median_l,
             "p90_latency_us": p90_l,
