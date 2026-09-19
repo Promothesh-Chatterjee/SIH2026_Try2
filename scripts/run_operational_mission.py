@@ -49,6 +49,7 @@ from ew_core.contracts import (
     DWELL_MODES,
     band_of_action,
     mode_of_action,
+)
 from ew_core.environment.radio_environment import PulseRecord
 from ew_core.environment.scenario_generator import DEFAULT_GNU_DATA_PATH, DEFAULT_GNU_DIR, load_gnu_records, load_h5_records
 from ew_core.models.drqn_scheduler import DRQNScheduler

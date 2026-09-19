@@ -64,7 +64,7 @@ def generate_frequency_overlap_scenario(
                 source_id="Threat_45deg",
             )
         )
-        t += 800.0
+        t += 350.0
 
     # Emitter B: Band 4 (2,250 MHz), Benign AoA = 135° (std=35.0° diffuse), PRI = 1200 µs
     t = 120.0
@@ -177,8 +177,13 @@ def evaluate_spatial_pairing(
             agent.reset()
 
         # Prime threat sector priority: sector 1 (30° - 60°) has 3.0x threat weight
-        if hasattr(agent, "moe") and hasattr(agent.moe, "spatial_tracker"):
+        if enable_spatial and hasattr(agent, "moe") and hasattr(agent.moe, "spatial_tracker"):
             agent.moe.spatial_tracker.sector_weights[1] = 3.0  # covers 45° and 50°
+
+        # Seed initial emitter track awareness from early scenario discovery pulses (t <= 200 us)
+        initial_pulses = [p for p in records if p.toa_us <= 200.0]
+        if hasattr(agent, "update_detections"):
+            agent.update_detections(initial_pulses, current_time=200.0)
 
         emitter_hits = {0: 0, 1: 0, 2: 0, 3: 0}
         emitter_latencies = {0: [], 1: [], 2: [], 3: []}
@@ -243,10 +248,22 @@ def evaluate_spatial_pairing(
     diff_count = sum(1 for i in range(min_len) if act_dis[i] != act_enb[i])
     alteration_rate = float(diff_count / max(1, min_len))
 
+    # Compute discrimination metrics under co-channel frequency overlap
+    dis_threat = float(results["spatial_disabled"]["threat_hits"])
+    dis_b4 = float(results["spatial_disabled"]["emitter_breakdown"][metadata[1]]["hits"])
+    enb_threat = float(results["spatial_enabled"]["threat_hits"])
+    enb_b4 = float(results["spatial_enabled"]["emitter_breakdown"][metadata[1]]["hits"])
+    disc_dis = dis_threat / (dis_threat + dis_b4) if (dis_threat + dis_b4) > 0 else 0.0
+    disc_enb = enb_threat / (enb_threat + enb_b4) if (enb_threat + enb_b4) > 0 else 0.0
+    disc_gain = disc_enb - disc_dis
+
     results["comparison"] = {
         "decision_alteration_rate": alteration_rate,
         "threat_hit_gain": int(results["spatial_enabled"]["threat_hits"] - results["spatial_disabled"]["threat_hits"]),
         "threat_ratio_gain": float(results["spatial_enabled"]["threat_preference_ratio"] - results["spatial_disabled"]["threat_preference_ratio"]),
+        "target_discrimination_gain": float(disc_gain),
+        "target_discrimination_enabled": float(disc_enb),
+        "target_discrimination_disabled": float(disc_dis),
     }
 
     print("\n" + "=" * 90)

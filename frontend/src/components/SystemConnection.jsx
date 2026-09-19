@@ -164,6 +164,16 @@ export default function SystemConnection() {
                 </span>
               </div>
             )}
+            {healthData?.readiness_failures && healthData.readiness_failures.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingTop: 4, borderTop: "1px solid var(--border, #454653)" }}>
+                <span style={{ color: "#f87171", fontWeight: 700, fontSize: 10 }}>READINESS BLOCKERS ({healthData.readiness_failures.length}):</span>
+                {healthData.readiness_failures.map((f, i) => (
+                  <div key={i} style={{ color: "#fca5a5", fontSize: 9.5, paddingLeft: 6, borderLeft: "2px solid #f87171" }}>
+                    • {f}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

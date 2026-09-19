@@ -361,13 +361,13 @@ class SmartScanMoE(nn.Module):
                 t = float(d.get("toa_us", d.get("time_us", self._simulated_clock_us)))
                 f = float(d.get("frequency_mhz", 0.0))
                 b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))
-                tid = d.get("track_id")
+                tid = d.get("track_id") if d.get("track_id") is not None else d.get("emitter_id")
                 aoa = d.get("aoa_deg", d.get("angle_deg"))
             else:
                 t = float(getattr(d, "toa_us", getattr(d, "time_us", self._simulated_clock_us)))
                 f = float(getattr(d, "frequency_mhz", 0.0))
                 b = int(min(self.n_bands - 1, max(0, int(f // 500.0))))
-                tid = getattr(d, "track_id", None)
+                tid = getattr(d, "track_id", getattr(d, "emitter_id", None))
                 aoa = getattr(d, "aoa_deg", getattr(d, "angle_deg", None))
             if tid is None:
                 continue
@@ -625,7 +625,7 @@ class SmartScanMoE(nn.Module):
             fallback_triggered = 0.0
             fallback_reason = "none"
             action_rejection_reason = "none"
-        elif eff_policy == "operational":
+        elif eff_policy == "operational" and not (self.enable_spatial or self.enable_t0 or self.enable_t1):
             eff_tau = 0.0
             force_exploration = False
             has_guarded_arrival = False
@@ -710,10 +710,13 @@ class SmartScanMoE(nn.Module):
             action = best_b * self.n_modes + mode
             logger.info("Forced fallback mode: selected band %d mode %d (%s)", best_b, mode, reason)
 
-        else:  # "demo" mode: exploration enabled and visible
-            eff_tau = self.default_tau if tau is None else float(tau)
-            if eff_tau <= 0.0:
-                eff_tau = 0.1
+        else:  # Cognitive arbitration (deterministic when operational, exploratory when demo)
+            if eff_policy == "operational":
+                eff_tau = 0.0
+            else:
+                eff_tau = self.default_tau if tau is None else float(tau)
+                if eff_tau <= 0.0:
+                    eff_tau = 0.1
 
             q_candidates = [int(b) for b in order_b if band_max[b] >= q_top1 - 0.05][:3]
 
@@ -730,12 +733,19 @@ class SmartScanMoE(nn.Module):
                         pred_etas[b_p] = min(pred_etas.get(b_p, float("inf")), float(p.eta_us))
 
             per_candidates = [int(b) for b in range(self.n_bands) if per_vec[b] > 0.50][:2] if self.preemptive_weight > 0.0 else []
-            all_candidates = list(dict.fromkeys(pred_candidates + per_candidates + q_candidates + occ_candidates))[:7]
+            spatial_candidates = []
+            if self.enable_spatial:
+                for eid, track in getattr(self.temporal_predictor, "tracks", {}).items():
+                    if self.spatial_tracker.get_spatial_priority(eid, self._simulated_clock_us) > 0.5:
+                        b_sp = getattr(track, "last_band", None)
+                        if b_sp is not None and 0 <= b_sp < self.n_bands and b_sp not in spatial_candidates:
+                            spatial_candidates.append(b_sp)
+            all_candidates = list(dict.fromkeys(spatial_candidates + pred_candidates + per_candidates + q_candidates + occ_candidates))[:7]
 
             if self._consecutive_empty_band >= 2 and self._last_band in all_candidates and len(all_candidates) > 1:
                 all_candidates = [b for b in all_candidates if b != self._last_band]
 
-            force_exploration = bool(self._consecutive_empty_total >= 3)
+            force_exploration = bool(self._consecutive_empty_total >= 3) and (eff_policy != "operational")
             has_guarded_arrival = False
             if force_exploration and self.enable_exploration_guard:
                 curr_t = self._simulated_clock_us
@@ -749,6 +759,12 @@ class SmartScanMoE(nn.Module):
 
             u_action = None
             if self.enable_t1 and not force_exploration and (self._consecutive_empty_band < 2):
+                track_prios = None
+                if self.enable_spatial:
+                    track_prios = {
+                        eid: self.spatial_tracker.get_spatial_priority(eid, self._simulated_clock_us)
+                        for eid in getattr(self.temporal_predictor, "tracks", {})
+                    }
                 u_scores, u_telem = self.temporal_predictor.compute_action_conditioned_utility(
                     q_values=q_values,
                     current_time=self._simulated_clock_us,
@@ -756,6 +772,7 @@ class SmartScanMoE(nn.Module):
                     lambda_t=self.lambda_t,
                     lambda_d=self.lambda_d,
                     lambda_a=self.lambda_a,
+                    track_priorities=track_prios,
                 )
                 pred_b_set = set(u_telem.get("predicted_bands", []))
                 act_res = u_telem.get("actionable_reservation", None)
@@ -857,6 +874,11 @@ class SmartScanMoE(nn.Module):
                 max_hist = float(np.max(self._historical_hits)) if len(self._historical_hits) > 0 else 0.0
                 hist_norm = (self._historical_hits / max(1.0, max_hist)).astype(np.float32)
                 explor_scores = 0.40 * revisit_norm + 0.35 * unc_vec + 0.15 * hist_norm + 0.10 * per_vec
+                if self.enable_spatial:
+                    for eid, track in getattr(self.temporal_predictor, "tracks", {}).items():
+                        b_sp = getattr(track, "last_band", None)
+                        if b_sp is not None and 0 <= b_sp < self.n_bands:
+                            explor_scores[b_sp] += self.lambda_spatial * self.spatial_tracker.get_spatial_priority(eid, self._simulated_clock_us)
                 if (self._consecutive_empty_band >= 1 or self._consecutive_dwells_same_band >= 1) and 0 <= self._last_band < self.n_bands:
                     explor_scores[self._last_band] = -1e9
                 best_b = int(np.argmax(explor_scores))

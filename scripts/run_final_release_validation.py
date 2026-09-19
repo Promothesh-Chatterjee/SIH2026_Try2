@@ -76,18 +76,15 @@ def main():
 
     # ── Stage 1: Clean Startup & Checkpoint Integrity ────────────────────────
     print("\n[STAGE 1/6] Clean Backend Startup & Checkpoint SHA-256 Verification...")
-    ckpt_path = Path("experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt")
-    if not ckpt_path.exists():
-        ckpt_path = Path("checkpoints/scheduler/checkpoint_gate_25000_frozen.pt")
-    expected_hash = "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+    from ew_core.training.safety.checkpoint_guard import CheckpointGuard, sha256_file
+    from ew_core.utils.checkpoint_paths import EXPECTED_FROZEN_SHA256
+
+    guard = CheckpointGuard("experiments/checkpoints/scheduler_v2_operational_candidate")
+    ckpt_path = guard.get_active_checkpoint()
+    expected_hash = EXPECTED_FROZEN_SHA256
     assert ckpt_path.exists(), f"Missing checkpoint {ckpt_path}"
 
-
-    hasher = hashlib.sha256()
-    with open(ckpt_path, "rb") as f:
-        while chunk := f.read(65536):
-            hasher.update(chunk)
-    actual_hash = hasher.hexdigest()
+    actual_hash = sha256_file(ckpt_path)
 
     if actual_hash != expected_hash:
         print(f"  [FAIL] Checkpoint hash mismatch! Expected: {expected_hash}, Actual: {actual_hash}")
@@ -107,18 +104,19 @@ def main():
     print("  -> Status: PASS")
 
     # ── Stage 2: Automated Qualification Suite ───────────────────────────────
-    print("\n[STAGE 2/6] Executing Complete 22/22 Automated Qualification Suite...")
+    print("\n[STAGE 2/6] Executing Complete Automated Qualification Suite...")
     test_files = [
-        "tests/test_operational_receiver_controller.py",
-        "tests/test_causality_and_leakage.py",
-        "tests/test_phase7_operational_readiness.py",
-        "tests/test_operational_backend_qualification.py",
+        "ew_core/tests/test_operational_receiver_controller.py",
+        "ew_core/tests/test_causality_and_leakage.py",
+        "ew_core/tests/test_phase7_operational_readiness.py",
+        "ew_core/tests/test_phase8_operational_readiness.py",
+        "ew_core/tests/test_operational_backend_qualification.py",
     ]
     pytest_exit_code = pytest.main(test_files + ["-q"])
     if pytest_exit_code != 0:
         print("  [FAIL] Qualification test suite failed!")
         sys.exit(1)
-    print("  -> All 22/22 Tests in Qualification Suite: PASSED")
+    print("  -> All Qualification Tests in Suite: PASSED")
     print("  -> Status: PASS")
 
     # ── Stage 3: Canonical 100-Step Operational Run ──────────────────────────

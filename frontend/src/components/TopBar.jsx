@@ -71,7 +71,7 @@ export default function TopBar() {
             display: "inline-block",
           }}
         />
-        STATUS: {isOperational ? "OPERATIONAL ACTIVE" : isOnline ? "ONLINE (VERIFYING)" : "BACKEND OFFLINE"}
+        STATUS: {isOperational ? "OPERATIONAL ACTIVE" : isOnline ? (health?.readiness_failures?.length ? `DEGRADED (${health.readiness_failures.length} BLOCKERS)` : "ONLINE (VERIFYING)") : "BACKEND OFFLINE"}
       </span>
       <span
         className="st-tsm"

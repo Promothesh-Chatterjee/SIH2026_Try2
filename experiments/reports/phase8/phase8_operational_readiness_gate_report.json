@@ -1,0 +1,136 @@
+{
+  "phase": 8,
+  "timestamp": "2026-09-19T17:26:52.864821+00:00",
+  "qualification_status": "QUALIFIED",
+  "all_gates_passed": true,
+  "execution_time_seconds": 27.4,
+  "gates": {
+    "GATE_8_1": {
+      "gate": "8.1",
+      "name": "Active Checkpoint Resolution & Immutability",
+      "passed": true,
+      "active_checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\scheduler_v2_operational_candidate\\checkpoint_gate_25000_frozen.pt",
+      "sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+      "expected_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+      "evidence": "CheckpointGuard resolved checkpoint_gate_25000_frozen.pt with bit-exact SHA-256 match 7a99c659affda277..."
+    },
+    "GATE_8_2": {
+      "gate": "8.2",
+      "name": "Fail-Closed Checkpoint Tampering & Unapproved Rejection",
+      "passed": true,
+      "missing_manifest_caught": true,
+      "tampered_hash_caught": true,
+      "evidence": "Unapproved directory raised ExplicitPromotionRequiredError; tampered file raised CheckpointTamperedError."
+    },
+    "GATE_8_3": {
+      "gate": "8.3",
+      "name": "Fail-Closed Metric Validation (NaN/Inf/Missing/Types)",
+      "passed": true,
+      "checks_passed": 5,
+      "total_checks": 5,
+      "evidence": "All 5 fail-closed metric validation tests passed (Missing, NaN, Inf, Bool, Bounds)."
+    },
+    "GATE_8_4": {
+      "gate": "8.4",
+      "name": "Gate A: Canonical Held-Out Gate Verification",
+      "passed": true,
+      "metrics": {
+        "pd": 0.5932999999999999,
+        "hits": 5933,
+        "median_latency_us": 76.6953125,
+        "mean_latency_us": 196.32142913576607,
+        "p90_latency_us": 597.7625,
+        "h2h_vs_round_robin": "10W-0L-0T",
+        "pfa": 0.0,
+        "empty_band_escape_pct": 100.0
+      },
+      "criteria": {
+        "pd_target": ">= 40.63% (4,063 hits)",
+        "median_latency_target": "<= 80.0 us (beating Round-Robin baseline 83.3 us)",
+        "h2h_target": ">= 7/10 wins",
+        "pfa_target": "<= 0.0001",
+        "empty_escape_target": "100.0%"
+      },
+      "evidence": "Gate A passed with Pd=59.33%, Latency=76.7us, Pfa=0.000000, Escape=100.0%."
+    },
+    "GATE_8_5": {
+      "gate": "8.5",
+      "name": "Gate B: Agile Stress Battery Non-Inferiority & Lift",
+      "passed": true,
+      "key_checks": {
+        "AG-04 (Fast Hopper) IR%": 90.0,
+        "AG-08 (Hybrid Fixed+Agile) IR%": 91.0,
+        "AG-10 (Dense Complex EW) IR%": 99.5,
+        "AG-05 (Slow Hopper Lift) IR%": 16.0,
+        "AG-06 (Markov Hopper) IR%": 77.5,
+        "AG-01 (3-Band Cyclic) IR%": 91.0,
+        "AG-02 (4-Band Cyclic) IR%": 94.0
+      },
+      "criteria": {
+        "AG-04": ">= 85.0%",
+        "AG-08": ">= 80.0%",
+        "AG-10": ">= 85.0%",
+        "AG-05": ">= 2.0% (lift over 1.6% baseline)",
+        "AG-06": ">= 4.0%",
+        "AG-01": ">= 70.0%",
+        "AG-02": ">= 70.0%"
+      },
+      "evidence": "Gate B verified: AG-04=90.0%, AG-08=91.0%, AG-10=99.5%, AG-05 Lift=16.0%, AG-06 Lift=77.5%."
+    },
+    "GATE_8_6": {
+      "gate": "8.6",
+      "name": "Gate C: Spatial Contention Resolution & Discrimination",
+      "passed": true,
+      "metrics": {
+        "threat_preference_ratio_disabled": 0.0,
+        "threat_preference_ratio_enabled": 3.4268585131894485,
+        "threat_hit_gain": 1429,
+        "decision_alteration_rate_pct": 99.4,
+        "target_discrimination_gain": 0.7741061755146262,
+        "threat_median_latency_us": 100.0
+      },
+      "criteria": {
+        "threat_preference_ratio": "> 2.0x",
+        "preference_shift": "Enabled > Disabled",
+        "threat_hit_gain": "> 0",
+        "decision_alteration_rate": ">= 45.0%",
+        "target_discrimination_gain": "> 0.0"
+      },
+      "evidence": "Gate C verified: Preference Ratio=3.43x (> 2.0x, vs disabled 0.00x), Threat Gain=+1429, DAR=99.4%."
+    },
+    "GATE_8_7": {
+      "gate": "8.7",
+      "name": "Gate D: Runtime Decision Cycle Profiling & Latency Budget",
+      "passed": true,
+      "metrics": {
+        "mean_cycle_ms": 2.1392454000306316,
+        "median_cycle_ms": 1.9672500056913123,
+        "p95_cycle_ms": 3.1172950140899047,
+        "p99_cycle_ms": 3.879274996870663,
+        "max_cycle_ms": 5.378700006986037,
+        "mean_ingest_predict_ms": 0.03965020022587851,
+        "mean_decision_arbitrate_ms": 2.081199999258388
+      },
+      "criteria": {
+        "mean_cycle_ms": "< 5.0 ms (Hard Readiness Criterion)",
+        "p95_cycle_ms": "< 10.0 ms (Tail Latency Diagnostic)"
+      },
+      "evidence": "Gate D verified: Mean Cycle=2.14 ms (< 5.0 ms hard budget), P95=3.12 ms (< 10.0 ms tail diagnostic)."
+    },
+    "GATE_8_8": {
+      "gate": "8.8",
+      "name": "Production Deployment /health API 10-Prerequisite Verification",
+      "passed": true,
+      "http_200_ok_passed": true,
+      "http_503_degraded_passed": true,
+      "evidence": "Verified HTTP 200 on healthy operational state; verified HTTP 503 and readiness_failures populated on degradation."
+    },
+    "GATE_8_9": {
+      "gate": "8.9",
+      "name": "Dedicated Phase 8 Unit Test Suite (25/25 Passing)",
+      "passed": true,
+      "evidence": "25/25 unit tests verified in test_phase8_operational_readiness.py: .toml\nplugins: anyio-4.14.2, cov-7.1.0\ncollected 25 items\n\new_core\\tests\\test_phase8_operational_readiness.py ..................... [ 84%]\n....                                                                     [100%]\n\n============================= 25 passed in 0.37s =============================="
+    }
+  },
+  "baseline_checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+}

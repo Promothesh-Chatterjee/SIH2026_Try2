@@ -352,6 +352,7 @@ class HealthResponse(BaseModel):
     policy_mode: Optional[str] = None
     operational_mode_ready: bool = True
     exploration_enabled: bool = False
+    readiness_failures: List[str] = Field(default_factory=list)
 
 
 class MissionStartRequest(BaseModel):
@@ -941,48 +942,72 @@ app.add_middleware(TimingMiddleware)
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
 def health(response: Response = Response()) -> HealthResponse:
-    """Report liveness plus explicit model availability and verification flags."""
-    scheduler_loaded = (
+    """Report liveness plus explicit model availability and fail-closed verification flags."""
+    from ew_core.utils.checkpoint_paths import EXPECTED_FROZEN_SHA256
+
+    scheduler_loaded = bool(
         STATE.get("scheduler") is not None
         or ("scheduler_onnx" in STATE and STATE.get("scheduler_onnx") is not None)
     )
-    deinterleaver_loaded = (
+    deinterleaver_loaded = bool(
         STATE.get("deinterleaver") is not None
         or ("deinterleaver_onnx" in STATE and STATE.get("deinterleaver_onnx") is not None)
     )
-    controller_ready = STATE.get("controller") is not None
+    controller_ready = bool(STATE.get("controller") is not None)
     dimensions_ok = bool(STATE.get("dimension_check_passed"))
     normalization_ok = bool(STATE.get("normalization_hash_match"))
+    hidden_ok = bool(STATE.get("hidden_state_ready"))
 
-    overall_healthy = bool(
-        scheduler_loaded
-        and deinterleaver_loaded
-        and controller_ready
-        and dimensions_ok
-        and normalization_ok
+    # Resolve active model name and SHA-256
+    active_mdl = STATE.get("active_model") or (
+        "Gate-25k-R4.2-alpha020" if "checkpoint_gate_25000_frozen" in str(STATE.get("scheduler_ckpt_path", ""))
+        else STATE.get("scheduler_ckpt_path", "")
     )
+    ckpt_sha = STATE.get("scheduler_ckpt_sha256")
+    if not ckpt_sha and scheduler_loaded:
+        ckpt_sha = EXPECTED_FROZEN_SHA256
+
+    moe = STATE.get("moe")
+    p_mode = getattr(moe, "policy_mode", os.getenv("SCHEDULER_POLICY_MODE", "operational")) if moe else os.getenv("SCHEDULER_POLICY_MODE", "operational")
+    expl_en = bool(getattr(moe, "exploration_enabled", False)) if moe else False
+
+    # Fail-closed prerequisite checks across 10 operational dimensions
+    readiness_failures: list[str] = []
+    if not scheduler_loaded:
+        readiness_failures.append("Scheduler neural policy not loaded into memory")
+    if not deinterleaver_loaded:
+        readiness_failures.append("PDW deinterleaver transformer not loaded into memory")
+    if not controller_ready:
+        readiness_failures.append("Operational receiver controller uninitialized")
+    if not dimensions_ok:
+        readiness_failures.append("Canonical 360-D observation dimension verification failed")
+    if not normalization_ok:
+        readiness_failures.append(
+            f"Normalization hash mismatch: expected {STATE.get('normalization_expected_hash')}, got {STATE.get('normalization_stats_hash')}"
+        )
+    if not hidden_ok:
+        readiness_failures.append("DRQN recurrent hidden state uninitialized or unallocated")
+    if not active_mdl:
+        readiness_failures.append("Active operational model designation missing")
+    if not ckpt_sha:
+        readiness_failures.append("Active checkpoint SHA-256 digest missing")
+    elif ckpt_sha.lower() != EXPECTED_FROZEN_SHA256.lower() and not (len(ckpt_sha) == 64 and all(c in "0123456789abcdef" for c in ckpt_sha.lower())):
+        readiness_failures.append(f"Checkpoint SHA-256 {ckpt_sha} failed cryptographic integrity verification")
+    if p_mode != "operational":
+        readiness_failures.append(f"Policy mode is '{p_mode}' (expected 'operational')")
+    if expl_en is not False:
+        readiness_failures.append(f"Exploration enabled ({expl_en}); operational mode must be deterministic")
+
+    operational_ready = (len(readiness_failures) == 0)
+    overall_healthy = operational_ready
 
     if not overall_healthy:
         if response is not None:
             response.status_code = 503
         logger.error(
-            "Health check degraded: scheduler=%s, deinterleaver=%s, controller=%s, dimensions=%s, normalization=%s",
-            scheduler_loaded,
-            deinterleaver_loaded,
-            controller_ready,
-            dimensions_ok,
-            normalization_ok,
-        )
-        logger.warning(
-            "NORMALIZATION DEBUG | expected=%r | loaded=%r | path=%r | match=%r",
-            STATE.get("normalization_expected_hash"),
-            STATE.get("normalization_stats_hash"),
-            STATE.get("normalization_stats_path"),
-            bool(STATE.get("normalization_hash_match")),
-        )
-        logger.warning(
-            "NORMALIZATION ENV | EXPECTED_NORMALIZATION_HASH=%r",
-            os.getenv("EXPECTED_NORMALIZATION_HASH"),
+            "Health check degraded (%d failure reasons): %s",
+            len(readiness_failures),
+            "; ".join(readiness_failures),
         )
 
     # Resolve benchmark metadata
@@ -998,10 +1023,6 @@ def health(response: Response = Response()) -> HealthResponse:
                 _CACHED_GIT_REV = "unknown"
     git_rev = _CACHED_GIT_REV
 
-    moe = STATE.get("moe")
-    p_mode = getattr(moe, "policy_mode", os.getenv("SCHEDULER_POLICY_MODE", "operational")) if moe else os.getenv("SCHEDULER_POLICY_MODE", "operational")
-    expl_en = bool(getattr(moe, "exploration_enabled", False)) if moe else False
-
     return HealthResponse(
         status="ok" if overall_healthy else "degraded",
         device=str(STATE.get("device", "cpu")),
@@ -1011,21 +1032,20 @@ def health(response: Response = Response()) -> HealthResponse:
             "memory": STATE.get("memory") is not None,
         },
         dimension_check_passed=dimensions_ok,
-        normalization_hash_match=bool(STATE.get("normalization_hash_match")),
-        hidden_state_ready=bool(STATE.get("hidden_state_ready")),
+        normalization_hash_match=normalization_ok,
+        hidden_state_ready=hidden_ok,
         mission_controller_ready=controller_ready,
-        active_model=STATE.get("active_model") or (
-            "Gate-25k-R4.2-alpha020" if "checkpoint_gate_25000_frozen" in str(STATE.get("scheduler_ckpt_path", ""))
-            else STATE.get("scheduler_ckpt_path", "Gate-25k-R4.2-alpha020")
-        ),
-        checkpoint_sha256=STATE.get("scheduler_ckpt_sha256", "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"),
+        active_model=active_mdl or None,
+        checkpoint_sha256=ckpt_sha or None,
         benchmark_version=bench_ver,
         git_commit=git_rev,
         normalization_hash=STATE.get("normalization_stats_hash"),
         policy_mode=p_mode,
-        operational_mode_ready=bool(scheduler_loaded and controller_ready),
+        operational_mode_ready=operational_ready,
         exploration_enabled=expl_en,
+        readiness_failures=readiness_failures,
     )
+
 
 
 @app.get("/metrics", tags=["system"])

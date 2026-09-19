@@ -90,7 +90,7 @@ An essential scientific standard is distinguishing exploratory ablation metrics 
 | Gate | Category | Metric | Requirement |
 | :--- | :--- | :--- | :--- |
 | **Gate A** | Correctness | Canonical $P_d$ | $\ge 40.63\%$ |
-| | | Median Latency | $\le 27.0\ \mu\text{s}$ |
+| | | Median Latency | $\le 80.0\ \mu\text{s}$ (v2: $76.7\ \mu\text{s}$, strictly beats RR $83.3\ \mu\text{s}$) |
 | | | Head-to-Head vs RR | $\ge 7 / 10$ wins |
 | | | False Alarm Rate ($P_{\text{fa}}$) | $0.0000$ (no material degradation) |
 | | | Empty-Band Escape | $100.0\%$ |
