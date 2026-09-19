@@ -82,7 +82,7 @@ The manifest is formatted as UTF-8 JSON:
     "sparse_ir": 75.10,
     "worst_case_ir": 71.00,
     "pd": 99.85,
-    "pfa": 0.0012,
+    "pfa": 0.0005,
     "mode2_fraction_agile_sparse": 0.185
   }
 }
