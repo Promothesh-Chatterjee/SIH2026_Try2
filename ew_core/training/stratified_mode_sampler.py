@@ -15,6 +15,7 @@ import logging
 from typing import Any, Dict, List, Tuple
 import numpy as np
 
+from ew_core.contracts import dwell_us_for
 from ew_core.training.replay_buffer import SequenceReplayBuffer
 
 logger = logging.getLogger(__name__)
@@ -105,6 +106,7 @@ class StratifiedModeSampler:
         hit_prob_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
         intercept_time_batch = np.full((batch_size, self.seq_len), np.nan, dtype=np.float32)
         time_valid_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
+        dwell_time_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
         valid_mask = np.zeros((batch_size, self.seq_len), dtype=np.float32)
         burn_in_mask = np.zeros((batch_size, self.seq_len), dtype=np.float32)
 
@@ -211,6 +213,8 @@ class StratifiedModeSampler:
                 hit_prob_batch[batch_slot, t] = ep["hit_probs"][idx]
                 intercept_time_batch[batch_slot, t] = float(ep["intercept_times_us"][idx])
                 time_valid_batch[batch_slot, t] = float(ep["time_target_valid"][idx])
+                ep_dwells = ep.get("dwell_times_us")
+                dwell_time_batch[batch_slot, t] = float(ep_dwells[idx]) if ep_dwells is not None else float(dwell_us_for(500.0, m_act))
                 valid_mask[batch_slot, t] = 1.0
                 if t < burn:
                     burn_in_mask[batch_slot, t] = 1.0
@@ -236,6 +240,7 @@ class StratifiedModeSampler:
             "hit_probs": hit_prob_batch,
             "intercept_times_us": intercept_time_batch,
             "time_target_valid": time_valid_batch,
+            "dwell_times_us": dwell_time_batch,
             "valid_mask": valid_mask,
             "burn_in_mask": burn_in_mask,
         }

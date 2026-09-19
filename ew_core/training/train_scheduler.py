@@ -22,7 +22,7 @@ import torch.nn as nn
 import torch.optim as optim
 import yaml
 
-from ..contracts import DWELL_MODES
+from ..contracts import DEFAULT_DWELL_MULTIPLIERS, DWELL_MODES
 from ..environment.cognitive_rf_scan_env import CognitiveRFScanEnv
 from ..environment.scenario_generator import ScenarioSource
 from ..data.tsrd_manifest import dataset_fingerprint
@@ -185,6 +185,18 @@ def _do_drqn_update(
             c_max = 100.0 if target_q_max is None else float(target_q_max)
             next_q = torch.clamp(next_q, min=c_min, max=c_max)
 
+    # Phase 5: Time-Aware Bellman Target
+    # γ_eff = γ^(Δt / T_base), where T_base = 500.0 µs
+    # Preferred: actual executed dwell duration (µs) recorded in replay batch
+    # Fallback: nominal dwell duration from action mode multiplier
+    if "dwell_times_us" in batch and batch["dwell_times_us"] is not None:
+        dwell_us_b = torch.tensor(batch["dwell_times_us"], dtype=torch.float32, device=device)
+    else:
+        dwell_multipliers = torch.tensor([0.25, 1.0, 2.5, 1.0, 1.0], dtype=torch.float32, device=device)
+        dwell_us_b = 500.0 * dwell_multipliers[act_b % 5]
+
+    gamma_eff = torch.pow(torch.as_tensor(float(gamma), dtype=torch.float32, device=device), dwell_us_b / 500.0)
+
     # Track D: reward centering strictly applied to TD target computation
     if loss_mask.any():
         batch_mean = float(rew_b[loss_mask].mean().item())
@@ -193,7 +205,7 @@ def _do_drqn_update(
     updated_baseline = baseline_momentum * reward_baseline + (1.0 - baseline_momentum) * batch_mean
     centered_rew_b = rew_b - updated_baseline
 
-    targets = centered_rew_b + gamma * next_q * (1.0 - done_b)
+    targets = centered_rew_b + gamma_eff * next_q * (1.0 - done_b)
     q_loss = loss_fn(q_chosen[loss_mask], targets[loss_mask].detach())
 
     # Phase 9B-R2: Q^2 regularization across all actions on graded steps
@@ -264,8 +276,11 @@ def _do_drqn_update(
         stats["mean_q_margin"] = mean_q_margin_val
         stats["mean_online_q"] = float(qm.mean().item())
         stats["mean_target_q"] = float(best_next.mean().item())
-        stats["max_target_q"] = float(target_table.max().item())
-        stats["target_online_gap"] = float(best_next.mean().item() - qm.mean().item())
+        stats["target_online_gap"] = float((best_next.mean() - qm.mean()).abs().item())
+        stats["signed_target_online_gap"] = float(best_next.mean().item() - qm.mean().item())
+        stats["gamma_eff_mean"] = float(gamma_eff[loss_mask_t].mean().item())
+        stats["gamma_eff_min"] = float(gamma_eff[loss_mask_t].min().item())
+        stats["gamma_eff_max"] = float(gamma_eff[loss_mask_t].max().item())
         pre_gn = float(pre_clip_grad_norm.item()) if torch.is_tensor(pre_clip_grad_norm) else float(pre_clip_grad_norm)
         stats["gradient_norm"] = min(1.0, pre_gn)
         stats["pre_clip_gradient_norm"] = pre_gn
@@ -866,6 +881,8 @@ def train_scheduler(
                 first_src = getattr(env.records[0], "source_id", "unknown")
                 ep_scen_id = str(first_src).split(":")[-1] if first_src else "unknown"
 
+            actual_dwell_us = float(info.get("dwell_time_us", 500.0 * DEFAULT_DWELL_MULTIPLIERS[action % n_modes]))
+
             buffer.add(
                 np.asarray(obs, dtype=np.float32),
                 action,
@@ -875,6 +892,7 @@ def train_scheduler(
                 hit_prob=float(info.get("hit_prob", 1.0 if info["hit"] else 0.0)),
                 intercept_time_us=float(info.get("intercept_time_us", float("nan"))),
                 scenario_id=ep_scen_id,
+                dwell_time_us=actual_dwell_us,
             )
             obs = next_obs
             ep_reward += float(reward)

@@ -31,6 +31,9 @@ from pathlib import Path
 
 import numpy as np
 
+from ew_core.contracts import DEFAULT_DWELL_MULTIPLIERS, dwell_us_for
+from ew_core.training.scenario_classifier import CANONICAL_SCENARIO_CLASSES, classify_scenario
+
 logger = logging.getLogger(__name__)
 
 
@@ -82,8 +85,19 @@ class SequenceReplayBuffer:
         self._total: int = 0
         self._current: dict | None = None
         self._current_len: int = 0
+        self._episode_counter: int = 0
 
-    def _make_episode(self, scenario_id: str | None = None) -> dict:
+    def _make_episode(
+        self,
+        scenario_id: str | None = None,
+        scenario_class: str | None = None,
+        episode_id: int | None = None,
+    ) -> dict:
+        if episode_id is None:
+            self._episode_counter += 1
+            episode_id = self._episode_counter
+        if scenario_class is None:
+            scenario_class = classify_scenario(scenario_id=scenario_id)
         return {
             "obs": [],
             "actions": [],
@@ -93,7 +107,10 @@ class SequenceReplayBuffer:
             "hit_probs": [],
             "intercept_times_us": [],
             "time_target_valid": [],
+            "dwell_times_us": [],
             "scenario_id": scenario_id,
+            "scenario_class": scenario_class,
+            "episode_id": episode_id,
         }
 
     def add(
@@ -106,6 +123,8 @@ class SequenceReplayBuffer:
         hit_prob: float | None = None,
         intercept_time_us: float | None = None,
         scenario_id: str | None = None,
+        scenario_class: str | None = None,
+        dwell_time_us: float | None = None,
     ) -> None:
         """Append transition; close episode on done.
 
@@ -115,21 +134,36 @@ class SequenceReplayBuffer:
             reward: Scalar reward.
             next_obs: Next obs (obs_dim,).
             done: Episode termination.
-            hit_prob: 1.0 if the swept band intercepted, else 0.0 (binary aux
-                target; coerced to 0/1).
+            hit_prob: 1.0 if the swept band intercepted, else 0.0. Missing hit_prob (None)
+                is explicitly treated as an invalid target / 0.0 (never converted to 1.0).
             intercept_time_us: Dwell-relative time-to-interception (µs), or
-                None/nan when there was no interception (then no valid time
-                target is recorded).
+                None/nan when there was no interception.
             scenario_id: Optional identifier of the scenario for scenario-balanced sampling.
+            scenario_class: Optional canonical scenario class.
+            dwell_time_us: Actual executed dwell duration (µs). Defaults to canonical duration.
         """
         if self._current is None:
-            self._current = self._make_episode(scenario_id=scenario_id)
+            self._current = self._make_episode(scenario_id=scenario_id, scenario_class=scenario_class)
         elif scenario_id is not None and self._current.get("scenario_id") is None:
             self._current["scenario_id"] = scenario_id
+            if self._current.get("scenario_class") is None:
+                self._current["scenario_class"] = classify_scenario(scenario_id=scenario_id)
 
-        hit_binary = 1.0 if (hit_prob is None or float(hit_prob) > 0.5) else 0.0
-        intercept_time = float("nan") if intercept_time_us is None else float(intercept_time_us)
-        time_valid = 1.0 if (intercept_time == intercept_time) else 0.0
+        # Point 8: Missing hit_prob is NOT converted into a hit
+        if hit_prob is None:
+            hit_binary = 0.0
+            time_valid = 0.0
+            intercept_time = float("nan")
+        else:
+            hit_binary = 1.0 if float(hit_prob) > 0.5 else 0.0
+            intercept_time = float("nan") if (intercept_time_us is None or hit_binary < 0.5) else float(intercept_time_us)
+            time_valid = 1.0 if (hit_binary > 0.5 and intercept_time == intercept_time) else 0.0
+
+        if dwell_time_us is None:
+            mode = int(action) % 5
+            dwell_us = float(dwell_us_for(500.0, mode))
+        else:
+            dwell_us = float(dwell_time_us)
 
         self._current["obs"].append(np.asarray(obs, dtype=np.float32))
         self._current["actions"].append(int(action))
@@ -139,6 +173,7 @@ class SequenceReplayBuffer:
         self._current["hit_probs"].append(hit_binary)
         self._current["intercept_times_us"].append(intercept_time)
         self._current["time_target_valid"].append(time_valid)
+        self._current["dwell_times_us"].append(dwell_us)
         self._current_len += 1
         self._total += 1
 
@@ -153,6 +188,10 @@ class SequenceReplayBuffer:
         hit_probs_arr = np.asarray(ep["hit_probs"], dtype=np.float32)
         has_any_hits = bool(np.any(hit_probs_arr > 0.5))
         scen_id = ep.get("scenario_id") or "unknown"
+        scen_cls = ep.get("scenario_class") or classify_scenario(scen_id)
+        ep_id = ep.get("episode_id") or 0
+
+        dwell_arr = np.asarray(ep.get("dwell_times_us", [500.0] * len(ep["actions"])), dtype=np.float32)
 
         return {
             "obs": np.vstack(ep["obs"]),
@@ -163,9 +202,12 @@ class SequenceReplayBuffer:
             "hit_probs": hit_probs_arr,
             "intercept_times_us": np.asarray(ep["intercept_times_us"], dtype=np.float32),
             "time_target_valid": np.asarray(ep["time_target_valid"], dtype=np.float32),
+            "dwell_times_us": dwell_arr,
             "length": int(self._current_len),
             "has_hits": has_any_hits,
             "scenario_id": str(scen_id),
+            "scenario_class": str(scen_cls),
+            "episode_id": int(ep_id),
         }
 
     def _archive_current(self) -> None:
@@ -188,6 +230,7 @@ class SequenceReplayBuffer:
         self,
         batch_size: int,
         target_hit_seq_fraction: float = 0.40,
+        enforce_alignment: bool = False,
     ) -> dict[str, np.ndarray]:
         """Sample batched windows (B, seq_len, ...) within single episodes with sequence balancing.
 
@@ -251,6 +294,8 @@ class SequenceReplayBuffer:
         hit_prob_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
         intercept_time_batch = np.full((batch_size, self.seq_len), np.nan, dtype=np.float32)
         time_valid_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
+        dwell_time_batch = np.zeros((batch_size, self.seq_len), dtype=np.float32)
+        episode_id_batch = np.zeros((batch_size, self.seq_len), dtype=np.int64)
         valid_mask = np.zeros((batch_size, self.seq_len), dtype=np.float32)
         burn_in_mask = np.zeros((batch_size, self.seq_len), dtype=np.float32)
 
@@ -258,6 +303,9 @@ class SequenceReplayBuffer:
         pos_scen_keys = list(pos_episodes_by_scen.keys())
         all_scen_keys = list(all_episodes_by_scen.keys())
         sampled_pos_scens: list[str] = []
+        sampled_scenario_ids: list[str] = []
+        sampled_scenario_classes: list[str] = []
+        sampled_episode_ids: list[int] = []
 
         for b in range(batch_size):
             want_hit = (b < n_hit_desired) and has_pos_data
@@ -326,6 +374,9 @@ class SequenceReplayBuffer:
                         start = 0
                         steps = ep_len
 
+            ep_dwells = ep.get("dwell_times_us")
+            ep_id_val = int(ep.get("episode_id", 0))
+
             for t in range(steps):
                 idx = start + t
                 obs_batch[b, t] = ep["obs"][idx]
@@ -336,9 +387,21 @@ class SequenceReplayBuffer:
                 hit_prob_batch[b, t] = ep["hit_probs"][idx]
                 intercept_time_batch[b, t] = float(ep["intercept_times_us"][idx])
                 time_valid_batch[b, t] = float(ep["time_target_valid"][idx])
+                dwell_time_batch[b, t] = float(ep_dwells[idx]) if ep_dwells is not None else float(dwell_us_for(500.0, int(ep["actions"][idx]) % 5))
+                episode_id_batch[b, t] = ep_id_val
                 valid_mask[b, t] = 1.0
                 if t < burn:
                     burn_in_mask[b, t] = 1.0
+
+            sampled_scenario_ids.append(str(ep.get("scenario_id", "unknown")))
+            sampled_scenario_classes.append(str(ep.get("scenario_class", "periodic")))
+            sampled_episode_ids.append(ep_id_val)
+
+            # Invariant check: next_obs[t] == obs[t+1] on contiguous adjacent transitions
+            if enforce_alignment and steps > 1:
+                assert np.allclose(next_obs_batch[b, :steps - 1], obs_batch[b, 1:steps]), (
+                    f"Transition misalignment in sampled window for episode {ep_id_val}"
+                )
 
         seq_has_hit = [bool(np.any(hit_prob_batch[b] > 0.5)) for b in range(batch_size)]
         seq_hit_fraction = float(np.mean(seq_has_hit))
@@ -361,12 +424,17 @@ class SequenceReplayBuffer:
             "hit_probs": hit_prob_batch,
             "intercept_times_us": intercept_time_batch,
             "time_target_valid": time_valid_batch,
+            "dwell_times_us": dwell_time_batch,
+            "episode_ids": episode_id_batch,
             "valid_mask": valid_mask,
             "burn_in_mask": burn_in_mask,
             "sequence_hit_fraction": seq_hit_fraction,
             "n_hit_sequences": int(np.sum(seq_has_hit)),
             "pos_scen_concentration": pos_scen_concentration,
             "sampled_pos_scenarios": sampled_pos_scens,
+            "sampled_scenario_ids": sampled_scenario_ids,
+            "sampled_scenario_classes": sampled_scenario_classes,
+            "sampled_episode_ids": sampled_episode_ids,
         }
 
     def can_sample(self, batch_size: int) -> bool:

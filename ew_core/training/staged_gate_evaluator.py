@@ -729,6 +729,9 @@ class StagedGateEvaluator:
         agile_irs = [v for k, v in scen_irs.items() if any(k.startswith(aid) for aid in agile_scen_ids)]
         sparse_irs = [v for k, v in scen_irs.items() if any(k.startswith(sid) for sid in sparse_scen_ids)]
 
+        target_gap_val = float(abs(max_q_val - mean_q_std)) if np.isfinite(max_q_val) else None
+        mode_ent_val = float(drqn_p.get("mode_entropy", 0.0)) if "mode_entropy" in drqn_p else None
+
         collapse_diag = self.collapse_detector.evaluate_eval_run(
             step=global_step,
             distinct_bands=float(drqn_p.get("distinct_bands", 0.0)),
@@ -744,15 +747,23 @@ class StagedGateEvaluator:
             pd=float(drqn_p.get("decision_level_pd", 0.0) or 0.0),
             pfa=float(drqn_p.get("pfa", 0.0) or 0.0),
             latency_us=float(drqn_p.get("avg_intercept_time_us", 0.0) or 0.0),
+            mode_entropy=mode_ent_val,
+            target_online_gap=target_gap_val,
         )
 
         checkpoint_tag = collapse_diag.tag
-        if collapse_diag.severity == "CRITICAL":
+        can_promote = True
+        is_critical_collapse = (collapse_diag.severity == CollapseSeverity.CRITICAL or str(collapse_diag.severity) == "CRITICAL")
+        if is_critical_collapse:
             logger.warning("POLICY COLLAPSE DETECTED at step %d: %s", global_step, collapse_diag.reasons)
-            if verdict == "PASS":
-                verdict = "INVESTIGATE"
-                notes = f"Integrity ok, but Policy-Collapse Detector flagged CRITICAL: {'; '.join(collapse_diag.reasons[:3])}"
-        elif collapse_diag.severity == "WARNING":
+            can_promote = False
+            verdict = "FAIL"
+            notes = f"CRITICAL Policy Collapse flagged: {'; '.join(collapse_diag.reasons[:3])}"
+            quarantine_dir = self.output_dir / "quarantine"
+            quarantine_dir.mkdir(parents=True, exist_ok=True)
+            ckpt_path = quarantine_dir / f"checkpoint_gate_{gate}_quarantined_collapsed.pt"
+            checkpoint_tag = "quarantined_collapsed"
+        elif collapse_diag.severity == CollapseSeverity.WARNING or str(collapse_diag.severity) == "WARNING":
             logger.info("POLICY COLLAPSE WARNING at step %d: %s", global_step, collapse_diag.reasons)
 
         # Compute Phase 9B Composite Generalization Score
@@ -818,6 +829,7 @@ class StagedGateEvaluator:
                 "collapse_severity": collapse_diag.severity.value,
                 "collapse_reasons": collapse_diag.reasons,
                 "composite_generalization_score": float(composite_score),
+                "can_promote": can_promote,
             },
         )
         torch.save({
@@ -834,6 +846,7 @@ class StagedGateEvaluator:
             "replay_buffer_size": replay_size,
             "optimizer_step_count": opt_steps,
             "checkpoint_tag": checkpoint_tag,
+            "can_promote": can_promote,
             "collapse_diagnostics": collapse_diag.to_dict(),
             "configuration_snapshot": {
                 "model_config": self.model_config,
