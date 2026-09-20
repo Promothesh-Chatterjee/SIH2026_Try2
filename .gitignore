@@ -33,6 +33,8 @@ patch*.py
 /data/
 *.h5
 *.hdf5
+!tests/fixtures/phase10_tsrd/
+!tests/fixtures/phase10_tsrd/**/*.h5
 
 # Config secrets & local paths
 .env
