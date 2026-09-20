@@ -634,22 +634,29 @@ async def lifespan(app: FastAPI):  # type: ignore
             active_ckpt = guard.get_active_checkpoint()
             scheduler_ckpts.append(active_ckpt)
         else:
-            manifest_file = p_env.parent / "ACTIVE_CHECKPOINT.json"
-            if manifest_file.exists():
+            baseline_roots = [
+                Path("experiments/checkpoints/production_baseline").resolve(),
+                (PACKAGE_ROOT / "experiments/checkpoints/production_baseline").resolve(),
+            ]
+            try:
+                parent_res = p_env.parent.resolve()
+            except Exception:
+                parent_res = p_env.parent
+            if any(parent_res == b_root for b_root in baseline_roots):
+                scheduler_ckpts.append(p_env)
+            else:
                 guard = CheckpointGuard(p_env.parent)
                 active_ckpt = guard.get_active_checkpoint()
                 if p_env.resolve() != active_ckpt.resolve():
                     raise CheckpointSecurityError(
                         f"Fail-closed: Specified checkpoint {p_env} is not the approved active checkpoint {active_ckpt}"
                     )
-            scheduler_ckpts.append(p_env)
+                scheduler_ckpts.append(p_env)
 
     # 2. Check operational candidate directories via CheckpointGuard
     candidate_dirs = [
         PACKAGE_ROOT / "experiments/checkpoints/scheduler_v2_operational_candidate",
         Path("experiments/checkpoints/scheduler_v2_operational_candidate"),
-        PACKAGE_ROOT / "experiments/checkpoints/safe_continuation_candidate",
-        Path("experiments/checkpoints/safe_continuation_candidate"),
         Path("checkpoints/scheduler_v2_operational_candidate"),
         PACKAGE_ROOT / "checkpoints/scheduler_v2_operational_candidate",
     ]
@@ -669,16 +676,16 @@ async def lifespan(app: FastAPI):  # type: ignore
             if active_ckpt not in scheduler_ckpts:
                 scheduler_ckpts.append(active_ckpt)
 
-    # 3. Fallback non-candidate discovery paths (ONNX / legacy)
+    # 3. Fallback non-candidate discovery paths (Baseline / ONNX)
     fallback_ckpts = [
+        PACKAGE_ROOT / "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt",
+        Path("experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt"),
+        PACKAGE_ROOT / "experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt",
+        Path("experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt"),
         PACKAGE_ROOT / "experiments/checkpoints/onnx/scheduler.onnx",
         Path("experiments/checkpoints/onnx/scheduler.onnx"),
         Path("checkpoints/onnx/scheduler.onnx"),
         PACKAGE_ROOT / "checkpoints/onnx/scheduler.onnx",
-        PACKAGE_ROOT / "experiments/checkpoints/scheduler/best.pt",
-        Path("experiments/checkpoints/scheduler/best.pt"),
-        PACKAGE_ROOT / "checkpoints/scheduler/best.pt",
-        Path("checkpoints/scheduler/best.pt"),
     ]
     for fb in fallback_ckpts:
         if fb not in scheduler_ckpts:

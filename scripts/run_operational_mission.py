@@ -119,12 +119,12 @@ def run_mission(
     """Execute the full 10-step operational mission demonstration."""
     print("=" * 80)
     print("  COGNITIVE EW SMARTSCAN — CLOSED-LOOP OPERATIONAL DEMONSTRATION")
-    print("  Candidate: Gate-25k-R4.2-alpha020 / Gate-25.5k Champion Candidate")
+    print("  Candidate: Gate-25k-Frozen Baseline")
     print("=" * 80)
 
     # ── Step 1: Backend Startup & Initialization ─────────────────────────────
     print("\n[STEP 1/10] Initializing Closed-Loop Backend Hardware & Neural Models...")
-    checkpoint_path = Path("experiments/checkpoints/scheduler/best.pt")
+    checkpoint_path = Path("experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt")
     if not checkpoint_path.exists():
         checkpoint_path = Path("experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt")
     if not checkpoint_path.exists():

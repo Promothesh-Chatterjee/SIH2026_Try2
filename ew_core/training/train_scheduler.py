@@ -276,6 +276,7 @@ def _do_drqn_update(
         stats["mean_q_margin"] = mean_q_margin_val
         stats["mean_online_q"] = float(qm.mean().item())
         stats["mean_target_q"] = float(best_next.mean().item())
+        stats["max_target_q"] = float(best_next.max().item())
         stats["target_online_gap"] = float((best_next.mean() - qm.mean()).abs().item())
         stats["signed_target_online_gap"] = float(best_next.mean().item() - qm.mean().item())
         stats["gamma_eff_mean"] = float(gamma_eff[loss_mask_t].mean().item())
@@ -378,21 +379,22 @@ def train_scheduler(
     env_config.setdefault("n_actions", n_actions)
 
     training_mode = train_cfg.get("training_mode", "real_tsrd")
+    if training_mode != "real_tsrd":
+        raise ValueError(f"Strict TSRD training mode required for retraining; got training_mode='{training_mode}'")
     from ..data.tsrd_root import resolve_tsrd_root
 
     canonical_root = resolve_tsrd_root(cli_value=data_dir_override, config=train_cfg)
-    if training_mode == "real_tsrd":
-        require_training_gate(
-            data_root=canonical_root,
-            deinterleaver_checkpoint=train_cfg.get("deinterleaver_ckpt", "checkpoints/deinterleaver/best.pt"),
-            normalization_stats=train_cfg.get("normalization_stats", "checkpoints/deinterleaver/normalization_stats.json"),
-            environment_config=env_config,
-            model_config=full_cfg,
-        )
+    require_training_gate(
+        data_root=canonical_root,
+        deinterleaver_checkpoint=train_cfg.get("deinterleaver_ckpt", "experiments/checkpoints/deinterleaver/best.pt"),
+        normalization_stats=train_cfg.get("normalization_stats", "experiments/checkpoints/deinterleaver/normalization_stats.json"),
+        environment_config=env_config,
+        model_config=full_cfg,
+    )
 
     # Load trained deinterleaver and normalization stats for perception
-    deinterleaver_ckpt = train_cfg.get("deinterleaver_ckpt", "checkpoints/deinterleaver/best.pt")
-    norm_stats_path = train_cfg.get("normalization_stats", "checkpoints/deinterleaver/normalization_stats.json")
+    deinterleaver_ckpt = train_cfg.get("deinterleaver_ckpt", "experiments/checkpoints/deinterleaver/best.pt")
+    norm_stats_path = train_cfg.get("normalization_stats", "experiments/checkpoints/deinterleaver/normalization_stats.json")
     
     deinterleaver_model = None
     fit_stats = None
@@ -508,7 +510,8 @@ def train_scheduler(
         {**moe_cfg, "n_bands": n_bands, "n_modes": n_modes, "n_actions": n_actions, "device": str(device)},
     ).to(device)
 
-    optimizer = optim.Adam(online_drqn.parameters(), lr=float(drqn_cfg.get("lr", 1e-4)))
+    learning_rate = float(sched_cfg.get("learning_rate", drqn_cfg.get("lr", 1e-4)))
+    optimizer = optim.Adam(online_drqn.parameters(), lr=learning_rate)
     loss_fn = nn.HuberLoss()
 
     # WandB optional
@@ -525,9 +528,9 @@ def train_scheduler(
     ts_explore_modes = bool(sched_cfg.get("thompson_explore_modes", False))
     ts_sampler = ThompsonSamplingExplorer(n_bands=n_bands, n_modes=n_modes, seed=seed, explore_modes=ts_explore_modes)
     ts_warmup = int(sched_cfg.get("thompson_warmup_steps", 5000))
-    eps_start = float(drqn_cfg.get("eps_start", 1.0))
-    eps_end = float(drqn_cfg.get("eps_end", 0.05))
-    eps_decay = float(drqn_cfg.get("eps_decay", 10000))
+    eps_start = float(sched_cfg.get("eps_start", drqn_cfg.get("eps_start", 1.0)))
+    eps_end = float(sched_cfg.get("eps_end", drqn_cfg.get("eps_end", 0.05)))
+    eps_decay = float(sched_cfg.get("eps_decay", drqn_cfg.get("eps_decay", 10000)))
     gamma = float(drqn_cfg.get("gamma", 0.99))
     seq_len = int(sched_cfg.get("seq_len", 16))
     burn_in = int(sched_cfg.get("burn_in", 8))
@@ -535,6 +538,14 @@ def train_scheduler(
     update_freq = int(sched_cfg.get("update_freq", 4))
     target_update_freq = int(sched_cfg.get("target_update_freq", 1000))
     total_steps = int(stop_at_step) if stop_at_step is not None else int(sched_cfg.get("total_timesteps", 500000))
+    target_q_max = float(sched_cfg.get("target_q_max", target_q_max))
+    target_q_min = float(sched_cfg.get("target_q_min", target_q_min))
+    q_reg_coef = float(sched_cfg.get("q_reg_coef", q_reg_coef))
+    if "targeted_exploration" in sched_cfg:
+        targeted_exploration = bool(sched_cfg["targeted_exploration"])
+    if "band_discovery_quota" in sched_cfg:
+        band_discovery_quota = int(sched_cfg["band_discovery_quota"])
+    target_q_max = float(sched_cfg.get("target_q_max", 100.0))
 
     buffer = SequenceReplayBuffer(
         capacity=int(sched_cfg.get("replay_buffer_size", 50000)),
@@ -554,6 +565,18 @@ def train_scheduler(
         SCHEDULER_DIR,
         role="scheduler",
     )
+    # Fail-closed guard: forbid output_dir within immutable baseline or operational candidate directories
+    forbidden_roots = [
+        Path("experiments/checkpoints/production_baseline").resolve(),
+        Path("experiments/checkpoints/scheduler_v2_operational_candidate").resolve(),
+    ]
+    resolved_out = output_dir.resolve()
+    for f_root in forbidden_roots:
+        if resolved_out == f_root or f_root in resolved_out.parents:
+            raise RuntimeError(
+                f"FATAL: output_dir '{output_dir}' resolves to or inside immutable baseline '{f_root}'. "
+                f"Retraining directly into baseline directories is strictly forbidden."
+            )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # P0-9: reproducible run directory + telemetry publisher (real metrics only).
@@ -579,6 +602,8 @@ def train_scheduler(
 
     # RC-2.9: fixed, documented validation scenario set (reproducible numbers).
     val_cfg = train_cfg.get("validation", {})
+    if bool(val_cfg.get("allow_synthetic_fallback", False)):
+        raise ValueError("Phase 11 strictly forbids allow_synthetic_fallback=True in validation set configuration.")
     val_set = FixedValidationSet(
         data_root=data_dir,
         subset=str(val_cfg.get("subset", "val")),
@@ -589,13 +614,127 @@ def train_scheduler(
         freq_max_mhz=float(env_config.get("freq_max_mhz", 18000.0)),
         time_horizon_us=float(env_config.get("time_horizon_us", 0.0)) or None,
         max_pulses=int(env_config.get("max_pulses", 50000)),
-        allow_synthetic_fallback=bool(val_cfg.get("allow_synthetic_fallback", False)),
+        allow_synthetic_fallback=False,
     )
     (run.dir / "validation_set.json").write_text(
         json.dumps(coerce(val_set.manifest()), indent=2), encoding="utf-8"
     )
     logger.info("Run %s at %s", run.run_id, run.dir)
 
+    # Phase 11 Fail-closed parent checkpoint resolution: CLI -> config -> scheduler.scheduler_ckpt
+    resolved_parent_ckpt = resume_checkpoint
+    if resolved_parent_ckpt is None:
+        resolved_parent_ckpt = train_cfg.get("scheduler_ckpt") or sched_cfg.get("scheduler_ckpt")
+
+    if resolved_parent_ckpt is None:
+        raise RuntimeError(
+            "FATAL: No parent checkpoint specified. Retraining requires an explicit parent checkpoint "
+            "(via CLI --resume or config 'scheduler_ckpt'). Silent fallback to fresh training is permanently disabled."
+        )
+
+    parent_path = Path(resolved_parent_ckpt)
+    if not parent_path.exists():
+        raise FileNotFoundError(
+            f"FATAL: Parent checkpoint not found at '{parent_path}'. "
+            f"Silent fallback to fresh training is permanently disabled."
+        )
+
+    import hashlib
+    sha256_hash = hashlib.sha256()
+    with open(parent_path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            sha256_hash.update(chunk)
+    parent_sha256 = sha256_hash.hexdigest()
+    logger.info("Parent checkpoint resolved: %s (SHA-256: %s)", parent_path, parent_sha256)
+
+    FROZEN_25K_SHA = "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+    if "checkpoint_gate_25000_frozen" in parent_path.name:
+        if parent_sha256 != FROZEN_25K_SHA:
+            raise RuntimeError(
+                f"FATAL: Checkpoint {parent_path} claims to be 25k frozen baseline but SHA-256 mismatch! "
+                f"Expected {FROZEN_25K_SHA}, got {parent_sha256}"
+            )
+        logger.info("Frozen 25k baseline SHA-256 verified bit-identical to canonical hash.")
+
+    try:
+        ckpt = torch.load(parent_path, map_location=device, weights_only=False)
+    except TypeError:
+        ckpt = torch.load(parent_path, map_location=device)
+
+    if "phase11" in str(parent_path).lower() and isinstance(ckpt, dict):
+        parent_sha256 = ckpt.get("parent_sha256") or ckpt.get("metadata", {}).get("extra", {}).get("parent_sha256", FROZEN_25K_SHA)
+        logger.info("Phase 11 lineage preserved: root parent SHA-256 = %s", parent_sha256)
+
+    # Architecture verification (360 obs_dim, 180 actions)
+    state_dict = ckpt["state_dict"] if isinstance(ckpt, dict) and "state_dict" in ckpt else ckpt
+    model_state = online_drqn.state_dict()
+    for k, v in state_dict.items():
+        if k in model_state:
+            if model_state[k].shape != v.shape:
+                raise RuntimeError(
+                    f"FATAL: Architecture mismatch for layer '{k}': "
+                    f"model expected {model_state[k].shape}, checkpoint has {v.shape}."
+                )
+
+    # Weights-only loading into online and target DRQN
+    online_drqn.load_state_dict(state_dict, strict=True)
+    target_drqn.load_state_dict(ckpt.get("target_state_dict", state_dict) if isinstance(ckpt, dict) else state_dict, strict=True)
+    logger.info("Loaded parent weights into online and target DRQN (strict=True).")
+
+    # Determine restart vs in-flight continuation contract
+    is_baseline_restart = (
+        ("frozen" in parent_path.name or "production_baseline" in str(parent_path))
+        and resume_checkpoint is None
+        and not (isinstance(ckpt, dict) and int(ckpt.get("global_step", 0)) > 25000)
+    )
+
+    global_step = 0
+    episode = 0
+    best_reward = -float("inf")
+    eps = eps_start
+    reward_baseline = -0.39
+    start_step = int(sched_cfg.get("start_step", 25000 if is_baseline_restart else 0))
+
+    if is_baseline_restart:
+        logger.info("Phase 11 restart contract ACTIVE: fresh optimizer, fresh replay, fresh RNG, fresh exploration.")
+        global_step = start_step
+        episode = 0
+        eps = eps_start
+    else:
+        if isinstance(ckpt, dict):
+            if "optimizer_state_dict" in ckpt and optimizer is not None:
+                try:
+                    optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+                except Exception as exc:
+                    logger.warning("Could not restore optimizer state: %s", exc)
+            if "rng_state" in ckpt:
+                try:
+                    torch.set_rng_state(ckpt["rng_state"])
+                except Exception:
+                    pass
+            if "np_rng_state" in ckpt:
+                try:
+                    np.random.set_state(ckpt["np_rng_state"])
+                except Exception:
+                    pass
+            global_step = int(ckpt.get("global_step", start_step))
+            episode = int(ckpt.get("episode", 0)) + 1
+            eps = float(ckpt.get("epsilon", eps_start))
+            if "reward_baseline" in ckpt:
+                reward_baseline = float(ckpt["reward_baseline"])
+            elif "reward_baseline" in ckpt.get("metadata", {}).get("extra", {}):
+                reward_baseline = float(ckpt["metadata"]["extra"]["reward_baseline"])
+            best_reward = float(ckpt.get("metadata", {}).get("metrics", {}).get("best_episode_reward", -float("inf")))
+        logger.info("Resumed in-flight state: global_step=%d, episode=%d, eps=%.4f", global_step, episode, eps)
+
+    cfg_gates = sched_cfg.get("staged_gates") or train_cfg.get("staged_gates")
+    if cfg_gates and (staged_gates is None or staged_gates == [1000, 5000, 25000, 100000, 200000, 300000, 500000]):
+        if isinstance(cfg_gates, str):
+            staged_gates = [int(g.strip()) for g in cfg_gates.split(",") if g.strip()]
+        elif isinstance(cfg_gates, list):
+            staged_gates = [int(g) for g in cfg_gates]
+
+    # StagedGateEvaluator constructed AFTER parent resolution, verification, and loading
     from .staged_gate_evaluator import StagedGateEvaluator
 
     gate_evaluator = StagedGateEvaluator(
@@ -608,61 +747,13 @@ def train_scheduler(
         seed=seed,
         device=device,
         semantic_memory_reset=reset_semantic_memory,
-        parent_checkpoint=resume_checkpoint,
+        parent_checkpoint=str(parent_path),
+        run_id=run.run_id,
+        dataset_fingerprint=data_fingerprint,
     )
-
-    global_step = 0
-    episode = 0
-    best_reward = -float("inf")
-    eps = eps_start
-    reward_baseline = -0.39
-
-    if resume_checkpoint is None:
-        resume_checkpoint = train_cfg.get("scheduler_ckpt") or sched_cfg.get("scheduler_ckpt")
-
-    if resume_checkpoint:
-        resume_path = Path(resume_checkpoint)
-        if not resume_path.exists():
-            raise FileNotFoundError(
-                f"Configured resume checkpoint not found: {resume_path}. "
-                f"Silent fallback to fresh training is permanently disabled in Phase 0."
-            )
-        try:
-            ckpt = torch.load(resume_path, map_location=device, weights_only=False)
-        except TypeError:
-            ckpt = torch.load(resume_path, map_location=device)
-        if "state_dict" in ckpt:
-            online_drqn.load_state_dict(ckpt["state_dict"])
-            target_drqn.load_state_dict(ckpt.get("target_state_dict", ckpt["state_dict"]))
-        if "optimizer_state_dict" in ckpt and optimizer is not None:
-            try:
-                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-            except Exception as exc:
-                logger.warning("Could not restore optimizer state: %s", exc)
-        if "rng_state" in ckpt:
-            try:
-                torch.set_rng_state(ckpt["rng_state"])
-            except Exception:
-                pass
-        if "np_rng_state" in ckpt:
-            try:
-                np.random.set_state(ckpt["np_rng_state"])
-            except Exception:
-                pass
-        global_step = int(ckpt.get("global_step", 0))
-        episode = int(ckpt.get("episode", 0)) + 1
-        eps = float(ckpt.get("epsilon", eps_start))
-        if "reward_baseline" in ckpt:
-            reward_baseline = float(ckpt["reward_baseline"])
-        elif "reward_baseline" in ckpt.get("metadata", {}).get("extra", {}):
-            reward_baseline = float(ckpt["metadata"]["extra"]["reward_baseline"])
-        else:
-            reward_baseline = -0.39
-        best_reward = float(ckpt.get("metadata", {}).get("metrics", {}).get("best_episode_reward", -float("inf")))
-        logger.info("Resumed state: global_step=%d, episode=%d, eps=%.4f, reward_baseline=%.4f", global_step, episode, eps, reward_baseline)
-        for g in gate_evaluator.gates:
-            if g <= global_step:
-                gate_evaluator.completed_gates.add(g)
+    for g in gate_evaluator.gates:
+        if g <= global_step:
+            gate_evaluator.completed_gates.add(g)
 
     from .eval_batch import get_or_create_fixed_eval_batch, evaluate_q_diagnostics
     fixed_eval_batch = get_or_create_fixed_eval_batch(data_dir=str(canonical_root), device=device)
@@ -726,6 +817,7 @@ def train_scheduler(
                     moe.set_periodic_urgency_vector(np.asarray(env.belief.periodic_urgency, dtype=np.float32))
                 except Exception:
                     pass
+            rel_step = max(0, global_step - start_step) if is_baseline_restart else global_step
             if override_epsilon is not None:
                 eps = float(override_epsilon)
             elif exploration_schedule == "c_rescue":
@@ -738,7 +830,7 @@ def train_scheduler(
                 else:
                     eps = 0.30
             elif exploration_schedule == "slower":
-                eps = eps_end + (eps_start - eps_end) * float(np.exp(-global_step / (eps_decay * 2.0)))
+                eps = eps_end + (eps_start - eps_end) * float(np.exp(-rel_step / (eps_decay * 2.0)))
             elif exploration_schedule == "staged":
                 if global_step < ts_warmup:
                     eps = eps_start
@@ -752,7 +844,7 @@ def train_scheduler(
                     frac = min(1.0, (global_step - 50000) / 50000.0)
                     eps = 0.15 - frac * (0.15 - eps_end)
             else:
-                eps = eps_end + (eps_start - eps_end) * float(np.exp(-global_step / eps_decay))
+                eps = eps_end + (eps_start - eps_end) * float(np.exp(-rel_step / eps_decay))
             if global_step < ts_warmup:
                 use_ts = True
                 action = ts_sampler.select_action()
@@ -902,6 +994,15 @@ def train_scheduler(
 
             # ---- Learning update ----
             if global_step % update_freq == 0 and buffer.can_sample(batch_size):
+                lr_schedule = sched_cfg.get("lr_schedule")
+                if lr_schedule == "cosine":
+                    total_train_steps = max(1, total_steps - start_step)
+                    progress = min(1.0, max(0.0, (global_step - start_step) / total_train_steps))
+                    min_lr = float(sched_cfg.get("min_lr", 5.0e-6))
+                    base_lr = float(sched_cfg.get("learning_rate", drqn_cfg.get("lr", 1e-4)))
+                    current_lr = min_lr + 0.5 * (base_lr - min_lr) * (1.0 + np.cos(np.pi * progress))
+                    for param_group in optimizer.param_groups:
+                        param_group["lr"] = current_lr
                 try:
                     batch = buffer.sample(batch_size, target_hit_seq_fraction=0.40)
                     upd_stats: dict = {}
@@ -1016,10 +1117,7 @@ def train_scheduler(
                 except Exception as exc:
                     logger.warning("Shadow validation failed at step %d: %s", global_step, exc)
 
-                # Safety Sentinel check
-                if ep_learn["max_q"] > 50.0:
-                    logger.error("SAFETY SENTINEL TRIGGERED: max_q=%.2f exceeds 50.0 ceiling! Halting run.", ep_learn["max_q"])
-                    break
+
 
             # ---- Target update ----
             if global_step % target_update_freq == 0:
@@ -1038,6 +1136,9 @@ def train_scheduler(
                 override_epsilon=override_epsilon,
                 target_drqn=target_drqn,
             )
+            if ep_learn["max_q"] > target_q_max:
+                logger.error("SAFETY SENTINEL TRIGGERED: max_q=%.2f exceeds target_q_max=%.2f ceiling! Halting run.", ep_learn["max_q"], target_q_max)
+                break
 
             if stop_at_step is not None and global_step >= stop_at_step:
                 break
@@ -1420,16 +1521,26 @@ def train_scheduler(
                 arch="DRQNScheduler+SmartScanMoE",
                 seed=seed,
                 metrics={"best_episode_reward": float(ep_reward)},
-                extra={"mode": world_mode, "obs_dim": int(env_config.get("obs_dim", obs_dim))},
+                extra={
+                    "mode": world_mode,
+                    "obs_dim": int(env_config.get("obs_dim", obs_dim)),
+                    "parent_sha256": parent_sha256,
+                    "phase": 11 if "phase11" in str(output_dir).lower() else None,
+                    "run_id": run.run_id,
+                    "global_step": global_step,
+                    "dataset_fingerprint": data_fingerprint,
+                },
             )
-            save_state(online_drqn, output_dir / "best.pt", meta)
-            logger.info("  New best reward %.2f — saved best.pt", ep_reward)
+            best_ckpt_name = "checkpoint_phase11_best_reward.pt" if "phase11" in str(output_dir).lower() else "best.pt"
+            save_state(online_drqn, output_dir / best_ckpt_name, meta)
+            logger.info("  New best reward %.2f — saved %s", ep_reward, best_ckpt_name)
 
         if stop_at_step is not None and global_step >= stop_at_step:
             logger.info("Reached stop_at_step=%d — concluding training run", stop_at_step)
             break
 
-    final_path = output_dir / "final.pt"
+    final_ckpt_name = f"checkpoint_phase11_step_{global_step}.pt" if "phase11" in str(output_dir).lower() else "final.pt"
+    final_path = output_dir / final_ckpt_name
     from ..utils.checkpoint_meta import build_train_metadata, save_state, write_checkpoint_metadata
 
     final_meta = build_train_metadata(
@@ -1438,11 +1549,25 @@ def train_scheduler(
         arch="DRQNScheduler+SmartScanMoE",
         seed=seed,
         metrics={"best_episode_reward": float(best_reward)},
-        extra={"mode": world_mode, "obs_dim": int(env_config.get("obs_dim", obs_dim))},
+        extra={
+            "mode": world_mode,
+            "obs_dim": int(env_config.get("obs_dim", obs_dim)),
+            "parent_sha256": parent_sha256,
+            "phase": 11 if "phase11" in str(output_dir).lower() else None,
+            "run_id": run.run_id,
+            "global_step": global_step,
+            "dataset_fingerprint": data_fingerprint,
+        },
     )
     save_state(online_drqn, final_path, final_meta)
-    # Phase 17: human-readable metadata.json sidecar (contract artifact).
-    write_checkpoint_metadata(output_dir / "metadata.json", final_meta, artifacts=["best.pt", "final.pt"])
+    # Human-readable metadata.json sidecar
+    artifacts_list = [final_ckpt_name]
+    if "phase11" in str(output_dir).lower():
+        if (output_dir / "checkpoint_phase11_best_reward.pt").exists():
+            artifacts_list.append("checkpoint_phase11_best_reward.pt")
+    else:
+        artifacts_list.append("best.pt")
+    write_checkpoint_metadata(output_dir / "metadata.json", final_meta, artifacts=artifacts_list)
     from ..utils.experiment_manifest import write_experiment_manifest
 
     manifest = write_experiment_manifest(

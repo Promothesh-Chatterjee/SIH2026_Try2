@@ -1,0 +1,114 @@
+{
+  "gate": 30000,
+  "global_step": 30000,
+  "checkpoint_file": "experiments/checkpoints/phase11_controlled/checkpoint_phase11_step_30000.pt",
+  "parent_checkpoint": "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt",
+  "parent_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+  "scenarios_evaluated": 10,
+  "drqn_standalone": {
+    "mean_ir": 0.5371,
+    "median_ir": 0.626,
+    "worst_case_ir": 0.0,
+    "agile_ir": 0.3035,
+    "sparse_ir": 0.054,
+    "pd": 0.7985220543189708,
+    "pfa": 0.0,
+    "mean_latency_us": 205.3584865566986,
+    "median_latency_us": 176.55724063609276,
+    "mode_fractions": {
+      "SHORT": 0.0,
+      "NORMAL": 0.2686,
+      "LONG": 0.7313999999999999,
+      "REVISIT": 0.0,
+      "PREEMPTIVE": 0.0
+    },
+    "mode_entropy": 0.31637958501710184,
+    "action_entropy": 1.4265217912282668,
+    "distinct_bands": 26.9,
+    "composite_generalization_score": 0.6446567707076647
+  },
+  "baseline_comparison": {
+    "delta_mean_ir": -0.09730000000000005,
+    "delta_median_ir": 0.0,
+    "delta_worst_case_ir": -0.171,
+    "delta_agile_ir": -0.22749999999999992,
+    "delta_sparse_ir": -0.21200000000000002,
+    "delta_pd": -0.20008417023970537,
+    "delta_pfa": 0.0,
+    "delta_mean_latency_us": -100.09055050656849,
+    "delta_median_latency_us": -86.55086639984344,
+    "delta_distinct_bands": 0.0,
+    "delta_composite_score": -0.3149690104610017
+  },
+  "scenario_comparison": {
+    "config_117": {
+      "base_ir": 0.994,
+      "step27500_ir": 0.994,
+      "step30000_ir": 0.994,
+      "delta_vs_25k": 0.0
+    },
+    "config_119": {
+      "base_ir": 0.361,
+      "step27500_ir": 0.347,
+      "step30000_ir": 0.0,
+      "delta_vs_25k": -0.361
+    },
+    "config_143": {
+      "base_ir": 0.171,
+      "step27500_ir": 0.051,
+      "step30000_ir": 0.108,
+      "delta_vs_25k": -0.06300000000000001
+    },
+    "config_194": {
+      "base_ir": 0.887,
+      "step27500_ir": 0.887,
+      "step30000_ir": 0.887,
+      "delta_vs_25k": 0.0
+    },
+    "config_195": {
+      "base_ir": 0.979,
+      "step27500_ir": 0.979,
+      "step30000_ir": 0.979,
+      "delta_vs_25k": 0.0
+    },
+    "config_241": {
+      "base_ir": 0.197,
+      "step27500_ir": 0.201,
+      "step30000_ir": 0.0,
+      "delta_vs_25k": -0.197
+    },
+    "config_29": {
+      "base_ir": 0.587,
+      "step27500_ir": 0.58,
+      "step30000_ir": 0.235,
+      "delta_vs_25k": -0.352
+    },
+    "config_42": {
+      "base_ir": 0.657,
+      "step27500_ir": 0.657,
+      "step30000_ir": 0.657,
+      "delta_vs_25k": 0.0
+    },
+    "config_64": {
+      "base_ir": 0.595,
+      "step27500_ir": 0.595,
+      "step30000_ir": 0.595,
+      "delta_vs_25k": 0.0
+    },
+    "config_96": {
+      "base_ir": 0.916,
+      "step27500_ir": 0.916,
+      "step30000_ir": 0.916,
+      "delta_vs_25k": 0.0
+    }
+  },
+  "gate_pass": {
+    "mean_ir_pass": false,
+    "worst_case_ir_pass": false,
+    "agile_ir_pass": false,
+    "sparse_ir_pass": false,
+    "pfa_pass": true,
+    "pd_pass": false,
+    "latency_pass": true
+  }
+}

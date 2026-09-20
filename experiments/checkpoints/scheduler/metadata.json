@@ -1,11 +1,22 @@
 {
   "arch": "DRQNScheduler_v2_BandAdvantageRouting",
   "version": "v2.0-canonical",
+  "active_baseline": {
+    "name": "checkpoint_gate_25000_frozen.pt",
+    "step": 25000,
+    "sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+    "immutable": true
+  },
+  "phase11_parent": {
+    "checkpoint": "checkpoint_gate_25000_frozen.pt",
+    "sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+    "allow_optimizer_restore": false,
+    "allow_replay_restore": false,
+    "allow_rng_restore": false,
+    "allow_epsilon_restore": false
+  },
   "artifacts": [
-    "best.pt",
-    "checkpoint_step_25500.pt",
-    "checkpoint_gate_25000_frozen.pt",
-    "checkpoint_step_26000_arme.pt"
+    "checkpoint_gate_25000_frozen.pt"
   ],
   "feature_order_per_band": [
     "occupancy",
@@ -36,7 +47,5 @@
   "n_modes": 5,
   "n_actions": 180,
   "obs_dim": 360,
-  "seed": 42,
-  "champion_step": 25500,
-  "continuation_step": 26000
+  "seed": 42
 }

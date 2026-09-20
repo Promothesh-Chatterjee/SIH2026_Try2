@@ -1,0 +1,524 @@
+{
+  "25k_frozen": {
+    "config_119": {
+      "raw_drqn_ir": 0.361,
+      "final_moe_ir": 0.364,
+      "raw_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 11,
+        "LONG_DWELL": 989,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "final_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 77,
+        "LONG_DWELL": 923,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "raw_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 1.1,
+        "LONG_DWELL": 98.9,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "final_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 7.7,
+        "LONG_DWELL": 92.3,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "override_rate_pct": 0.0,
+      "agreement_rate_pct": 100.0,
+      "decision_sources": {
+        "moe_arbitration": 1000
+      },
+      "q_stats": {
+        "mean_q_selected": -6.1331656653285025,
+        "mean_q_max": -6.1331656653285025,
+        "mean_q_mean": -7.5631538900882,
+        "mean_q_std": 0.20845217041298747
+      }
+    },
+    "config_143": {
+      "raw_drqn_ir": 0.171,
+      "final_moe_ir": 0.165,
+      "raw_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 0,
+        "LONG_DWELL": 1000,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "final_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 103,
+        "LONG_DWELL": 897,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "raw_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 100.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "final_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 10.3,
+        "LONG_DWELL": 89.7,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "override_rate_pct": 0.0,
+      "agreement_rate_pct": 100.0,
+      "decision_sources": {
+        "moe_arbitration": 1000
+      },
+      "q_stats": {
+        "mean_q_selected": -10.522801531255245,
+        "mean_q_max": -10.522801531255245,
+        "mean_q_mean": -11.260712621882558,
+        "mean_q_std": 0.11632214800268412
+      }
+    },
+    "config_241": {
+      "raw_drqn_ir": 0.197,
+      "final_moe_ir": 0.161,
+      "raw_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 0,
+        "LONG_DWELL": 1000,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "final_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 229,
+        "LONG_DWELL": 771,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "raw_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 100.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "final_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 22.9,
+        "LONG_DWELL": 77.1,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "override_rate_pct": 0.0,
+      "agreement_rate_pct": 100.0,
+      "decision_sources": {
+        "moe_arbitration": 1000
+      },
+      "q_stats": {
+        "mean_q_selected": -10.545419740140439,
+        "mean_q_max": -10.545419740140439,
+        "mean_q_mean": -11.485566218569875,
+        "mean_q_std": 0.14073858558759092
+      }
+    },
+    "config_29": {
+      "raw_drqn_ir": 0.587,
+      "final_moe_ir": 0.554,
+      "raw_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 0,
+        "LONG_DWELL": 1000,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "final_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 69,
+        "LONG_DWELL": 931,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "raw_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 100.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "final_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 6.9,
+        "LONG_DWELL": 93.1,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "override_rate_pct": 0.0,
+      "agreement_rate_pct": 100.0,
+      "decision_sources": {
+        "moe_arbitration": 1000
+      },
+      "q_stats": {
+        "mean_q_selected": -9.51869356006384,
+        "mean_q_max": -9.51869356006384,
+        "mean_q_mean": -11.51886187954247,
+        "mean_q_std": 0.28257402148097754
+      }
+    }
+  },
+  "27.5k": {
+    "config_119": {
+      "raw_drqn_ir": 0.0,
+      "final_moe_ir": 0.0,
+      "raw_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 856,
+        "LONG_DWELL": 144,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "final_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 908,
+        "LONG_DWELL": 92,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "raw_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 85.6,
+        "LONG_DWELL": 14.4,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "final_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 90.8,
+        "LONG_DWELL": 9.2,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "override_rate_pct": 0.0,
+      "agreement_rate_pct": 100.0,
+      "decision_sources": {
+        "moe_arbitration": 1000
+      },
+      "q_stats": {
+        "mean_q_selected": -12.287431213080882,
+        "mean_q_max": -12.287431213080882,
+        "mean_q_mean": -12.351124223709107,
+        "mean_q_std": 0.031690301256254313
+      }
+    },
+    "config_143": {
+      "raw_drqn_ir": 0.15,
+      "final_moe_ir": 0.152,
+      "raw_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 182,
+        "LONG_DWELL": 818,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "final_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 200,
+        "LONG_DWELL": 800,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "raw_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 18.2,
+        "LONG_DWELL": 81.8,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "final_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 20.0,
+        "LONG_DWELL": 80.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "override_rate_pct": 0.0,
+      "agreement_rate_pct": 100.0,
+      "decision_sources": {
+        "moe_arbitration": 1000
+      },
+      "q_stats": {
+        "mean_q_selected": -23.605991355359553,
+        "mean_q_max": -23.605991355359553,
+        "mean_q_mean": -24.260015795469283,
+        "mean_q_std": 0.109674280885607
+      }
+    },
+    "config_241": {
+      "raw_drqn_ir": 0.187,
+      "final_moe_ir": 0.0,
+      "raw_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 205,
+        "LONG_DWELL": 795,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "final_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 908,
+        "LONG_DWELL": 92,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "raw_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 20.5,
+        "LONG_DWELL": 79.5,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "final_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 90.8,
+        "LONG_DWELL": 9.2,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "override_rate_pct": 0.0,
+      "agreement_rate_pct": 100.0,
+      "decision_sources": {
+        "moe_arbitration": 1000
+      },
+      "q_stats": {
+        "mean_q_selected": -22.39419698739052,
+        "mean_q_max": -22.39419698739052,
+        "mean_q_mean": -23.356901594877243,
+        "mean_q_std": 0.15088881183043124
+      }
+    },
+    "config_29": {
+      "raw_drqn_ir": 0.371,
+      "final_moe_ir": 0.55,
+      "raw_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 350,
+        "LONG_DWELL": 650,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "final_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 76,
+        "LONG_DWELL": 924,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "raw_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 35.0,
+        "LONG_DWELL": 65.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "final_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 7.6,
+        "LONG_DWELL": 92.4,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "override_rate_pct": 0.0,
+      "agreement_rate_pct": 100.0,
+      "decision_sources": {
+        "moe_arbitration": 1000
+      },
+      "q_stats": {
+        "mean_q_selected": -23.613811067819594,
+        "mean_q_max": -23.613811067819594,
+        "mean_q_mean": -24.820031206846238,
+        "mean_q_std": 0.18637520784512163
+      }
+    }
+  },
+  "30k": {
+    "config_119": {
+      "raw_drqn_ir": 0.0,
+      "final_moe_ir": 0.0,
+      "raw_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 856,
+        "LONG_DWELL": 144,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "final_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 944,
+        "LONG_DWELL": 56,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "raw_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 85.6,
+        "LONG_DWELL": 14.4,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "final_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 94.4,
+        "LONG_DWELL": 5.6,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "override_rate_pct": 0.0,
+      "agreement_rate_pct": 100.0,
+      "decision_sources": {
+        "moe_arbitration": 1000
+      },
+      "q_stats": {
+        "mean_q_selected": -35.33308636283874,
+        "mean_q_max": -35.33308636283874,
+        "mean_q_mean": -35.389737257122995,
+        "mean_q_std": 0.031542705681174996
+      }
+    },
+    "config_143": {
+      "raw_drqn_ir": 0.108,
+      "final_moe_ir": 0.0,
+      "raw_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 422,
+        "LONG_DWELL": 578,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "final_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 944,
+        "LONG_DWELL": 56,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "raw_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 42.2,
+        "LONG_DWELL": 57.8,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "final_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 94.4,
+        "LONG_DWELL": 5.6,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "override_rate_pct": 0.0,
+      "agreement_rate_pct": 100.0,
+      "decision_sources": {
+        "moe_arbitration": 1000
+      },
+      "q_stats": {
+        "mean_q_selected": -34.88764198112488,
+        "mean_q_max": -34.88764198112488,
+        "mean_q_mean": -35.3762302724123,
+        "mean_q_std": 0.08924411961250008
+      }
+    },
+    "config_241": {
+      "raw_drqn_ir": 0.0,
+      "final_moe_ir": 0.0,
+      "raw_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 856,
+        "LONG_DWELL": 144,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "final_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 944,
+        "LONG_DWELL": 56,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "raw_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 85.6,
+        "LONG_DWELL": 14.4,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "final_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 94.4,
+        "LONG_DWELL": 5.6,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "override_rate_pct": 0.0,
+      "agreement_rate_pct": 100.0,
+      "decision_sources": {
+        "moe_arbitration": 1000
+      },
+      "q_stats": {
+        "mean_q_selected": -35.33308636283874,
+        "mean_q_max": -35.33308636283874,
+        "mean_q_mean": -35.389737257122995,
+        "mean_q_std": 0.031542705681174996
+      }
+    },
+    "config_29": {
+      "raw_drqn_ir": 0.235,
+      "final_moe_ir": 0.245,
+      "raw_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 552,
+        "LONG_DWELL": 448,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "final_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 558,
+        "LONG_DWELL": 442,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "raw_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 55.2,
+        "LONG_DWELL": 44.8,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "final_mode_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 55.8,
+        "LONG_DWELL": 44.2,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "override_rate_pct": 0.0,
+      "agreement_rate_pct": 100.0,
+      "decision_sources": {
+        "moe_arbitration": 1000
+      },
+      "q_stats": {
+        "mean_q_selected": -34.66837627220154,
+        "mean_q_max": -34.66837627220154,
+        "mean_q_mean": -35.41727015888691,
+        "mean_q_std": 0.12646923225931822
+      }
+    }
+  }
+}

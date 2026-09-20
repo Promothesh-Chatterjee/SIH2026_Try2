@@ -1,0 +1,114 @@
+{
+  "occupancy": {
+    "mean_abs_delta_q_all_actions": 0.02888847831636667,
+    "mean_delta_q_target_band": 0.6496251448988914,
+    "per_mode_delta_q": {
+      "SHORT_DWELL": 0.6138675436377525,
+      "NORMAL_DWELL": 0.6128855541348457,
+      "LONG_DWELL": 0.8248534083366394,
+      "REVISIT": 0.612297473847866,
+      "PREEMPTIVE_INTERCEPT": 0.5842217251658439
+    },
+    "action_change_pct": 0.0,
+    "band_change_pct": 0.0,
+    "mode_change_pct": 0.0
+  },
+  "detection_rate": {
+    "mean_abs_delta_q_all_actions": 0.03400478716939688,
+    "mean_delta_q_target_band": 0.6375704735517502,
+    "per_mode_delta_q": {
+      "SHORT_DWELL": 0.6021323949098587,
+      "NORMAL_DWELL": 0.6011591523885726,
+      "LONG_DWELL": 0.8112332463264466,
+      "REVISIT": 0.6005761235952377,
+      "PREEMPTIVE_INTERCEPT": 0.5727514684200287
+    },
+    "action_change_pct": 0.0,
+    "band_change_pct": 0.0,
+    "mode_change_pct": 0.0
+  },
+  "miss_rate": {
+    "mean_abs_delta_q_all_actions": 0.0,
+    "mean_delta_q_target_band": 0.0,
+    "per_mode_delta_q": {
+      "SHORT_DWELL": 0.0,
+      "NORMAL_DWELL": 0.0,
+      "LONG_DWELL": 0.0,
+      "REVISIT": 0.0,
+      "PREEMPTIVE_INTERCEPT": 0.0
+    },
+    "action_change_pct": 0.0,
+    "band_change_pct": 0.0,
+    "mode_change_pct": 0.0
+  },
+  "uncertainty": {
+    "mean_abs_delta_q_all_actions": 0.0002301667800566065,
+    "mean_delta_q_target_band": -0.0009623813355574384,
+    "per_mode_delta_q": {
+      "SHORT_DWELL": -0.0009015083312988281,
+      "NORMAL_DWELL": -0.0009001731872558594,
+      "LONG_DWELL": -0.0012599706649780273,
+      "REVISIT": -0.0008991718292236328,
+      "PREEMPTIVE_INTERCEPT": -0.0008510828018188476
+    },
+    "action_change_pct": 35.0,
+    "band_change_pct": 35.0,
+    "mode_change_pct": 0.0
+  },
+  "revisit_age": {
+    "mean_abs_delta_q_all_actions": 0.010966870904667303,
+    "mean_delta_q_target_band": -0.08716298257932067,
+    "per_mode_delta_q": {
+      "SHORT_DWELL": -0.0828116662800312,
+      "NORMAL_DWELL": -0.08269239440560341,
+      "LONG_DWELL": -0.10848589837551117,
+      "REVISIT": -0.08262069448828697,
+      "PREEMPTIVE_INTERCEPT": -0.079204261302948
+    },
+    "action_change_pct": 97.5,
+    "band_change_pct": 97.5,
+    "mode_change_pct": 0.0
+  },
+  "emitter_count": {
+    "mean_abs_delta_q_all_actions": 0.006071161146974191,
+    "mean_delta_q_target_band": 0.05315298903733492,
+    "per_mode_delta_q": {
+      "SHORT_DWELL": 0.05030119270086288,
+      "NORMAL_DWELL": 0.05022258907556534,
+      "LONG_DWELL": 0.06712867170572281,
+      "REVISIT": 0.050175724923610686,
+      "PREEMPTIVE_INTERCEPT": 0.04793676808476448
+    },
+    "action_change_pct": 0.0,
+    "band_change_pct": 0.0,
+    "mode_change_pct": 0.0
+  },
+  "agility": {
+    "mean_abs_delta_q_all_actions": 0.005096041032811627,
+    "mean_delta_q_target_band": 0.04412621045485139,
+    "per_mode_delta_q": {
+      "SHORT_DWELL": 0.04181533306837082,
+      "NORMAL_DWELL": 0.041751936078071594,
+      "LONG_DWELL": 0.055450165271759035,
+      "REVISIT": 0.041713865101337434,
+      "PREEMPTIVE_INTERCEPT": 0.03989975079894066
+    },
+    "action_change_pct": 0.0,
+    "band_change_pct": 0.0,
+    "mode_change_pct": 0.0
+  },
+  "priority": {
+    "mean_abs_delta_q_all_actions": 0.030301578738726676,
+    "mean_delta_q_target_band": 0.47840876802802085,
+    "per_mode_delta_q": {
+      "SHORT_DWELL": 0.4515723310410976,
+      "NORMAL_DWELL": 0.45083555206656456,
+      "LONG_DWELL": 0.6099189341068267,
+      "REVISIT": 0.45039399787783624,
+      "PREEMPTIVE_INTERCEPT": 0.42932301163673403
+    },
+    "action_change_pct": 0.0,
+    "band_change_pct": 0.0,
+    "mode_change_pct": 0.0
+  }
+}

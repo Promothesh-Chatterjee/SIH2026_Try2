@@ -1,22 +1,26 @@
-data_dir: "${DATA_DIR:-data}"
-# Phase 17: the root-level `output_dir` is intentionally REMOVED — writing both
-# models into `checkpoints` would create ambiguous root-level best.pt/final.pt.
-# Trainers ALWAYS resolve to their canonical subdirectory
-# (checkpoints/deinterleaver | checkpoints/scheduler) unless --output-dir is
-# passed explicitly.
+# Phase 11 Controlled Retraining Configuration
+# Sole authoritative parent baseline: 25k frozen checkpoint
+# SHA-256: 7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0
+
+data_dir: "${DATA_DIR:-D:/TSRD}"
 seed: 42
 subset: "train"
 mode: "scan"
 world_mode: "stare"
 observation_mode: "scan"
 training_mode: "real_tsrd"
+
 deinterleaver_ckpt: "experiments/checkpoints/deinterleaver/best.pt"
 scheduler_ckpt: "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt"
 normalization_stats: "experiments/checkpoints/deinterleaver/normalization_stats.json"
+
+output_dir: "experiments/checkpoints/phase11_controlled"
+runs_dir: "runs/phase11_controlled"
+
 deinterleaver:
   batch_size: 8
-  max_pulses_per_train: 512    # window size; 2048→512 for CPU-feasible full-dataset triplet training
-  epochs: 3                      # provenance/quality revision (was 50)
+  max_pulses_per_train: 512
+  epochs: 3
   lr: 3e-4
   weight_decay: 1e-5
   scheduler: cosine
@@ -30,31 +34,42 @@ scheduler:
   version: "v2"
   action_selection_mode: "flat_argmax"
   start_step: 25000
-  total_timesteps: 40000
+  total_timesteps: 35000
+  staged_gates: [27500, 30000, 32500, 35000]
   freeze_advantage_head: false
-  learning_rate: 2.5e-5
+  learning_rate: 2.0e-5
+  lr_schedule: "cosine"
+  min_lr: 5.0e-6
   replay_buffer_size: 50000
   batch_size: 32
-  seq_len: 16                   # DRQN sequence length for BPTT
-  burn_in: 8                    # leading window steps: LSTM warm-up, excluded from loss
+  seq_len: 16
+  burn_in: 8
   update_freq: 4
   target_update_freq: 250
-  thompson_warmup_steps: 0      # Post-warmup continuation (v2 state already trained)
-
+  thompson_warmup_steps: 0
+  eps_start: 0.08
+  eps_end: 0.01
+  eps_decay: 5000
+  gamma: 0.99
+  target_q_max: 100.0
+  target_q_min: -50.0
+  q_reg_coef: 1.0e-4
+  targeted_exploration: true
+  band_discovery_quota: 2
 
 environment:
   n_bands: 36
-  band_features: 10            # belief features per band -> obs_dim = 36*10 = 360
+  band_features: 10
   obs_dim: 360
-  n_modes: 5                   # dwell modes: SHORT/NORMAL/LONG/REVISIT/PREEMPTIVE
-  n_actions: 180               # n_bands * n_modes (band, mode) joint selection
+  n_modes: 5
+  n_actions: 180
   freq_min_mhz: 0.0
   freq_max_mhz: 18000.0
-  ibw_mhz: 500.0               # instantaneous bandwidth (MHz)
-  dwell_time_us: 500.0         # BASE receiver dwell per action (mode multiplier applied)
+  ibw_mhz: 500.0
+  dwell_time_us: 500.0
   detection_threshold_db: -140.0
   frequency_step_mhz: 500.0
-  time_horizon_us: 30000000.0  # cap scenario ToA; ~30 s spans TSRD scan files
+  time_horizon_us: 30000000.0
   max_pulses: 50000
   max_steps_per_episode: 1000
   belief:
@@ -86,13 +101,11 @@ reward:
   w_redundant: -0.25
   w_dwell_cost: -0.01
 
-# RC-2.9: fixed, reproducible validation scenario set (10 unseen scenarios for generalization gating).
 validation:
   subset: "val"
   n_files: 10
   seed: 42
   allow_synthetic_fallback: false
 
-# RC-2.10: explicit telemetry schema version (all records carry this field).
 telemetry:
   schema_version: "2.0"

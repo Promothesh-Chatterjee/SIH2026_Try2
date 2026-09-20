@@ -101,7 +101,7 @@ def render_step_card(step: int, t_now: float, obs_summary: dict, action: int,
 def run_demo(
     scenario_type: str = "canonical",
     scenario_id: str = "config_194",
-    checkpoint_path: str = "experiments/checkpoints/scheduler/best.pt",
+    checkpoint_path: str = "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt",
     n_steps: int = 50,
     interactive: bool = False,
     pause_sec: float = 0.05,
@@ -111,7 +111,7 @@ def run_demo(
     """Execute the end-to-end operational pipeline demonstration."""
     print("=" * 80)
     print("  COGNITIVE EW SMART SCAN SCHEDULER -- OPERATIONAL PIPELINE DEMONSTRATION")
-    print("  Reference: Gate-25k-R4.2-alpha020 / Gate-25.5k Champion")
+    print("  Reference: Gate-25k-Frozen Baseline")
     print(f"  Checkpoint: {checkpoint_path}")
 
     print(f"  Scenario  : {scenario_type.upper()} ({scenario_id}) | Steps: {n_steps} | Seed: {seed}")
@@ -320,7 +320,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Operational Demonstration of Cognitive EW Smart Scan Pipeline")
     parser.add_argument("--scenario-type", choices=["canonical", "agile"], default="canonical", help="Scenario family")
     parser.add_argument("--scenario-id", default="config_194", help="Specific scenario ID (e.g. config_194, AG-04, AG-08)")
-    parser.add_argument("--checkpoint", default="experiments/checkpoints/scheduler/best.pt", help="Frozen checkpoint")
+    parser.add_argument("--checkpoint", default="experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt", help="Frozen checkpoint")
 
     parser.add_argument("--steps", type=int, default=30, help="Number of demonstration cycles")
     parser.add_argument("--interactive", action="store_true", help="Step through one cycle at a time")

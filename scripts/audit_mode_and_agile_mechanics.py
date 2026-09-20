@@ -25,10 +25,11 @@ def audit():
     base_model.eval()
 
     # 2. Load Candidate Model
-    cand_ckpt_path = Path("experiments/checkpoints/safe_continuation_candidate/checkpoint_gate_27500.pt")
+    cand_ckpt_path = Path("experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt")
     cand_ckpt = torch.load(cand_ckpt_path, map_location=device, weights_only=False)
     cand_model = DRQNScheduler(obs_dim=360, n_bands=36, n_modes=5, lstm_hidden=256, lstm_layers=2)
-    cand_model.load_state_dict(cand_ckpt["online_drqn"])
+    cand_state = cand_ckpt["online_drqn"] if "online_drqn" in cand_ckpt else cand_ckpt["state_dict"]
+    cand_model.load_state_dict(cand_state)
     cand_model.eval()
 
     scenarios = [

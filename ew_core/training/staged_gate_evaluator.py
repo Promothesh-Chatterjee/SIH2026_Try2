@@ -39,7 +39,7 @@ from ..models.baseline_suite import build_baseline
 from ..models.drqn_scheduler import DRQNScheduler
 from ..models.smartscan_moe import SmartScanMoE
 from ..telemetry.schema import coerce, shannon_entropy
-from ..training.policy_collapse_detector import PolicyCollapseDetector, CollapseThresholds
+from ..training.policy_collapse_detector import PolicyCollapseDetector, CollapseThresholds, CollapseSeverity
 from ..utils.checkpoint_meta import build_train_metadata, current_git_revision, save_state
 from ..evaluation.canonical_metrics import EvaluationManifest, compute_canonical_metrics
 
@@ -71,6 +71,8 @@ class StagedGateEvaluator:
         device: torch.device | str = "cpu",
         semantic_memory_reset: bool = False,
         parent_checkpoint: str | None = None,
+        run_id: str | None = None,
+        dataset_fingerprint: str | None = None,
     ) -> None:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -83,6 +85,8 @@ class StagedGateEvaluator:
         self.device = torch.device(device) if isinstance(device, str) else device
         self.semantic_memory_reset = bool(semantic_memory_reset)
         self.parent_checkpoint = str(parent_checkpoint) if parent_checkpoint else None
+        self.run_id = str(run_id) if run_id else None
+        self.dataset_fingerprint = str(dataset_fingerprint) if dataset_fingerprint else None
         self.completed_gates: set[int] = set()
 
         # Step-level rolling diagnostic statistics
@@ -803,7 +807,10 @@ class StagedGateEvaluator:
             notes = f"CRITICAL Policy Collapse flagged: {'; '.join(collapse_diag.reasons[:3])}"
             quarantine_dir = self.output_dir / "quarantine"
             quarantine_dir.mkdir(parents=True, exist_ok=True)
-            ckpt_path = quarantine_dir / f"checkpoint_gate_{gate}_quarantined_collapsed.pt"
+            if "phase11" in str(self.output_dir).lower():
+                ckpt_path = quarantine_dir / f"checkpoint_phase11_step_{gate}_quarantined_collapsed.pt"
+            else:
+                ckpt_path = quarantine_dir / f"checkpoint_gate_{gate}_quarantined_collapsed.pt"
             checkpoint_tag = "quarantined_collapsed"
         elif collapse_diag.severity == CollapseSeverity.WARNING or str(collapse_diag.severity) == "WARNING":
             logger.info("POLICY COLLAPSE WARNING at step %d: %s", global_step, collapse_diag.reasons)
@@ -828,7 +835,10 @@ class StagedGateEvaluator:
         )
 
         # 4. Save Checkpoint (Ensuring frozen reference baseline is never overwritten)
-        ckpt_name = f"checkpoint_gate_{gate}.pt"
+        if "phase11" in str(self.output_dir).lower():
+            ckpt_name = f"checkpoint_phase11_step_{gate}.pt"
+        else:
+            ckpt_name = f"checkpoint_gate_{gate}.pt"
         ckpt_path = self.output_dir / ckpt_name
         if "scheduler_v2_gate20k" in str(ckpt_path).replace("\\", "/") and gate == 20000:
             # Strictly protect immutable frozen baseline reference
@@ -898,7 +908,12 @@ class StagedGateEvaluator:
             "rng_state": torch.get_rng_state(),
             "np_rng_state": np.random.get_state(),
             "parent_checkpoint": self.parent_checkpoint,
+            "parent_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+            "phase": 11 if "phase11" in str(self.output_dir).lower() else None,
+            "run_id": self.run_id,
+            "dataset_fingerprint": self.dataset_fingerprint,
             "git_revision": git_rev,
+            "git_sha": git_rev,
             "seed": self.seed,
             "metadata": meta,
         }, ckpt_path)
