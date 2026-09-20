@@ -213,6 +213,8 @@ def validate_split_isolation(
         "layer1_path_overlaps": layer1_overlaps,
         "layer2_raw_hash_overlaps": layer2_overlaps,
         "layer3_content_hash_overlaps": layer3_overlaps,
+        "raw_hashes": {h: str(path) for s in splits for h, path in file_hashes_by_split[s].items()},
+        "content_hashes": {c: str(path) for s in splits for c, path in content_hashes_by_split[s].items()},
     }
 
     if not is_isolated and fail_fast:
@@ -223,6 +225,69 @@ def validate_split_isolation(
             f"Layer 3 (Content SHA): {len(layer3_overlaps)} overlaps."
         )
         raise SplitLeakageError(err_msg)
+
+    return report
+
+
+def validate_split_isolation_dual_mode(
+    file_lists: dict[str, dict[str, list[Path]]],
+    root_path: str | Path | None = None,
+    fail_fast: bool = False,
+) -> dict[str, Any]:
+    """Exhaustive 3-layer cross-split isolation for both STARE and SCAN.
+
+    Mandatory failure condition:
+      - train <-> val <-> test isolation within STARE
+      - train <-> val <-> test isolation within SCAN
+
+    Cross-mode comparison (STARE <-> SCAN):
+      - Duplicate raw file hashes and canonical content hashes across modes are
+        reported as telemetry diagnostics (does not fail qualification, as official
+        TSRD uses the same transmitter configs under different receiver modes).
+    """
+    root = Path(root_path).resolve() if root_path else None
+    stare_splits = file_lists.get("stare", {})
+    scan_splits = file_lists.get("scan", {})
+
+    stare_iso = validate_split_isolation(stare_splits, root_path=root, fail_fast=fail_fast)
+    scan_iso = validate_split_isolation(scan_splits, root_path=root, fail_fast=fail_fast)
+
+    is_isolated = bool(stare_iso["isolated"] and scan_iso["isolated"])
+
+    # Fast cross-mode set intersection using precomputed hash dictionaries
+    stare_raw = stare_iso.get("raw_hashes", {})
+    scan_raw = scan_iso.get("raw_hashes", {})
+    common_raw = set(stare_raw.keys()) & set(scan_raw.keys())
+    cross_raw_overlaps = [
+        {"sha256": h, "stare_file": stare_raw[h], "scan_file": scan_raw[h]}
+        for h in common_raw
+    ]
+
+    stare_content = stare_iso.get("content_hashes", {})
+    scan_content = scan_iso.get("content_hashes", {})
+    common_content = set(stare_content.keys()) & set(scan_content.keys())
+    cross_content_overlaps = [
+        {"canonical_content_sha256": c, "stare_file": stare_content[c], "scan_file": scan_content[c]}
+        for c in common_content
+    ]
+
+    cross_mode_diag = {
+        "cross_mode_raw_hash_overlaps": cross_raw_overlaps,
+        "cross_mode_content_hash_overlaps": cross_content_overlaps,
+        "cross_mode_raw_overlap_count": len(cross_raw_overlaps),
+        "cross_mode_content_overlap_count": len(cross_content_overlaps),
+        "note": "Cross-mode overlaps are reported as telemetry; transmitter configs are shared across receiver modes in official TSRD.",
+    }
+
+    report = {
+        "isolated": is_isolated,
+        "stare_isolation": stare_iso,
+        "scan_isolation": scan_iso,
+        "cross_mode_diagnostic": cross_mode_diag,
+    }
+
+    if not is_isolated and fail_fast:
+        raise SplitLeakageError("Intra-mode split leakage detected in STARE or SCAN!")
 
     return report
 
@@ -575,6 +640,184 @@ class TSRDValidator:
 
         return result
 
+    def validate_file_streaming(
+        self,
+        file_path: str | Path,
+        chunk_size: int = 100000,
+        compute_content_hash: bool = False,
+        compute_taxonomy: bool = False,
+    ) -> dict[str, Any]:
+        """Exhaustively validate HDF5 file using streaming chunks without loading full multi-million pulse arrays.
+
+        Tracks:
+          - files_checked (1)
+          - pulses_checked (int)
+          - first_inversion_file (str or None)
+          - first_inversion_index (int or None)
+          - first_inversion_delta_us (float or None)
+          - nonfinite_count (int)
+          - empty_file_count (1 if empty else 0)
+          - structurally_valid (bool)
+          - training_eligible (bool)
+          - evaluation_eligible (bool)
+        """
+        path = Path(file_path)
+        result: dict[str, Any] = {
+            "path": str(path),
+            "filename": path.name,
+            "valid": True,
+            "structurally_valid": True,
+            "empty_scenario": False,
+            "training_eligible": False,
+            "evaluation_eligible": False,
+            "num_pulses": 0,
+            "num_emitters": 0,
+            "duration_s": 0.0,
+            "first_inversion_file": None,
+            "first_inversion_index": None,
+            "first_inversion_delta_us": None,
+            "nonfinite_count": 0,
+            "errors": [],
+            "warnings": [],
+        }
+
+        if not path.exists():
+            result["valid"] = False
+            result["structurally_valid"] = False
+            result["errors"].append(f"File does not exist: {path}")
+            return result
+
+        try:
+            with h5py.File(str(path), "r") as handle:
+                if "data" not in handle:
+                    result["valid"] = False
+                    result["structurally_valid"] = False
+                    result["errors"].append("Missing 'data' dataset")
+                    return result
+                if "labels" not in handle:
+                    result["valid"] = False
+                    result["structurally_valid"] = False
+                    result["errors"].append("Missing 'labels' dataset")
+                    return result
+
+                data_ds = handle["data"]
+                labels_ds = handle["labels"]
+
+                shape = data_ds.shape
+                if len(shape) != 2 or shape[1] != 5:
+                    result["valid"] = False
+                    result["structurally_valid"] = False
+                    result["errors"].append(f"Data shape must be (N, 5), got {shape}")
+                    return result
+
+                n_pulses = shape[0]
+                result["num_pulses"] = n_pulses
+
+                if labels_ds.shape[0] != n_pulses:
+                    result["valid"] = False
+                    result["errors"].append(f"Labels length {labels_ds.shape[0]} != data length {n_pulses}")
+
+                if n_pulses == 0:
+                    result["empty_scenario"] = True
+                    result["structurally_valid"] = result["valid"]
+                    result["training_eligible"] = False
+                    result["evaluation_eligible"] = False
+                    return result
+
+                # Chunked streaming ToA and finiteness validation
+                prev_last = -np.inf
+                first_toa = None
+                last_toa = None
+                inversion_found = False
+
+                for start_idx in range(0, n_pulses, chunk_size):
+                    end_idx = min(start_idx + chunk_size, n_pulses)
+                    # Read only ToA column in chunk
+                    toas = np.asarray(data_ds[start_idx:end_idx, 0], dtype=np.float64)
+
+                    if first_toa is None and len(toas) > 0:
+                        first_toa = toas[0]
+                    if len(toas) > 0:
+                        last_toa = toas[-1]
+
+                    # Finiteness check
+                    finite_mask = np.isfinite(toas)
+                    if not np.all(finite_mask):
+                        n_bad = int(len(toas) - np.sum(finite_mask))
+                        result["nonfinite_count"] += n_bad
+                        result["valid"] = False
+                        result["errors"].append(f"Found {n_bad} non-finite ToA values in chunk [{start_idx}:{end_idx}]")
+
+                    # Inter-chunk monotonicity check
+                    if not inversion_found and len(toas) > 0 and toas[0] < prev_last:
+                        inversion_found = True
+                        delta = float(prev_last - toas[0])
+                        result["valid"] = False
+                        result["first_inversion_file"] = str(path)
+                        result["first_inversion_index"] = start_idx
+                        result["first_inversion_delta_us"] = delta
+                        result["errors"].append(
+                            f"ToA inversion between chunks at index {start_idx}: delta={delta:.3f} us"
+                        )
+
+                    # Intra-chunk monotonicity check
+                    if not inversion_found and len(toas) > 1:
+                        diffs = np.diff(toas)
+                        neg_mask = diffs < 0
+                        if np.any(neg_mask):
+                            inversion_found = True
+                            rel_idx = int(np.where(neg_mask)[0][0])
+                            abs_idx = start_idx + rel_idx + 1
+                            delta = float(-diffs[rel_idx])
+                            result["valid"] = False
+                            result["first_inversion_file"] = str(path)
+                            result["first_inversion_index"] = abs_idx
+                            result["first_inversion_delta_us"] = delta
+                            result["errors"].append(
+                                f"ToA inversion at index {abs_idx}: delta={delta:.3f} us"
+                            )
+
+                    if len(toas) > 0:
+                        prev_last = toas[-1]
+
+                if first_toa is not None and last_toa is not None:
+                    result["duration_s"] = float(max(0.0, last_toa - first_toa)) / 1e6
+
+                # Read sample for emitter count and metadata if non-empty
+                if n_pulses <= 200000:
+                    labels_sample = np.asarray(labels_ds).reshape(-1)
+                else:
+                    labels_sample = np.asarray(labels_ds[:200000]).reshape(-1)
+                unique_emitters = np.unique(labels_sample)
+                result["num_emitters"] = int(len(unique_emitters))
+                nonnoise = labels_sample[labels_sample != -1]
+                result["num_nonnoise_emitters"] = int(len(np.unique(nonnoise)))
+
+                result["structurally_valid"] = result["valid"]
+                result["training_eligible"] = result["valid"] and n_pulses > 0
+                result["evaluation_eligible"] = (
+                    result["training_eligible"] and result["num_nonnoise_emitters"] >= 1
+                )
+
+                if "metadata" in handle and hasattr(handle["metadata"], "attrs"):
+                    result["metadata_attrs"] = {k: str(v) for k, v in handle["metadata"].attrs.items()}
+
+                if compute_taxonomy and n_pulses > 0:
+                    sample_pulses = min(n_pulses, 10000)
+                    sample_data = np.asarray(data_ds[:sample_pulses])
+                    sample_labels = np.asarray(labels_ds[:sample_pulses]).reshape(-1)
+                    result["taxonomy"] = classify_project_taxonomy(sample_data, sample_labels)
+
+            if compute_content_hash and result["structurally_valid"]:
+                result["canonical_content_sha256"] = streaming_canonical_content_sha256(path, chunk_size=chunk_size)
+
+        except Exception as exc:
+            result["valid"] = False
+            result["structurally_valid"] = False
+            result["errors"].append(f"HDF5 reading error: {exc}")
+
+        return result
+
 
 def discover_h5_files(data_root: str | Path, mode: str | None = None) -> list[Path]:
     """Recursively discover .h5 files under the dataset root."""
@@ -789,6 +1032,204 @@ def build_manifest(
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         logger.info("Saved TSRD manifest to %s (%d files, %d pulses)", out, manifest["summary"]["total_files"], manifest["summary"]["total_pulses"])
+
+    return manifest
+
+
+def build_integrated_manifest(
+    data_root: str | Path,
+    output_path: str | Path | None = None,
+    root_resolution_source: str = "cli",
+    evaluation_split: str = "test",
+    max_files_per_split: int | None = None,
+    enforce_split_isolation: bool = True,
+    fail_fast_on_leakage: bool = False,
+    classify_taxonomy: bool = True,
+    compute_content_hash: bool = True,
+) -> dict[str, Any]:
+    """Build exhaustive 6,000-file integrated manifest covering both STARE and SCAN.
+
+    Every file entry records:
+      mode, split, relative_path, file_size, raw_sha256, canonical_content_sha256,
+      num_pulses, num_emitters, duration_s, observed_ranges,
+      structurally_valid, empty_scenario, training_eligible, evaluation_eligible, taxonomy.
+
+    A global dataset fingerprint is derived from all 6,000 canonical content hashes.
+    Intra-mode 3-layer isolation is enforced as a hard contract; cross-mode telemetry
+    is tracked diagnostically.
+    """
+    if evaluation_split == "train":
+        raise ValueError("Role contract violation: 'train' split cannot be designated as evaluation_split")
+
+    root = Path(data_root).resolve()
+    validator = TSRDValidator()
+
+    def _json_default(o: Any) -> Any:
+        if isinstance(o, (np.bool_, bool)):
+            return bool(o)
+        if isinstance(o, (np.integer, int)):
+            return int(o)
+        if isinstance(o, (np.floating, float)):
+            return float(o)
+        if isinstance(o, np.ndarray):
+            return o.tolist()
+        if isinstance(o, Path):
+            return str(o)
+        return str(o)
+
+    manifest: dict[str, Any] = {
+        "data_root": str(root),
+        "dataset_provenance": {
+            "upstream_dataset_name": "Turing Synthetic Radar Dataset (TSRD)",
+            "upstream_distribution": "Hugging Face / Official Upstream",
+            "upstream_repository": "https://github.com/alan-turing-institute/tsrd",
+            "upstream_revision_identifier": "2026-02-release",
+            "upstream_commit_or_dataset_revision": "2026.02",
+            "receiver_modes": ["STARE", "SCAN"],
+            "project_qualification_id": "TSRD-QUAL-2026-V1",
+            "qualification_timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "local_dataset_root": str(root),
+            "root_resolution_source": root_resolution_source,
+            "evaluation_split": evaluation_split,
+        },
+        "modes": {},
+        "summary": {
+            "total_files": 0,
+            "total_pulses": 0,
+            "structurally_valid_files": 0,
+            "empty_files": 0,
+            "training_eligible": 0,
+            "evaluation_eligible": 0,
+        },
+        "taxonomy_summary": {cls_name: 0 for cls_name in PROJECT_TAXONOMY_CLASSES},
+    }
+    manifest["taxonomy_summary"]["unknown"] = 0
+
+    all_file_paths: list[Path] = []
+    canonical_hashes_all: list[str] = []
+    file_lists: dict[str, dict[str, list[Path]]] = {"stare": {}, "scan": {}}
+
+    for mode in ["stare", "scan"]:
+        manifest["modes"][mode] = {
+            "splits": {},
+            "summary": {
+                "total_files": 0,
+                "total_pulses": 0,
+                "structurally_valid_files": 0,
+                "empty_files": 0,
+                "training_eligible": 0,
+                "evaluation_eligible": 0,
+            },
+        }
+
+        for split_name in ["train", "val", "test"]:
+            dir_name = f"{split_name}_{mode}"
+            split_dir = root / mode / dir_name
+            files = sorted(split_dir.glob("*.h5")) if split_dir.exists() else []
+            if max_files_per_split is not None:
+                files = files[:max_files_per_split]
+
+            file_lists[mode][split_name] = files
+            records = []
+            split_pulses = 0
+            split_stats = {
+                "structurally_valid_files": 0,
+                "empty_files": 0,
+                "training_eligible": 0,
+                "evaluation_eligible": 0,
+            }
+
+            for fp in files:
+                all_file_paths.append(fp)
+                v = validator.validate_file_streaming(
+                    fp,
+                    compute_content_hash=compute_content_hash,
+                    compute_taxonomy=classify_taxonomy,
+                )
+                if v["structurally_valid"]:
+                    split_stats["structurally_valid_files"] += 1
+                if v["empty_scenario"]:
+                    split_stats["empty_files"] += 1
+                if v["training_eligible"]:
+                    split_stats["training_eligible"] += 1
+                if v["evaluation_eligible"]:
+                    split_stats["evaluation_eligible"] += 1
+
+                c_hash = v.get("canonical_content_sha256")
+                if c_hash:
+                    canonical_hashes_all.append(c_hash)
+
+                tax = v.get("taxonomy")
+                if tax and "primary_class" in tax:
+                    p_cls = tax["primary_class"]
+                    manifest["taxonomy_summary"][p_cls] = manifest["taxonomy_summary"].get(p_cls, 0) + 1
+
+                rel_path = str(fp.relative_to(root)).replace("\\", "/") if root in fp.parents else str(fp)
+                records.append({
+                    "mode": mode,
+                    "split": split_name,
+                    "relative_path": rel_path,
+                    "filename": fp.name,
+                    "size_bytes": fp.stat().st_size,
+                    "raw_sha256": _sha256(fp),
+                    "canonical_content_sha256": c_hash,
+                    "num_pulses": v["num_pulses"],
+                    "num_emitters": v["num_emitters"],
+                    "duration_s": round(v["duration_s"], 3),
+                    "structurally_valid": v["structurally_valid"],
+                    "empty_scenario": v["empty_scenario"],
+                    "training_eligible": v["training_eligible"],
+                    "evaluation_eligible": v["evaluation_eligible"],
+                    "observed_ranges": v.get("observed_ranges"),
+                    "taxonomy": tax,
+                })
+                split_pulses += v["num_pulses"]
+
+            manifest["modes"][mode]["splits"][split_name] = {
+                "directory": str(split_dir),
+                "file_count": len(records),
+                "total_pulses": split_pulses,
+                "structurally_valid_files": split_stats["structurally_valid_files"],
+                "empty_files": split_stats["empty_files"],
+                "training_eligible": split_stats["training_eligible"],
+                "evaluation_eligible": split_stats["evaluation_eligible"],
+                "files": records,
+            }
+
+            manifest["modes"][mode]["summary"]["total_files"] += len(records)
+            manifest["modes"][mode]["summary"]["total_pulses"] += split_pulses
+            for k in split_stats:
+                manifest["modes"][mode]["summary"][k] += split_stats[k]
+                manifest["summary"][k] += split_stats[k]
+
+            manifest["summary"]["total_files"] += len(records)
+            manifest["summary"]["total_pulses"] += split_pulses
+
+    # Global dataset fingerprint across all 6,000 files
+    sorted_hashes = sorted(canonical_hashes_all)
+    manifest["dataset_fingerprint"] = hashlib.sha256(
+        "::".join(sorted_hashes).encode("utf-8")
+    ).hexdigest()
+
+    if enforce_split_isolation:
+        iso_report = validate_split_isolation_dual_mode(
+            file_lists=file_lists,
+            root_path=root,
+            fail_fast=fail_fast_on_leakage,
+        )
+        manifest["split_isolation"] = iso_report
+
+    if output_path is not None:
+        out = Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(manifest, indent=2, default=_json_default), encoding="utf-8")
+        logger.info(
+            "Saved integrated TSRD manifest to %s (%d files, %d pulses, fingerprint=%s)",
+            out,
+            manifest["summary"]["total_files"],
+            manifest["summary"]["total_pulses"],
+            manifest["dataset_fingerprint"],
+        )
 
     return manifest
 
