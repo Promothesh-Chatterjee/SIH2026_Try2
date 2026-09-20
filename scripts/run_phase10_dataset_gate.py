@@ -585,6 +585,7 @@ def run_phase10_gates(
     empty_file_count = 0
     corrupted_files: list[str] = []
     inversion_violations: list[dict[str, Any]] = []
+    validations_cache: dict[str, Any] = {}
 
     t_toa_start = time.time()
     for mode in ["scan", "stare"]:
@@ -592,6 +593,7 @@ def run_phase10_gates(
             split_files = file_lists[mode][split]
             for f in split_files:
                 v = validator.validate_file_streaming(f, chunk_size=100000)
+                validations_cache[str(f.resolve())] = v
                 files_checked += 1
                 pulses_checked += v["num_pulses"]
                 if v["empty_scenario"]:
@@ -666,6 +668,9 @@ def run_phase10_gates(
         enforce_split_isolation=False,  # Already executed in Gate 10.2
         classify_taxonomy=False,        # Census handled comprehensively in Gate 10.4A
         compute_content_hash=True,
+        precomputed_validations=validations_cache,
+        precomputed_raw_hashes=iso_dual.get("file_to_raw_hash"),
+        precomputed_content_hashes=iso_dual.get("file_to_content_hash"),
     )
     results["gates"]["gate_10_5_manifest"] = {
         "manifest_path": "results/phase10_dataset_manifest.json",
