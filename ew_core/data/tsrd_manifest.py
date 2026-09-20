@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -215,6 +216,8 @@ def validate_split_isolation(
         "layer3_content_hash_overlaps": layer3_overlaps,
         "raw_hashes": {h: str(path) for s in splits for h, path in file_hashes_by_split[s].items()},
         "content_hashes": {c: str(path) for s in splits for c, path in content_hashes_by_split[s].items()},
+        "file_to_raw_hash": {str(path): h for s in splits for h, path in file_hashes_by_split[s].items()},
+        "file_to_content_hash": {str(path): c for s in splits for c, path in content_hashes_by_split[s].items()},
     }
 
     if not is_isolated and fail_fast:
@@ -279,11 +282,21 @@ def validate_split_isolation_dual_mode(
         "note": "Cross-mode overlaps are reported as telemetry; transmitter configs are shared across receiver modes in official TSRD.",
     }
 
+    file_to_raw: dict[str, str] = {}
+    file_to_raw.update(stare_iso.get("file_to_raw_hash", {}))
+    file_to_raw.update(scan_iso.get("file_to_raw_hash", {}))
+
+    file_to_content: dict[str, str] = {}
+    file_to_content.update(stare_iso.get("file_to_content_hash", {}))
+    file_to_content.update(scan_iso.get("file_to_content_hash", {}))
+
     report = {
         "isolated": is_isolated,
         "stare_isolation": stare_iso,
         "scan_isolation": scan_iso,
         "cross_mode_diagnostic": cross_mode_diag,
+        "file_to_raw_hash": file_to_raw,
+        "file_to_content_hash": file_to_content,
     }
 
     if not is_isolated and fail_fast:
@@ -1046,6 +1059,9 @@ def build_integrated_manifest(
     fail_fast_on_leakage: bool = False,
     classify_taxonomy: bool = True,
     compute_content_hash: bool = True,
+    precomputed_validations: dict[str, Any] | None = None,
+    precomputed_raw_hashes: dict[str, str] | None = None,
+    precomputed_content_hashes: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build exhaustive 6,000-file integrated manifest covering both STARE and SCAN.
 
@@ -1141,11 +1157,15 @@ def build_integrated_manifest(
 
             for fp in files:
                 all_file_paths.append(fp)
-                v = validator.validate_file_streaming(
-                    fp,
-                    compute_content_hash=compute_content_hash,
-                    compute_taxonomy=classify_taxonomy,
-                )
+                fp_key = str(fp.resolve())
+                if precomputed_validations and fp_key in precomputed_validations:
+                    v = precomputed_validations[fp_key]
+                else:
+                    v = validator.validate_file_streaming(
+                        fp,
+                        compute_content_hash=compute_content_hash,
+                        compute_taxonomy=classify_taxonomy,
+                    )
                 if v["structurally_valid"]:
                     split_stats["structurally_valid_files"] += 1
                 if v["empty_scenario"]:
@@ -1155,7 +1175,16 @@ def build_integrated_manifest(
                 if v["evaluation_eligible"]:
                     split_stats["evaluation_eligible"] += 1
 
-                c_hash = v.get("canonical_content_sha256")
+                raw_h = (
+                    precomputed_raw_hashes.get(fp_key)
+                    if precomputed_raw_hashes is not None and fp_key in precomputed_raw_hashes
+                    else _sha256(fp)
+                )
+                c_hash = (
+                    precomputed_content_hashes.get(fp_key)
+                    if precomputed_content_hashes is not None and fp_key in precomputed_content_hashes
+                    else (v.get("canonical_content_sha256") if compute_content_hash else None)
+                )
                 if c_hash:
                     canonical_hashes_all.append(c_hash)
 
@@ -1171,7 +1200,7 @@ def build_integrated_manifest(
                     "relative_path": rel_path,
                     "filename": fp.name,
                     "size_bytes": fp.stat().st_size,
-                    "raw_sha256": _sha256(fp),
+                    "raw_sha256": raw_h,
                     "canonical_content_sha256": c_hash,
                     "num_pulses": v["num_pulses"],
                     "num_emitters": v["num_emitters"],
