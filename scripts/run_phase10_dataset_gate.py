@@ -437,7 +437,7 @@ def verify_counterfactual_future_invariance(
     # Test perception adapter ID-renaming invariance
     renaming_passed = True
     try:
-        from ew_core.environment.perception_adapter import build_band_belief_from_tracks
+        from ew_core.perception.adapters import build_band_belief_from_tracks
         labels_raw = np.array([0, 1, 0, 2, -1, 1, 2, 0])
         toas_raw = np.array([10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0])
         freqs_raw = np.array([2200.0, 3500.0, 2205.0, 5100.0, 4000.0, 3510.0, 5090.0, 2195.0])
@@ -1165,11 +1165,13 @@ def main():
     results_dir.mkdir(parents=True, exist_ok=True)
 
     # Save outputs
-    stare_out = results_dir / "phase10_latent_world_evaluation.json"
-    stare_out.write_text(json.dumps(results["gates"]["gate_10_3_dual_scan_stare"]["stare_latent_world"], indent=2, default=_json_default), encoding="utf-8")
+    g3 = results.get("gates", {}).get("gate_10_3_dual_scan_stare")
+    if g3:
+        stare_out = results_dir / "phase10_latent_world_evaluation.json"
+        stare_out.write_text(json.dumps(g3.get("stare_latent_world", {}), indent=2, default=_json_default), encoding="utf-8")
 
-    scan_out = results_dir / "phase10_realistic_scan_evaluation.json"
-    scan_out.write_text(json.dumps(results["gates"]["gate_10_3_dual_scan_stare"]["scan_realistic_scan"], indent=2, default=_json_default), encoding="utf-8")
+        scan_out = results_dir / "phase10_realistic_scan_evaluation.json"
+        scan_out.write_text(json.dumps(g3.get("scan_realistic_scan", {}), indent=2, default=_json_default), encoding="utf-8")
 
     gate_out = results_dir / "phase10_qualification_report.json"
     gate_out.write_text(json.dumps(results, indent=2, default=_json_default), encoding="utf-8")
