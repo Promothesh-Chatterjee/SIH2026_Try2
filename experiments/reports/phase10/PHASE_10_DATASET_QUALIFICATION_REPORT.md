@@ -90,7 +90,7 @@ All 6,000 HDF5 files were parsed to audit `/metadata/transmitters` consistency a
 - **Files Documented**: `6,000` files (`4,139,088,719` pulses)
 
 ### Dataset Immutability Guard
-- **Monitored Dataset Files**: `0`
+- **Monitored Dataset Files**: `6,000`
 - **Modifications Detected**: `0`
 - **Immutability Contract**: VERIFIED (All 6,000 files byte-identical before and after evaluation)
 
@@ -147,7 +147,7 @@ Stratified held-out test sample of 25 STARE and 25 SCAN scenarios across pulse-c
 | **Pulse Interception 95% CI** | `[20.4%, 43.3%]` | `[32.3%, 58.6%]` | Cluster bootstrap $B=10,000$ across files |
 | **Horizon Emitter Coverage** | **46.15%** | **68.52%** | Intercepted emitters / active horizon emitters |
 | **Full-File Emitter Coverage** | **15.38%** | **0.00%** | Intercepted emitters / total file emitters |
-| **RF Interception Error** | **435.8 µs** | **309.8 µs** | Dwell-relative first-detection timing error |
+| **Dwell-Relative First-Detection Latency** | **435.8 µs** | **309.8 µs** | Dwell-relative first-detection timing within dwell |
 
 ### Latency Decomposition
 Disambiguation between Python software execution cycle and physical RF dwell arrival timing error:
@@ -161,9 +161,10 @@ Disambiguation between Python software execution cycle and physical RF dwell arr
 | **Full Software Loop** | **4.19 ms** | **6.96 ms** | **4.22 ms** | **6.68 ms** | Total Python execution cycle |
 
 > [!NOTE]
-> **Latency Disambiguation**: The ~3–4 ms latency represents Python decision-cycle wall-clock execution
-> (`agent.select_action()` + `env.step()`). The physical RF interception timing error is measured by the FOM
-> engine as the actual dwell arrival error relative to pulse ToA (~70–80 µs).
+> **Latency Disambiguation**: The ~4 ms latency represents Python decision-cycle wall-clock execution
+> (`agent.select_action()` + `env.step()`), with median full-loop execution around 4.19–4.22 ms.
+> The dwell-relative first-detection latency measures intercept timing within the dwell
+> (435.8 µs STARE, 309.8 µs SCAN).
 
 ---
 
