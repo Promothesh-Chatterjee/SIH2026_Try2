@@ -76,6 +76,8 @@ class EWMetrics:
     n_total_transmissions: int
     n_receiver_dwells: int
     n_missed_dwells: int = 0
+    n_true_negatives: int = 0
+    canonical_pfa: float = 0.0
 
 
 def compute_pd(n_true_positives: int, n_false_negatives: int = 0) -> float:
@@ -111,26 +113,59 @@ def compute_pd(n_true_positives: int, n_false_negatives: int = 0) -> float:
     return float(np.clip(float(tp) / float(denom), 0.0, 1.0))
 
 
-def compute_pfa(n_false_alarms: int, n_receiver_dwells: int) -> float:
-    """Compute Probability of False Alarm: Pfa = FP / N_receiver_dwells.
+def compute_pfa(
+    n_false_alarms: int,
+    n_receiver_dwells: int = 0,
+    n_true_negatives: int | None = None,
+) -> float:
+    """Compute Probability of False Alarm.
+
+    If n_true_negatives is provided, computes canonical decision-level
+    Pfa = FP / (FP + TN), aligning with canonical_metrics.py.
+    Otherwise computes dwell-normalized Pfa = FP / N_receiver_dwells.
 
     Parameters
     ----------
     n_false_alarms : int
-        Number of false alarms (detections when no emitter was active in that band).
-    n_receiver_dwells : int
+        Number of false alarms (FP).
+    n_receiver_dwells : int, optional
         Total number of receiver dwell steps.
+    n_true_negatives : int | None, optional
+        Number of true negatives (TN: inactive dwells without false alarm).
 
     Returns
     -------
     float
-        Probability of False Alarm in [0.0, 1.0]. Returns 0.0 if N_receiver_dwells == 0.
+        Probability of False Alarm in [0.0, 1.0].
     """
     fp = int(n_false_alarms)
+    if n_true_negatives is not None:
+        denom = fp + int(n_true_negatives)
+        if denom <= 0:
+            return 0.0
+        return float(np.clip(float(fp) / float(denom), 0.0, 1.0))
+
     dwells = int(n_receiver_dwells)
     if dwells <= 0:
         return 0.0
     return float(np.clip(float(fp) / float(dwells), 0.0, 1.0))
+
+
+def compute_canonical_pfa(n_false_alarms: int, n_true_negatives: int) -> float:
+    """Authoritative decision-level Pfa = FP / (FP + TN) matching canonical_metrics.py."""
+    return compute_pfa(n_false_alarms=n_false_alarms, n_true_negatives=n_true_negatives)
+
+
+def compute_canonical_decision_metrics(
+    n_true_positives: int,
+    n_false_negatives: int,
+    n_false_alarms: int,
+    n_true_negatives: int,
+) -> dict[str, float]:
+    """Compute canonical decision-level Pd and Pfa matching canonical_metrics.py."""
+    pd = compute_pd(n_true_positives, n_false_negatives)
+    pfa = compute_canonical_pfa(n_false_alarms, n_true_negatives)
+    return {"pd": pd, "pfa": pfa}
 
 
 def compute_avg_intercept_rate(hits: Sequence[bool] | np.ndarray) -> float:
@@ -269,12 +304,15 @@ def compute_all_metrics(
     tp = 0
     fn = 0
     fp = 0
+    tn = 0
     
     # If explicit false alarms logged, use them; otherwise verify against active_bands_per_step
     explicit_false_alarms = episode_log.get("false_alarms", None)
     if explicit_false_alarms is not None:
         fp = int(sum(1 for f in explicit_false_alarms if f))
         tp = int(sum(1 for h in hits if h))
+        fn = int(episode_log.get("missed_dwells", 0))
+        tn = max(0, n_dwells - tp - fn - fp)
     else:
         for t in range(n_dwells):
             b_chosen = chosen_bands[t] if t < len(chosen_bands) else -1
@@ -290,6 +328,8 @@ def compute_all_metrics(
             else:
                 if hit:
                     fp += 1
+                else:
+                    tn += 1
 
     # Total emitter transmission opportunities across all bands
     if "n_total_transmissions" in episode_log:
@@ -309,6 +349,7 @@ def compute_all_metrics(
 
     pd = compute_pd(n_true_positives=tp, n_false_negatives=fn)
     pfa = compute_pfa(n_false_alarms=fp, n_receiver_dwells=n_dwells)
+    canonical_pfa = compute_canonical_pfa(n_false_alarms=fp, n_true_negatives=tn)
     avg_intercept_rate = compute_avg_intercept_rate(hits)
     avg_reward = compute_avg_reward(rewards)
     pct_correct = compute_pct_correct_predictions(hits, active_mask)
@@ -327,4 +368,6 @@ def compute_all_metrics(
         n_total_transmissions=n_total_transmissions,
         n_receiver_dwells=n_dwells,
         n_missed_dwells=fn,
+        n_true_negatives=tn,
+        canonical_pfa=canonical_pfa,
     )

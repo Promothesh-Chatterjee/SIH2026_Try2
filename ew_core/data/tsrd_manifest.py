@@ -125,6 +125,8 @@ def validate_split_isolation(
     root: Path | str | None = None,
     root_path: Path | str | None = None,
     fail_fast: bool = False,
+    precomputed_raw_hashes: dict[str, str] | None = None,
+    precomputed_content_hashes: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Verify 3-layer split isolation across train, val, and test partitions.
 
@@ -152,11 +154,23 @@ def validate_split_isolation(
         near_dups_by_split[s] = {}
         for p in split_files[s]:
             resolved = p.resolve()
+            p_str = str(resolved)
+            p_orig = str(p)
             rel = str(resolved.relative_to(root_path)).replace("\\", "/") if root_path and root_path in resolved.parents else p.name
             paths_by_split[s][rel] = resolved
-            f_hash = _sha256(resolved)
+
+            f_hash = None
+            if precomputed_raw_hashes is not None:
+                f_hash = precomputed_raw_hashes.get(p_str) or precomputed_raw_hashes.get(p_orig)
+            if not f_hash:
+                f_hash = _sha256(resolved)
             file_hashes_by_split[s][f_hash] = resolved
-            c_hash = streaming_canonical_content_sha256(resolved)
+
+            c_hash = None
+            if precomputed_content_hashes is not None:
+                c_hash = precomputed_content_hashes.get(p_str) or precomputed_content_hashes.get(p_orig)
+            if not c_hash:
+                c_hash = streaming_canonical_content_sha256(resolved)
             if c_hash:
                 content_hashes_by_split[s][c_hash] = resolved
 
@@ -236,6 +250,8 @@ def validate_split_isolation_dual_mode(
     file_lists: dict[str, dict[str, list[Path]]],
     root_path: str | Path | None = None,
     fail_fast: bool = False,
+    precomputed_raw_hashes: dict[str, str] | None = None,
+    precomputed_content_hashes: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Exhaustive 3-layer cross-split isolation for both STARE and SCAN.
 
@@ -252,8 +268,20 @@ def validate_split_isolation_dual_mode(
     stare_splits = file_lists.get("stare", {})
     scan_splits = file_lists.get("scan", {})
 
-    stare_iso = validate_split_isolation(stare_splits, root_path=root, fail_fast=fail_fast)
-    scan_iso = validate_split_isolation(scan_splits, root_path=root, fail_fast=fail_fast)
+    stare_iso = validate_split_isolation(
+        stare_splits,
+        root_path=root,
+        fail_fast=fail_fast,
+        precomputed_raw_hashes=precomputed_raw_hashes,
+        precomputed_content_hashes=precomputed_content_hashes,
+    )
+    scan_iso = validate_split_isolation(
+        scan_splits,
+        root_path=root,
+        fail_fast=fail_fast,
+        precomputed_raw_hashes=precomputed_raw_hashes,
+        precomputed_content_hashes=precomputed_content_hashes,
+    )
 
     is_isolated = bool(stare_iso["isolated"] and scan_iso["isolated"])
 
@@ -320,7 +348,7 @@ PROJECT_TAXONOMY_CLASSES = (
 def classify_project_taxonomy(
     data: np.ndarray,
     labels: np.ndarray | None = None,
-    max_pulses: int = 50000,
+    max_pulses: int | None = None,
 ) -> dict[str, Any]:
     """Classify an electromagnetic scenario into the project's 8-class EW taxonomy.
 
@@ -342,7 +370,7 @@ def classify_project_taxonomy(
             "classification_evidence": {"empty": True},
         }
 
-    sample = data[:max_pulses]
+    sample = data if max_pulses is None else data[:max_pulses]
     num_pulses = len(sample)
     toas = sample[:, 0]
     freqs = sample[:, 1]
@@ -369,8 +397,10 @@ def classify_project_taxonomy(
     emitter_fast = []
     emitter_slow = []
     emitter_spans = []
+    emitter_markov = []
+    markov_evidence_list = []
 
-    for eid in unique_emitters[:50]:
+    for eid in unique_emitters:
         mask = (lbls == eid)
         e_cfs = freqs[mask]
         e_toas = toas[mask]
@@ -389,6 +419,47 @@ def classify_project_taxonomy(
 
         if is_agile:
             emitter_agile.append(eid)
+            # Project-defined first-order transition-dependent agility heuristic:
+            # Evaluated within each individual emitter label sequence (not interleaved global stream).
+            if len(e_cfs) >= 20:
+                q_freq = np.round(e_cfs / 30.0) * 30.0
+                unique_states, state_indices = np.unique(q_freq, return_inverse=True)
+                K = len(unique_states)
+                if K >= 2:
+                    s_from = state_indices[:-1]
+                    s_to = state_indices[1:]
+                    trans_counts = np.zeros((K, K), dtype=np.int64)
+                    np.add.at(trans_counts, (s_from, s_to), 1)
+                    N_trans = len(s_from)
+                    if N_trans > 0:
+                        p_joint = trans_counts / N_trans
+                        p_from = np.sum(p_joint, axis=1)
+                        p_to = np.sum(p_joint, axis=0)
+                        outer_p = np.outer(p_from, p_to)
+                        mi = 0.0
+                        for r in range(K):
+                            for col in range(K):
+                                if p_joint[r, col] > 0 and outer_p[r, col] > 0:
+                                    mi += p_joint[r, col] * np.log2(p_joint[r, col] / outer_p[r, col])
+
+                        row_sums = np.sum(trans_counts, axis=1)
+                        cond_ent = 0.0
+                        for r in range(K):
+                            if row_sums[r] > 0:
+                                row_p = trans_counts[r] / row_sums[r]
+                                row_nz = row_p[row_p > 0]
+                                cond_ent += p_from[r] * (-np.sum(row_nz * np.log2(row_nz)))
+
+                        sparsity = float(np.count_nonzero(trans_counts == 0) / (K * K))
+                        if mi >= 0.35 or (mi >= 0.20 and sparsity >= 0.15):
+                            emitter_markov.append(eid)
+                            markov_evidence_list.append({
+                                "emitter_id": int(eid),
+                                "num_states": int(K),
+                                "transition_mi": round(float(mi), 4),
+                                "conditional_entropy": round(float(cond_ent), 4),
+                                "sparsity": round(sparsity, 4),
+                            })
         if is_fixed:
             emitter_fixed.append(eid)
         if is_fast:
@@ -411,6 +482,8 @@ def classify_project_taxonomy(
         "n_fixed_emitters": len(emitter_fixed),
         "n_fast_agile_emitters": len(emitter_fast),
         "n_slow_agile_emitters": len(emitter_slow),
+        "n_markov_agile_emitters": len(emitter_markov),
+        "markov_evidence": markov_evidence_list,
     }
 
     tags: list[str] = []
@@ -428,10 +501,11 @@ def classify_project_taxonomy(
         tags.append("mixed")
     if has_fixed and not has_agile and n_emitters >= 1:
         tags.append("fixed")
-    if has_agile and len(emitter_agile) >= 2:
+    if (len(emitter_markov) >= 2 or (len(emitter_markov) >= 1 and not has_fixed and len(emitter_agile) == len(emitter_markov))):
         tags.append("markov_agile")
 
     # Periodic scan check: presence of periodic burst gaps in ToA with intra-burst pulses
+    # Labeled strictly as a periodic burst/gap heuristic (pulse arrival regularity, not unmeasured antenna rotation).
     if len(toas) > 20:
         diffs = np.diff(toas)
         burst_pris = diffs[diffs < 1000.0]
@@ -442,6 +516,7 @@ def classify_project_taxonomy(
             if gap_mean > 0 and (gap_std / gap_mean) < 0.40:
                 tags.append("periodic_scan")
                 evidence["periodic_scan_period_us"] = round(gap_mean, 1)
+                evidence["periodic_scan_heuristic_note"] = "Detected via periodic burst/gap arrival timing regularity heuristic"
 
     # Primary class determination
     primary = "unknown"
@@ -737,35 +812,51 @@ class TSRDValidator:
                     result["evaluation_eligible"] = False
                     return result
 
-                # Chunked streaming ToA and finiteness validation
+                # Chunked streaming 5-column validation (finiteness, ToA monotonicity, exact emitter set)
                 prev_last = -np.inf
                 first_toa = None
                 last_toa = None
                 inversion_found = False
 
+                unique_emitters_set: set[int] = set()
+                nonnoise_emitters_set: set[int] = set()
+
+                running_min = np.full(5, np.inf, dtype=np.float64)
+                running_max = np.full(5, -np.inf, dtype=np.float64)
+
                 for start_idx in range(0, n_pulses, chunk_size):
                     end_idx = min(start_idx + chunk_size, n_pulses)
-                    # Read only ToA column in chunk
-                    toas = np.asarray(data_ds[start_idx:end_idx, 0], dtype=np.float64)
+                    chunk_data = np.asarray(data_ds[start_idx:end_idx], dtype=np.float64)
+                    chunk_labels = np.asarray(labels_ds[start_idx:end_idx]).reshape(-1)
 
+                    if chunk_data.ndim != 2 or chunk_data.shape[1] != 5:
+                        result["valid"] = False
+                        result["structurally_valid"] = False
+                        result["errors"].append(f"Chunk at [{start_idx}:{end_idx}] has invalid shape {chunk_data.shape}")
+                        break
+
+                    # 1. Finiteness check across all 5 PDW columns
+                    finite_mask = np.isfinite(chunk_data)
+                    if not np.all(finite_mask):
+                        n_bad = int(chunk_data.size - np.sum(finite_mask))
+                        result["nonfinite_count"] += n_bad
+                        result["valid"] = False
+                        result["structurally_valid"] = False
+                        result["errors"].append(f"Found {n_bad} non-finite PDW values in chunk [{start_idx}:{end_idx}]")
+
+                    # 2. Time ordering (monotonic ToA)
+                    toas = chunk_data[:, 0]
                     if first_toa is None and len(toas) > 0:
                         first_toa = toas[0]
                     if len(toas) > 0:
                         last_toa = toas[-1]
-
-                    # Finiteness check
-                    finite_mask = np.isfinite(toas)
-                    if not np.all(finite_mask):
-                        n_bad = int(len(toas) - np.sum(finite_mask))
-                        result["nonfinite_count"] += n_bad
-                        result["valid"] = False
-                        result["errors"].append(f"Found {n_bad} non-finite ToA values in chunk [{start_idx}:{end_idx}]")
 
                     # Inter-chunk monotonicity check
                     if not inversion_found and len(toas) > 0 and toas[0] < prev_last:
                         inversion_found = True
                         delta = float(prev_last - toas[0])
                         result["valid"] = False
+                        result["structurally_valid"] = False
                         result["first_inversion_file"] = str(path)
                         result["first_inversion_index"] = start_idx
                         result["first_inversion_delta_us"] = delta
@@ -783,6 +874,7 @@ class TSRDValidator:
                             abs_idx = start_idx + rel_idx + 1
                             delta = float(-diffs[rel_idx])
                             result["valid"] = False
+                            result["structurally_valid"] = False
                             result["first_inversion_file"] = str(path)
                             result["first_inversion_index"] = abs_idx
                             result["first_inversion_delta_us"] = delta
@@ -793,18 +885,43 @@ class TSRDValidator:
                     if len(toas) > 0:
                         prev_last = toas[-1]
 
+                    # 3. Exact streaming emitter set collection (zero sampling cap)
+                    for lbl in chunk_labels:
+                        lbl_int = int(lbl)
+                        unique_emitters_set.add(lbl_int)
+                        if lbl_int != -1:
+                            nonnoise_emitters_set.add(lbl_int)
+
+                    # 4. Running physical feature bounds
+                    if len(chunk_data) > 0:
+                        chunk_min = np.min(chunk_data, axis=0)
+                        chunk_max = np.max(chunk_data, axis=0)
+                        running_min = np.minimum(running_min, chunk_min)
+                        running_max = np.maximum(running_max, chunk_max)
+
                 if first_toa is not None and last_toa is not None:
                     result["duration_s"] = float(max(0.0, last_toa - first_toa)) / 1e6
 
-                # Read sample for emitter count and metadata if non-empty
-                if n_pulses <= 200000:
-                    labels_sample = np.asarray(labels_ds).reshape(-1)
-                else:
-                    labels_sample = np.asarray(labels_ds[:200000]).reshape(-1)
-                unique_emitters = np.unique(labels_sample)
-                result["num_emitters"] = int(len(unique_emitters))
-                nonnoise = labels_sample[labels_sample != -1]
-                result["num_nonnoise_emitters"] = int(len(np.unique(nonnoise)))
+                result["num_emitters"] = len(unique_emitters_set)
+                result["num_nonnoise_emitters"] = len(nonnoise_emitters_set)
+
+                # Decouple structural validity from physical-domain diagnostics:
+                # Amplitude, PW=0, CF spectrum, and AoA are recorded as diagnostics and do not invalidate structural validity.
+                result["observed_ranges"] = {
+                    "toa_us": [float(running_min[0]), float(running_max[0])],
+                    "freq_mhz": [float(running_min[1]), float(running_max[1])],
+                    "pw_us": [float(running_min[2]), float(running_max[2])],
+                    "aoa_deg": [float(running_min[3]), float(running_max[3])],
+                    "amp_db": [float(running_min[4]), float(running_max[4])],
+                    "has_zero_pw": bool(running_min[2] <= 0.0),
+                    "amplitude_range": [float(running_min[4]), float(running_max[4])],
+                }
+                result["physical_diagnostics"] = {
+                    "has_zero_pw": bool(running_min[2] <= 0.0),
+                    "amplitude_range": [float(running_min[4]), float(running_max[4])],
+                    "cf_range_mhz": [float(running_min[1]), float(running_max[1])],
+                    "aoa_range_deg": [float(running_min[3]), float(running_max[3])],
+                }
 
                 result["structurally_valid"] = result["valid"]
                 result["training_eligible"] = result["valid"] and n_pulses > 0
@@ -816,7 +933,7 @@ class TSRDValidator:
                     result["metadata_attrs"] = {k: str(v) for k, v in handle["metadata"].attrs.items()}
 
                 if compute_taxonomy and n_pulses > 0:
-                    sample_pulses = min(n_pulses, 10000)
+                    sample_pulses = min(n_pulses, 50000)
                     sample_data = np.asarray(data_ds[:sample_pulses])
                     sample_labels = np.asarray(labels_ds[:sample_pulses]).reshape(-1)
                     result["taxonomy"] = classify_project_taxonomy(sample_data, sample_labels)
@@ -830,6 +947,279 @@ class TSRDValidator:
             result["errors"].append(f"HDF5 reading error: {exc}")
 
         return result
+
+
+def audit_tsrd_transmitter_metadata(
+    file_path: Path | str,
+    tolerance_mhz: float = 50.0,
+    tolerance_pw_us: float = 0.5,
+) -> dict[str, Any]:
+    """Audit HDF5 transmitter metadata consistency against observed pulse trains (Gate 10.1B).
+
+    Derives mapping rule by sorting /metadata/transmitters entries by their integer suffix:
+      label k -> sorted /metadata/transmitters children by integer suffix -> child[k]
+
+    Categorizes each file into the 4-tier quality overlay:
+      1. consistent: Metadata and assigned PDWs align cleanly.
+      2. inconsistent_but_PDWs_labels_usable: Label-to-transmitter mapping diverges, but PDWs and local cluster labels are structurally sound.
+      3. quarantined_for_metadata_dependent_training: Unsafe for training pipelines requiring semantic transmitter truth.
+      4. unsafe_for_metadata_dependent_evaluation: Unsafe for evaluation protocols relying on transmitter parameter truth.
+    """
+    import ast
+    import re
+
+    path = Path(file_path)
+    result: dict[str, Any] = {
+        "file": str(path),
+        "filename": path.name,
+        "tier": "inconsistent_but_PDWs_labels_usable",
+        "consistent": False,
+        "quarantined_for_metadata_dependent_training": True,
+        "unsafe_for_metadata_dependent_evaluation": True,
+        "num_emitters_in_data": 0,
+        "num_transmitters_in_metadata": 0,
+        "matched_labels": [],
+        "mismatched_labels": [],
+        "reason": None,
+    }
+
+    if not path.exists():
+        result["reason"] = f"File not found: {path}"
+        return result
+
+    try:
+        with h5py.File(str(path), "r") as handle:
+            if "data" not in handle or "labels" not in handle:
+                result["reason"] = "Missing data or labels dataset"
+                return result
+
+            n_total = handle["data"].shape[0]
+            if n_total == 0:
+                result["tier"] = "consistent"
+                result["consistent"] = True
+                result["quarantined_for_metadata_dependent_training"] = False
+                result["unsafe_for_metadata_dependent_evaluation"] = False
+                result["reason"] = "Empty scenario"
+                return result
+
+            # Sample up to 5,000 pulses to audit metadata mapping efficiently
+            sample_n = min(n_total, 5000)
+            data = np.asarray(handle["data"][:sample_n])
+            labels = np.asarray(handle["labels"][:sample_n]).reshape(-1)
+
+            meta = handle.get("metadata")
+            if meta is None or "transmitters" not in meta:
+                result["reason"] = "Missing /metadata/transmitters"
+                return result
+
+            tx = meta["transmitters"]
+            parsed_children = []
+
+            if isinstance(tx, h5py.Group):
+                for k in sorted(tx.keys()):
+                    child = tx[k]
+                    m = re.search(r"(\d+)$", k)
+                    suffix_int = int(m.group(1)) if m else -1
+                    fc_data = []
+                    if "frequency_config" in child:
+                        fc_grp = child["frequency_config"]
+                        if "freqs_mhz" in fc_grp:
+                            fc_data = np.asarray(fc_grp["freqs_mhz"]).flatten().tolist()
+                        elif hasattr(fc_grp, "attrs") and "freqs_mhz" in fc_grp.attrs:
+                            fc_data = list(fc_grp.attrs["freqs_mhz"])
+                    pwc_data = []
+                    if "pulse_width_config" in child:
+                        pwc_grp = child["pulse_width_config"]
+                        if "pws_us" in pwc_grp:
+                            pwc_data = np.asarray(pwc_grp["pws_us"]).flatten().tolist()
+                        elif hasattr(pwc_grp, "attrs") and "pws_us" in pwc_grp.attrs:
+                            pwc_data = list(pwc_grp.attrs["pws_us"])
+
+                    parsed_children.append({
+                        "key": k,
+                        "suffix": suffix_int,
+                        "freqs_mhz": fc_data,
+                        "pws_us": pwc_data,
+                    })
+            else:
+                for idx, item in enumerate(tx):
+                    raw = item.decode("utf-8") if isinstance(item, bytes) else str(item)
+                    try:
+                        d = ast.literal_eval(raw)
+                    except Exception:
+                        d = {}
+                    func_name = d.get("function", "")
+                    m = re.search(r"(\d+)$", func_name)
+                    suffix_int = int(m.group(1)) if m else idx
+
+                    fc = d.get("frequency_config", {})
+                    freqs_list = fc.get("freqs_mhz", [])
+                    pwc = d.get("pulse_width_config", {})
+                    pws_list = pwc.get("pws_us", [])
+
+                    parsed_children.append({
+                        "key": func_name or f"tx_{idx}",
+                        "suffix": suffix_int,
+                        "freqs_mhz": freqs_list,
+                        "pws_us": pws_list,
+                    })
+
+            parsed_children.sort(key=lambda c: (c["suffix"], c["key"]))
+            result["num_transmitters_in_metadata"] = len(parsed_children)
+
+            suffix_map = {c["suffix"]: c for c in parsed_children if c["suffix"] >= 0}
+
+            unique_labels = [int(x) for x in np.unique(labels) if x != -1]
+            result["num_emitters_in_data"] = len(unique_labels)
+
+            matched = []
+            mismatched = []
+
+            for lbl in unique_labels:
+                target_cfg = suffix_map.get(lbl)
+                if target_cfg is None and 0 <= lbl < len(parsed_children):
+                    target_cfg = parsed_children[lbl]
+
+                if target_cfg is None:
+                    mismatched.append({"label": lbl, "reason": "no_corresponding_transmitter_in_metadata"})
+                    continue
+
+                lbl_mask = (labels == lbl)
+                lbl_pulses = data[lbl_mask]
+                if len(lbl_pulses) == 0:
+                    matched.append(lbl)
+                    continue
+
+                lbl_cfs = lbl_pulses[:, 1]
+                lbl_pws = lbl_pulses[:, 2]
+
+                cfg_cfs = target_cfg["freqs_mhz"]
+                cfg_pws = target_cfg["pws_us"]
+
+                cf_match = True
+                if cfg_cfs:
+                    cfg_cfs_arr = np.asarray(cfg_cfs, dtype=np.float64)
+                    diffs_cf = np.abs(lbl_cfs[:, None] - cfg_cfs_arr[None, :])
+                    min_diff_cf = np.min(diffs_cf, axis=1)
+                    if np.mean(min_diff_cf <= tolerance_mhz) < 0.80:
+                        cf_match = False
+
+                pw_match = True
+                if cfg_pws:
+                    cfg_pws_arr = np.asarray(cfg_pws, dtype=np.float64)
+                    diffs_pw = np.abs(lbl_pws[:, None] - cfg_pws_arr[None, :])
+                    min_diff_pw = np.min(diffs_pw, axis=1)
+                    tol = max(tolerance_pw_us, 0.25 * float(np.min(cfg_pws_arr)))
+                    if np.mean(min_diff_pw <= tol) < 0.80:
+                        pw_match = False
+
+                if cf_match and pw_match:
+                    matched.append(lbl)
+                else:
+                    mismatched.append({
+                        "label": lbl,
+                        "reason": f"cf_match={cf_match}, pw_match={pw_match}",
+                        "cfg_cfs": cfg_cfs,
+                        "cfg_pws": cfg_pws,
+                    })
+
+            result["matched_labels"] = matched
+            result["mismatched_labels"] = mismatched
+
+            if len(mismatched) == 0:
+                result["tier"] = "consistent"
+                result["consistent"] = True
+                result["quarantined_for_metadata_dependent_training"] = False
+                result["unsafe_for_metadata_dependent_evaluation"] = False
+                result["reason"] = "All emitter labels match transmitter metadata within tolerance"
+            else:
+                result["tier"] = "inconsistent_but_PDWs_labels_usable"
+                result["consistent"] = False
+                result["quarantined_for_metadata_dependent_training"] = True
+                result["unsafe_for_metadata_dependent_evaluation"] = True
+                result["reason"] = f"{len(mismatched)} emitter labels diverge from transmitter metadata"
+
+    except Exception as exc:
+        result["tier"] = "inconsistent_but_PDWs_labels_usable"
+        result["consistent"] = False
+        result["quarantined_for_metadata_dependent_training"] = True
+        result["unsafe_for_metadata_dependent_evaluation"] = True
+        result["reason"] = f"Audit exception: {exc}"
+
+    return result
+
+
+class DatasetImmutabilityError(RuntimeError):
+    """Raised when any dataset file is modified, resized, or altered during qualification."""
+    pass
+
+
+class DatasetImmutabilityGuard:
+    """Guards dataset immutability across qualification run.
+
+    Captures file size, mtime, and raw SHA-256 for all monitored files at start,
+    and verifies at completion that no file was modified or deleted.
+    """
+
+    def __init__(self, files: list[Path] | None = None) -> None:
+        self.snapshots: dict[str, tuple[int, float, str]] = {}
+        if files:
+            self.capture(files)
+
+    def record(self, path: Path | str | list[Path | str]) -> None:
+        if isinstance(path, (list, tuple)):
+            self.capture([Path(p) for p in path])
+        else:
+            self.capture([Path(path)])
+
+    def capture(self, files: list[Path]) -> None:
+        for p in files:
+            p_res = Path(p).resolve()
+            st = p_res.stat()
+            self.snapshots[str(p_res)] = (st.st_size, st.st_mtime, _sha256(p_res))
+
+    def verify_all(self, fail_fast: bool = False) -> dict[str, Any]:
+        return self.verify(fail_fast=fail_fast)
+
+    def verify(self, fail_fast: bool = True) -> dict[str, Any]:
+        violations = []
+        for p_str, (orig_size, orig_mtime, orig_sha) in self.snapshots.items():
+            p = Path(p_str)
+            if not p.exists():
+                violations.append({"file": p_str, "error": "file_deleted", "type": "missing_file"})
+                continue
+            st = p.stat()
+            if st.st_size != orig_size:
+                violations.append({
+                    "file": p_str,
+                    "error": "size_changed",
+                    "type": "size_mismatch",
+                    "orig_size": orig_size,
+                    "new_size": st.st_size,
+                })
+                continue
+            if st.st_mtime != orig_mtime:
+                new_sha = _sha256(p)
+                if new_sha != orig_sha:
+                    violations.append({
+                        "file": p_str,
+                        "error": "content_changed",
+                        "type": "content_mismatch",
+                        "orig_sha256": orig_sha,
+                        "new_sha256": new_sha,
+                    })
+        passed = len(violations) == 0
+        report = {
+            "passed": passed,
+            "files_monitored": len(self.snapshots),
+            "violations_count": len(violations),
+            "violations": violations,
+        }
+        if not passed and fail_fast:
+            raise DatasetImmutabilityError(
+                f"Dataset immutability violation: {len(violations)} files altered during execution! {violations[:3]}"
+            )
+        return report
 
 
 def discover_h5_files(data_root: str | Path, mode: str | None = None) -> list[Path]:
@@ -1098,7 +1488,7 @@ def build_integrated_manifest(
         "dataset_provenance": {
             "upstream_dataset_name": "Turing Synthetic Radar Dataset (TSRD)",
             "upstream_distribution": "Hugging Face / Official Upstream",
-            "upstream_repository": "https://github.com/alan-turing-institute/tsrd",
+            "upstream_repository": "https://github.com/alan-turing-institute/turing-deinterleaving-challenge",
             "upstream_revision_identifier": "2026-02-release",
             "upstream_commit_or_dataset_revision": "2026.02",
             "receiver_modes": ["STARE", "SCAN"],
@@ -1234,11 +1624,25 @@ def build_integrated_manifest(
             manifest["summary"]["total_files"] += len(records)
             manifest["summary"]["total_pulses"] += split_pulses
 
-    # Global dataset fingerprint across all 6,000 files
-    sorted_hashes = sorted(canonical_hashes_all)
-    manifest["dataset_fingerprint"] = hashlib.sha256(
-        "::".join(sorted_hashes).encode("utf-8")
-    ).hexdigest()
+    # Path-bound global dataset fingerprint bound to sorted canonical tuples of:
+    # (mode, split, relative_path, file_size, raw_sha256, canonical_content_sha256)
+    fingerprint_entries = []
+    for mode_key, m_info in manifest["modes"].items():
+        for split_key, s_info in m_info["splits"].items():
+            for r in s_info["files"]:
+                fingerprint_entries.append((
+                    str(r["mode"]),
+                    str(r["split"]),
+                    str(r["relative_path"]).replace("\\", "/"),
+                    int(r["size_bytes"]),
+                    str(r["raw_sha256"]),
+                    str(r.get("canonical_content_sha256") or ""),
+                ))
+    fingerprint_entries.sort()
+    fp_serialized = "\n".join(
+        f"{m}|{s}|{p}|{sz}|{rh}|{ch}" for m, s, p, sz, rh, ch in fingerprint_entries
+    )
+    manifest["dataset_fingerprint"] = hashlib.sha256(fp_serialized.encode("utf-8")).hexdigest()
 
     if enforce_split_isolation:
         iso_report = validate_split_isolation_dual_mode(
