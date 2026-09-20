@@ -275,5 +275,129 @@ class Phase10ControlledBatteryTests(unittest.TestCase):
                     )
 
 
+class Phase10RemediationRigorousTests(unittest.TestCase):
+    """Rigorous scientific contract tests for Phase 10 remediation."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp_dir.name)
+
+    def tearDown(self):
+        self.tmp_dir.cleanup()
+
+    def test_physical_diagnostics_vs_structural_finiteness(self):
+        """Zero PW and high amplitudes are physical diagnostics, not structural failures. NaNs/Infs are structural failures."""
+        p_valid_diag = self.root / "valid_diag.h5"
+        data_diag = np.zeros((10, 5), dtype=np.float32)
+        data_diag[:, 0] = np.arange(10, dtype=np.float32) * 100.0
+        data_diag[:, 1] = 9500.0
+        data_diag[:, 2] = 0.0  # Zero PW (observed in TSRD test)
+        data_diag[:, 3] = 30.0
+        data_diag[:, 4] = 45.0  # Positive amplitude +45 dB (observed in TSRD train)
+        _make_h5(p_valid_diag, data_diag, np.zeros(10))
+
+        validator = TSRDValidator()
+        v = validator.validate_file_streaming(p_valid_diag)
+        self.assertTrue(v["structurally_valid"])
+        self.assertEqual(v["nonfinite_count"], 0)
+        self.assertTrue(v["observed_ranges"]["has_zero_pw"])
+        self.assertEqual(v["observed_ranges"]["amplitude_range"], [45.0, 45.0])
+
+        # Test NaN and Inf fail structurally
+        p_nan = self.root / "nan.h5"
+        data_nan = data_diag.copy()
+        data_nan[2, 1] = np.nan
+        data_nan[4, 4] = np.inf
+        _make_h5(p_nan, data_nan, np.zeros(10))
+
+        v_nan = validator.validate_file_streaming(p_nan)
+        self.assertFalse(v_nan["structurally_valid"])
+        self.assertEqual(v_nan["nonfinite_count"], 2)
+
+    def test_immutability_guard_tracks_and_detects_alterations(self):
+        """DatasetImmutabilityGuard must detect byte modifications, size changes, and deletions."""
+        from ew_core.data.tsrd_manifest import DatasetImmutabilityGuard
+
+        f1 = self.root / "file1.h5"
+        f2 = self.root / "file2.h5"
+        _make_h5(f1, np.ones((10, 5)), np.zeros(10))
+        _make_h5(f2, np.full((10, 5), 2.0), np.ones(10))
+
+        guard = DatasetImmutabilityGuard()
+        guard.record(f1)
+        guard.record(f2)
+
+        status = guard.verify_all()
+        self.assertTrue(status["passed"])
+        self.assertEqual(len(status["violations"]), 0)
+
+        # Append byte to f1
+        with open(f1, "ab") as handle:
+            handle.write(b"corrupt")
+
+        status_mut = guard.verify_all()
+        self.assertFalse(status_mut["passed"])
+        self.assertEqual(len(status_mut["violations"]), 1)
+        self.assertEqual(status_mut["violations"][0]["type"], "size_mismatch")
+
+        # Delete f2
+        f2.unlink()
+        status_del = guard.verify_all()
+        self.assertFalse(status_del["passed"])
+        types = [v["type"] for v in status_del["violations"]]
+        self.assertIn("missing_file", types)
+
+    def test_transmitter_metadata_consistency_audit(self):
+        """Transmitter metadata audit correctly flags consistent vs inconsistent entries."""
+        from ew_core.data.tsrd_manifest import audit_tsrd_transmitter_metadata
+
+        p_stare = self.root / "stare_sample.h5"
+        data = np.zeros((20, 5), dtype=np.float32)
+        data[:, 0] = np.arange(20, dtype=np.float32) * 50.0
+        data[:, 1] = 3000.0  # 3000 MHz
+        data[:, 2] = 2.0     # 2.0 us
+        labels = np.zeros(20, dtype=np.int64)
+
+        with h5py.File(str(p_stare), "w") as h:
+            h.create_dataset("data", data=data)
+            h.create_dataset("labels", data=labels.reshape(-1, 1))
+            meta = h.create_group("metadata")
+            tx = meta.create_group("transmitters")
+            tx0 = tx.create_group("transmitters_0")
+            fc = tx0.create_group("frequency_config")
+            fc.create_dataset("freqs_mhz", data=np.array([3000.0]))
+            pwc = tx0.create_group("pulse_width_config")
+            pwc.create_dataset("pws_us", data=np.array([2.0]))
+
+        audit_res = audit_tsrd_transmitter_metadata(p_stare)
+        self.assertEqual(audit_res["tier"], "consistent")
+        self.assertTrue(audit_res["consistent"])
+        self.assertFalse(audit_res["quarantined_for_metadata_dependent_training"])
+
+    def test_path_bound_manifest_fingerprint_sensitivity(self):
+        """Global manifest fingerprint must be sensitive to path/mode/split changes."""
+        from ew_core.data.tsrd_manifest import build_integrated_manifest
+
+        d_root = self.root / "tsrd_mock"
+        for mode in ["scan", "stare"]:
+            for split in ["train", "val", "test"]:
+                sp = d_root / mode / f"{split}_{mode}"
+                sp.mkdir(parents=True, exist_ok=True)
+                _make_h5(sp / "config_0.h5", np.ones((10, 5)), np.zeros(10))
+
+        m1 = build_integrated_manifest(d_root, output_path=self.root / "m1.json", enforce_split_isolation=False)
+        fp1 = m1["dataset_fingerprint"]
+
+        # Rename one file
+        src = d_root / "scan" / "test_scan" / "config_0.h5"
+        dst = d_root / "scan" / "test_scan" / "config_1.h5"
+        src.rename(dst)
+
+        m2 = build_integrated_manifest(d_root, output_path=self.root / "m2.json", enforce_split_isolation=False)
+        fp2 = m2["dataset_fingerprint"]
+
+        self.assertNotEqual(fp1, fp2)
+
+
 if __name__ == "__main__":
     unittest.main()

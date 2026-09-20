@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-09-20 08:58:12 UTC",
+  "data_root": "D:\\TSRD",
+  "verdict": "PHASE_10_QUALIFIED_READY",
+  "artifacts": [
+    {
+      "filename": "tsrd_integrated_manifest_6000.json",
+      "relative_path": "experiments\\reports\\phase10\\artifacts\\tsrd_integrated_manifest_6000.json",
+      "size_bytes": 4812282,
+      "sha256": "69feae7324abd4697e89688564e4b04a01ece468041d8d988ce2fb2d609ba953"
+    },
+    {
+      "filename": "tsrd_metadata_quality_overlay.json",
+      "relative_path": "experiments\\reports\\phase10\\artifacts\\tsrd_metadata_quality_overlay.json",
+      "size_bytes": 2239138,
+      "sha256": "53f0ab24bec7c38057802d6060ff65f00c65c549f0a4dbd1da674768d30b783d"
+    },
+    {
+      "filename": "operational_benchmark_stare_scan_50.json",
+      "relative_path": "experiments\\reports\\phase10\\artifacts\\operational_benchmark_stare_scan_50.json",
+      "size_bytes": 37067,
+      "sha256": "bdc731c6f37eb4e106f0a75996c27ae11e930fdde1009c5df4c4f26884431205"
+    },
+    {
+      "filename": "phase10_gate_qualification_summary.json",
+      "relative_path": "experiments\\reports\\phase10\\artifacts\\phase10_gate_qualification_summary.json",
+      "size_bytes": 3053366,
+      "sha256": "a609c02091db8dfab2b1c25013128c6da5f9c30f49b05ab180fed2aebaa3e56f"
+    }
+  ]
+}
