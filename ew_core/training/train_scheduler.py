@@ -392,15 +392,31 @@ def train_scheduler(
         model_config=full_cfg,
     )
 
-    # Load trained deinterleaver and normalization stats for perception
-    deinterleaver_ckpt = train_cfg.get("deinterleaver_ckpt", "experiments/checkpoints/deinterleaver/best.pt")
-    norm_stats_path = train_cfg.get("normalization_stats", "experiments/checkpoints/deinterleaver/normalization_stats.json")
-    
+    # Load trained deinterleaver and normalization stats for perception (Fail-closed Fix 4)
+    deinterleaver_ckpt_str = train_cfg.get("deinterleaver_ckpt", "experiments/checkpoints/deinterleaver/best.pt")
+    norm_stats_path_str = train_cfg.get("normalization_stats", "experiments/checkpoints/deinterleaver/normalization_stats.json")
+    deinterleaver_ckpt = Path(deinterleaver_ckpt_str)
+    norm_stats_path = Path(norm_stats_path_str)
+
     deinterleaver_model = None
     fit_stats = None
-    
-    if Path(deinterleaver_ckpt).exists():
-        logger.info("Loading trained deinterleaver from %s", deinterleaver_ckpt)
+
+    if training_mode == "real_tsrd" or train_cfg.get("strict_perception", True):
+        if not deinterleaver_ckpt.exists():
+            raise FileNotFoundError(f"FATAL: Required deinterleaver checkpoint not found at {deinterleaver_ckpt}")
+        if not norm_stats_path.exists():
+            raise FileNotFoundError(f"FATAL: Required normalization stats not found at {norm_stats_path}")
+
+        fit_stats = load_normalization_stats(norm_stats_path)
+        computed_norm_hash = normalization_stats_hash(fit_stats)
+        expected_norm_hash = str(train_cfg.get("expected_norm_hash", "bacee02ac1c29428"))
+        if computed_norm_hash != expected_norm_hash:
+            raise ValueError(
+                f"FATAL: Normalization stats hash mismatch: expected {expected_norm_hash}, got {computed_norm_hash} from {norm_stats_path}"
+            )
+        logger.info("Loaded and verified normalization stats from %s (hash=%s)", norm_stats_path, computed_norm_hash)
+
+        logger.info("Loading trained deinterleaver from %s (strict=True)", deinterleaver_ckpt)
         d_cfg = full_cfg.get("deinterleaver", {})
         deinterleaver_model = PDWTransformerEncoder(
             pdw_dim=d_cfg.get("pdw_dim", 6),
@@ -414,17 +430,26 @@ def train_scheduler(
         state = torch.load(deinterleaver_ckpt, map_location="cpu")
         if isinstance(state, dict) and "state_dict" in state:
             state = state["state_dict"]
-        deinterleaver_model.load_state_dict(state, strict=False)
+        deinterleaver_model.load_state_dict(state, strict=True)
         deinterleaver_model.eval()
-        
-        # Load normalization stats
-        if Path(norm_stats_path).exists():
-            fit_stats = load_normalization_stats(norm_stats_path)
-            logger.info("Loaded normalization stats from %s", norm_stats_path)
-        else:
-            logger.warning("Normalization stats not found at %s; perception may be degraded", norm_stats_path)
-    else:
-        logger.warning("Deinterleaver checkpoint not found at %s; perception disabled", deinterleaver_ckpt)
+        logger.info("Deinterleaver successfully loaded with strict=True from %s", deinterleaver_ckpt)
+    elif deinterleaver_ckpt.exists() and norm_stats_path.exists():
+        fit_stats = load_normalization_stats(norm_stats_path)
+        d_cfg = full_cfg.get("deinterleaver", {})
+        deinterleaver_model = PDWTransformerEncoder(
+            pdw_dim=d_cfg.get("pdw_dim", 6),
+            d_model=d_cfg.get("d_model", 128),
+            nhead=d_cfg.get("nhead", 8),
+            num_layers=d_cfg.get("num_layers", 4),
+            dim_feedforward=d_cfg.get("dim_feedforward", 512),
+            dropout=d_cfg.get("dropout", 0.1),
+            embed_dim=d_cfg.get("embed_dim", 64),
+        )
+        state = torch.load(deinterleaver_ckpt, map_location="cpu")
+        if isinstance(state, dict) and "state_dict" in state:
+            state = state["state_dict"]
+        deinterleaver_model.load_state_dict(state, strict=True)
+        deinterleaver_model.eval()
 
     # Build the receiver-driven cognitive env from a TSRD/synthetic scenario.
     data_dir = canonical_root
@@ -476,9 +501,19 @@ def train_scheduler(
         semantic_memory_path=":memory:"
     )
     env.reset()  # populate first episode's records so obs_dim/action checks are valid
-    assert env.obs_dim == obs_dim, f"env obs_dim {env.obs_dim} != configured {obs_dim}"
-    assert env.action_space.n == n_actions, f"env action space {env.action_space.n} != n_actions {n_actions}"
+    assert obs_dim == 360, f"Rescue-A requires obs_dim == 360, got {obs_dim}"
+    assert n_modes == 5, f"Rescue-A requires n_modes == 5, got {n_modes}"
+    assert n_actions == 180, f"Rescue-A requires n_actions == 180, got {n_actions}"
+    assert env.obs_dim == 360, f"env obs_dim {env.obs_dim} != 360"
+    assert env.action_space.n == 180, f"env action space {env.action_space.n} != 180"
     assert env.action_space.n == n_bands * n_modes, f"env action space must be n_bands*n_modes = {n_bands * n_modes}"
+
+    # Rescue-A Preflight Verification: confirm all 5 modes {0, 1, 2, 3, 4} are accessible in exploration
+    sampled_targeted_modes = {random.randrange(n_modes) for _ in range(500)}
+    assert sampled_targeted_modes == {0, 1, 2, 3, 4}, f"Targeted exploration cannot reach all 5 modes: {sampled_targeted_modes}"
+    sampled_uniform_modes = {(random.randrange(n_actions) % n_modes) for _ in range(500)}
+    assert sampled_uniform_modes == {0, 1, 2, 3, 4}, f"Uniform exploration cannot reach all 5 modes: {sampled_uniform_modes}"
+    logger.info("Rescue-A Preflight PASSED: 360-D obs, 180 actions, 5 modes fully accessible in exploration.")
     
     if env.perception_enabled:
         logger.info("Perception pipeline ENABLED: trained deinterleaver + EmitterTracker active")
@@ -803,6 +838,10 @@ def train_scheduler(
         positive_transitions = 0
         ep_explore_mode_counts = np.zeros(n_modes, dtype=np.float64)
         ep_greedy_mode_counts = np.zeros(n_modes, dtype=np.float64)
+        ep_thompson_mode_counts = np.zeros(n_modes, dtype=np.float64)
+        ep_targeted_mode_counts = np.zeros(n_modes, dtype=np.float64)
+        ep_uniform_mode_counts = np.zeros(n_modes, dtype=np.float64)
+        ep_overall_mode_counts = np.zeros(n_modes, dtype=np.float64)
         ep_targeted_exp_steps = 0
         ep_uniform_exp_steps = 0
         ep_thompson_exp_steps = 0
@@ -851,31 +890,38 @@ def train_scheduler(
                 moe_attr = None
                 act_source = "thompson"
                 decision_source = "thompson_exploration"
+                m_act = int(action % n_modes)
                 ep_thompson_exp_steps += 1
-                ep_explore_mode_counts[int(action % n_modes)] += 1
+                ep_thompson_mode_counts[m_act] += 1
+                ep_explore_mode_counts[m_act] += 1
+                ep_overall_mode_counts[m_act] += 1
             else:
                 use_ts = False
                 if random.random() < eps:
                     targeted_b = band_tracker.sample_targeted_band() if band_tracker is not None else None
                     if targeted_b is not None:
-                        # Correction 3: Band discovery only — sample mode uniformly from valid exploratory modes (0=SHORT, 1=NORMAL, 2=LONG)
-                        m_rand = random.randrange(min(3, n_modes))
+                        # Rescue-A Fix 3: Full 5-mode exploration (0=SHORT, 1=NORMAL, 2=LONG, 3=REVISIT, 4=PREEMPTIVE)
+                        m_rand = random.randrange(n_modes)
                         action = int(targeted_b * n_modes + m_rand)
                         act_source = "targeted_random"
                         decision_source = "targeted_band_exploration"
                         ep_targeted_exp_steps += 1
+                        ep_targeted_mode_counts[m_rand] += 1
                     else:
                         if action_selection_mode == "flat_argmax":
                             action = random.randrange(n_actions)
                             m_rand = int(action % n_modes)
                         else:
                             b_rand = random.randint(0, n_bands - 1)
-                            m_rand = random.randrange(min(3, n_modes))
+                            # Rescue-A Fix 3: Full 5-mode exploration
+                            m_rand = random.randrange(n_modes)
                             action = b_rand * n_modes + m_rand
                         act_source = "random"
                         decision_source = "epsilon_exploration"
                         ep_uniform_exp_steps += 1
+                        ep_uniform_mode_counts[m_rand] += 1
                     ep_explore_mode_counts[m_rand] += 1
+                    ep_overall_mode_counts[m_rand] += 1
                     moe_attr = None
                 else:
                     online_drqn.eval()
@@ -889,7 +935,9 @@ def train_scheduler(
                             consecutive_empty=consecutive_empty,
                             tau=0.15 if action_selection_mode == "band_first_decoupled" else 0.0,
                         )
-                        ep_greedy_mode_counts[int(action % n_modes)] += 1
+                        m_grd = int(action % n_modes)
+                        ep_greedy_mode_counts[m_grd] += 1
+                        ep_overall_mode_counts[m_grd] += 1
                         # Diagnostic MoE query for passive telemetry only (MoE quarantined from action selection)
                         try:
                             _, _, moe_attr = moe.select_action(obs_np, hidden)
@@ -1165,13 +1213,18 @@ def train_scheduler(
         target_exp_pct = (ep_targeted_exp_steps / max(1, tot_exp_steps)) * 100.0 if tot_exp_steps > 0 else 0.0
 
         logger.info(
-            "Ep %d | step %d/%d | rew %.2f hits %d ir %.3f eps %.3f | Bands: %d/36 (min=%d, med=%.1f, max=%d, under=%d) | Exp: Target=%.1f%% (%d/%d) | ReplaySeqHit: %.1f%% (PosScenMax: %.1f%%, %d upds) | TD: %.4f QReg: %.4f | QMarginMax: %.3f QMax: %.1f | Q-Modes: N=%.1f%% L=%.1f%% S=%.1f%%",
+            "Ep %d | step %d/%d | rew %.2f hits %d ir %.3f eps %.3f | Bands: %d/36 (min=%d, med=%.1f, max=%d, under=%d) | Exp: Target=%.1f%% (%d/%d) | ReplaySeqHit: %.1f%% (PosScenMax: %.1f%%, %d upds) | TD: %.4f QReg: %.4f | QMarginMax: %.3f QMax: %.1f | Q-Modes: [S=%.1f%%, N=%.1f%%, L=%.1f%%, R=%.1f%%, P=%.1f%%] | Exp-Modes: [S=%.1f%%, N=%.1f%%, L=%.1f%%, R=%.1f%%, P=%.1f%%]",
             episode, global_step, total_steps, ep_reward, ep_hits, intercept_rate, eps,
             u_bands, min_bv, med_bv, max_bv, under_cnt,
             target_exp_pct, ep_targeted_exp_steps, tot_exp_steps,
             seq_hit_pct, avg_pos_scen, n_upd,
             avg_td_loss, avg_q_reg, ep_learn["max_q_margin"], ep_learn["max_q"],
-            (ep_greedy_mode_counts[1] / grd_tot) * 100, (ep_greedy_mode_counts[2] / grd_tot) * 100, (ep_greedy_mode_counts[0] / grd_tot) * 100,
+            (ep_greedy_mode_counts[0] / grd_tot) * 100, (ep_greedy_mode_counts[1] / grd_tot) * 100,
+            (ep_greedy_mode_counts[2] / grd_tot) * 100, (ep_greedy_mode_counts[3] / grd_tot) * 100,
+            (ep_greedy_mode_counts[4] / grd_tot) * 100,
+            (ep_explore_mode_counts[0] / exp_tot) * 100, (ep_explore_mode_counts[1] / exp_tot) * 100,
+            (ep_explore_mode_counts[2] / exp_tot) * 100, (ep_explore_mode_counts[3] / exp_tot) * 100,
+            (ep_explore_mode_counts[4] / exp_tot) * 100,
         )
 
         if use_wandb:
@@ -1305,6 +1358,10 @@ def train_scheduler(
             "band_histogram": [int(c) for c in ep_band_counts],
             "explore_mode_histogram": [int(c) for c in ep_explore_mode_counts],
             "greedy_mode_histogram": [int(c) for c in ep_greedy_mode_counts],
+            "thompson_mode_histogram": [int(c) for c in ep_thompson_mode_counts],
+            "targeted_mode_histogram": [int(c) for c in ep_targeted_mode_counts],
+            "uniform_mode_histogram": [int(c) for c in ep_uniform_mode_counts],
+            "overall_mode_histogram": [int(c) for c in ep_overall_mode_counts],
         }
 
         # --- RC-2 learning statistics (averaged over the episode's updates) ---

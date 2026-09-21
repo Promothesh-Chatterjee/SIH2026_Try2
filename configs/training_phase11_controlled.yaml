@@ -35,7 +35,7 @@ scheduler:
   action_selection_mode: "flat_argmax"
   start_step: 25000
   total_timesteps: 35000
-  staged_gates: [27500, 30000, 32500, 35000]
+  staged_gates: [26000, 27500, 30000, 32500, 35000]
   freeze_advantage_head: false
   learning_rate: 2.0e-5
   lr_schedule: "cosine"
