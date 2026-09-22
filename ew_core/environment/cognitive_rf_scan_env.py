@@ -391,6 +391,20 @@ class CognitiveRFScanEnv(gym.Env):
         self.dwell_time_us: float = self.base_dwell_time_us  # default mode multiplier 1.0
         self.frequency_step_mhz: float = float(config.get("frequency_step_mhz", RF_FREQUENCY_STEP_MHZ))
         self.detection_threshold_db: float = float(config.get("detection_threshold_db", -140.0))
+        from ew_core.environment.receiver_model import compute_band_sensitivities, CFARDetector
+        self._band_sensitivities_dbm = compute_band_sensitivities(
+            n_bands=self.n_bands,
+            base_ibw_mhz=self.ibw_mhz,
+            noise_figure_db=float(config.get("noise_figure_db", 6.0)),
+            snr_min_db=float(config.get("snr_min_db", 10.0)),
+        )
+        self._cfar = CFARDetector(n_bands=self.n_bands)
+        logger.info(
+            "Band sensitivity range: %.1f to %.1f dBm (fallback detection threshold: %.1f dBm)",
+            float(self._band_sensitivities_dbm.min()),
+            float(self._band_sensitivities_dbm.max()),
+            self.detection_threshold_db,
+        )
         self.max_steps_per_episode: int = int(config.get("max_steps_per_episode", 2000))
 
         # Canonical dwell-mode action space (time-frequency joint).
@@ -581,6 +595,8 @@ class CognitiveRFScanEnv(gym.Env):
         self._emitter_frequencies = defaultdict(set)
         self._cumulative_interceptions = 0
         self._intercept_latencies_us = []
+        self._episode_false_alarms = 0
+        self._episode_total_decisions = 0
         self.fom.reset()
 
         # Perception buffer
@@ -645,10 +661,18 @@ class CognitiveRFScanEnv(gym.Env):
         sensitivity_boost_db = 0.0
         intercept_hold_us = 0.0
         try:
+            # Audit Item 7: Dynamic physics-based band sensitivity + CFAR threshold
+            base_band_sensitivity = float(self._band_sensitivities_dbm[band]) if hasattr(self, "_band_sensitivities_dbm") else float(self.detection_threshold_db)
+            cfar_threshold = self._cfar.get_threshold_dbm(band, sensitivity_dbm=base_band_sensitivity) if hasattr(self, "_cfar") else base_band_sensitivity
+            # When configured with a legacy or custom threshold lower than the physics floor, preserve coverage
+            effective_threshold = min(self.detection_threshold_db, cfar_threshold) if self.detection_threshold_db != -140.0 else cfar_threshold
+            if self.receiver is not None:
+                self.receiver.detection_threshold_db = effective_threshold
+
             if mode == REVISIT:
                 sensitivity_boost_db = min(3.0, 1.0 + 2.0 * revisit_urgency)
-                if threshold_saved is not None:
-                    self.receiver.detection_threshold_db = threshold_saved - sensitivity_boost_db
+                if self.receiver is not None:
+                    self.receiver.detection_threshold_db = effective_threshold - sensitivity_boost_db
             elif mode == PREEMPTIVE_INTERCEPT:
                 predicted_toa = self._preemptive_interception_us(band, dwell_start, base_dwell_us)
                 if predicted_toa is not None:
@@ -695,6 +719,12 @@ class CognitiveRFScanEnv(gym.Env):
 
         # 4. Collect causal observations
         observation = self.receiver.get_observation()
+
+        # Update CFAR noise floor estimate for this band
+        if hasattr(self, "_cfar"):
+            observed_amp = [float(getattr(d, "amplitude_db", -140.0)) for d in getattr(observation, "detections", [])]
+            noise_est = max(observed_amp) if observed_amp else float(self._band_sensitivities_dbm[band])
+            self._cfar.update(band, noise_est)
 
         # 5. Perception pipeline: accumulate PDWs and run deinterleaving
         detections = getattr(observation, "detections", [])
@@ -844,9 +874,11 @@ class CognitiveRFScanEnv(gym.Env):
             if len(self._emitter_frequencies.get(int(eid), set())) > 1:
                 is_agile = True
                 break
-        if not is_agile and self.belief is not None:
-            if hasattr(self.belief, "get_band_agility") and self.belief.get_band_agility(band) > 0.25:
-                is_agile = True
+        # Update running Pfa for Lagrangian constraint
+        self._episode_total_decisions += 1
+        if false_detection or (not selected_band_active and any_hit):
+            self._episode_false_alarms += 1
+        running_pfa = float(self._episode_false_alarms / max(1, self._episode_total_decisions))
 
         if self.reward_version == "v2":
             reward_components = receiver_reward_components_v2(
@@ -873,6 +905,9 @@ class CognitiveRFScanEnv(gym.Env):
                 w_false_alarm=self.w_false_alarm_v2,
                 w_redundant=self.w_redundant_v2,
                 w_dwell_cost=self.w_dwell_cost_v2,
+                lambda_pfa=float(getattr(self, "lambda_pfa", 2.0)),
+                pfa_threshold=float(getattr(self, "pfa_threshold", 0.05)),
+                running_pfa=running_pfa,
                 reward_variant=self.reward_variant,
             )
         else:

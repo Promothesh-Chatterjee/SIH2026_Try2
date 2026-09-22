@@ -1,0 +1,139 @@
+"""Physics-based receiver sensitivity model for the SmartScan ES receiver.
+
+Replaces the fixed -140 dBm constant with a computed per-band sensitivity
+based on the Friis noise formula: S_min = kTB + NF + SNR_min
+
+Where:
+  k  = Boltzmann constant = -228.6 dBW/K/Hz
+  T  = System noise temperature (290 K standard)
+  B  = Instantaneous bandwidth per band in Hz
+  NF = Receiver noise figure in dB
+  SNR_min = Minimum detectable SNR in dB
+
+Also implements a simple CFAR (Constant False Alarm Rate) detection
+threshold that adapts the detection threshold per-band based on recent
+noise floor estimates from the environment.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+
+BOLTZMANN_DBW = -228.6       # dBW/K/Hz
+STANDARD_TEMP_K = 290.0      # Kelvin
+DEFAULT_NF_DB = 6.0          # dB — typical wideband ES receiver
+DEFAULT_SNR_MIN_DB = 10.0    # dB — minimum detectable SNR
+DEFAULT_IBW_MHZ = 500.0      # MHz — instantaneous bandwidth per band (from contracts)
+CFAR_GUARD_CELLS = 2
+CFAR_REFERENCE_CELLS = 8
+CFAR_FALSE_ALARM_PROB = 1e-4  # Pfa target for CFAR threshold
+
+
+def compute_sensitivity_dbm(
+    noise_figure_db: float = DEFAULT_NF_DB,
+    bandwidth_mhz: float = DEFAULT_IBW_MHZ,
+    snr_min_db: float = DEFAULT_SNR_MIN_DB,
+    temp_k: float = STANDARD_TEMP_K,
+) -> float:
+    """Compute minimum detectable signal power in dBm.
+
+    S_min(dBm) = 10*log10(kTB) + NF + SNR_min + 30  (dBm conversion)
+
+    Args:
+        noise_figure_db: Receiver noise figure in dB.
+        bandwidth_mhz: Instantaneous bandwidth in MHz.
+        snr_min_db: Minimum required SNR for detection in dB.
+        temp_k: System noise temperature in Kelvin.
+
+    Returns:
+        Minimum detectable signal power in dBm.
+    """
+    bandwidth_hz = bandwidth_mhz * 1e6
+    # Thermal noise floor: N = kTB in dBW
+    noise_floor_dbw = (
+        BOLTZMANN_DBW
+        + 10.0 * np.log10(temp_k)
+        + 10.0 * np.log10(bandwidth_hz)
+    )
+    # Convert to dBm and add noise figure + SNR threshold
+    sensitivity_dbm = noise_floor_dbw + 30.0 + noise_figure_db + snr_min_db
+    return float(sensitivity_dbm)
+
+
+def compute_band_sensitivities(
+    n_bands: int = 36,
+    base_ibw_mhz: float = DEFAULT_IBW_MHZ,
+    noise_figure_db: float = DEFAULT_NF_DB,
+    snr_min_db: float = DEFAULT_SNR_MIN_DB,
+) -> np.ndarray:
+    """Compute per-band sensitivity array.
+
+    All bands have same IBW (500 MHz) per canonical contracts,
+    but NF can vary slightly with frequency in a real system.
+    Returns array of shape (n_bands,) in dBm.
+    """
+    # Simple frequency-dependent NF: +0.1 dB per 500 MHz for higher bands
+    freq_penalty = np.arange(n_bands) * 0.1  # dB
+    sensitivities = np.array([
+        compute_sensitivity_dbm(
+            noise_figure_db=noise_figure_db + freq_penalty[b],
+            bandwidth_mhz=base_ibw_mhz,
+            snr_min_db=snr_min_db,
+        )
+        for b in range(n_bands)
+    ], dtype=np.float32)
+    return sensitivities
+
+
+class CFARDetector:
+    """Cell-Averaging CFAR detector for per-band adaptive detection threshold.
+
+    Maintains a sliding window of power estimates per band and computes
+    a detection threshold that maintains a target false alarm rate.
+    """
+
+    def __init__(
+        self,
+        n_bands: int = 36,
+        window_size: int = 64,
+        pfa: float = CFAR_FALSE_ALARM_PROB,
+    ) -> None:
+        self.n_bands = int(n_bands)
+        self.window_size = int(window_size)
+        self.pfa = float(pfa)
+        # CFAR multiplier for CA-CFAR: alpha = N * (Pfa^(-1/N) - 1)
+        n_ref = CFAR_REFERENCE_CELLS * 2
+        self.alpha = float(n_ref * (self.pfa ** (-1.0 / n_ref) - 1.0))
+        self._noise_windows: list[list[float]] = [[] for _ in range(self.n_bands)]
+
+    def update(self, band: int, power_dbm: float) -> None:
+        """Update noise estimate for a band with a new power observation."""
+        if 0 <= band < self.n_bands:
+            w = self._noise_windows[band]
+            w.append(float(power_dbm))
+            if len(w) > self.window_size:
+                w.pop(0)
+
+    def get_threshold_dbm(self, band: int, sensitivity_dbm: float = -110.0) -> float:
+        """Compute detection threshold for a band.
+
+        Falls back to physics-based sensitivity if insufficient history.
+        """
+        if not (0 <= band < self.n_bands):
+            return float(sensitivity_dbm)
+        w = self._noise_windows[band]
+        if len(w) < CFAR_REFERENCE_CELLS * 2 + 1:
+            return float(sensitivity_dbm)  # not enough history yet
+        # CA-CFAR: threshold = alpha * mean(reference cells)
+        noise_power_linear = np.mean(
+            [10.0 ** (p / 10.0) for p in w[-CFAR_REFERENCE_CELLS * 2:]]
+        )
+        threshold_linear = self.alpha * noise_power_linear
+        threshold_dbm = 10.0 * np.log10(max(threshold_linear, 1e-30))
+        # Never go below physics-based sensitivity floor
+        return float(max(threshold_dbm, sensitivity_dbm))
+
+    def detect(self, band: int, signal_power_dbm: float, sensitivity_dbm: float = -110.0) -> bool:
+        """Return True if signal exceeds CFAR threshold."""
+        threshold = self.get_threshold_dbm(band, sensitivity_dbm)
+        return bool(signal_power_dbm >= threshold)
