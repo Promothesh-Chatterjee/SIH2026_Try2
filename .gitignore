@@ -54,4 +54,29 @@ Thumbs.db
 .coverage
 htmlcov/
 
+# Large binary / generated outputs — store in Azure Blob, not Git
+repomix-output.xml
+smartscan_deployment_bundle_latest.zip
+*.zip
 
+# ML model files — use Azure ML Registry instead
+*.pt
+*.pth
+*.onnx
+*.safetensors
+
+# Environment
+.env.production
+
+# Frontend build outputs
+frontend/dist/
+frontend/build/
+
+# Python artifacts (extra)
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
