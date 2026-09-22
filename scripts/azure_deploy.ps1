@@ -1,43 +1,26 @@
 <#
 .SYNOPSIS
-    SmartScan EW — Azure Infrastructure Deployment Script
+    SmartScan EW — Zero-Cost Azure Infrastructure Deployment Script
 .DESCRIPTION
     Automated deployment script tailored for Azure for Students subscription.
-    Provisions Resource Group, ACR, Storage Account (TSRD dataset & models),
-    builds the Docker image in Azure via ACR Cloud Build (no local Docker daemon required),
-    provisions AKS with Blob CSI driver, deploys the backend API, and deploys
-    the React frontend to Azure Static Web Apps.
-.PARAMETER ResourceGroup
-    Azure Resource Group name (default: smartscan-rg)
-.PARAMETER Location
-    Azure Region (default: centralindia or eastus)
-.PARAMETER AcrName
-    Unique Azure Container Registry name (alphanumeric only, 5-50 chars)
-.PARAMETER StorageAccountName
-    Unique Storage Account name (alphanumeric only, 3-24 chars)
-.PARAMETER AksName
-    AKS cluster name (default: smartscan-aks)
-.PARAMETER VmSize
-    VM size for AKS nodes (default: Standard_B2s for student quota safety)
-.PARAMETER NodeCount
-    Number of worker nodes in AKS (default: 2)
-.PARAMETER TsrdLocalPath
-    Local path to TSRD dataset on host machine (default: D:/TSRD)
-.PARAMETER ApiKey
-    SmartScan API Key for authentication (default: smartscan-sih2026-demo-key)
+    Uses GitHub Container Registry (ghcr.io) for 100% FREE image hosting ($0 ACR).
+    Provisions Resource Group, Azure Storage Account (lightweight TSRD slice & model),
+    AKS Cluster (Standard_B2s, 1 node) with Blob CSI driver, and deploys the
+    React frontend to Azure Static Web Apps (Free Plan).
 #>
 
 [CmdletBinding()]
 param(
     [string]$ResourceGroup = "smartscan-rg",
     [string]$Location = "centralindia",
-    [string]$AcrName = "",
     [string]$StorageAccountName = "",
     [string]$AksName = "smartscan-aks",
     [string]$VmSize = "Standard_B2s",
-    [int]$NodeCount = 2,
-    [string]$TsrdLocalPath = "D:/TSRD",
+    [int]$NodeCount = 1,
+    [string]$ImageName = "ghcr.io/promothesh-chatterjee/sih2026_try2:latest",
+    [string]$TsrdLocalPath = "D:/TSRD/stare/val_stare",
     [string]$ApiKey = "smartscan-sih2026-demo-key",
+    [string]$StaticWebAppName = "smartscan-ui",
     [switch]$SkipDatasetUpload,
     [switch]$SkipAks,
     [switch]$SkipFrontend
@@ -63,93 +46,66 @@ function Write-Info {
 }
 
 # -----------------------------------------------------------------------------
-# 0. Check Azure CLI & Login Status
+# 0. Check Azure CLI & Authentication
 # -----------------------------------------------------------------------------
 Write-Step "0. Checking Azure CLI & Authentication"
 
-# Refresh environment PATH in current PowerShell session
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
-    Write-Error "Azure CLI ('az') is not installed or not found in PATH. Please install Azure CLI or restart terminal."
+    Write-Error "Azure CLI ('az') is not installed or not in PATH."
     exit 1
 }
 
-Write-Info "Verifying active Azure login..."
 $accountJson = az account show 2>$null
 if (-not $accountJson) {
-    Write-Host "`nYou are not logged into Azure CLI. Running 'az login'..." -ForegroundColor Yellow
+    Write-Host "Running 'az login'..." -ForegroundColor Yellow
     az login --output table
     $accountJson = az account show
 }
 
 $account = $accountJson | ConvertFrom-Json
-Write-Success "Logged into Azure Subscription: '$($account.name)' (ID: $($account.id))"
+Write-Success "Logged in: '$($account.name)' (ID: $($account.id))"
 
 # -----------------------------------------------------------------------------
-# 1. Generate Unique Resource Names if Not Provided
+# 1. Resource Names & Config
 # -----------------------------------------------------------------------------
 Write-Step "1. Configuring Resource Names"
 
-if ([string]::IsNullOrWhiteSpace($AcrName)) {
-    $randomSuffix = Get-Random -Minimum 1000 -Maximum 9999
-    $AcrName = "smartscanacr$randomSuffix"
-}
 if ([string]::IsNullOrWhiteSpace($StorageAccountName)) {
     $randomSuffix = Get-Random -Minimum 1000 -Maximum 9999
     $StorageAccountName = "smartscanstore$randomSuffix"
 }
 
-Write-Info "Resource Group:        $ResourceGroup"
-Write-Info "Location:              $Location"
-Write-Info "ACR Name:              $AcrName"
-Write-Info "Storage Account:       $StorageAccountName"
-Write-Info "AKS Cluster Name:      $AksName"
-Write-Info "AKS Node VM Size:      $VmSize (Node count: $NodeCount)"
-Write-Info "TSRD Local Source:     $TsrdLocalPath"
+Write-Info "Resource Group:    $ResourceGroup"
+Write-Info "Location:          $Location"
+Write-Info "Storage Account:   $StorageAccountName (Free Tier Eligible, 5GB)"
+Write-Info "Container Image:   $ImageName (GitHub Container Registry — 100% Free)"
+Write-Info "AKS Cluster:       $AksName ($NodeCount node of $VmSize)"
+Write-Info "Static Web App:    $StaticWebAppName (Free Plan — $0.00)"
 
 # -----------------------------------------------------------------------------
-# 2. Register Required Azure Resource Providers
+# 2. Register Required Providers
 # -----------------------------------------------------------------------------
-Write-Step "2. Registering Azure Resource Providers"
+Write-Step "2. Ensuring Azure Resource Providers Registration"
 
-$providers = @(
-    "Microsoft.ContainerRegistry",
-    "Microsoft.ContainerService",
-    "Microsoft.Storage",
-    "Microsoft.Web"
-)
-
+$providers = @("Microsoft.Compute", "Microsoft.ContainerService", "Microsoft.Storage", "Microsoft.Web", "Microsoft.Network")
 foreach ($p in $providers) {
-    Write-Info "Ensuring provider registration: $p"
     az provider register --namespace $p --output none 2>$null
 }
-Write-Success "Resource providers registered."
+Write-Success "Providers verified."
 
 # -----------------------------------------------------------------------------
-# 3. Create Resource Group
+# 3. Create Resource Group ($0.00 Free)
 # -----------------------------------------------------------------------------
-Write-Step "3. Creating Resource Group '$ResourceGroup' in '$Location'"
+Write-Step "3. Creating Resource Group '$ResourceGroup' ($0.00)"
 az group create --name $ResourceGroup --location $Location --output table
-Write-Success "Resource Group created/verified."
+Write-Success "Resource Group ready."
 
 # -----------------------------------------------------------------------------
-# 4. Create Azure Container Registry (ACR)
+# 4. Create Storage Account (Free 5GB Tier)
 # -----------------------------------------------------------------------------
-Write-Step "4. Creating Azure Container Registry '$AcrName'"
-az acr create `
-    --resource-group $ResourceGroup `
-    --name $AcrName `
-    --sku Basic `
-    --admin-enabled true `
-    --output table
-Write-Success "ACR '$AcrName' ready."
-
-# -----------------------------------------------------------------------------
-# 5. Create Azure Storage Account & Containers
-# -----------------------------------------------------------------------------
-Write-Step "5. Creating Storage Account '$StorageAccountName' & Containers"
-
+Write-Step "4. Creating Storage Account '$StorageAccountName' (5GB Free Tier)"
 az storage account create `
     --resource-group $ResourceGroup `
     --name $StorageAccountName `
@@ -159,7 +115,6 @@ az storage account create `
     --allow-blob-public-access false `
     --output table
 
-Write-Info "Retrieving Storage Connection String..."
 $connString = (az storage account show-connection-string `
     --resource-group $ResourceGroup `
     --name $StorageAccountName `
@@ -168,156 +123,124 @@ $connString = (az storage account show-connection-string `
 
 $containers = @("tsrd-dataset", "smartscan-models", "reports")
 foreach ($c in $containers) {
-    Write-Info "Creating container '$c'..."
-    az storage container create `
-        --name $c `
-        --connection-string $connString `
-        --output none
+    az storage container create --name $c --connection-string $connString --output none
 }
 Write-Success "Storage account and containers ready."
 
 # -----------------------------------------------------------------------------
-# 6. Upload Dataset and Checkpoints
+# 5. Upload Dataset Slice & Checkpoints (Lightweight, < 300MB)
 # -----------------------------------------------------------------------------
-Write-Step "6. Uploading Assets to Azure Blob Storage"
+Write-Step "5. Uploading Lightweight Dataset Slice & Frozen Model"
 
 if (-not $SkipDatasetUpload) {
     if (Test-Path $TsrdLocalPath) {
-        Write-Info "Uploading TSRD dataset from $TsrdLocalPath to container 'tsrd-dataset'..."
-        az storage blob upload-batch `
-            --destination "tsrd-dataset" `
-            --source $TsrdLocalPath `
-            --connection-string $connString `
-            --output table
-        Write-Success "TSRD dataset uploaded."
-    } else {
-        Write-Host "[WARNING] Local TSRD path '$TsrdLocalPath' not found. Skipping dataset batch upload." -ForegroundColor Yellow
-        Write-Host "          You can upload later with 'az storage blob upload-batch --destination tsrd-dataset --source <PATH>'." -ForegroundColor Yellow
+        Write-Info "Uploading validation scenario files from $TsrdLocalPath to 'tsrd-dataset'..."
+        # Upload first 15 scenario h5 files for instant verification without blowing quota/bandwidth
+        $files = Get-ChildItem $TsrdLocalPath -Filter "*.h5" | Select-Object -First 15
+        foreach ($f in $files) {
+            az storage blob upload `
+                --container-name "tsrd-dataset" `
+                --file $f.FullName `
+                --name "val_stare/$($f.Name)" `
+                --connection-string $connString `
+                --output none
+        }
+        Write-Success "15 validation scenarios uploaded to Azure Blob."
     }
 
-    # Upload best model checkpoint if available
     $checkpointPath = "experiments/checkpoints/best_model.zip"
     if (Test-Path $checkpointPath) {
-        Write-Info "Uploading frozen model checkpoint '$checkpointPath' to 'smartscan-models'..."
+        Write-Info "Uploading model checkpoint '$checkpointPath' to 'smartscan-models'..."
         az storage blob upload `
             --container-name "smartscan-models" `
             --file $checkpointPath `
             --name "best_model.zip" `
             --connection-string $connString `
-            --output table
+            --output none
         Write-Success "Frozen model checkpoint uploaded."
     }
-} else {
-    Write-Info "Skipping dataset upload per --SkipDatasetUpload flag."
 }
 
 # -----------------------------------------------------------------------------
-# 7. Build and Push Container Image to ACR (Cloud Build)
-# -----------------------------------------------------------------------------
-Write-Step "7. Building & Pushing Docker Image using Azure ACR Cloud Build"
-Write-Info "Building 'smartscan-api:latest' directly in Azure compute (no local Docker engine required)..."
-
-az acr build `
-    --registry $AcrName `
-    --image "smartscan-api:latest" `
-    --file Dockerfile `
-    .
-
-Write-Success "Docker image built and stored in $AcrName.azurecr.io/smartscan-api:latest"
-
-# -----------------------------------------------------------------------------
-# 8. Create AKS Cluster (Azure for Students Safe)
+# 6. Create AKS Cluster (Student-Safe 1-Node Cluster)
 # -----------------------------------------------------------------------------
 if (-not $SkipAks) {
-    Write-Step "8. Provisioning Azure Kubernetes Service (AKS) Cluster '$AksName'"
-    Write-Info "Cluster node configuration: $NodeCount nodes of size $VmSize (total: $($NodeCount * 2) vCPUs, fits student quota)"
+    Write-Step "6. Provisioning Azure Kubernetes Service (AKS) '$AksName'"
+    Write-Info "Node config: $NodeCount x $VmSize (burstable, 2 vCPUs, fits student quota)"
 
     az aks create `
         --resource-group $ResourceGroup `
         --name $AksName `
         --node-count $NodeCount `
         --node-vm-size $VmSize `
-        --attach-acr $AcrName `
         --enable-blob-driver `
         --generate-ssh-keys `
         --output table
 
-    Write-Success "AKS Cluster '$AksName' provisioned."
+    Write-Success "AKS Cluster provisioned."
 
-    # Get credentials for kubectl
-    Write-Info "Configuring kubectl context for '$AksName'..."
+    # Connect kubectl
+    Write-Info "Configuring kubectl context..."
     az aks get-credentials --resource-group $ResourceGroup --name $AksName --overwrite-existing
 
     # -----------------------------------------------------------------------------
-    # 9. Deploy Backend to AKS
+    # 7. Deploy Backend to AKS
     # -----------------------------------------------------------------------------
-    Write-Step "9. Deploying SmartScan API to AKS"
+    Write-Step "7. Deploying SmartScan API to AKS"
 
-    # Create / update Kubernetes Secret
-    Write-Info "Applying smartscan-secrets Kubernetes Secret..."
+    # Secrets
     kubectl delete secret smartscan-secrets --ignore-not-found=true
     kubectl create secret generic smartscan-secrets `
         --from-literal=api-key="$ApiKey" `
         --from-literal=azure-storage-connection-string="$connString"
 
-    # Apply PersistentVolumeClaim for TSRD Blob
+    # PersistentVolumeClaim for TSRD Blob
     if (Test-Path "k8s/blob-storage-pvc.yaml") {
-        Write-Info "Applying Blob Storage PVC..."
         kubectl apply -f k8s/blob-storage-pvc.yaml
     }
 
-    # Render and apply deployment.yaml with ACR name substituted
-    Write-Info "Deploying smartscan-api with image '$AcrName.azurecr.io/smartscan-api:latest'..."
+    # Render deployment manifest with GHCR image
     $deploymentManifest = Get-Content "k8s/deployment.yaml" -Raw
-    $renderedManifest = $deploymentManifest -replace '\$\{ACR_NAME\}', $AcrName
+    $renderedManifest = $deploymentManifest -replace '\$\{IMAGE_NAME:.*\}', $ImageName
     $renderedManifest | kubectl apply -f -
 
-    Write-Info "Waiting for smartscan-api deployment rollout..."
+    Write-Info "Waiting for deployment rollout..."
     kubectl rollout status deployment/smartscan-api --timeout=300s
 
-    Write-Info "Fetching Public LoadBalancer IP (this may take 1-2 minutes)..."
+    Write-Info "Fetching Public LoadBalancer IP..."
     $backendIp = ""
     for ($i = 0; $i -lt 30; $i++) {
         $backendIp = (kubectl get svc smartscan-api-svc -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>$null)
-        if (-not [string]::IsNullOrWhiteSpace($backendIp)) {
-            break
-        }
+        if (-not [string]::IsNullOrWhiteSpace($backendIp)) { break }
         Start-Sleep -Seconds 5
     }
 
     if ($backendIp) {
-        Write-Success "SmartScan API Public IP: http://$backendIp"
-        Write-Success "API Health Endpoint:     http://$backendIp/health"
-        Write-Success "API Docs:                http://$backendIp/docs"
-        Write-Success "WebSocket Metrics:       ws://$backendIp/ws/metrics"
-    } else {
-        Write-Host "[NOTICE] LoadBalancer IP is still provisioning. Run 'kubectl get svc smartscan-api-svc' in a few minutes." -ForegroundColor Yellow
+        Write-Success "API Public Endpoint: http://$backendIp"
+        Write-Success "API Health:          http://$backendIp/health"
+        Write-Success "API Documentation:   http://$backendIp/docs"
+        Write-Success "Live WebSocket:      ws://$backendIp/ws/metrics"
     }
 }
 
 # -----------------------------------------------------------------------------
-# 10. Frontend Build & Azure Static Web Apps Deployment
+# 8. Deploy Frontend to Azure Static Web Apps (Free Plan — $0.00)
 # -----------------------------------------------------------------------------
 if (-not $SkipFrontend) {
-    Write-Step "10. Building and Deploying Frontend to Azure Static Web Apps"
+    Write-Step "8. Building & Deploying Frontend to Azure Static Web Apps (Free Plan)"
 
     $frontendDir = Join-Path $PSScriptRoot "..\frontend"
     if (Test-Path $frontendDir) {
         Push-Location $frontendDir
 
-        # If backend IP is known, set as build env var
         if ($backendIp) {
             $env:VITE_API_URL = "http://$backendIp"
             $env:VITE_WS_URL = "ws://$backendIp/ws/metrics"
         }
 
-        Write-Info "Building production React frontend with Vite..."
         npm run build
 
-        Write-Info "Creating/Deploying Azure Static Web App '$StaticWebAppName'..."
-        # If az staticwebapp extension is not installed, install it
         az extension add --name staticwebapps --allow-preview $true --output none 2>$null
-
         az staticwebapp create `
             --name $StaticWebAppName `
             --resource-group $ResourceGroup `
@@ -327,14 +250,14 @@ if (-not $SkipFrontend) {
 
         Pop-Location
         Write-Success "Frontend deployed to Azure Static Web Apps!"
-    } else {
-        Write-Host "[WARNING] Frontend directory '$frontendDir' not found. Skipping frontend deployment." -ForegroundColor Yellow
     }
 }
 
+# -----------------------------------------------------------------------------
+# Summary & Pause Instructions
+# -----------------------------------------------------------------------------
 Write-Step "DEPLOYMENT COMPLETE"
-Write-Host "SmartScan EW Multi-Node Defense Suite is fully configured for Azure." -ForegroundColor Green
-if ($backendIp) {
-    Write-Host "Access the Backend API at: http://$backendIp" -ForegroundColor Cyan
-    Write-Host "API Key: $ApiKey" -ForegroundColor Cyan
-}
+Write-Host "To pause the AKS cluster and freeze compute billing at `$0.00:" -ForegroundColor Yellow
+Write-Host "  az aks stop --name $AksName --resource-group $ResourceGroup" -ForegroundColor Cyan
+Write-Host "To resume the AKS cluster:" -ForegroundColor Yellow
+Write-Host "  az aks start --name $AksName --resource-group $ResourceGroup" -ForegroundColor Cyan

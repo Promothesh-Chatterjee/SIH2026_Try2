@@ -14,9 +14,11 @@ spec:
       labels:
         app: smartscan-api
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
       - name: smartscan-api
-        image: ${ACR_NAME}.azurecr.io/smartscan-api:latest
+        image: ${IMAGE_NAME:-ghcr.io/promothesh-chatterjee/sih2026_try2:latest}
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
