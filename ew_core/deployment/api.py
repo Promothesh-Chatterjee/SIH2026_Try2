@@ -1179,6 +1179,25 @@ async def run_scenario(request: Request, scenario_id: str = "config_119", n_step
     return results
 
 
+@app.get("/api/benchmark", tags=["evaluation"])
+async def get_benchmark():
+    """Serve the pre-computed benchmark results for the frontend table."""
+    bench_path = Path("reports/benchmark_results.json")
+    if not bench_path.exists():
+        bench_path = PACKAGE_ROOT / "reports/benchmark_results.json"
+    if not bench_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Benchmark not yet run. Execute scripts/benchmark.py first.",
+        )
+    data = json.loads(bench_path.read_text(encoding="utf-8"))
+    if "schedulers" in data and "results" not in data:
+        data["results"] = {
+            s: val.get("summary", val) for s, val in data["schedulers"].items()
+        }
+    return data
+
+
 @app.get("/health", response_model=HealthResponse, tags=["system"])
 def health(response: Response = Response()) -> HealthResponse:
     """Report liveness plus explicit model availability and fail-closed verification flags."""

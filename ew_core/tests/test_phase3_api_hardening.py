@@ -268,3 +268,15 @@ def test_scenario_run_endpoint():
                 mock_eval.assert_called_once()
             finally:
                 STATE["moe"] = orig_moe
+
+
+def test_benchmark_endpoint_serves_json():
+    """Verify GET /api/benchmark serves pre-computed reports/benchmark_results.json."""
+    with TestClient(app) as client:
+        resp = client.get("/api/benchmark")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "schedulers" in data or "results" in data
+        results = data.get("results", data.get("schedulers", {}))
+        assert "SmartScan_DRQN_MoE" in results
+
