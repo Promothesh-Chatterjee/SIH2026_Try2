@@ -423,6 +423,9 @@ def receiver_reward_components_v2(
     w_false_alarm: float = -1.0,
     w_redundant: float = -0.25,
     w_dwell_cost: float = -0.01,
+    lambda_pfa: float = 2.0,      # Lagrangian multiplier for Pfa constraint
+    pfa_threshold: float = 0.05,  # Maximum allowable Pfa (5%)
+    running_pfa: float = 0.0,     # Rolling Pfa estimate from the episode so far
     reward_variant: str = "baseline",
     strict_dominance: bool = False,
     **_extra,
@@ -504,6 +507,16 @@ def receiver_reward_components_v2(
             redundant_pen = float(w_redundant)
         dwell_cost = float(w_dwell_cost * dwell_norm)
 
+    # Lagrangian Pfa Constraint (Audit Item 10)
+    # Penalises the policy whenever the running false alarm rate exceeds the target.
+    # Soft constraint: progressive penalty when running_pfa > pfa_threshold.
+    lagrangian_pfa_penalty = 0.0
+    if running_pfa > pfa_threshold:
+        pfa_excess = running_pfa - pfa_threshold
+        lagrangian_pfa_penalty = -lambda_pfa * pfa_excess
+        # Cap penalty: never larger than 50% of the primary miss penalty
+        lagrangian_pfa_penalty = max(lagrangian_pfa_penalty, w_miss * 0.5)
+
     total = (
         interception_reward
         + latency_reward
@@ -513,13 +526,14 @@ def receiver_reward_components_v2(
         + false_alarm_pen
         + redundant_pen
         + dwell_cost
+        + lagrangian_pfa_penalty
     )
 
     if reward_variant == "time_normalized" and dwell_us > 0.0:
         total = total * (500.0 / dwell_us)
 
     # Dominance Check: detect if secondary shaping exceeds primary interception signal
-    shaping_mag = abs(latency_reward) + abs(agility_bonus) + abs(prediction_bonus) + abs(redundant_pen) + abs(dwell_cost)
+    shaping_mag = abs(latency_reward) + abs(agility_bonus) + abs(prediction_bonus) + abs(redundant_pen) + abs(dwell_cost) + abs(lagrangian_pfa_penalty)
     dominance_violated = bool(is_sel_active and is_detected and (shaping_mag >= abs(interception_reward)))
     if dominance_violated:
         if strict_dominance:
@@ -539,7 +553,7 @@ def receiver_reward_components_v2(
     hit_reward_total = float(interception_reward + latency_reward + agility_bonus + prediction_bonus)
     hit_reward_per_ms = float(hit_reward_total / dwell_ms)
     # Preserved signed negative penalty so: reward_per_ms = hit_reward_per_ms + penalty_per_ms (or 0)
-    penalty_total = float(miss_penalty + false_alarm_pen + redundant_pen + dwell_cost)
+    penalty_total = float(miss_penalty + false_alarm_pen + redundant_pen + dwell_cost + lagrangian_pfa_penalty)
     penalty_per_ms = float(penalty_total / dwell_ms)
 
     return {
@@ -553,6 +567,9 @@ def receiver_reward_components_v2(
         "false_alarm_penalty": float(false_alarm_pen),
         "redundant_penalty": float(redundant_pen),
         "dwell_cost": float(dwell_cost),
+        "lagrangian_pfa_penalty": float(lagrangian_pfa_penalty),
+        "running_pfa": float(running_pfa),
+        "pfa_constraint_active": bool(running_pfa > pfa_threshold),
         "dominance_warning": dominance_violated,
         "reward_component_dominance": dominance_violated,
         # Time-aware diagnostic telemetry fields
