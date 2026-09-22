@@ -120,3 +120,41 @@ You will receive a JSON response confirming that all neural models and the missi
 | **Live Telemetry Stream** | `WSS /ws/state` | Continuous 5 Hz telemetry broadcasting |
 | **Live Mission Controller** | `POST /mission/stream/start` | Closed-loop 180-action DRQN radar scheduler |
 | **Dynamic Benchmark** | `POST /benchmark/evaluate` | Dynamic multi-scheduler comparison |
+
+---
+
+## 6. Azure Kubernetes Service (AKS) Production Architecture ($0.00 Cost Model)
+
+The Cognitive EW SmartScan system is fully containerized and verified on **Azure Kubernetes Service (AKS)** in region `indiasouthcentral` using GitHub Container Registry (GHCR) and Azure Blob Storage:
+
+### Architecture Summary
+* **Container Registry**: `ghcr.io/promothesh-chatterjee/sih2026_try2:latest` (100% Free Forever via GitHub Student Developer Pack)
+* **Kubernetes Cluster**: `smartscan-aks` (Resource Group: `smartscan-rg`, Node: `Standard_B2s` in `indiasouthcentral`)
+* **Storage Account**: `smartscanstore4301` (`Standard_LRS`, 5GB Free Tier)
+  * `tsrd-dataset`: TSRD validation HDF5 scenarios
+  * `smartscan-models`: Neural checkpoints (`best.pt`, `checkpoint_gate_25000_frozen.pt`)
+  * `reports`: Benchmark evaluation outputs
+* **Public Service**: Public LoadBalancer on port 80 (Assigned IP: `172.198.227.59`)
+
+### Single-Command Cluster Lifecycle Management
+
+To prevent consuming any compute credits when not performing live demonstrations, use the Azure CLI:
+
+#### 1. Resume / Start Cluster
+```bash
+az aks start --name smartscan-aks --resource-group smartscan-rg
+```
+*Takes ~2 minutes. Reallocates the node and restores the running pod at `http://172.198.227.59`.*
+
+#### 2. Pause / Stop Cluster (Zero Compute Billing)
+```bash
+az aks stop --name smartscan-aks --resource-group smartscan-rg
+```
+*Deallocates VM compute cores. Freezes billing completely at $0.00.*
+
+#### 3. Check Status
+```bash
+az aks show --name smartscan-aks --resource-group smartscan-rg --query "{PowerState:powerState.code,ProvisioningState:provisioningState}"
+```
+*(Returns `PowerState: Stopped` or `PowerState: Running`)*
+

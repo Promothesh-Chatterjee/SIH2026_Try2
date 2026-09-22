@@ -18,7 +18,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: smartscan-api
-        image: ${IMAGE_NAME:-ghcr.io/promothesh-chatterjee/sih2026_try2:latest}
+        image: ghcr.io/promothesh-chatterjee/sih2026_try2:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
@@ -60,7 +60,7 @@ spec:
           timeoutSeconds: 5
         livenessProbe:
           httpGet:
-            path: /health
+            path: /ready
             port: 8000
           initialDelaySeconds: 20
           periodSeconds: 20
@@ -68,11 +68,9 @@ spec:
         volumeMounts:
         - name: tsrd-volume
           mountPath: /mnt/tsrd
-          readOnly: true
       volumes:
       - name: tsrd-volume
-        persistentVolumeClaim:
-          claimName: tsrd-blob-pvc
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
