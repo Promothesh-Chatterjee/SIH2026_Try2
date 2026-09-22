@@ -353,33 +353,68 @@ def synthetic_records(
     rng = np.random.default_rng(seed)
     records: list[PulseRecord] = []
     total = 0
+    from .emitter_models import RotatingBeamEmitter
     for emitter_id in range(n_emitters):
-        bursts = int(np.clip(3 + emitter_id, 2, 8))
-        for b in range(bursts):
-            cf = freq_min_mhz + (freq_max_mhz - freq_min_mhz) * (
-                (emitter_id + 0.5) / n_emitters + rng.uniform(-0.03, 0.03)
+        # Every 3rd emitter is a rotating beam radar (Audit Item 9)
+        is_rotating = (emitter_id % 3 == 0)
+        cf = freq_min_mhz + (freq_max_mhz - freq_min_mhz) * (
+            (emitter_id + 0.5) / n_emitters + rng.uniform(-0.03, 0.03)
+        )
+        cf = float(np.clip(cf, freq_min_mhz, freq_max_mhz))
+
+        if is_rotating:
+            band_idx = int(np.clip((cf - freq_min_mhz) / max(1.0, (freq_max_mhz - freq_min_mhz) / 36.0), 0, 35))
+            rot_em = RotatingBeamEmitter(
+                band_idx=band_idx,
+                freq_mhz=cf,
+                scan_rate_rpm=float(rng.uniform(4.0, 12.0)),
+                beam_width_deg=float(rng.uniform(3.0, 8.0)),
+                initial_angle_deg=float(rng.uniform(0.0, 360.0)),
+                emitter_id=emitter_id,
             )
-            cf = float(np.clip(cf, freq_min_mhz, freq_max_mhz))
-            burst_start = time_horizon_us * ((b + rng.uniform(0.1, 0.9)) / bursts)
-            pri = rng.uniform(300.0, 1500.0)
-            n_pulses_here = int(np.clip(n_pulses // (n_emitters * bursts), 1, 40))
-            pw = rng.uniform(0.5, 8.0)
-            for k in range(n_pulses_here):
-                toa = burst_start + k * pri
-                if toa > time_horizon_us:
-                    break
-                records.append(
-                    PulseRecord(
-                        toa_us=float(toa),
-                        frequency_mhz=cf,
-                        pulse_width_us=pw,
-                        amplitude_db=float(rng.uniform(-90, -50)),
-                        aoa_deg=float(rng.uniform(-60, 60)),
-                        emitter_id=emitter_id,
-                        source_id="synthetic",
+            # Generate pulses across time horizon only during intercept windows
+            t_curr = 0.0
+            pri = float(rng.uniform(500.0, 2000.0))
+            pw = float(rng.uniform(1.0, 5.0))
+            while t_curr < time_horizon_us:
+                rot_em.update(pri)
+                if rot_em.is_interceptable():
+                    records.append(
+                        PulseRecord(
+                            toa_us=float(t_curr),
+                            frequency_mhz=cf,
+                            pulse_width_us=pw,
+                            amplitude_db=float(rng.uniform(-85, -55)),
+                            aoa_deg=float(rng.uniform(-45, 45)),
+                            emitter_id=emitter_id,
+                            source_id="synthetic_rotating_beam",
+                        )
                     )
-                )
-                total += 1
+                    total += 1
+                t_curr += pri
+        else:
+            bursts = int(np.clip(3 + emitter_id, 2, 8))
+            for b in range(bursts):
+                burst_start = time_horizon_us * ((b + rng.uniform(0.1, 0.9)) / bursts)
+                pri = rng.uniform(300.0, 1500.0)
+                n_pulses_here = int(np.clip(n_pulses // (n_emitters * bursts), 1, 40))
+                pw = rng.uniform(0.5, 8.0)
+                for k in range(n_pulses_here):
+                    toa = burst_start + k * pri
+                    if toa > time_horizon_us:
+                        break
+                    records.append(
+                        PulseRecord(
+                            toa_us=float(toa),
+                            frequency_mhz=cf,
+                            pulse_width_us=pw,
+                            amplitude_db=float(rng.uniform(-90, -50)),
+                            aoa_deg=float(rng.uniform(-60, 60)),
+                            emitter_id=emitter_id,
+                            source_id="synthetic",
+                        )
+                    )
+                    total += 1
     records.sort(key=lambda r: r.toa_us)
     return records
 

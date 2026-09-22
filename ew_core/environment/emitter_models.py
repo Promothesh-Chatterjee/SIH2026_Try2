@@ -132,3 +132,100 @@ class PeriodicScanEmitter(BaseEmitter):
         t_in_cycle = t % self._scan_period
         pattern_idx = min(len(self._scan_pattern) - 1, t_in_cycle // self._dwell_time)
         return self._scan_pattern[pattern_idx]
+
+
+class RotatingBeamEmitter(BaseEmitter):
+    """Models a radar/communication emitter with a mechanically rotating antenna beam.
+
+    This is the canonical 'spatially scanning emitter' from the PS description.
+
+    The emitter is only interceptable when its beam is pointed toward the receiver.
+    This creates a time-gated intercept window: T_window = beam_width_deg / scan_rate_dps
+
+    Key PS requirement: 'model should enable prediction of intercept time and
+    interception ratio against spatially scanning emitters.'
+    """
+
+    def __init__(
+        self,
+        band_idx: int,
+        freq_mhz: float,
+        scan_rate_rpm: float = 6.0,         # rotations per minute (10 sec/scan)
+        beam_width_deg: float = 5.0,         # antenna beam width in degrees
+        initial_angle_deg: float = 0.0,      # starting beam angle
+        receiver_angle_deg: float = 90.0,    # angle to our receiver (fixed geometry)
+        power_dbm: float = -60.0,
+        emitter_id: int = 4,
+    ) -> None:
+        super().__init__(emitter_id=emitter_id)
+        self.band_idx = int(band_idx)
+        self.freq_mhz = float(freq_mhz)
+        self.scan_rate_dps = float(scan_rate_rpm * 360.0 / 60.0)  # degrees per second
+        self.scan_period_us = float((360.0 / self.scan_rate_dps) * 1e6)  # µs per full rotation
+        self.beam_width_deg = float(beam_width_deg)
+        self.current_angle_deg = float(initial_angle_deg % 360.0)
+        self.receiver_angle_deg = float(receiver_angle_deg % 360.0)
+        self.power_dbm = float(power_dbm)
+
+        # Intercept window duration: beam_width / scan_rate in microseconds
+        self.intercept_window_us = float((beam_width_deg / self.scan_rate_dps) * 1e6)
+
+    def update(self, elapsed_us: float) -> None:
+        """Advance the beam angle by elapsed_us microseconds."""
+        delta_deg = self.scan_rate_dps * elapsed_us / 1e6
+        self.current_angle_deg = (self.current_angle_deg + delta_deg) % 360.0
+
+    def is_interceptable(self) -> bool:
+        """Return True if the beam is currently pointed within beam_width of receiver."""
+        diff = abs(self.current_angle_deg - self.receiver_angle_deg) % 360.0
+        if diff > 180.0:
+            diff = 360.0 - diff
+        return diff <= (self.beam_width_deg / 2.0)
+
+    def time_to_next_intercept_us(self) -> float:
+        """Compute how many microseconds until the beam next enters the intercept window.
+
+        Returns 0.0 if currently interceptable.
+        """
+        if self.is_interceptable():
+            return 0.0
+        diff = (self.receiver_angle_deg - self.current_angle_deg) % 360.0
+        half_bw = self.beam_width_deg / 2.0
+        leading_edge_diff = (diff - half_bw) % 360.0
+        return float(leading_edge_diff / self.scan_rate_dps * 1e6)
+
+    def intercept_probability(self, dwell_time_us: float, prediction_error_us: float = 0.0) -> float:
+        """Compute Pr(intercept) for a given dwell time at this band.
+
+        P = min(1, dwell_time / intercept_window) * correction(prediction_error)
+        Implements the PS formula: P_intercept = beam_dwell/scan_period * correction
+        """
+        if self.intercept_window_us <= 0:
+            return 0.0
+        base_p = min(1.0, float(dwell_time_us) / self.intercept_window_us)
+        if prediction_error_us > 0 and self.intercept_window_us > 0:
+            overlap = max(0.0, 1.0 - float(prediction_error_us) / self.intercept_window_us)
+        else:
+            overlap = 1.0
+        return float(base_p * overlap)
+
+    def step(self, t: int) -> bool:
+        """BaseEmitter compatibility method based on discrete slot t."""
+        return self.is_interceptable()
+
+    def get_band(self, t: int) -> int:
+        """Return the band index."""
+        return self.band_idx
+
+    def to_dict(self) -> dict:
+        return {
+            "type": "rotating_beam",
+            "band_idx": self.band_idx,
+            "freq_mhz": self.freq_mhz,
+            "scan_rate_rpm": self.scan_rate_dps * 60.0 / 360.0,
+            "beam_width_deg": self.beam_width_deg,
+            "scan_period_us": self.scan_period_us,
+            "intercept_window_us": self.intercept_window_us,
+            "current_angle_deg": self.current_angle_deg,
+            "interceptable": self.is_interceptable(),
+        }
