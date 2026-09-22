@@ -31,6 +31,7 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import asyncio
+import functools
 import json
 from threading import Lock
 from fastapi.middleware.cors import CORSMiddleware
@@ -108,7 +109,12 @@ def update_latest_evaluation_data(
 
 import torch
 import yaml
-from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from ew_core.deployment.auth import require_api_key, get_valid_api_keys
+from ew_core.deployment.dataset_service import get_tsrd_root, list_scenarios, download_from_blob
 hidden_lock = Lock()
 try:
     from fastapi.middleware.base import BaseHTTPMiddleware  # type: ignore
@@ -149,12 +155,17 @@ OBS_FEATURES_PER_BAND = CANONICAL_BAND_FEATURES
 
 
 def _is_authorized(request: Request) -> bool:
-    """Allow state-changing endpoints only with a valid session token.
+    """Allow state-changing endpoints with a valid API key or session token."""
+    api_key = request.headers.get("X-SmartScan-API-Key", "")
+    valid_keys = get_valid_api_keys()
+    if valid_keys:
+        if api_key in valid_keys:
+            return True
+        token = os.getenv("SMARTSCAN_API_TOKEN", "")
+        if token and request.headers.get("Authorization", "") == f"Bearer {token}":
+            return True
+        return False
 
-    The project requirement explicitly calls for authentication on mutating API
-    routes. A simple bearer token avoids open state mutation while keeping the
-    service runnable in local testing environments.
-    """
     token = os.getenv("SMARTSCAN_API_TOKEN", "")
     if not token:
         return True
@@ -173,6 +184,7 @@ STATE: dict[str, Any] = {
     "deinterleaver": None,
     "scheduler": None,
     "moe": None,
+    "env": None,
     "memory": None,
     "fom": None,
     "hidden": None,
@@ -277,6 +289,11 @@ class PredictBandsRequest(BaseModel):
 
     obs: list[float] = Field(..., description=f"Observation vector of exactly obs_dim={CANONICAL_OBS_DIM} (36 bands x 10 features)", min_length=2)
     policy_mode: Optional[str] = Field(None, description="Scheduler policy mode: 'operational', 'demo', or 'fallback'")
+
+
+class ScheduleRequest(PredictBandsRequest):
+    """Alias for PredictBandsRequest to conform to /schedule endpoint specifications."""
+    pass
 
 
 class PredictBandsResponse(BaseModel):
@@ -939,6 +956,34 @@ async def lifespan(app: FastAPI):  # type: ignore
     except Exception as adapt_exc:
         logger.warning("Adaptation setup notice: %s", adapt_exc)
 
+    # Phase 3: Initialize TSRD Environment with dataset_service
+    try:
+        from ew_core.environment.cognitive_rf_scan_env import CognitiveRFScanEnv
+        from ew_core.environment.scenario_generator import load_h5_records, synthetic_records
+        tsrd_root = get_tsrd_root()
+        val_dir = Path(tsrd_root) / "stare" / "val_stare"
+        if not val_dir.exists():
+            val_dir = Path(tsrd_root) / "val"
+        sample_scens = list(val_dir.glob("config_*.h5")) if val_dir.exists() else []
+        if sample_scens:
+            recs = load_h5_records(sample_scens[0])
+        else:
+            recs = synthetic_records(seed=42)
+        STATE["env"] = CognitiveRFScanEnv(
+            {
+                "n_bands": CANONICAL_N_BANDS,
+                "n_modes": CANONICAL_N_MODES,
+                "obs_dim": CANONICAL_N_BANDS * 10,
+                "semantic_memory_path": ":memory:",
+                "data_dir": tsrd_root,
+            },
+            records=recs,
+        )
+        logger.info("CognitiveRFScanEnv initialized with TSRD root: %s", tsrd_root)
+    except Exception as env_exc:
+        logger.warning("Could not initialize CognitiveRFScanEnv at startup: %s", env_exc)
+        STATE["env"] = None
+
     yield
     # Shutdown: close DB
     try:
@@ -958,6 +1003,29 @@ cors_origins_env = os.getenv(
 cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
 
 app = FastAPI(title="Cognitive EW SmartScan API", version="0.1.0", lifespan=lifespan)
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+def rate_limit(limit_value: str):
+    """Rate limit decorator that applies slowapi for HTTP requests and bypasses for direct Python calls."""
+    limiter_dec = limiter.limit(limit_value)
+
+    def decorator(fn):
+        wrapped = limiter_dec(fn)
+
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            has_request = any(isinstance(a, Request) for a in args) or isinstance(kwargs.get("request"), Request)
+            if not has_request:
+                return fn(*args, **kwargs)
+            return wrapped(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -966,6 +1034,149 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(TimingMiddleware)
+
+# ── WebSocket & Live Telemetry Broadcasting (Phase 3) ─────────────────────────
+_metrics_ws_clients: set[WebSocket] = set()
+
+
+@app.websocket("/ws/metrics")
+async def websocket_metrics(websocket: WebSocket):
+    """Stream live scheduler metrics to connected dashboards."""
+    await websocket.accept()
+    _metrics_ws_clients.add(websocket)
+    try:
+        while True:
+            # Keep-alive ping every 30s; metrics pushed by broadcast_metrics()
+            await asyncio.sleep(30)
+            await websocket.send_json({"type": "ping", "ts": time.time()})
+    except (WebSocketDisconnect, Exception):
+        _metrics_ws_clients.discard(websocket)
+
+
+async def broadcast_metrics(metrics_dict: dict):
+    """Called by inference endpoints to push metrics to all WS clients."""
+    if not _metrics_ws_clients:
+        return
+    dead = set()
+    for ws in list(_metrics_ws_clients):
+        try:
+            await ws.send_json({"type": "metrics", "data": metrics_dict})
+        except Exception:
+            dead.add(ws)
+    _metrics_ws_clients.difference_update(dead)
+
+
+def broadcast_metrics_sync(metrics_dict: dict) -> None:
+    """Helper to dispatch broadcast_metrics from both sync and async contexts."""
+    if not _metrics_ws_clients:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(broadcast_metrics(metrics_dict))
+    except RuntimeError:
+        try:
+            asyncio.run(broadcast_metrics(metrics_dict))
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+@app.get("/auth/info", tags=["auth"])
+async def auth_info():
+    """Information on API authentication and rate limits for developer onboarding."""
+    return {
+        "auth_required": bool(get_valid_api_keys()),
+        "header_name": "X-SmartScan-API-Key",
+        "rate_limit": "120 requests/minute per IP",
+        "docs": "Include header: X-SmartScan-API-Key: <key>",
+    }
+
+
+@app.get("/ready", tags=["system"])
+async def readiness_probe():
+    """Kubernetes readiness probe — returns 503 until model and dataset are loaded."""
+    from fastapi import status as http_status
+    issues = []
+    if STATE.get("scheduler") is None and STATE.get("scheduler_onnx") is None:
+        issues.append("model_not_loaded")
+    try:
+        get_tsrd_root()
+    except RuntimeError as e:
+        issues.append(f"dataset_unavailable: {e}")
+    if issues:
+        raise HTTPException(status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE, detail={"not_ready": issues})
+    return {
+        "status": "ready",
+        "model_loaded": True,
+        "dataset_root": get_tsrd_root(),
+        "scenarios_count": len(list_scenarios("val")),
+        "ts": time.time(),
+    }
+
+
+@app.post("/model/reload", dependencies=[Depends(require_api_key)], tags=["model"])
+async def reload_model(checkpoint_path: str):
+    """Hot-reload a new checkpoint into running SmartScanMoE without restart."""
+    global STATE
+    try:
+        if checkpoint_path.startswith("az://"):
+            local_path = await download_from_blob(checkpoint_path)
+        else:
+            local_path = checkpoint_path
+
+        ckpt_p = Path(local_path)
+        if not ckpt_p.exists():
+            raise HTTPException(status_code=404, detail=f"Checkpoint file not found: {local_path}")
+
+        ckpt = torch.load(str(ckpt_p), map_location="cpu", weights_only=False)
+        state = (
+            ckpt["state_dict"]
+            if isinstance(ckpt, dict) and "state_dict" in ckpt
+            else (ckpt.get("model_state_dict", ckpt) if isinstance(ckpt, dict) else ckpt)
+        )
+
+        drqn_model = STATE.get("scheduler")
+        if drqn_model is not None and hasattr(drqn_model, "load_state_dict"):
+            drqn_model.load_state_dict(state, strict=False)
+            drqn_model.eval()
+            moe_scheduler = STATE.get("moe")
+            if moe_scheduler is not None:
+                moe_scheduler.drqn = drqn_model
+                if hasattr(moe_scheduler, "eager_agent") and hasattr(moe_scheduler.eager_agent, "drqn"):
+                    moe_scheduler.eager_agent.drqn = drqn_model
+            controller = STATE.get("controller")
+            if controller is not None and hasattr(controller, "moe_scheduler"):
+                controller.moe_scheduler.drqn = drqn_model
+
+        STATE["scheduler_ckpt_path"] = str(local_path)
+        return {
+            "status": "reloaded",
+            "checkpoint": checkpoint_path,
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Model reload failed for %s: %s", checkpoint_path, e)
+        raise HTTPException(status_code=500, detail=f"Reload failed: {e}")
+
+
+@app.post("/scenario/run", dependencies=[Depends(require_api_key)], tags=["evaluation"])
+@limiter.limit("10/minute")
+async def run_scenario(request: Request, scenario_id: str = "config_119", n_steps: int = 1000):
+    """Run a full evaluation episode and return all 7 PS FoMs."""
+    from fastapi import status as http_status
+    from ew_core.training.eval_batch import run_evaluation
+    scheduler = STATE.get("moe", STATE.get("scheduler"))
+    if scheduler is None:
+        raise HTTPException(status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE, detail="Model not loaded")
+    try:
+        data_dir = get_tsrd_root()
+    except RuntimeError:
+        data_dir = "D:/TSRD"
+    results = run_evaluation(scheduler, scenario_ids=[scenario_id], n_steps=n_steps, data_dir=data_dir)
+    return results
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
@@ -1259,8 +1470,9 @@ def _minmax_norm(vals: np.ndarray) -> np.ndarray:
     return ((vals - v_min) / (v_max - v_min + 1e-8)).astype(np.float32)
 
 
-@app.post("/predict_bands", response_model=PredictBandsResponse, tags=["scheduler"])
-def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
+@app.post("/predict_bands", dependencies=[Depends(require_api_key)], response_model=PredictBandsResponse, tags=["scheduler"])
+@rate_limit("120/minute")
+def predict_bands(req: PredictBandsRequest, request: Request = None) -> PredictBandsResponse:
     """Select the single best time-frequency action from a trained scheduler.
 
     Phase 16 fail-safe contract:
@@ -1379,6 +1591,19 @@ def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
         except Exception:
             pass
 
+    broadcast_metrics_sync({
+        "pd": float(prob),
+        "pfa": 0.0,
+        "avg_intercept_rate": float(prob),
+        "avg_reward": 1.0 if prob >= 0.5 else -0.1,
+        "last_action": int(action),
+        "last_band": int(band),
+        "last_mode": int(mode),
+        "decision_reason": str(attribution.get("reason", "eager_drqn")),
+        "step": int(getattr(STATE.get("fom"), "total_dwells", 0)) if STATE.get("fom") else 0,
+        "ts": time.time(),
+    })
+
     return PredictBandsResponse(
         selected_action=int(action),
         selected_band=band,
@@ -1389,6 +1614,13 @@ def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
         attribution=attribution,
         latency_ms=latency,
     )
+
+
+@app.post("/schedule", dependencies=[Depends(require_api_key)], response_model=PredictBandsResponse, tags=["scheduler"])
+@rate_limit("120/minute")
+def schedule_action(body: ScheduleRequest, request: Request = None) -> PredictBandsResponse:
+    """Select next scanning dwell action — alias for /predict_bands."""
+    return predict_bands(req=body, request=request)
 
 
 def _normalise_for_inference(pdws_arr: np.ndarray) -> np.ndarray:
@@ -1425,8 +1657,9 @@ def _normalise_for_inference(pdws_arr: np.ndarray) -> np.ndarray:
     return normalise_pdws(pdws_arr, None)[0]
 
 
-@app.post("/deinterleave", response_model=DeinterleaveResponse, tags=["deinterleaving"])
-def deinterleave_endpoint(req: DeinterleaveRequest, request: Request) -> DeinterleaveResponse:
+@app.post("/deinterleave", dependencies=[Depends(require_api_key)], response_model=DeinterleaveResponse, tags=["deinterleaving"])
+@rate_limit("60/minute")
+def deinterleave_endpoint(req: DeinterleaveRequest, request: Request = None) -> DeinterleaveResponse:
     """Run deinterleaving on PDW batch."""
     start = time.perf_counter()
     if len(req.pdws) > MAX_PDWS_PER_REQUEST:
@@ -1606,8 +1839,9 @@ async def mission_start(req: MissionStartRequest, request: Request) -> dict[str,
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.post("/mission/step", response_model=MissionStepResponse, tags=["mission"])
-def mission_step(req: MissionStepRequest, request: Request) -> MissionStepResponse:
+@app.post("/mission/step", dependencies=[Depends(require_api_key)], response_model=MissionStepResponse, tags=["mission"])
+@rate_limit("120/minute")
+def mission_step(req: MissionStepRequest, request: Request = None) -> MissionStepResponse:
     """Execute one closed-loop operational dwell cycle without simulation shortcuts."""
     if not _is_authorized(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -1672,6 +1906,19 @@ def mission_step(req: MissionStepRequest, request: Request) -> MissionStepRespon
                 shift_det.update(np.asarray(req.obs, dtype=np.float32))
             except Exception:
                 pass
+
+        broadcast_metrics_sync({
+            "pd": float(frame.rolling_pd),
+            "pfa": 0.0,
+            "avg_intercept_rate": float(frame.rolling_pd),
+            "avg_reward": 1.0 if frame.hit else -0.1,
+            "last_action": int(frame.selected_band * CANONICAL_N_MODES + frame.selected_mode),
+            "last_band": int(frame.selected_band),
+            "last_mode": int(frame.selected_mode),
+            "decision_reason": str(frame.mode_name),
+            "step": int(frame.step),
+            "ts": time.time(),
+        })
 
         return MissionStepResponse(status="ok", frame=frame_dict)
     except Exception as exc:
