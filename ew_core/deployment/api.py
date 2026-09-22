@@ -1610,16 +1610,25 @@ def predict_bands(req: PredictBandsRequest, request: Request = None) -> PredictB
         except Exception:
             pass
 
+    fom_obj = STATE.get("fom")
+    fom_sum = fom_obj.summary() if fom_obj and hasattr(fom_obj, "summary") else {}
+    obs_active = [
+        b for b in range(n_bands)
+        if obs[b * OBS_FEATURES_PER_BAND] > 0.05 or obs[b * OBS_FEATURES_PER_BAND + 1] > 0.05
+    ]
     broadcast_metrics_sync({
-        "pd": float(prob),
-        "pfa": 0.0,
-        "avg_intercept_rate": float(prob),
-        "avg_reward": 1.0 if prob >= 0.5 else -0.1,
+        "pd": float(fom_sum.get("Pd", prob)),
+        "pfa": float(fom_sum.get("Pfa", 0.0)),
+        "avg_intercept_rate": float(fom_sum.get("avg_intercept_rate", prob)),
+        "avg_reward": float(fom_sum.get("avg_reward", 1.0 if prob >= 0.5 else -0.1)),
+        "pct_correct_predictions": float(fom_sum.get("pct_correct_predictions", 0.0)),
+        "avg_intercept_time_error_us": float(fom_sum.get("avg_intercept_time_error_us", pred_time_us)),
         "last_action": int(action),
         "last_band": int(band),
         "last_mode": int(mode),
         "decision_reason": str(attribution.get("reason", "eager_drqn")),
-        "step": int(getattr(STATE.get("fom"), "total_dwells", 0)) if STATE.get("fom") else 0,
+        "active_bands": obs_active,
+        "step": int(getattr(fom_obj, "total_dwells", 0)) if fom_obj else 0,
         "ts": time.time(),
     })
 
@@ -1926,15 +1935,28 @@ def mission_step(req: MissionStepRequest, request: Request = None) -> MissionSte
             except Exception:
                 pass
 
+        fom_obj = STATE.get("fom")
+        fom_sum = fom_obj.summary() if fom_obj and hasattr(fom_obj, "summary") else {}
+        active_emitter_bands = sorted(list({
+            int(float(p.get("frequency_mhz", 0.0)) // 500)
+            for p in (req.pdws or [])
+            if 0 <= int(float(p.get("frequency_mhz", 0.0)) // 500) < CANONICAL_N_BANDS
+        }))
+        if frame.hit:
+            active_emitter_bands = sorted(list(set(active_emitter_bands + [int(frame.selected_band)])))
+
         broadcast_metrics_sync({
-            "pd": float(frame.rolling_pd),
-            "pfa": 0.0,
-            "avg_intercept_rate": float(frame.rolling_pd),
-            "avg_reward": 1.0 if frame.hit else -0.1,
+            "pd": float(fom_sum.get("Pd", frame.rolling_pd)),
+            "pfa": float(fom_sum.get("Pfa", 0.0)),
+            "avg_intercept_rate": float(fom_sum.get("avg_intercept_rate", frame.rolling_pd)),
+            "avg_reward": float(fom_sum.get("avg_reward", 1.0 if frame.hit else -0.1)),
+            "pct_correct_predictions": float(fom_sum.get("pct_correct_predictions", 100.0 if frame.hit else 0.0)),
+            "avg_intercept_time_error_us": float(fom_sum.get("avg_intercept_time_error_us", 0.0)),
             "last_action": int(frame.selected_band * CANONICAL_N_MODES + frame.selected_mode),
             "last_band": int(frame.selected_band),
             "last_mode": int(frame.selected_mode),
             "decision_reason": str(frame.mode_name),
+            "active_bands": active_emitter_bands,
             "step": int(frame.step),
             "ts": time.time(),
         })
