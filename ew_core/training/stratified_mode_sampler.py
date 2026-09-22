@@ -1,17 +1,7 @@
-"""Stratified Sequence Mode Sampler for DRQN Training.
-
-Ensures balanced representation of action modes (Modes 0-4) in sampled batches
-by anchoring sequence windows around actual occurrences of target modes in episodes,
-while strictly preserving:
-- DRQN 16-step contiguous sequence slices
-- 8-step burn-in masking (first 8 steps excluded from loss calculation)
-- Single-episode boundaries (no crossing between episodes)
-- Auditable logging: requested mode counts, actual mode counts, multi-mode sequence overlaps.
-"""
-
 from __future__ import annotations
 
 import logging
+import random
 from typing import Any, Dict, List, Tuple
 import numpy as np
 
@@ -20,9 +10,27 @@ from ew_core.training.replay_buffer import SequenceReplayBuffer
 
 logger = logging.getLogger(__name__)
 
+# Phase-1: Hard sparse/agile scenario IDs that get oversampled 3× during replay.
+# config_119, config_143, config_241 — sparse agile emitters (Gate-25k IR < 15%)
+# config_29 — additional hard scenario identified in forensic audit.
+HARD_SCENARIO_IDS: frozenset[str] = frozenset({
+    "config_119",
+    "config_143",
+    "config_241",
+    "config_29",
+})
+HARD_SCENARIO_WEIGHT: float = 3.0   # Sample hard scenarios 3× more often than easy ones
+DEFAULT_SCENARIO_WEIGHT: float = 1.0
+
 
 class StratifiedModeSampler:
-    """Samples DRQN sequence windows anchored on specific action modes."""
+    """Samples DRQN sequence windows anchored on specific action modes.
+
+    Phase-1 addition: hard sparse/agile scenarios (config_119, config_143,
+    config_241, config_29) are oversampled by hard_scenario_weight (default 3×)
+    via weighted random selection in the occurrence pool, directly counteracting
+    the Gate-25k policy collapse on sparse emitter scenarios.
+    """
 
     def __init__(
         self,
@@ -33,6 +41,7 @@ class StratifiedModeSampler:
         n_modes: int = 5,
         seed: int = 42,
         replay_strategy: str = "baseline",
+        hard_scenario_weight: float = HARD_SCENARIO_WEIGHT,
     ) -> None:
         self.buffer = buffer
         self.seq_len = seq_len
@@ -40,6 +49,7 @@ class StratifiedModeSampler:
         self.n_modes = n_modes
         self.replay_strategy = replay_strategy
         self.rng = np.random.default_rng(seed)
+        self.hard_scenario_weight = float(hard_scenario_weight)
 
         # Default balanced target: Modes 0-4 distributed with emphasis on Mode 2 (LONG)
         # Mode 0: SHORT (15%), Mode 1: NORMAL (25%), Mode 2: LONG (30%), Mode 3: REVISIT (15%), Mode 4: PREEMPTIVE (15%)
@@ -53,6 +63,39 @@ class StratifiedModeSampler:
         w_sum = sum(self.mode_weights.values())
         if abs(w_sum - 1.0) > 1e-6:
             raise ValueError(f"Mode weights must sum to 1.0, got {w_sum:.4f}")
+
+    def get_scenario_sample_weight(self, scenario_id: str) -> float:
+        """Return oversampling weight for a given scenario ID.
+
+        Hard sparse/agile scenarios (HARD_SCENARIO_IDS) receive hard_scenario_weight
+        (default 3.0). All others receive DEFAULT_SCENARIO_WEIGHT (1.0).
+        """
+        return self.hard_scenario_weight if scenario_id in HARD_SCENARIO_IDS else DEFAULT_SCENARIO_WEIGHT
+
+    def weighted_scenario_select(
+        self,
+        occurrence_list: List[Tuple[int, int]],
+        usable: List[Any],
+    ) -> Tuple[int, int]:
+        """Select one occurrence from occurrence_list weighted by scenario hardness.
+
+        Hard sparse/agile scenarios (config_119, config_143, config_241, config_29)
+        are 3× more likely to be selected than easy scenarios, directly addressing
+        the Gate-25k policy collapse on sparse emitter configurations.
+
+        Args:
+            occurrence_list: List of (ep_idx, transition_idx) pairs.
+            usable: List of episode dicts (same indexing as occurrence_list ep_idx).
+
+        Returns:
+            Single (ep_idx, transition_idx) pair selected by weighted random choice.
+        """
+        weights = [
+            self.get_scenario_sample_weight(usable[ep_i].get("scenario_id", ""))
+            for (ep_i, _) in occurrence_list
+        ]
+        selected = random.choices(occurrence_list, weights=weights, k=1)[0]
+        return selected
 
     def allocate_mode_counts(self, batch_size: int) -> Dict[int, int]:
         """Deterministic integer allocation of batch sequences per target mode."""
@@ -147,13 +190,14 @@ class StratifiedModeSampler:
                     ]
                     active_list = pos_occ if pos_occ else occ_list
                 elif self.replay_strategy in ("sparse_balanced", "sparse_and_mode2_positive_balanced"):
-                    # Balance across scenario classes so sparse scenarios (config_119, config_143) are equally sampled
-                    sparse_ids = {"config_119", "config_143", "config_241"}
+                    # Balance across scenario classes so sparse scenarios are equally sampled.
+                    # Phase-1: config_29 added to the hard-scenario set.
+                    sparse_ids = HARD_SCENARIO_IDS  # config_119, config_143, config_241, config_29
                     sparse_occ = [
                         (ep_i, t_i) for (ep_i, t_i) in occ_list
                         if usable[ep_i].get("scenario_id") in sparse_ids
                     ]
-                    # If target is Mode 2 and we have sparse Mode 2 occurrences, sample 50% of the time from sparse
+                    # If we have hard-scenario occurrences, sample 50% of the time from them
                     if sparse_occ and float(self.rng.random()) < 0.5:
                         active_list = sparse_occ
                     else:
@@ -161,9 +205,10 @@ class StratifiedModeSampler:
                 else:
                     active_list = occ_list
 
-                # Pick an occurrence uniformly from the selected candidate list
-                rand_choice = int(self.rng.integers(0, len(active_list)))
-                ep_idx, target_idx = active_list[rand_choice]
+                # Phase-1: weighted selection — hard scenarios (HARD_SCENARIO_IDS) are 3×
+                # more likely to be chosen regardless of replay_strategy. This directly
+                # oversamples the sparse/agile configs that collapsed at Gate-25k.
+                ep_idx, target_idx = self.weighted_scenario_select(active_list, usable)
                 ep = usable[ep_idx]
                 ep_len = int(ep["length"])
 
