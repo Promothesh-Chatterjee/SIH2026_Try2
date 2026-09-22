@@ -1,0 +1,143 @@
+# Training Config — Controlled Resume: Gate-25k → Gate-100k
+#
+# Phase-1 resume training config. Resumes from the frozen Gate-25k checkpoint
+# with anti-collapse fixes active (entropy regulariser, 3× sparse oversampling,
+# higher MoE confidence threshold).
+#
+# DO NOT modify obs_dim, n_bands, n_modes, n_actions — these are frozen canonical.
+# Architecture: 36 bands × 5 modes = 180 actions, obs_dim = 360 (frozen).
+
+# ── Dataset ─────────────────────────────────────────────────────────────────
+data_dir: "D:/TSRD"
+seed: 42
+subset: "train"
+mode: "scan"
+world_mode: "stare"
+observation_mode: "scan"
+training_mode: "real_tsrd"
+
+# ── Checkpoint ──────────────────────────────────────────────────────────────
+# Phase-1 RESUME: load from Gate-25k frozen baseline.
+# SHA256: 7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0
+scheduler_ckpt: "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"
+
+# ── Perception ──────────────────────────────────────────────────────────────
+deinterleaver_ckpt: "experiments/checkpoints/deinterleaver/best.pt"
+normalization_stats: "experiments/checkpoints/deinterleaver/normalization_stats.json"
+expected_norm_hash: "bacee02ac1c29428"
+strict_perception: true
+
+# ── Scheduler Training ──────────────────────────────────────────────────────
+scheduler:
+  version: "v2"
+  action_selection_mode: "flat_argmax"
+
+  # Resume contract: start counting from step 25k, train to 100k
+  start_step: 25000
+  total_timesteps: 100000
+
+  # Epsilon: start at 0.50 (not 1.0) — resume at 50% exploration
+  # Optimizer, replay buffer, and epsilon are NOT restored from the checkpoint
+  # (allow_optimizer_restore: false is set in ACTIVE_CHECKPOINT.json).
+  eps_start: 0.50
+  eps_end: 0.05
+  eps_decay: 50000
+  exploration_schedule: "slower"   # gentler decay appropriate for warm-start resume
+
+  # Learning
+  learning_rate: 2.5e-5            # same as production baseline (conservative)
+  replay_buffer_size: 50000
+  batch_size: 32
+  seq_len: 16                      # DRQN BPTT sequence length
+  burn_in: 8                       # burn-in steps excluded from loss
+  update_freq: 4
+  target_update_freq: 250
+
+  # Phase-1 Sparse oversampling: activate 3× hard-scenario strategy
+  replay_strategy: "sparse_and_mode2_positive_balanced"
+
+  # Thompson warmup: 0 (already past warmup in Gate-25k)
+  thompson_warmup_steps: 0
+
+  # Staged gate evaluations: run at 50k and 100k
+  staged_gates: "50000,100000"
+
+  # Q-value stability
+  target_q_max: 100.0
+  target_q_min: -50.0
+  q_reg_coef: 1e-4
+
+  # LR schedule: cosine decay from step 25k to 100k
+  lr_schedule: "cosine"
+  min_lr: 5.0e-6
+
+  # Targeted band exploration
+  targeted_exploration: true
+  band_discovery_quota: 2
+
+# ── Environment ─────────────────────────────────────────────────────────────
+environment:
+  n_bands: 36
+  band_features: 10            # obs_dim = 36 * 10 = 360 (FROZEN — do not change)
+  obs_dim: 360
+  n_modes: 5                   # dwell modes: SHORT/NORMAL/LONG/REVISIT/PREEMPTIVE (FROZEN)
+  n_actions: 180               # n_bands * n_modes (FROZEN)
+  freq_min_mhz: 0.0
+  freq_max_mhz: 18000.0
+  ibw_mhz: 500.0
+  dwell_time_us: 500.0
+  detection_threshold_db: -140.0
+  frequency_step_mhz: 500.0
+  time_horizon_us: 30000000.0
+  max_pulses: 50000
+  max_steps_per_episode: 1000
+  belief:
+    ema_alpha: 0.30
+    ema_alpha_miss_confirmed: 0.20
+  reward:
+    version: "v2"
+    variant: "baseline"
+    w_hit_novel: 10.0
+    w_hit_repeat: 8.0
+    w_latency: 5.0
+    w_agile_bonus: 2.0
+    w_prediction: 0.5
+    w_miss: -4.0
+    w_false_alarm: -1.0
+    w_redundant: -0.25
+    w_dwell_cost: -0.01
+
+# ── Reward ──────────────────────────────────────────────────────────────────
+reward:
+  version: "v2"
+  variant: "baseline"
+  w_hit_novel: 10.0
+  w_hit_repeat: 8.0
+  w_latency: 5.0
+  w_agile_bonus: 2.0
+  w_prediction: 0.5
+  w_miss: -4.0
+  w_false_alarm: -1.0
+  w_redundant: -0.25
+  w_dwell_cost: -0.01
+
+# ── Validation ──────────────────────────────────────────────────────────────
+# Fixed 10-file val set (reproducible gate evaluation)
+validation:
+  subset: "val"
+  n_files: 10
+  seed: 42
+  allow_synthetic_fallback: false
+
+# ── Telemetry ────────────────────────────────────────────────────────────────
+telemetry:
+  schema_version: "2.0"
+
+# ── Gate-100k Target Criteria ────────────────────────────────────────────────
+# Phase-1 is complete when Gate-100k checkpoint satisfies ALL of:
+#   mean_ir >= 65%          (across all 10 val scenarios)
+#   worst_case_ir >= 20%    (config_143, config_119, config_241)
+#   top_band_frac <= 75%    (collapse resolved)
+#   pd >= 99%
+#   pfa <= 0.05%
+#   optimizer_steps >= 15000
