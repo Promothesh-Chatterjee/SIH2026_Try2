@@ -1,160 +1,159 @@
-# Cloud Deployment Guide: Render (Backend) + Vercel (Frontend)
+# Azure Cloud Production Deployment Guide ($0.00 Cost Model)
 
-This guide walks you through deploying the **Cognitive EW SmartScan Backend** to **Render** and connecting it to your **Frontend** already running on **Vercel** (`https://sih-2026-try2.vercel.app/`).
+This guide documents the complete production cloud deployment of **Cognitive EW SmartScan** on **Microsoft Azure** using the **GitHub Student Developer Pack (Azure for Students)**.
 
 ---
 
-## 1. Commit and Push to GitHub
+## 1. Cloud Architecture Overview
 
-Ensure all new deployment configurations and optimizations are pushed to GitHub:
+The system is deployed across an integrated, enterprise-grade architecture in Azure Region `indiasouthcentral`:
 
-```bash
-git add .
-git commit -m "feat(deploy): add render.yaml, requirements-render.txt, vercel config, and cloud connection panel"
-git push origin main
+```
+                                    +---------------------------------------------------+
+                                    |         Azure Region: indiasouthcentral           |
+                                    |                                                   |
+  +--------------------------+      |  +---------------------------------------------+  |
+  |  GitHub Container        |      |  |           smartscan-rg (Resource Group)     |  |
+  |  Registry (GHCR)         |      |  |                                             |  |
+  |  ghcr.io/promothesh-     |      |  |  +---------------------------------------+  |  |
+  |  chatterjee/sih2026_try2 |====> |  |  |     Azure Kubernetes Service (AKS)    |  |  |
+  |  (:latest, 3.24 GB)      |      |  |  |     Cluster: smartscan-aks            |  |  |
+  +--------------------------+      |  |  |     Node: 1x Standard_B2s (Burstable) |  |  |
+                                    |  |  |     Public IP: 172.198.227.59:80      |  |  |
+                                    |  |  +---------------------------------------+  |  |
+                                    |  |                         |                   |  |
+                                    |  |                         v                   |  |
+                                    |  |  +---------------------------------------+  |  |
+                                    |  |  |      Storage: smartscanstore4301      |  |  |
+                                    |  |  |      - Container: tsrd-dataset        |  |  |
+                                    |  |  |      - Container: smartscan-models    |  |  |
+                                    |  |  |      - Container: reports             |  |  |
+                                    |  |  +---------------------------------------+  |  |
+                                    |  +---------------------------------------------+  |
+                                    +---------------------------------------------------+
 ```
 
 ---
 
-## 2. Deploy Backend on Render
+## 2. Resource Inventory & Free Tier ($0.00) Accounting
 
-### Method A: Blueprint (1-Click Automated Setup — Recommended)
-1. Log in to [Render Dashboard](https://dashboard.render.com).
-2. Click **New +** (top right) $\rightarrow$ **Blueprint**.
-3. Select your GitHub repository: `Promothesh-Chatterjee/SIH2026_Try2`.
-4. Render will automatically read `render.yaml` from the repository:
-   - **Service Name**: `smartscan-backend`
-   - **Runtime**: Python 3.11
-   - **Build Command**: `pip install --upgrade pip && pip install -e ".[render]"`
-   - **Start Command**: `python -m uvicorn ew_core.deployment.api:app --host 0.0.0.0 --port $PORT`
-   - **Health Check Path**: `/health`
-   - **Plan**: Free
-5. Click **Apply**.
-6. Wait 1–2 minutes for the build to complete. Once finished, Render will display your service URL (e.g., `https://smartscan-backend-xxxx.onrender.com`).
+Every component has been configured to guarantee zero out-of-pocket costs:
 
----
+| Resource | Service / Name | Configuration / Tier | Region | Cost Impact |
+| :--- | :--- | :--- | :--- | :--- |
+| **Resource Group** | `smartscan-rg` | Management container | `indiasouthcentral` | **$0.00** (Free) |
+| **Container Registry** | GitHub Container Registry (GHCR) | `ghcr.io/promothesh-chatterjee/sih2026_try2:latest` | Global (CDN) | **$0.00** (Included in GitHub Student Pack) |
+| **Blob Storage Account** | `smartscanstore4301` | `Standard_LRS` (5 GB Free Tier) | `indiasouthcentral` | **$0.00** (~180 MB used, < 4% of free quota) |
+| **Blob Containers** | `tsrd-dataset`, `smartscan-models`, `reports` | Private Blob Storage | `indiasouthcentral` | **$0.00** |
+| **Kubernetes Cluster** | `smartscan-aks` | 1 Node `Standard_B2s` (Linux 64-bit) | `indiasouthcentral` | Covered by Azure Student credits; **$0.00 when paused** |
+| **Public LoadBalancer** | `smartscan-api-svc` | Standard Public IP (`172.198.227.59:80`) | `indiasouthcentral` | **$0.00** (Attached to cluster) |
 
-### Method B: Manual Web Service Setup
-If you prefer creating the Web Service manually:
-1. Go to [Render Dashboard](https://dashboard.render.com) $\rightarrow$ **New +** $\rightarrow$ **Web Service**.
-2. Select your repository: `Promothesh-Chatterjee/SIH2026_Try2`.
-3. Configure the following settings:
-   - **Name**: `smartscan-backend`
-   - **Region**: Any (e.g., Oregon or Frankfurt)
-   - **Branch**: `main`
-   - **Root Directory**: *(leave blank or set to repository root)*
-   - **Runtime**: `Python 3`
-   - **Build Command**:
-     ```bash
-     pip install --upgrade pip && pip install -e ".[render]"
-     ```
-   - **Start Command**:
-     ```bash
-     python -m uvicorn ew_core.deployment.api:app --host 0.0.0.0 --port $PORT
-     ```
-   - **Instance Type**: `Free`
-4. Under **Advanced**:
-   - Add Environment Variable:
-     - `PYTHON_VERSION` = `3.11.9`
-     - `DEVICE` = `cpu`
-     - `CORS_ORIGINS` = `https://sih-2026-try2.vercel.app`
-   - **Health Check Path**: `/health`
-5. Click **Create Web Service**.
+> [!IMPORTANT]
+> **Azure Student Policy Compliance**: All Azure resources are strictly deployed in region **`indiasouthcentral`** to comply with the Azure for Students policy (`sys.regionrestriction`).
 
 ---
 
-## 3. Verify Backend Deployment
+## 3. Cluster Lifecycle Management (Freeze & Resume)
 
-Once deployed on Render, verify the service is healthy by opening the URL in your browser:
-```text
-https://<your-service-name>.onrender.com/health
-```
-You will receive a JSON response confirming that all neural models and the mission controller are online:
-```json
-{
-  "status": "ok",
-  "device": "cpu",
-  "models_loaded": {
-    "deinterleaver": true,
-    "scheduler": true,
-    "memory": true
-  },
-  "dimension_check_passed": true,
-  "normalization_hash_match": true,
-  "hidden_state_ready": true,
-  "mission_controller_ready": true
-}
-```
+To ensure zero compute credits are consumed when not performing live tests or evaluations, use the following single-command Azure CLI operations:
 
----
-
-## 4. Connect Backend to Vercel Frontend
-
-### Option 1: Permanent Environment Variable in Vercel (Recommended)
-1. Go to your [Vercel Dashboard](https://vercel.com) and open the `sih-2026-try2` project.
-2. Go to **Settings** $\rightarrow$ **Environment Variables**.
-3. Add a new variable:
-   - **Key**: `VITE_API_BASE_URL`
-   - **Value**: `https://<your-service-name>.onrender.com` *(no trailing slash)*
-4. Go to the **Deployments** tab in Vercel, click on the **...** menu on the latest deployment, and click **Redeploy**.
-5. Once rebuilt, the Vercel app will permanently point to your live Render backend for both REST and secure WebSockets (`wss://`).
-
----
-
-### Option 2: Instant Connection via UI (No Rebuild Required!)
-1. Open your live app: [https://sih-2026-try2.vercel.app/](https://sih-2026-try2.vercel.app/)
-2. In the sidebar, click on **System Config** (`/system`).
-3. Locate the panel: **00 // LIVE BACKEND CLOUD CONNECTION (RENDER / VERCEL)**.
-4. Paste your Render backend URL (e.g. `https://<your-service-name>.onrender.com`).
-5. Click **Connect & Save**.
-6. The app will immediately test the connection, verify the active frozen neural models (`Gate-25k-R4.2-alpha020`), and switch all live telemetry and WebSocket streams to your Render backend!
-
----
-
-## 5. End-to-End Operational Checklist
-
-| Subsystem | Endpoint | Verification |
-| :--- | :--- | :--- |
-| **Liveness & Neural Health** | `GET /health` | Status 200 with `models_loaded: true` |
-| **Telemetry History** | `GET /telemetry/latest` | Real FoM metrics from receiver |
-| **Live Telemetry Stream** | `WSS /ws/state` | Continuous 5 Hz telemetry broadcasting |
-| **Live Mission Controller** | `POST /mission/stream/start` | Closed-loop 180-action DRQN radar scheduler |
-| **Dynamic Benchmark** | `POST /benchmark/evaluate` | Dynamic multi-scheduler comparison |
-
----
-
-## 6. Azure Kubernetes Service (AKS) Production Architecture ($0.00 Cost Model)
-
-The Cognitive EW SmartScan system is fully containerized and verified on **Azure Kubernetes Service (AKS)** in region `indiasouthcentral` using GitHub Container Registry (GHCR) and Azure Blob Storage:
-
-### Architecture Summary
-* **Container Registry**: `ghcr.io/promothesh-chatterjee/sih2026_try2:latest` (100% Free Forever via GitHub Student Developer Pack)
-* **Kubernetes Cluster**: `smartscan-aks` (Resource Group: `smartscan-rg`, Node: `Standard_B2s` in `indiasouthcentral`)
-* **Storage Account**: `smartscanstore4301` (`Standard_LRS`, 5GB Free Tier)
-  * `tsrd-dataset`: TSRD validation HDF5 scenarios
-  * `smartscan-models`: Neural checkpoints (`best.pt`, `checkpoint_gate_25000_frozen.pt`)
-  * `reports`: Benchmark evaluation outputs
-* **Public Service**: Public LoadBalancer on port 80 (Assigned IP: `172.198.227.59`)
-
-### Single-Command Cluster Lifecycle Management
-
-To prevent consuming any compute credits when not performing live demonstrations, use the Azure CLI:
-
-#### 1. Resume / Start Cluster
-```bash
+### A. Resume / Start Cluster (Before Demonstrations)
+To wake up the Kubernetes cluster and bring all pods and APIs online:
+```powershell
 az aks start --name smartscan-aks --resource-group smartscan-rg
 ```
-*Takes ~2 minutes. Reallocates the node and restores the running pod at `http://172.198.227.59`.*
+* **Execution Time**: ~2 minutes.
+* **Result**: The `Standard_B2s` VM node is reallocated, the container image is loaded from local cache, and the service resumes immediately on **`http://172.198.227.59`**.
 
-#### 2. Pause / Stop Cluster (Zero Compute Billing)
-```bash
+### B. Pause / Stop Cluster (After Demonstrations)
+To pause compute execution and freeze billing at **$0.00**:
+```powershell
 az aks stop --name smartscan-aks --resource-group smartscan-rg
 ```
-*Deallocates VM compute cores. Freezes billing completely at $0.00.*
+* **Execution Time**: ~1.5 minutes.
+* **Result**: Deallocates the compute instance cores. Storage and IP configurations are preserved, but all compute consumption stops.
 
-#### 3. Check Status
-```bash
+### C. Check Live Power State
+To verify whether the cluster is currently active or paused:
+```powershell
 az aks show --name smartscan-aks --resource-group smartscan-rg --query "{PowerState:powerState.code,ProvisioningState:provisioningState}"
 ```
-*(Returns `PowerState: Stopped` or `PowerState: Running`)*
+* Output when paused:
+  ```json
+  {
+    "PowerState": "Stopped",
+    "ProvisioningState": "Succeeded"
+  }
+  ```
+* Output when running:
+  ```json
+  {
+    "PowerState": "Running",
+    "ProvisioningState": "Succeeded"
+  }
+  ```
 
+---
+
+## 4. Live Endpoint Reference & Verification
+
+When the cluster is active, the following endpoints are available at Public IP **`172.198.227.59:80`**:
+
+### 1. Readiness Probe
+* **Method**: `GET`
+* **URL**: `http://172.198.227.59/ready`
+* **Response**:
+  ```json
+  {
+    "status": "ready",
+    "model_loaded": true,
+    "dataset_root": "/mnt/tsrd",
+    "scenarios_count": 0,
+    "ts": 1790107024.0569508
+  }
+  ```
+
+### 2. Multi-Scheduler Benchmark Comparison API
+* **Method**: `GET`
+* **URL**: `http://172.198.227.59/api/benchmark`
+* **Description**: Serves the complete 4-scheduler comparative analysis table across all 5,000 receiver dwell steps (evaluating **SmartScan DRQN MoE**, **Random**, **RoundRobin**, and **HighestOccupancy**).
+
+### 3. Live Metrics WebSocket Stream
+* **Protocol**: `WebSocket`
+* **URL**: `ws://172.198.227.59/ws/metrics`
+* **Description**: Live, bidirectional WebSocket channel streaming real-time operational radar telemetry (interception rate, sensitivity, false alarms, and Figures of Merit).
+
+### 4. Neural Action Inference
+* **Method**: `POST`
+* **URL**: `http://172.198.227.59/predict_bands`
+* **Payload**:
+  ```json
+  {
+    "obs": [0.0, ..., 0.0],
+    "policy_mode": "operational"
+  }
+  ```
+* **Description**: Executes neural action arbitration using the frozen operational candidate checkpoint (`Gate-25k-R4.2-alpha020`) with calibrated inference latency (~54 ms).
+
+---
+
+## 5. Connecting the Frontend Dashboard
+
+The frontend application (`frontend/`) is configured to interface directly with the live Azure AKS backend.
+
+### Running Frontend Locally with Live Azure AKS Backend:
+1. Open PowerShell in `frontend/`:
+   ```powershell
+   npm run preview
+   ```
+2. The dashboard runs at `http://localhost:4173/` (or `http://localhost:5173/`) and connects across the internet to the Azure AKS backend at `http://172.198.227.59` and `ws://172.198.227.59/ws/metrics`.
+3. All CORS headers on the FastAPI backend are configured to authorize local development and preview origins.
+
+---
+
+## 6. Kubernetes Deployment Manifests
+
+The Kubernetes configuration files are maintained in the `k8s/` directory:
+* [`k8s/deployment.yaml`](file:///c:/Users/PromotheshChatterjee/Documents/GitHub/SIH2026_Try2/k8s/deployment.yaml): Contains the Deployment and Public LoadBalancer Service specs, with `/ready` liveness and readiness probes, resource limits (1 CPU, 2 GiB RAM), and volume mounts.
+* `ghcr-secret`: Secret configured on the cluster containing GitHub PAT credentials to pull from GitHub Container Registry.
+* `smartscan-secrets`: Secret configured with the Azure Storage Account connection string and API keys.
