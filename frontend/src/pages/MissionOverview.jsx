@@ -9,6 +9,9 @@ import {
   PipelineFlow,
 } from "../components/stitch";
 import { useOverviewTelemetry } from "../services/useOverviewTelemetry";
+import { useMetricsWebSocket } from "../hooks/useMetricsWebSocket";
+import LiveMetricsDashboard from "../components/LiveMetricsDashboard";
+import SpectrumWaterfall from "../components/SpectrumWaterfall";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -532,6 +535,7 @@ function EnvironmentSpectrum({ activeBands, quietBands, currentBand, currentFreq
 
 export default function MissionOverview() {
   const t = useOverviewTelemetry();
+  const { metrics: wsMetrics, history: wsHistory } = useMetricsWebSocket();
   const [isOperating, setIsOperating] = useState(false);
   const [controlError, setControlError] = useState("");
 
@@ -701,6 +705,12 @@ export default function MissionOverview() {
           footRight={live ? "LIVE CLOCK" : "INACTIVE"}
           valueColor="#bdc2ff"
         />
+      </section>
+
+      {/* Live Cognitive EW Metrics & Spectrum Waterfall (Phase 4) */}
+      <section style={{ display: "flex", flexDirection: "column", gap: 8, margin: "8px 0" }}>
+        <LiveMetricsDashboard metrics={wsMetrics} />
+        <SpectrumWaterfall history={wsHistory} />
       </section>
 
       {/* Main 2-column layout */}

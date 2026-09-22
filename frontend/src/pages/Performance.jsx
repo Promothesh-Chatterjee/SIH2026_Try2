@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { PanelHead, StitchTable } from "../components/stitch";
 import { useOverviewTelemetry } from "../services/useOverviewTelemetry";
 import { api } from "../services/api";
+import BenchmarkTable from "../components/BenchmarkTable";
 
 const BENCHMARK_COLUMNS = [
   "Metric Dimension",
@@ -511,6 +512,18 @@ export default function Performance() {
               {isEvaluating ? "EVALUATING..." : "RUN BENCHMARK EVALUATION"}
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Problem Statement 7 FoM Authoritative Benchmark */}
+      <div className="st-panel">
+        <PanelHead
+          icon="assessment"
+          title="PROBLEM STATEMENT AUTHORITATIVE BENCHMARK (ALL 7 FoMs)"
+          badge="CANONICAL 10 SCENARIOS"
+        />
+        <div className="st-body" style={{ padding: 12 }}>
+          <BenchmarkTable />
         </div>
       </div>
 

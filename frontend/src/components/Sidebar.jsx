@@ -3,6 +3,7 @@ import ThemeToggle from "./ThemeToggle";
 
 const ICONS = {
   overview: "grid_view",
+  benchmark: "table_chart",
   spectrum: "show_chart",
   "smart-scan": "neurology",
   receiver: "satellite_alt",

@@ -83,3 +83,108 @@ button {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* ── Phase 4 Components: LiveMetricsDashboard, Waterfall, Benchmark ───────── */
+.metrics-dashboard {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.conn-status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fom-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.fom-card {
+  padding: 8px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fom-card.good {
+  border-left: 3px solid #00ff88;
+}
+
+.fom-card.warn {
+  border-left: 3px solid #f59e0b;
+}
+
+.fom-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fom-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-bright);
+}
+
+.fom-target {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.action-attribution {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  background: var(--panel-3);
+  padding: 8px 12px;
+  border: 1px solid var(--border-dim);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.action-attribution .attr-title {
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.waterfall-wrap {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 12px;
+}
+
+.benchmark-table-wrap {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.benchmark-table th {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.benchmark-table td {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
