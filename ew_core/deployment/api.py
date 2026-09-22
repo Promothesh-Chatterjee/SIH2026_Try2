@@ -187,6 +187,8 @@ STATE: dict[str, Any] = {
     "receiver_adapter": None,
     "state_builder": None,
     "controller": None,
+    "online_learner": None,
+    "shift_detector": None,
 }
 
 # P0-10: real telemetry broker. Deliberately no fabricated streaming keys: the
@@ -918,6 +920,25 @@ async def lifespan(app: FastAPI):  # type: ignore
         logger.error("Failed to initialise OperationalReceiverController: %s", exc)
         STATE["controller"] = None
 
+    # Audit Item 13: OpenTelemetry & Azure Application Insights setup
+    try:
+        from ew_core.deployment.telemetry import configure_telemetry
+        configure_telemetry(app=app)
+    except Exception as tel_exc:
+        logger.warning("Telemetry setup notice: %s", tel_exc)
+
+    # Audit Items H & I: Continual Online Learner + Distribution Shift Detector
+    try:
+        from ew_core.training.distribution_shift_detector import DistributionShiftDetector
+        from ew_core.training.online_learner import OnlineLearner
+        drqn_model = STATE.get("scheduler")
+        if drqn_model is not None and hasattr(drqn_model, "parameters"):
+            STATE["online_learner"] = OnlineLearner(drqn_model)
+        STATE["shift_detector"] = DistributionShiftDetector(obs_dim=CANONICAL_OBS_DIM)
+        logger.info("OnlineLearner and DistributionShiftDetector initialised for deployment")
+    except Exception as adapt_exc:
+        logger.warning("Adaptation setup notice: %s", adapt_exc)
+
     yield
     # Shutdown: close DB
     try:
@@ -1150,6 +1171,27 @@ def telemetry_runs() -> dict[str, Any]:
     return {"runs": runs}
 
 
+@app.get("/diagnostics", tags=["system", "adaptation"])
+def get_diagnostics() -> dict[str, Any]:
+    """Expose online continual learning and distribution shift telemetry."""
+    online_lrn = STATE.get("online_learner")
+    shift_det = STATE.get("shift_detector")
+    return {
+        "online_learner": {
+            "buffer_size": online_lrn.buffer_size if online_lrn else 0,
+            "update_count": getattr(online_lrn, "_update_count", 0) if online_lrn else 0,
+            "step_count": getattr(online_lrn, "_step_count", 0) if online_lrn else 0,
+            "active": online_lrn is not None,
+        },
+        "distribution_shift": {
+            "shift_detected": getattr(shift_det, "shift_detected", False) if shift_det else False,
+            "severity": getattr(shift_det, "shift_severity", "none") if shift_det else "none",
+            "kl_history_last10": getattr(shift_det, "_kl_history", [])[-10:] if shift_det else [],
+            "active": shift_det is not None,
+        },
+    }
+
+
 @app.post("/reset", tags=["system"])
 def reset(request: Request) -> dict[str, str]:
     """Reset LSTM hidden state and episodic memory."""
@@ -1307,6 +1349,36 @@ def predict_bands(req: PredictBandsRequest) -> PredictBandsResponse:
     band = band_of_action(action, n_modes)
     mode = mode_of_action(action, n_modes)
     latency = (time.perf_counter() - start) * 1000.0
+
+    # Audit Item 13: OpenTelemetry inference tracing
+    try:
+        from ew_core.deployment.telemetry import record_inference_span
+        record_inference_span(
+            action=action,
+            band=band,
+            mode=mode,
+            q_score=float(prob),
+            decision_reason=str(attribution.get("reason", "eager_drqn")),
+            hit=bool(prob >= 0.5),
+            latency_us=latency * 1000.0,
+        )
+    except Exception:
+        pass
+
+    # Audit Item I: Distribution Shift check
+    shift_det = STATE.get("shift_detector")
+    if shift_det is not None:
+        try:
+            shift_info = shift_det.update(obs)
+            if shift_info.get("shift_detected"):
+                moe_obj = STATE.get("moe")
+                if moe_obj is not None and "raise_tau_to_0.5" in shift_info.get("actions", []):
+                    moe_obj.tau = 0.5
+                elif moe_obj is not None and "raise_tau_to_0.25" in shift_info.get("actions", []):
+                    moe_obj.tau = max(getattr(moe_obj, "tau", 0.0), 0.25)
+        except Exception:
+            pass
+
     return PredictBandsResponse(
         selected_action=int(action),
         selected_band=band,
@@ -1580,6 +1652,26 @@ def mission_step(req: MissionStepRequest, request: Request) -> MissionStepRespon
             )
         except Exception as tel_err:
             logger.debug("Failed to update telemetry publisher: %s", tel_err)
+
+        # Audit Items H & I: Online continual learning + Distribution shift tracking
+        online_lrn = STATE.get("online_learner")
+        if online_lrn is not None and req.obs is not None:
+            try:
+                obs_np = np.asarray(req.obs, dtype=np.float32)
+                act = int(frame.selected_band * CANONICAL_N_MODES + frame.selected_mode)
+                rew = 1.0 if frame.hit else -0.1
+                nobs_np = obs_np.copy()
+                online_lrn.record_step(obs_np, act, rew, nobs_np, done=False)
+                online_lrn.try_update()
+            except Exception:
+                pass
+
+        shift_det = STATE.get("shift_detector")
+        if shift_det is not None and req.obs is not None:
+            try:
+                shift_det.update(np.asarray(req.obs, dtype=np.float32))
+            except Exception:
+                pass
 
         return MissionStepResponse(status="ok", frame=frame_dict)
     except Exception as exc:
