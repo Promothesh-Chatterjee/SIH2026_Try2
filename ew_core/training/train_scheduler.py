@@ -576,10 +576,26 @@ def train_scheduler(
     target_drqn = copy.deepcopy(online_drqn).to(device)
     target_drqn.eval()
 
-    moe = SmartScanMoE(
-        online_drqn,
-        {**moe_cfg, "n_bands": n_bands, "n_modes": n_modes, "n_actions": n_actions, "device": str(device)},
-    ).to(device)
+    # Phase-1 Task 1.3: Training-mode MoE config override.
+    # During training the MoE is used PASSIVELY for telemetry/attribution only;
+    # actual training actions come from online_drqn.act() (epsilon-greedy).
+    # We raise confidence_margin_threshold and enable exploration so the diagnostic
+    # attribution logs reflect the exploratory training phase, not operational inference.
+    # SAFETY: This has NO effect on training actions or gradients.
+    _training_moe_overrides = {
+        "confidence_margin_threshold": 0.08,  # higher than operational 0.02 — forces fallback attribution
+        "policy_mode": "demo",                 # demo mode (not operational) for training eval telemetry
+        "exploration_enabled": True,           # allow MoE to explore during diagnostic queries
+    }
+    _training_moe_cfg = {
+        **moe_cfg,
+        **_training_moe_overrides,
+        "n_bands": n_bands,
+        "n_modes": n_modes,
+        "n_actions": n_actions,
+        "device": str(device),
+    }
+    moe = SmartScanMoE(online_drqn, _training_moe_cfg).to(device)
 
     learning_rate = float(sched_cfg.get("learning_rate", drqn_cfg.get("lr", 1e-4)))
     optimizer = optim.Adam(online_drqn.parameters(), lr=learning_rate)
