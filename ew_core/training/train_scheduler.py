@@ -140,6 +140,8 @@ def _do_drqn_update(
     target_q_max: float = 100.0,
     target_q_min: float = -50.0,
     q_reg_coef: float = 1e-4,
+    n_bands: int = 36,
+    n_modes: int = 5,
 ) -> float:
     """One Double-DQN BPTT update on a sampled batch. Returns loss value.
 
@@ -215,6 +217,36 @@ def _do_drqn_update(
         q_reg_loss = torch.zeros((), device=device)
 
     loss: torch.Tensor = q_loss + q_reg_loss
+
+    # Phase-1 Anti-Collapse: entropy regulariser (λ_ent=0.01)
+    # Penalise Q-value concentration — prevents the policy collapsing to a
+    # single dominant action across all bands (top_band_fraction → 100%).
+    # Applied only on graded (non-burn-in) transitions in loss_mask.
+    q_probs = torch.softmax(q_all[loss_mask] / 1.0, dim=-1)  # temperature=1.0
+    action_entropy = -(q_probs * torch.log(q_probs + 1e-8)).sum(dim=-1).mean()
+    lambda_ent = 0.01
+    loss = loss - lambda_ent * action_entropy
+
+    # Phase-1 Anti-Collapse: top-band diversity penalty
+    # If a single band dominates >80% of the Q-mass across graded transitions,
+    # apply a small additional penalty proportional to the excess concentration.
+    # Detached from backward to avoid gradient instability.
+    _diversity_pen = torch.zeros((), device=device)
+    with torch.no_grad():
+        _n_graded = loss_mask.sum().item()
+        if _n_graded > 0:
+            # Reshape graded Q values: (N_graded, n_bands, n_modes)
+            _q_graded = q_all[loss_mask].view(-1, n_bands, n_modes)
+            # Max Q per band across modes → per-band saliency
+            _band_max_q = _q_graded.max(dim=-1).values  # (N_graded, n_bands)
+            _band_softmax = torch.softmax(_band_max_q, dim=-1)
+            _top_band_frac = _band_softmax.max(dim=-1).values.mean()
+        else:
+            _top_band_frac = torch.zeros((), device=device)
+    if _top_band_frac > 0.80:
+        _diversity_pen = 0.005 * (_top_band_frac - 0.80) * loss.abs().detach()
+        loss = loss + _diversity_pen
+
     aux_loss: torch.Tensor = torch.zeros((), device=device)
     if aux_coef > 0:
         hit_probs = torch.tensor(batch["hit_probs"], dtype=torch.float32, device=device)
@@ -293,6 +325,10 @@ def _do_drqn_update(
             stats["replay_hit_fraction"] = float(hit_probs[loss_mask_t].mean().item())
         stats["replay_sequence_hit_fraction"] = float(batch.get("sequence_hit_fraction", 0.0))
         stats["pos_scen_concentration"] = float(batch.get("pos_scen_concentration", 0.0))
+        # Phase-1 Anti-Collapse telemetry
+        stats["action_entropy"] = float(action_entropy.item())
+        stats["top_band_frac"] = float(_top_band_frac.item() if torch.is_tensor(_top_band_frac) else float(_top_band_frac))
+        stats["diversity_penalty"] = float(_diversity_pen.item())
     return float(loss.item())
 
 
@@ -1068,6 +1104,8 @@ def train_scheduler(
                         target_q_max=target_q_max,
                         target_q_min=target_q_min,
                         q_reg_coef=q_reg_coef,
+                        n_bands=n_bands,
+                        n_modes=n_modes,
                     )
                     if upd_stats:
                         if "reward_baseline" in upd_stats:
