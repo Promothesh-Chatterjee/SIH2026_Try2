@@ -79,6 +79,25 @@ class EWMetrics:
     n_true_negatives: int = 0
     canonical_pfa: float = 0.0
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize Figures of Merit to dictionary."""
+        return {
+            "pd": float(self.pd),
+            "pfa": float(self.pfa),
+            "sensitivity_dbm": float(self.sensitivity_dbm),
+            "avg_intercept_rate": float(self.avg_intercept_rate),
+            "avg_reward": float(self.avg_reward),
+            "pct_correct_predictions": float(self.pct_correct_predictions),
+            "avg_intercept_time_error_us": float(self.avg_intercept_time_error_us),
+            "n_intercepts": int(self.n_intercepts),
+            "n_false_alarms": int(self.n_false_alarms),
+            "n_total_transmissions": int(self.n_total_transmissions),
+            "n_receiver_dwells": int(self.n_receiver_dwells),
+            "n_missed_dwells": int(self.n_missed_dwells),
+            "n_true_negatives": int(self.n_true_negatives),
+            "canonical_pfa": float(self.canonical_pfa),
+        }
+
 
 def compute_pd(n_true_positives: int, n_false_negatives: int = 0) -> float:
     """Compute Probability of Detection: Pd = TP / (TP + FN).

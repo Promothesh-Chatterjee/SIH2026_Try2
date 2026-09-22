@@ -17,15 +17,17 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 import torch
 import yaml
 
-from ..contracts import CANONICAL_N_BANDS, CANONICAL_N_MODES
+from ..contracts import CANONICAL_N_BANDS, CANONICAL_N_MODES, band_of_action
 from ..environment.cognitive_rf_scan_env import CognitiveRFScanEnv
-from ..environment.scenario_generator import load_h5_records
+from ..environment.scenario_generator import load_h5_records, synthetic_records
+from ..metrics.ew_metrics import compute_all_metrics, EWMetrics
+from ..models.drqn_scheduler import DRQNScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -194,4 +196,211 @@ def evaluate_q_diagnostics(
         "stuck_state_top1_mode": stuck_top1_mode,
         "stuck_state_top2_band": stuck_top2_band,
         "stuck_state_margin": stuck_margin,
+    }
+
+
+def run_evaluation(
+    scheduler: Any,
+    env: CognitiveRFScanEnv | None = None,
+    scenario_ids: Sequence[str] | None = None,
+    n_steps: int = 1000,
+    seed: int = 42,
+    policy_mode: str = "operational",
+    data_dir: str | Path = "D:/TSRD",
+    device: str | torch.device = "cpu",
+) -> dict[str, Any]:
+    """Unified evaluation harness computing all 7 PS Figures of Merit.
+
+    Args:
+        scheduler: Scheduler policy (SmartScanMoE, DRQNScheduler, or baseline).
+        env: Optional pre-existing environment.
+        scenario_ids: Scenario IDs to evaluate (e.g. ['config_117', ...]).
+        n_steps: Episode steps per scenario.
+        seed: Random seed for environment reproducibility.
+        policy_mode: 'operational' (deterministic) or 'demo' (exploratory).
+        data_dir: Root dataset directory.
+        device: Torch execution device for neural models.
+
+    Returns:
+        Dict containing all 7 aggregate Figures of Merit and per-scenario breakdown.
+    """
+    dev = torch.device(device) if isinstance(device, str) else device
+    val_dir = Path(data_dir) / "stare" / "val_stare"
+    if not val_dir.exists():
+        val_dir = Path(data_dir) / "val"
+
+    if scenario_ids is None or len(scenario_ids) == 0:
+        if env is not None:
+            active_scenarios = [("provided_env", None)]
+        else:
+            active_scenarios = [("default_scenario", None)]
+    else:
+        active_scenarios = [(scen_id, scen_id) for scen_id in scenario_ids]
+
+    scenario_metrics: dict[str, EWMetrics] = {}
+
+    for scen_idx, (scen_name, scen_id) in enumerate(active_scenarios):
+        # 1. Resolve pulse records & environment
+        if scen_id is not None:
+            h5_path = val_dir / f"{scen_id}.h5"
+            if h5_path.exists():
+                records = load_h5_records(
+                    h5_path,
+                    freq_min_mhz=0.0,
+                    freq_max_mhz=18000.0,
+                    time_horizon_us=30000000.0,
+                    max_pulses=50000,
+                )
+            else:
+                logger.warning("Scenario %s not found in %s; falling back to synthetic records", scen_id, val_dir)
+                records = synthetic_records(seed=seed + scen_idx)
+
+            env_cfg = {
+                "n_bands": CANONICAL_N_BANDS,
+                "n_modes": CANONICAL_N_MODES,
+                "obs_dim": CANONICAL_N_BANDS * 10,
+                "semantic_memory_path": ":memory:",
+                "max_steps_per_episode": n_steps,
+                "reward": {"version": "v2"},
+            }
+            if env is not None and hasattr(env, "config"):
+                env_cfg.update(env.config)
+            eval_env = CognitiveRFScanEnv(env_cfg, records=records, seed=seed + scen_idx)
+        else:
+            if env is not None:
+                eval_env = env
+            else:
+                eval_env = CognitiveRFScanEnv(
+                    {
+                        "n_bands": CANONICAL_N_BANDS,
+                        "n_modes": CANONICAL_N_MODES,
+                        "obs_dim": CANONICAL_N_BANDS * 10,
+                        "semantic_memory_path": ":memory:",
+                        "max_steps_per_episode": n_steps,
+                        "reward": {"version": "v2"},
+                    },
+                    records=synthetic_records(seed=seed),
+                    seed=seed,
+                )
+
+        # 2. Reset scheduler and environment
+        obs, _ = eval_env.reset()
+        if hasattr(scheduler, "reset"):
+            scheduler.reset()
+        hidden = None
+        if hasattr(scheduler, "init_hidden"):
+            hidden = scheduler.init_hidden(1, dev)
+
+        episode_log: dict[str, list[Any]] = {
+            "hits": [],
+            "chosen_bands": [],
+            "active_bands_per_step": [],
+            "rewards": [],
+            "predicted_times": [],
+            "actual_times": [],
+            "false_alarms": [],
+        }
+
+        # 3. Episode step loop
+        for step in range(n_steps):
+            # Select action
+            if hasattr(scheduler, "select_action"):
+                try:
+                    action, hidden, attr = scheduler.select_action(obs, hidden, policy_mode=policy_mode)
+                except TypeError:
+                    action, hidden, attr = scheduler.select_action(obs, hidden)
+            elif hasattr(scheduler, "act"):
+                if isinstance(scheduler, DRQNScheduler) or hasattr(scheduler, "lstm"):
+                    t_obs = torch.as_tensor(obs, dtype=torch.float32, device=dev)
+                    action, hidden = scheduler.act(t_obs, hidden)
+                else:
+                    res = scheduler.act(obs)
+                    action = res[0] if isinstance(res, tuple) else res
+            elif hasattr(scheduler, "step"):
+                action = scheduler.step(obs)
+            elif callable(scheduler):
+                action = scheduler(obs)
+            else:
+                raise ValueError(f"Unsupported scheduler interface: {type(scheduler)}")
+
+            action = int(action)
+            band = int(band_of_action(action, CANONICAL_N_MODES))
+
+            # TASK 2.1: Wire TemporalPredictor Output into avg_intercept_time_error
+            temporal_pred = getattr(scheduler, "temporal_predictor", getattr(eval_env, "temporal_predictor", None))
+            pred_toa = None
+            dwell_start = float(getattr(eval_env.receiver, "current_time_us", 0.0))
+            if temporal_pred is not None:
+                try:
+                    preds = temporal_pred.predict_all(current_time=dwell_start, horizon_us=50000.0)
+                    for p in preds:
+                        if p.target_band == band:
+                            pred_toa = float(p.next_expected_toa)
+                            break
+                except Exception:
+                    pass
+
+            # Step environment
+            obs, reward, terminated, truncated, info = eval_env.step(action)
+
+            hit = bool(info.get("hit", False))
+            active_bands = info.get("active_bands", [])
+            false_alarm = bool(not (band in active_bands) and hit)
+
+            episode_log["hits"].append(hit)
+            episode_log["chosen_bands"].append(band)
+            episode_log["active_bands_per_step"].append(active_bands)
+            episode_log["rewards"].append(float(reward))
+            episode_log["false_alarms"].append(false_alarm)
+
+            if hit:
+                actual_toa = float(dwell_start + info.get("intercept_time_error_us", 0.0))
+                if pred_toa is not None:
+                    episode_log["predicted_times"].append(pred_toa)
+                    episode_log["actual_times"].append(actual_toa)
+                else:
+                    # Baseline or unpredicted arrival: record dwell-onset relative latency
+                    episode_log["predicted_times"].append(dwell_start)
+                    episode_log["actual_times"].append(actual_toa)
+
+            if hasattr(scheduler, "update_result"):
+                scheduler.update_result(hit, band)
+            if hasattr(scheduler, "update"):
+                scheduler.update(action)
+
+            if terminated or truncated:
+                break
+
+        # Compute all 7 FoMs for this scenario
+        metrics = compute_all_metrics(episode_log)
+        scenario_metrics[scen_name] = metrics
+
+    # 4. Aggregate across scenarios
+    avg_pd = float(np.mean([m.pd for m in scenario_metrics.values()]))
+    avg_pfa = float(np.mean([m.pfa for m in scenario_metrics.values()]))
+    avg_canonical_pfa = float(np.mean([m.canonical_pfa for m in scenario_metrics.values()]))
+    avg_sensitivity = float(np.mean([m.sensitivity_dbm for m in scenario_metrics.values()]))
+    avg_rate = float(np.mean([m.avg_intercept_rate for m in scenario_metrics.values()]))
+    avg_reward = float(np.mean([m.avg_reward for m in scenario_metrics.values()]))
+    avg_pct_correct = float(np.mean([m.pct_correct_predictions for m in scenario_metrics.values()]))
+    avg_time_error = float(np.mean([m.avg_intercept_time_error_us for m in scenario_metrics.values()]))
+    total_intercepts = int(sum(m.n_intercepts for m in scenario_metrics.values()))
+    total_dwells = int(sum(m.n_receiver_dwells for m in scenario_metrics.values()))
+    total_false_alarms = int(sum(m.n_false_alarms for m in scenario_metrics.values()))
+
+    return {
+        "pd": avg_pd,
+        "pfa": avg_pfa,
+        "canonical_pfa": avg_canonical_pfa,
+        "sensitivity_dbm": avg_sensitivity,
+        "avg_intercept_rate": avg_rate,
+        "avg_reward": avg_reward,
+        "pct_correct_predictions": avg_pct_correct,
+        "avg_intercept_time_error_us": avg_time_error,
+        "n_intercepts": total_intercepts,
+        "n_receiver_dwells": total_dwells,
+        "n_false_alarms": total_false_alarms,
+        "scenario_breakdown": {
+            name: m.to_dict() for name, m in scenario_metrics.items()
+        },
     }
