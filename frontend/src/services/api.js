@@ -33,6 +33,9 @@ const API_BASE_URL = getApiBaseUrl();
 
 async function request(path, options = {}) {
   const base = getApiBaseUrl();
+  const apiKey = (typeof window !== "undefined" && localStorage.getItem("smartscan_api_key")) || 
+    import.meta.env.VITE_API_KEY || 
+    "smartscan-sih2026-demo-key";
   let response;
 
   try {
@@ -40,6 +43,7 @@ async function request(path, options = {}) {
       headers: {
         Accept: "application/json",
         ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(apiKey ? { "X-API-Key": apiKey } : {}),
         ...(options.headers || {}),
       },
       ...options,

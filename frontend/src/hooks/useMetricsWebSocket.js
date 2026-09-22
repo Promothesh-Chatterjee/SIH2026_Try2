@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { getWsBaseUrl } from '../config';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 
-  `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/metrics`;
+const getMetricsWsUrl = () => `${getWsBaseUrl()}/ws/metrics`;
 
 export function useMetricsWebSocket() {
   const [metrics, setMetrics] = useState({
@@ -23,7 +23,7 @@ export function useMetricsWebSocket() {
 
   const connect = useCallback(() => {
     try {
-      const ws = new WebSocket(WS_URL);
+      const ws = new WebSocket(getMetricsWsUrl());
       ws.onopen = () => setMetrics(m => ({ ...m, connected: true }));
       ws.onmessage = (e) => {
         try {
