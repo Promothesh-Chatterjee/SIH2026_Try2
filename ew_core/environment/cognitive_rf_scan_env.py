@@ -678,8 +678,9 @@ class CognitiveRFScanEnv(gym.Env):
             # Audit Item 7: Dynamic physics-based band sensitivity + CFAR threshold
             base_band_sensitivity = float(self._band_sensitivities_dbm[band]) if hasattr(self, "_band_sensitivities_dbm") else float(self.detection_threshold_db)
             cfar_threshold = self._cfar.get_threshold_dbm(band, sensitivity_dbm=base_band_sensitivity) if hasattr(self, "_cfar") else base_band_sensitivity
-            # CFAR threshold is always used; physics sensitivity is its floor
-            effective_threshold = min(self.detection_threshold_db, cfar_threshold)
+            # CFAR adaptive threshold with physics sensitivity floor.
+            # In noisy conditions, CFAR raises the threshold above the base sensitivity floor.
+            effective_threshold = max(self.detection_threshold_db, cfar_threshold)
             if self.receiver is not None:
                 self.receiver.detection_threshold_db = effective_threshold
 

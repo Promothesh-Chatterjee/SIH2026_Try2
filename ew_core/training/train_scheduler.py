@@ -235,40 +235,39 @@ def _do_drqn_update(
     with torch.no_grad():
         _n_graded = loss_mask.sum().item()
         if _n_graded > 0:
-            # Reshape graded Q values: (N_graded, n_bands, n_modes)
-            q_banded = q_all[loss_mask].view(-1, n_bands, n_modes)
-            # Max Q per band across modes → per-band saliency
-            _band_max_q = q_banded.max(dim=-1).values  # (N_graded, n_bands)
+            _band_max_q = q_all[loss_mask].detach().view(-1, n_bands, n_modes).max(dim=-1).values  # (N_graded, n_bands)
             _band_softmax = torch.softmax(_band_max_q, dim=-1)
             _top_band_frac = _band_softmax.max(dim=-1).values.mean()
         else:
-            q_banded = torch.empty((0, n_bands, n_modes), device=device)
             _top_band_frac = torch.zeros((), device=device)
     if _top_band_frac > 0.80:
         _diversity_pen = 0.005 * (_top_band_frac - 0.80) * loss.abs().detach()
         loss = loss + _diversity_pen
 
-    # Per-band mode diversity penalty (Phase 1 fix — mode collapse)
-    # For each of the 36 bands, compute the softmax distribution over
-    # its 5 modes. If any single mode dominates (>80%), apply a penalty.
-    # This is the key fix for LONG-mode dominance at ~99.9%.
+    # Per-band mode diversity penalty on LIVE computation graph (Phase 1 fix — mode collapse)
+    # For each of the 36 bands, compute the softmax distribution over its 5 modes directly
+    # from the live q_all computation graph. If any mode dominates (>80%), backpropagate a
+    # gradient to penalise mode collapse and actively train the network toward mode diversity.
     mode_collapse_rate = torch.tensor(0.0)
-    mode_diversity_pen = torch.tensor(0.0)
+    mode_diversity_pen = torch.zeros((), device=device)
     try:
-        # q_banded shape: (valid_steps, n_bands, n_modes)
-        # already computed above for top_band_frac
-        band_mode_softmax = torch.softmax(q_banded / 1.0, dim=-1)  # (B, n_bands, n_modes)
-        # For each band, get the max mode probability
-        max_mode_prob_per_band = band_mode_softmax.max(dim=-1).values  # (B, n_bands)
-        # Mean across bands: how often does a single mode dominate
-        mode_collapse_rate = (max_mode_prob_per_band > 0.80).float().mean()
-        if mode_collapse_rate > 0.5:  # more than half the bands have mode collapse
-            # Penalise in proportion to the collapse severity
-            avg_max_mode_prob = max_mode_prob_per_band.mean()
-            mode_diversity_pen = 0.005 * (avg_max_mode_prob - 0.80).clamp(min=0.0) * loss.abs().detach()
-            loss = loss + mode_diversity_pen
+        if loss_mask.any():
+            # q_banded_live is on the LIVE computation graph (requires_grad=True)
+            q_banded_live = q_all[loss_mask].view(-1, n_bands, n_modes)
+            band_mode_softmax = torch.softmax(q_banded_live / 1.0, dim=-1)  # (N, n_bands, n_modes)
+            max_mode_prob_per_band = band_mode_softmax.max(dim=-1).values  # (N, n_bands), differentiable!
+            with torch.no_grad():
+                mode_collapse_rate = (max_mode_prob_per_band > 0.80).float().mean()
+            if mode_collapse_rate > 0.5:  # more than half the bands have mode collapse
+                # Differentiable penalty: pushes down probability of dominant mode with live gradients
+                avg_max_mode_prob = max_mode_prob_per_band.mean()
+                mode_diversity_pen = 0.005 * (avg_max_mode_prob - 0.80).clamp(min=0.0) * loss.abs().detach()
+                loss = loss + mode_diversity_pen
+            else:
+                mode_diversity_pen = torch.zeros((), device=device)
         else:
-            mode_diversity_pen = torch.tensor(0.0)
+            mode_diversity_pen = torch.zeros((), device=device)
+            mode_collapse_rate = torch.tensor(0.0)
     except Exception:
         mode_diversity_pen = torch.tensor(0.0)
         mode_collapse_rate = torch.tensor(0.0)
