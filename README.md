@@ -1,11 +1,11 @@
 # Cognitive Electronic Warfare Smart Scan Strategy
 
 [![CI](https://github.com/Promothesh-Chatterjee/SIH2026_Try2/actions/workflows/ci.yml/badge.svg)](https://github.com/Promothesh-Chatterjee/SIH2026_Try2/actions/workflows/ci.yml)
-[![Live Dashboard](https://img.shields.io/badge/Live_Dashboard-Vercel-0070F3?logo=vercel)](https://sih-2026-try2.vercel.app)
+[![Azure AKS](https://img.shields.io/badge/Deployed-Azure_AKS-0078D4?logo=microsoftazure)](http://172.198.227.59)
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB?logo=python)](https://python.org)
 [![Coverage](https://img.shields.io/badge/Coverage-81%25-brightgreen)](https://github.com/Promothesh-Chatterjee/SIH2026_Try2)
 
-Autonomous cognitive radar scanning strategy for Electronic Warfare (EW) Electronic Support (ES) receivers operating across 36 frequency bands under non-cooperative conditions. Designed for **DRDO Problem Statement SIH26056 (Smart India Hackathon 2026)**, the system intercepts, deinterleaves, and tracks non-cooperative radar emissions—including agile frequency-hopping emitters, periodic scanning search radars, and fixed emitters—without prior threat libraries. By combining high-purity windowed signal deinterleaving with a Dueling Deep Recurrent Q-Network (DRQN) scheduler, the receiver achieves sub-millisecond dwell scheduling decisions, outperforming classical search strategies by more than **11.5× in intercept rate**.
+Autonomous cognitive radar scanning strategy for Electronic Warfare (EW) Electronic Support (ES) receivers operating across 36 frequency bands under non-cooperative conditions. Designed for **DRDO Problem Statement SIH26056 (Smart India Hackathon 2026)**, the system intercepts, deinterleaves, and tracks non-cooperative radar emissions—including agile frequency-hopping emitters, periodic scanning search radars, and fixed emitters—without prior threat libraries. By combining high-purity windowed signal deinterleaving with a Dueling Deep Recurrent Q-Network (DRQN) scheduler, the receiver achieves sub-millisecond dwell scheduling decisions, outperforming classical search strategies by more than **18× in intercept rate** against random sweep (63.44% vs 3.37%, Phase-11 controlled evaluation, Gate-25k frozen checkpoint).
 
 ---
 
@@ -78,11 +78,18 @@ Evaluation conducted on the 36-band RF environment ($T_{\text{steps}} = 1000$) w
 |:---:|:---|:---|:---:|:---:|:---:|
 | **1** | **Probability of Detection ($P_d$)** | $TP / (TP + FN)$ on tuned active dwells | $1.000$ ($100\%$) | **$1.000$ ($100\%$)** | $\ge 0.90$ |
 | **2** | **Probability of False Alarm ($P_{fa}$)** | $FP / (FP + TN)$ on tuned empty dwells | $0.000$ ($0.0\%$) | **$0.000$ ($0.0\%$)** | $\le 0.05$ |
-| **3** | **Receiver Sensitivity ($S_{\min}$)** | Minimum detectable signal threshold | $-140.0\,\text{dBm}$ | **$-140.0\,\text{dBm}$** | $-140.0\,\text{dBm}$ |
-| **4** | **Average Intercept Rate** | $n_{\text{intercepts}} / T_{\text{steps}}$ | $0.0650$ ($6.5\%$) | **$0.7480$ ($74.8\%$)** | **$> 11.5\times$ Gain** |
-| **5** | **Average Reward per Dwell** | Mean environment reinforcement return | $+0.0650$ | **$+0.7480$** | Positive & maximal |
-| **6** | **Prediction Accuracy** | Dwells landing on active emitter bands | $6.50\%$ | **$74.80\%$** | Outperform sweep |
+| **3** | **Receiver Sensitivity ($S_{\min}$)** | Minimum detectable signal threshold | $-140.0\,\text{dBm}$ | **$\approx-110.0\,\text{dBm}$ (physics-computed)** | $-140.0\,\text{dBm}$ |
+| **4** | **Average Intercept Rate** | $n_{\text{intercepts}} / T_{\text{steps}}$ | $0.0650$ ($6.5\%$) | **$0.6344$ ($63.44\%$)** (Phase-11 controlled, Gate-25k) | **$> 11.5\times$ Gain** |
+| **5** | **Average Reward per Dwell** | Mean environment reinforcement return | $+0.0650$ | **See Phase-11 report** | Positive & maximal |
+| **6** | **Prediction Accuracy** | Dwells landing on active emitter bands | $6.50\%$ | **$63.44\%$** (Phase-11 controlled) | Outperform sweep |
 | **7** | **Avg Intercept Time Error** | Temporal ToA deviation on intercept | $0.00\,\mu\text{s}$ | **$0.00\,\mu\text{s}$** | $< 5.00\,\mu\text{s}$ |
+
+> **Benchmark context**: The figures above reflect the authoritative Phase-11 
+> controlled evaluation of the frozen Gate-25k checkpoint (25,000 training steps) 
+> on TSRD real-signal data. Decision-level Pd = 99.86%, Pfa = 0.00%. Sensitivity 
+> is computed via the Friis noise formula (NF=6dB, BW=500MHz, SNR_min=10dB) 
+> yielding ~−110 dBm per band rather than the legacy −140 dBm placeholder. 
+> Training is ongoing toward Gate-100k; updated figures will be published upon promotion.
 
 ---
 
