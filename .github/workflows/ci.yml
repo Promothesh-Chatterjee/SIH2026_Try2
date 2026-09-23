@@ -34,7 +34,65 @@ jobs:
           pip install -e .
           pip install pytest pytest-cov
 
-      # Note: Baseline-immutability tests skip in CI until checkpoint is hosted — Sprint 4 closes this.
+      - name: Provision production baseline checkpoint from Azure Blob
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        # Only attempt download when the secret is configured.
+        # If the secret is absent (forks, external PRs), gracefully skip —
+        # the tests will skip via the requires_baseline marker from Fix 1.
+        run: |
+          if [ -z "$AZURE_STORAGE_CONNECTION_STRING" ]; then
+            echo "[SKIP] AZURE_STORAGE_CONNECTION_STRING not set — baseline checkpoint unavailable in this run."
+            echo "       Baseline-immutability tests will be skipped via @requires_baseline marker."
+            exit 0
+          fi
+          echo "[INFO] Downloading production baseline checkpoint from Azure Blob..."
+          pip install azure-storage-blob --quiet
+          python - <<'PYEOF'
+          import os, sys
+          from pathlib import Path
+          from azure.storage.blob import BlobServiceClient
+
+          conn_str = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
+          client = BlobServiceClient.from_connection_string(conn_str)
+
+          downloads = [
+              ("smartscan-models",
+               "scheduler_v2/checkpoint_gate_25000_frozen.pt",
+               "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt"),
+              ("smartscan-models",
+               "scheduler_v2/checkpoint_gate_25000_frozen.pt",
+               "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"),
+          ]
+
+          for container, blob_name, local_path in downloads:
+              local = Path(local_path)
+              local.parent.mkdir(parents=True, exist_ok=True)
+              if local.exists():
+                  print(f"[OK] Already present: {local}")
+                  continue
+              print(f"[INFO] Downloading {blob_name} -> {local}")
+              blob = client.get_blob_client(container=container, blob=blob_name)
+              with open(local, "wb") as f:
+                  data = blob.download_blob()
+                  data.readinto(f)
+              print(f"[OK] Downloaded: {local} ({local.stat().st_size / 1024 / 1024:.1f} MB)")
+
+          # Verify SHA-256
+          import hashlib
+          EXPECTED = "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+          ckpt = Path("experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt")
+          h = hashlib.sha256()
+          with open(ckpt, "rb") as f:
+              while chunk := f.read(65536):
+                  h.update(chunk)
+          actual = h.hexdigest()
+          if actual != EXPECTED:
+              print(f"[FAIL] SHA-256 mismatch: expected {EXPECTED}, got {actual}", file=sys.stderr)
+              sys.exit(1)
+          print(f"[OK] SHA-256 verified: {actual}")
+          PYEOF
+
       - name: Run test suite with coverage
         run: |
           pytest ew_core/tests/ --cov=ew_core --cov-report=term-missing
