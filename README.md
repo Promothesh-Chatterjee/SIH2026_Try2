@@ -131,9 +131,26 @@ Endpoints available:
 
 ---
 
-## Documentation & Live Links
+## Cloud Deployment & Operations (Azure AKS)
 
-- **Scheduler Architecture & Mathematical Derivations**: [docs/drqn_scheduler_architecture.md](docs/drqn_scheduler_architecture.md)
-  - Detailed formulations of Dueling DRQN, band-localized advantage routing, Thompson Sampling warm-up, and auxiliary loss heads.
-- **Production Web Dashboard**: [https://sih-2026-try2.vercel.app](https://sih-2026-try2.vercel.app)
-  - Real-time spectrum waterfall visualization, receiver trajectory tracking, and live FoM gauges.
+The cognitive EW microservice is containerized and deployed to **Azure Kubernetes Service (AKS)** with zero out-of-pocket costs ($0.00 model via Azure for Students & GitHub Container Registry):
+
+* **Backend Live Endpoint**: [http://172.198.227.59](http://172.198.227.59) *(start AKS first)*
+* **Container Registry**: `ghcr.io/promothesh-chatterjee/sih2026_try2:latest` (GHCR)
+* **Storage**: Azure Blob Storage (`smartscanstore4301`) for TSRD dataset & neural models
+
+### Single-Command Cluster Lifecycle Management
+To preserve compute credits when not conducting demonstrations:
+
+```powershell
+# 1. Start / Resume AKS cluster (takes ~2 minutes)
+az aks start --name smartscan-aks --resource-group smartscan-rg
+
+# 2. Run operational smoke test against live endpoint
+python scripts/smoke_test.py --api_url http://172.198.227.59 --api_key smartscan-sih2026-demo-key
+
+# 3. Stop / Pause AKS cluster (freezes compute billing at $0.00)
+az aks stop --name smartscan-aks --resource-group smartscan-rg
+```
+
+See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for full architectural specifications, storage mounting, and CI/CD automation.

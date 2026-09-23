@@ -22,6 +22,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy pyproject.toml first to cache dependency installations
 COPY pyproject.toml .
 RUN pip install --upgrade pip setuptools wheel && \
+    pip install torch --index-url https://download.pytorch.org/whl/cpu && \
     pip install .
 
 # =============================================================================

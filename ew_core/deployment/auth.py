@@ -15,9 +15,10 @@ API_KEY_HEADER = APIKeyHeader(name="X-SmartScan-API-Key", auto_error=False)
 
 def get_valid_api_keys() -> set[str]:
     """Retrieve currently valid API keys dynamically from environment variable."""
+    raw = os.environ.get("SMARTSCAN_API_KEYS") or os.environ.get("SMARTSCAN_API_KEY", "")
     return {
         k.strip()
-        for k in os.environ.get("SMARTSCAN_API_KEYS", "").split(",")
+        for k in raw.split(",")
         if k.strip()
     }
 

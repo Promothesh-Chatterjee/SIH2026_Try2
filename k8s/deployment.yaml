@@ -38,6 +38,12 @@ spec:
               name: smartscan-secrets
               key: api-key
               optional: true
+        - name: SMARTSCAN_API_KEYS
+          valueFrom:
+            secretKeyRef:
+              name: smartscan-secrets
+              key: api-key
+              optional: true
         - name: AZURE_STORAGE_CONNECTION_STRING
           valueFrom:
             secretKeyRef:

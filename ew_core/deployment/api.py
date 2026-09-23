@@ -311,6 +311,7 @@ class PredictBandsResponse(BaseModel):
       * latency_ms             wall-clock inference latency
     """
 
+    action: Optional[int] = Field(None, description="Alias for selected_action")
     selected_action: int = Field(..., description="Selected flat time-frequency action index")
     selected_band: int = Field(..., description="Selected band index")
     selected_mode: int = Field(..., description="Selected dwell-mode index")
@@ -578,6 +579,8 @@ async def lifespan(app: FastAPI):  # type: ignore
     # Deinterleaver
     deinterleaver_ckpts = [
         PACKAGE_ROOT / "experiments/checkpoints/deinterleaver/best.pt",
+        PACKAGE_ROOT / "experiments/checkpoints/deint_full_s2/best.pt",
+        Path("experiments/checkpoints/deint_full_s2/best.pt"),
         PACKAGE_ROOT / "checkpoints/deinterleaver/best.pt",
         Path("experiments/checkpoints/deinterleaver/best.pt"),
         Path("checkpoints/deinterleaver/best.pt"),
@@ -1633,6 +1636,7 @@ def predict_bands(req: PredictBandsRequest, request: Request = None) -> PredictB
     })
 
     return PredictBandsResponse(
+        action=int(action),
         selected_action=int(action),
         selected_band=band,
         selected_mode=mode,
