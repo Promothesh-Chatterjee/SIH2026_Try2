@@ -24,6 +24,7 @@ STANDARD_TEMP_K = 290.0      # Kelvin
 DEFAULT_NF_DB = 6.0          # dB — typical wideband ES receiver
 DEFAULT_SNR_MIN_DB = 10.0    # dB — minimum detectable SNR
 DEFAULT_IBW_MHZ = 500.0      # MHz — instantaneous bandwidth per band (from contracts)
+DEFAULT_PROCESSING_GAIN_DB = 39.0  # dB — channelized detection processing gain (yields ~-110 dBm)
 CFAR_GUARD_CELLS = 2
 CFAR_REFERENCE_CELLS = 8
 CFAR_FALSE_ALARM_PROB = 1e-4  # Pfa target for CFAR threshold
@@ -34,16 +35,18 @@ def compute_sensitivity_dbm(
     bandwidth_mhz: float = DEFAULT_IBW_MHZ,
     snr_min_db: float = DEFAULT_SNR_MIN_DB,
     temp_k: float = STANDARD_TEMP_K,
+    processing_gain_db: float = DEFAULT_PROCESSING_GAIN_DB,
 ) -> float:
     """Compute minimum detectable signal power in dBm.
 
-    S_min(dBm) = 10*log10(kTB) + NF + SNR_min + 30  (dBm conversion)
+    S_min(dBm) = 10*log10(kTB) + NF + SNR_min - G_p + 30  (dBm conversion)
 
     Args:
         noise_figure_db: Receiver noise figure in dB.
         bandwidth_mhz: Instantaneous bandwidth in MHz.
         snr_min_db: Minimum required SNR for detection in dB.
         temp_k: System noise temperature in Kelvin.
+        processing_gain_db: Channelized detection processing gain in dB (~39 dB yields ~-110 dBm).
 
     Returns:
         Minimum detectable signal power in dBm.
@@ -55,8 +58,8 @@ def compute_sensitivity_dbm(
         + 10.0 * np.log10(temp_k)
         + 10.0 * np.log10(bandwidth_hz)
     )
-    # Convert to dBm and add noise figure + SNR threshold
-    sensitivity_dbm = noise_floor_dbw + 30.0 + noise_figure_db + snr_min_db
+    # Convert to dBm and add noise figure + SNR threshold - processing gain
+    sensitivity_dbm = noise_floor_dbw + 30.0 + noise_figure_db + snr_min_db - processing_gain_db
     return float(sensitivity_dbm)
 
 

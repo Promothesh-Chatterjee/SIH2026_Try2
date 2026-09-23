@@ -37,10 +37,11 @@ from ew_core.training.online_learner import OnlineLearner
 
 # ── 1. Physics Sensitivity & CFAR Detector ──────────────────────────────────
 def test_physics_sensitivity_calculation():
-    """Verify Friis sensitivity formula produces realistic values (-85 to -65 dBm for 500 MHz IBW)."""
-    sens = compute_sensitivity_dbm(noise_figure_db=6.0, bandwidth_mhz=500.0, snr_min_db=10.0)
-    # kTB for 500 MHz is -86.99 dBm + 6 dB NF + 10 dB SNR = ~ -70.99 dBm
-    assert -85.0 <= sens <= -65.0, f"Unexpected sensitivity {sens} dBm"
+    """Verify Friis sensitivity formula produces realistic values (~-110 dBm with channelization, ~-71 dBm raw)."""
+    sens_raw = compute_sensitivity_dbm(noise_figure_db=6.0, bandwidth_mhz=500.0, snr_min_db=10.0, processing_gain_db=0.0)
+    assert -85.0 <= sens_raw <= -65.0, f"Unexpected raw sensitivity {sens_raw} dBm"
+    sens_chan = compute_sensitivity_dbm()
+    assert -120.0 <= sens_chan <= -100.0, f"Unexpected channelized sensitivity {sens_chan} dBm"
 
 
 def test_band_sensitivities_frequency_gradient():
