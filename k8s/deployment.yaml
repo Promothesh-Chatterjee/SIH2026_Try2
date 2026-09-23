@@ -16,6 +16,30 @@ spec:
     spec:
       imagePullSecrets:
       - name: ghcr-secret
+      initContainers:
+      - name: download-checkpoint
+        image: mcr.microsoft.com/azure-cli:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          az storage blob download \
+            --account-name smartscanstore4301 \
+            --container-name smartscan-models \
+            --name "scheduler_v2/checkpoint_gate_25000_frozen.pt" \
+            --file /mnt/models/checkpoint_gate_25000_frozen.pt \
+            --connection-string "$AZURE_STORAGE_CONNECTION_STRING" \
+            --no-progress || echo "Checkpoint download failed — will use bundled weights"
+        env:
+        - name: AZURE_STORAGE_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: smartscan-secrets
+              key: azure-storage-connection-string
+              optional: true
+        volumeMounts:
+        - name: model-volume
+          mountPath: /mnt/models
       containers:
       - name: smartscan-api
         image: ghcr.io/promothesh-chatterjee/sih2026_try2:latest
@@ -30,8 +54,12 @@ spec:
           value: "production"
         - name: DEVICE
           value: "cpu"
+        - name: CHECKPOINT_PATH
+          value: "/mnt/models/checkpoint_gate_25000_frozen.pt"
         - name: TSRD_DATA_ROOT
           value: "/mnt/tsrd"
+        - name: TSRD_OPTIONAL
+          value: "true"
         - name: SMARTSCAN_API_KEY
           valueFrom:
             secretKeyRef:
@@ -74,8 +102,12 @@ spec:
         volumeMounts:
         - name: tsrd-volume
           mountPath: /mnt/tsrd
+        - name: model-volume
+          mountPath: /mnt/models
       volumes:
       - name: tsrd-volume
+        emptyDir: {}
+      - name: model-volume
         emptyDir: {}
 ---
 apiVersion: v1
