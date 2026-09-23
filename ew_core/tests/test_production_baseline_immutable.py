@@ -28,9 +28,15 @@ from scripts.verify_baseline_gate import (
 )
 
 BASELINE_DIR = Path("experiments/checkpoints/production_baseline")
+_BASELINE_CKPT_FILE = BASELINE_DIR / "checkpoint_gate_25000_frozen.pt"
 requires_baseline = pytest.mark.skipif(
-    not BASELINE_DIR.exists(),
-    reason="Production baseline checkpoint not available in CI"
+    not _BASELINE_CKPT_FILE.exists(),
+    reason=(
+        "Production baseline checkpoint (checkpoint_gate_25000_frozen.pt) "
+        "not available in this environment. "
+        "The file is gitignored — provision via CI artifact download or "
+        "copy from D:/TSRD area locally. See CHECKPOINT_LOCATION.md."
+    )
 )
 
 
