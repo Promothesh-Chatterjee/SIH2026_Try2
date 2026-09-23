@@ -399,6 +399,20 @@ class CognitiveRFScanEnv(gym.Env):
             snr_min_db=float(config.get("snr_min_db", 10.0)),
         )
         self._cfar = CFARDetector(n_bands=self.n_bands)
+        # Use the mean physics-based sensitivity as the receiver base threshold.
+        # This replaces the legacy -140.0 dBm placeholder with a computed value.
+        # Per-band CFAR thresholds in step() will further refine this per dwell.
+        self._physics_base_threshold_dbm: float = float(
+            np.mean(self._band_sensitivities_dbm)
+        )
+        # Only override if the config did not supply an explicit custom threshold
+        if self.detection_threshold_db == -140.0:
+            self.detection_threshold_db = self._physics_base_threshold_dbm
+            logger.info(
+                "Detection threshold updated from legacy -140.0 dBm to "
+                "physics-computed %.1f dBm (mean band sensitivity)",
+                self._physics_base_threshold_dbm,
+            )
         logger.info(
             "Band sensitivity range: %.1f to %.1f dBm (fallback detection threshold: %.1f dBm)",
             float(self._band_sensitivities_dbm.min()),
@@ -664,8 +678,8 @@ class CognitiveRFScanEnv(gym.Env):
             # Audit Item 7: Dynamic physics-based band sensitivity + CFAR threshold
             base_band_sensitivity = float(self._band_sensitivities_dbm[band]) if hasattr(self, "_band_sensitivities_dbm") else float(self.detection_threshold_db)
             cfar_threshold = self._cfar.get_threshold_dbm(band, sensitivity_dbm=base_band_sensitivity) if hasattr(self, "_cfar") else base_band_sensitivity
-            # When configured with a legacy or custom threshold lower than the physics floor, preserve coverage
-            effective_threshold = min(self.detection_threshold_db, cfar_threshold) if self.detection_threshold_db != -140.0 else cfar_threshold
+            # CFAR threshold is always used; physics sensitivity is its floor
+            effective_threshold = min(self.detection_threshold_db, cfar_threshold)
             if self.receiver is not None:
                 self.receiver.detection_threshold_db = effective_threshold
 
