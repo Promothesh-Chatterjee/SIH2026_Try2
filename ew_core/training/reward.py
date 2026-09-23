@@ -507,6 +507,21 @@ def receiver_reward_components_v2(
             redundant_pen = float(w_redundant)
         dwell_cost = float(w_dwell_cost * dwell_norm)
 
+    # Missed-coverage penalty: fires when we visited an empty/wrong band
+    # while active emitters existed elsewhere in the spectrum.
+    # This is the key credit-assignment fix for the miss_rate gradient problem.
+    missed_coverage_penalty = 0.0
+    if not is_sel_active and other_bands_active:
+        # How many active opportunities were missed?
+        n_missed = max(0, int(getattr(belief, 'n_bands', 36)) - 1) if belief else 1
+        opportunity_scale = min(1.0, float(n_missed) / 8.0)  # saturate at 8+ active bands
+        missed_coverage_penalty = float(w_miss) * 0.25 * opportunity_scale
+        # Scale by belief miss_rate of chosen band: if we had high miss_rate here,
+        # penalise more (we should have known this band was poor)
+        if belief is not None and hasattr(belief, 'detection_rate') and band is not None and 0 <= band < len(belief.detection_rate):
+            band_miss_rate = 1.0 - float(belief.detection_rate[band])
+            missed_coverage_penalty *= (0.5 + 0.5 * band_miss_rate)
+
     # Lagrangian Pfa Constraint (Audit Item 10)
     # Penalises the policy whenever the running false alarm rate exceeds the target.
     # Soft constraint: progressive penalty when running_pfa > pfa_threshold.
@@ -523,6 +538,7 @@ def receiver_reward_components_v2(
         + agility_bonus
         + prediction_bonus
         + miss_penalty
+        + missed_coverage_penalty
         + false_alarm_pen
         + redundant_pen
         + dwell_cost
@@ -553,7 +569,7 @@ def receiver_reward_components_v2(
     hit_reward_total = float(interception_reward + latency_reward + agility_bonus + prediction_bonus)
     hit_reward_per_ms = float(hit_reward_total / dwell_ms)
     # Preserved signed negative penalty so: reward_per_ms = hit_reward_per_ms + penalty_per_ms (or 0)
-    penalty_total = float(miss_penalty + false_alarm_pen + redundant_pen + dwell_cost + lagrangian_pfa_penalty)
+    penalty_total = float(miss_penalty + missed_coverage_penalty + false_alarm_pen + redundant_pen + dwell_cost + lagrangian_pfa_penalty)
     penalty_per_ms = float(penalty_total / dwell_ms)
 
     return {
@@ -564,6 +580,7 @@ def receiver_reward_components_v2(
         "prediction_bonus": float(prediction_bonus),
         "frequency_agility_bonus": float(agility_bonus),
         "miss_penalty": float(miss_penalty),
+        "missed_coverage_penalty": float(missed_coverage_penalty),
         "false_alarm_penalty": float(false_alarm_pen),
         "redundant_penalty": float(redundant_pen),
         "dwell_cost": float(dwell_cost),
@@ -582,7 +599,7 @@ def receiver_reward_components_v2(
         "hit_term": float(interception_reward),
         "novel_term": float(w_hit_novel - w_hit_repeat if novel_emitter else 0.0),
         "timing_penalty": 0.0,
-        "missed_coverage_penalty": 0.0,
+        "missed_coverage_penalty": float(missed_coverage_penalty),
         "priority_term": 0.0,
         "info_gain_term": 0.0,
         "staleness_bonus": 0.0,
