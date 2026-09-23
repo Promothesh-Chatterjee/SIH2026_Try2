@@ -243,7 +243,8 @@ def test_model_reload_local(tmp_path):
         orig_sched = STATE.get("scheduler")
         try:
             STATE["scheduler"] = dummy_drqn
-            resp = client.post(f"/model/reload?checkpoint_path={str(ckpt_file).replace('\\', '/')}")
+            ckpt_path_str = str(ckpt_file).replace("\\", "/")
+            resp = client.post(f"/model/reload?checkpoint_path={ckpt_path_str}")
             assert resp.status_code == 200
             assert resp.json()["status"] == "reloaded"
         finally:

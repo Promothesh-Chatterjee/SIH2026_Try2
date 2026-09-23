@@ -227,21 +227,22 @@ def _do_drqn_update(
     lambda_ent = 0.01
     loss = loss - lambda_ent * action_entropy
 
-    # Phase-1 Anti-Collapse: top-band diversity penalty
+    # Phase-1 Anti-Collapse: top-band diversity penalty (LIVE gradients)
     # If a single band dominates >80% of the Q-mass across graded transitions,
-    # apply a small additional penalty proportional to the excess concentration.
-    # Detached from backward to avoid gradient instability.
+    # apply a differentiable penalty proportional to the excess concentration.
     _diversity_pen = torch.zeros((), device=device)
-    with torch.no_grad():
-        _n_graded = loss_mask.sum().item()
-        if _n_graded > 0:
-            _band_max_q = q_all[loss_mask].detach().view(-1, n_bands, n_modes).max(dim=-1).values  # (N_graded, n_bands)
-            _band_softmax = torch.softmax(_band_max_q, dim=-1)
-            _top_band_frac = _band_softmax.max(dim=-1).values.mean()
-        else:
-            _top_band_frac = torch.zeros((), device=device)
-    if _top_band_frac > 0.80:
-        _diversity_pen = 0.005 * (_top_band_frac - 0.80) * loss.abs().detach()
+    _n_graded = loss_mask.sum().item()
+    if _n_graded > 0:
+        _band_max_q = q_all[loss_mask].view(-1, n_bands, n_modes).max(dim=-1).values  # (N_graded, n_bands) — LIVE graph
+        _band_softmax = torch.softmax(_band_max_q, dim=-1)
+        _top_band_frac = _band_softmax.max(dim=-1).values.mean()  # differentiable scalar
+        with torch.no_grad():
+            _top_band_frac_val = _top_band_frac.item()
+    else:
+        _top_band_frac = torch.zeros((), device=device)
+        _top_band_frac_val = 0.0
+    if _top_band_frac_val > 0.80:
+        _diversity_pen = 0.005 * (_top_band_frac - 0.80).clamp(min=0.0) * loss.abs().detach()
         loss = loss + _diversity_pen
 
     # Per-band mode diversity penalty on LIVE computation graph (Phase 1 fix — mode collapse)
@@ -268,7 +269,8 @@ def _do_drqn_update(
         else:
             mode_diversity_pen = torch.zeros((), device=device)
             mode_collapse_rate = torch.tensor(0.0)
-    except Exception:
+    except (RuntimeError, ValueError, IndexError) as exc:
+        logging.getLogger(__name__).warning("mode-diversity penalty skipped: %s", exc)
         mode_diversity_pen = torch.tensor(0.0)
         mode_collapse_rate = torch.tensor(0.0)
 

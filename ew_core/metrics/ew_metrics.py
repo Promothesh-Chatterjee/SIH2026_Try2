@@ -330,7 +330,11 @@ def compute_all_metrics(
     if explicit_false_alarms is not None:
         fp = int(sum(1 for f in explicit_false_alarms if f))
         tp = int(sum(1 for h in hits if h))
-        fn = int(episode_log.get("missed_dwells", 0))
+        missed_raw = episode_log.get("missed_dwells", 0)
+        if isinstance(missed_raw, (list, tuple)):
+            fn = int(sum(1 for m in missed_raw if m))
+        else:
+            fn = int(missed_raw)
         tn = max(0, n_dwells - tp - fn - fp)
     else:
         for t in range(n_dwells):

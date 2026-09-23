@@ -1120,7 +1120,11 @@ async def readiness_probe():
 
 @app.post("/model/reload", dependencies=[Depends(require_api_key)], tags=["model"])
 async def reload_model(checkpoint_path: str):
-    """Hot-reload a new checkpoint into running SmartScanMoE without restart."""
+    """Hot-reload a new checkpoint into running SmartScanMoE without restart.
+
+    Fail-closed: uses strict=True to reject architecture mismatches.
+    Pre-validates obs_dim and n_actions from checkpoint config if available.
+    """
     global STATE
     try:
         if checkpoint_path.startswith("az://"):
@@ -1141,7 +1145,26 @@ async def reload_model(checkpoint_path: str):
 
         drqn_model = STATE.get("scheduler")
         if drqn_model is not None and hasattr(drqn_model, "load_state_dict"):
-            drqn_model.load_state_dict(state, strict=False)
+            # Architecture verification: check obs_dim and n_actions if stored in checkpoint
+            if isinstance(ckpt, dict) and "config" in ckpt:
+                ckpt_cfg = ckpt["config"]
+                model_obs_dim = getattr(drqn_model, "obs_dim", None)
+                model_n_actions = getattr(drqn_model, "n_actions", None)
+                ckpt_obs_dim = ckpt_cfg.get("obs_dim")
+                ckpt_n_actions = ckpt_cfg.get("n_actions")
+                if model_obs_dim is not None and ckpt_obs_dim is not None and model_obs_dim != ckpt_obs_dim:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Architecture mismatch: running model obs_dim={model_obs_dim}, checkpoint obs_dim={ckpt_obs_dim}",
+                    )
+                if model_n_actions is not None and ckpt_n_actions is not None and model_n_actions != ckpt_n_actions:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Architecture mismatch: running model n_actions={model_n_actions}, checkpoint n_actions={ckpt_n_actions}",
+                    )
+
+            # Fail-closed: strict=True rejects missing/unexpected keys
+            drqn_model.load_state_dict(state, strict=True)
             drqn_model.eval()
             moe_scheduler = STATE.get("moe")
             if moe_scheduler is not None:

@@ -299,6 +299,7 @@ def run_evaluation(
             "predicted_times": [],
             "actual_times": [],
             "false_alarms": [],
+            "missed_dwells": [],
         }
 
         # 3. Episode step loop
@@ -346,12 +347,15 @@ def run_evaluation(
             hit = bool(info.get("hit", False))
             active_bands = info.get("active_bands", [])
             false_alarm = bool(not (band in active_bands) and hit)
+            # Missed dwell (FN): agent chose an active band but did not detect
+            missed = bool((band in active_bands) and not hit)
 
             episode_log["hits"].append(hit)
             episode_log["chosen_bands"].append(band)
             episode_log["active_bands_per_step"].append(active_bands)
             episode_log["rewards"].append(float(reward))
             episode_log["false_alarms"].append(false_alarm)
+            episode_log["missed_dwells"].append(missed)
 
             if hit:
                 actual_toa = float(dwell_start + info.get("intercept_time_error_us", 0.0))
