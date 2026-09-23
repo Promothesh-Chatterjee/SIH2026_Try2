@@ -236,16 +236,42 @@ def _do_drqn_update(
         _n_graded = loss_mask.sum().item()
         if _n_graded > 0:
             # Reshape graded Q values: (N_graded, n_bands, n_modes)
-            _q_graded = q_all[loss_mask].view(-1, n_bands, n_modes)
+            q_banded = q_all[loss_mask].view(-1, n_bands, n_modes)
             # Max Q per band across modes → per-band saliency
-            _band_max_q = _q_graded.max(dim=-1).values  # (N_graded, n_bands)
+            _band_max_q = q_banded.max(dim=-1).values  # (N_graded, n_bands)
             _band_softmax = torch.softmax(_band_max_q, dim=-1)
             _top_band_frac = _band_softmax.max(dim=-1).values.mean()
         else:
+            q_banded = torch.empty((0, n_bands, n_modes), device=device)
             _top_band_frac = torch.zeros((), device=device)
     if _top_band_frac > 0.80:
         _diversity_pen = 0.005 * (_top_band_frac - 0.80) * loss.abs().detach()
         loss = loss + _diversity_pen
+
+    # Per-band mode diversity penalty (Phase 1 fix — mode collapse)
+    # For each of the 36 bands, compute the softmax distribution over
+    # its 5 modes. If any single mode dominates (>80%), apply a penalty.
+    # This is the key fix for LONG-mode dominance at ~99.9%.
+    mode_collapse_rate = torch.tensor(0.0)
+    mode_diversity_pen = torch.tensor(0.0)
+    try:
+        # q_banded shape: (valid_steps, n_bands, n_modes)
+        # already computed above for top_band_frac
+        band_mode_softmax = torch.softmax(q_banded / 1.0, dim=-1)  # (B, n_bands, n_modes)
+        # For each band, get the max mode probability
+        max_mode_prob_per_band = band_mode_softmax.max(dim=-1).values  # (B, n_bands)
+        # Mean across bands: how often does a single mode dominate
+        mode_collapse_rate = (max_mode_prob_per_band > 0.80).float().mean()
+        if mode_collapse_rate > 0.5:  # more than half the bands have mode collapse
+            # Penalise in proportion to the collapse severity
+            avg_max_mode_prob = max_mode_prob_per_band.mean()
+            mode_diversity_pen = 0.005 * (avg_max_mode_prob - 0.80).clamp(min=0.0) * loss.abs().detach()
+            loss = loss + mode_diversity_pen
+        else:
+            mode_diversity_pen = torch.tensor(0.0)
+    except Exception:
+        mode_diversity_pen = torch.tensor(0.0)
+        mode_collapse_rate = torch.tensor(0.0)
 
     aux_loss: torch.Tensor = torch.zeros((), device=device)
     if aux_coef > 0:
@@ -329,6 +355,8 @@ def _do_drqn_update(
         stats["action_entropy"] = float(action_entropy.item())
         stats["top_band_frac"] = float(_top_band_frac.item() if torch.is_tensor(_top_band_frac) else float(_top_band_frac))
         stats["diversity_penalty"] = float(_diversity_pen.item())
+        stats["mode_collapse_rate"] = float(mode_collapse_rate.item() if hasattr(mode_collapse_rate, 'item') else mode_collapse_rate)
+        stats["mode_diversity_pen"] = float(mode_diversity_pen.item() if hasattr(mode_diversity_pen, 'item') else mode_diversity_pen)
     return float(loss.item())
 
 
