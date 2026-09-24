@@ -43,14 +43,14 @@ Evaluated across the 10 canonical TSRD scenarios (`config_117`, `config_119`, `c
 - $P_d = TP / (TP + FN)$ holds identically for all four schedulers.
 - $P_{fa} = FP / (FP + TN) = 0.00\%$ holds identically across all four schedulers.
 - SmartScan ML model demonstrates **+25.0% relative improvement in Intercept Rate** and **+31.9% higher reward** over the strongest heuristic baseline (`HighestOccupancy`).
-- **Benchmark Results Artifact SHA-256**: `b5267892d4f837d9eeaaeee4c5adaccce5219836d21ee30f59afad0aa5dcece9`
+- **Benchmark Results Artifact SHA-256**: `24329de556fa38432c13a6dfb867da7bfc66393d19ff5194ef723fcfac9dec79`
 
 ---
 
 ## 4. Strict 1,000-Step Qualification Run Evidence (Audited & Verified)
 
-- **Qualification Run ID**: `fc971f3d-2b7f-4b16-8873-7803ede1fe67`
-- **Git Commit SHA**: `d7a9f1fb46f4b28dced68ac109bc1ef015bc175b`
+- **Qualification Run ID**: `9744accb-efa5-48bd-b471-aed26971f65d`
+- **Git Commit SHA**: `c4f94212e0749919710662a75e690f16c7dc119a`
 - **Training Config SHA-256**: `2b9add4b2a581c9bbf91335825c4855c54c690113e3eb293bccb2b13cea38425`
 - **Model Config SHA-256**: `f9a1a316b0726e37400a5b663b0946372cbbe1a8b6a8dcfa3375e074ea7b1280`
 - **Parent Checkpoint SHA-256**: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`

@@ -83,8 +83,8 @@ python -m ew_core.training.train_scheduler `
 ```
 
 ### Verified Evidence Summary (`qualification_run_summary.json`):
-- **Qualification Run ID**: `fc971f3d-2b7f-4b16-8873-7803ede1fe67`
-- **Git Commit SHA**: `d7a9f1fb46f4b28dced68ac109bc1ef015bc175b`
+- **Qualification Run ID**: `9744accb-efa5-48bd-b471-aed26971f65d`
+- **Git Commit SHA**: `c4f94212e0749919710662a75e690f16c7dc119a`
 - **Parent Checkpoint SHA-256**: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`
 - **Start Global Step**: 25,000
 - **Final Global Step**: 26,000 (1,000 steps executed)
@@ -114,7 +114,7 @@ Evaluated across the 10 canonical TSRD scenarios (`D:/TSRD`, 500 steps/scenario 
 - **Random**: $TP=125$, $FN=9$, $FP=0$, $TN=4866 \implies \text{Total} = 5000$.
 - **RoundRobin**: $TP=109$, $FN=10$, $FP=0$, $TN=4881 \implies \text{Total} = 5000$.
 - **HighestOccupancy**: $TP=1685$, $FN=23$, $FP=0$, $TN=3292 \implies \text{Total} = 5000$.
-- **Benchmark Artifact SHA-256**: `b5267892d4f837d9eeaaeee4c5adaccce5219836d21ee30f59afad0aa5dcece9`
+- **Benchmark Artifact SHA-256**: `24329de556fa38432c13a6dfb867da7bfc66393d19ff5194ef723fcfac9dec79`
 
 ---
 

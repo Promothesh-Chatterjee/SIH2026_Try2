@@ -2,26 +2,26 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  test:
-    name: Pytest & Validation Suite
-    runs-on: ubuntu-latest
+  qualification:
+    name: Full Qualification Suite
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.10
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.10"
 
       - name: Cache pip dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
@@ -32,156 +32,39 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov azure-storage-blob
 
-      - name: Provision production baseline checkpoint from Azure Blob
+      - name: Provision baseline checkpoint (fail-closed)
         env:
           AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
         run: |
-          if [ -z "$AZURE_STORAGE_CONNECTION_STRING" ]; then
-            echo "[SKIP] AZURE_STORAGE_CONNECTION_STRING not configured."
-            echo "       Baseline checkpoint unavailable — immutability tests will skip."
-            exit 0
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "[INFO] Main branch push — strict provisioning (fail-closed)"
+            python scripts/provision_baseline.py --strict
+          else
+            echo "[INFO] Pull request — best-effort provisioning"
+            python scripts/provision_baseline.py --best-effort
           fi
-
-          echo "[INFO] Attempting to provision production baseline from Azure Blob..."
-          pip install azure-storage-blob --quiet
-
-          python - <<'PYEOF'
-import os
-import sys
-import hashlib
-from pathlib import Path
-
-EXPECTED_SHA256 = "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
-
-BLOB_TARGETS = [
-    {
-        "container": "smartscan-models",
-        "blob_name": "scheduler_v2/checkpoint_gate_25000_frozen.pt",
-        "local_path": "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt",
-        "description": "production baseline",
-    },
-    {
-        "container": "smartscan-models",
-        "blob_name": "scheduler_v2/checkpoint_gate_25000_frozen.pt",
-        "local_path": "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt",
-        "description": "candidate mirror",
-    },
-]
-
-try:
-    from azure.storage.blob import BlobServiceClient
-    from azure.core.exceptions import ResourceNotFoundError
-
-    conn_str = os.environ["AZURE_STORAGE_CONNECTION_STRING"]
-    client = BlobServiceClient.from_connection_string(conn_str)
-
-    # List blobs in the container to help diagnose path issues
-    print("[INFO] Listing blobs in smartscan-models container:")
-    try:
-        container_client = client.get_container_client("smartscan-models")
-        blobs = list(container_client.list_blobs())
-        if blobs:
-            for b in blobs:
-                print(f"       FOUND: {b.name} ({b.size / 1024 / 1024:.1f} MB)")
-        else:
-            print("       Container is EMPTY — checkpoint has never been uploaded.")
-            print("       Run PART A of the CI fix locally to upload the checkpoint.")
-            print("[SKIP] No blobs found — baseline tests will be skipped.")
-            sys.exit(0)
-    except Exception as list_err:
-        print(f"       Could not list blobs: {list_err}")
-
-    downloaded_any = False
-    for target in BLOB_TARGETS:
-        local = Path(target["local_path"])
-        local.parent.mkdir(parents=True, exist_ok=True)
-
-        # If already present and correct, skip download
-        if local.exists():
-            h = hashlib.sha256()
-            with open(local, "rb") as f:
-                while chunk := f.read(65536):
-                    h.update(chunk)
-            if h.hexdigest() == EXPECTED_SHA256:
-                print(f"[OK] Already present and verified: {local}")
-                downloaded_any = True
-                continue
-            else:
-                print(f"[WARN] {local} exists but SHA-256 mismatch — re-downloading.")
-
-        print(f"[INFO] Downloading {target['blob_name']} -> {local} ({target['description']})")
-        try:
-            blob_client = client.get_blob_client(
-                container=target["container"],
-                blob=target["blob_name"]
-            )
-            with open(local, "wb") as f:
-                downloader = blob_client.download_blob()
-                downloader.readinto(f)
-            size_mb = local.stat().st_size / 1024 / 1024
-            print(f"[OK] Downloaded: {local} ({size_mb:.1f} MB)")
-            downloaded_any = True
-        except ResourceNotFoundError:
-            print(
-                f"[WARN] Blob not found: {target['container']}/{target['blob_name']}\n"
-                f"       Upload it first from your local machine:\n"
-                f"       az storage blob upload \\\n"
-                f"         --account-name smartscanstore4301 \\\n"
-                f"         --container-name {target['container']} \\\n"
-                f"         --name \"{target['blob_name']}\" \\\n"
-                f"         --file \"experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt\""
-            )
-            continue
-        except Exception as dl_err:
-            print(f"[WARN] Download failed for {target['blob_name']}: {dl_err}")
-            continue
-
-    if not downloaded_any:
-        print("[SKIP] No checkpoint files were downloaded — baseline tests will be skipped.")
-        sys.exit(0)
-
-    # Verify SHA-256 of the production baseline copy
-    baseline_ckpt = Path(BLOB_TARGETS[0]["local_path"])
-    if baseline_ckpt.exists():
-        h = hashlib.sha256()
-        with open(baseline_ckpt, "rb") as f:
-            while chunk := f.read(65536):
-                h.update(chunk)
-        actual = h.hexdigest()
-        if actual != EXPECTED_SHA256:
-            print(f"[FAIL] SHA-256 mismatch: expected {EXPECTED_SHA256}, got {actual}")
-            print("       The checkpoint on Azure Blob may be corrupted or wrong file.")
-            sys.exit(1)
-        print(f"[OK] SHA-256 verified: {actual}")
-        print("[OK] Production baseline checkpoint provisioned successfully.")
-    else:
-        print("[SKIP] Baseline checkpoint not available after download attempt.")
-        sys.exit(0)
-
-except ImportError:
-    print("[WARN] azure-storage-blob not installed — cannot provision checkpoint.")
-    print("       Baseline tests will be skipped.")
-    sys.exit(0)
-except Exception as e:
-    print(f"[WARN] Unexpected error during checkpoint provisioning: {e}")
-    print("       This will NOT fail CI — baseline tests will be skipped.")
-    sys.exit(0)
-PYEOF
 
       - name: Run test suite with coverage
         run: |
           pytest ew_core/tests/ --cov=ew_core --cov-report=term-missing
 
-      - name: Run pipeline validation
+      - name: Run full pipeline validation
         run: |
           if [ -f "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt" ]; then
             echo "[INFO] Checkpoint present — running full validation (fail-closed)"
             python scripts/validate_pipeline.py
-            # This exits non-zero on any validation failure
           else
-            echo "::warning::CI running in REDUCED / INCOMPLETE QUALIFICATION mode (checkpoint not provisioned)"
-            echo "[INFO] Running structural-only validation..."
-            python scripts/validate_pipeline.py --structural-only
+            if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              echo "::error::QUALIFICATION BLOCKED: Checkpoint not provisioned on main branch."
+              exit 1
+            else
+              echo "::warning::Running structural-only validation (PR without checkpoint)."
+              python scripts/validate_pipeline.py --structural-only
+            fi
           fi
+
+      - name: Validate CI YAML syntax
+        run: |
+          python -c "import yaml, sys; [yaml.safe_load(open(f)) for f in __import__('pathlib').Path('.github/workflows').glob('*.yml')]; print('[OK] All workflow YAML valid')" || { echo '[FAIL] YAML validation error'; exit 1; }

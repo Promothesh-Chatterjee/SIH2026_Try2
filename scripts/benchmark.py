@@ -79,11 +79,12 @@ def resolve_checkpoint(path: str | None) -> Path:
         raise FileNotFoundError(f"Requested benchmark checkpoint not found: {ckpt_path}")
     import hashlib
     actual_sha = hashlib.sha256(ckpt_path.read_bytes()).hexdigest()
-    if ckpt_path.name == "checkpoint_gate_25000_frozen.pt" or "gate_25000" in ckpt_path.name:
-        if actual_sha != FROZEN_25K_SHA:
-            raise ValueError(
-                f"Checkpoint SHA mismatch for {ckpt_path}! Expected {FROZEN_25K_SHA}, got {actual_sha}"
-            )
+    if actual_sha != FROZEN_25K_SHA:
+        raise ValueError(
+            f"Checkpoint SHA mismatch for {ckpt_path}! "
+            f"Expected {FROZEN_25K_SHA}, got {actual_sha}. "
+            f"The canonical benchmark requires the exact frozen Gate-25k checkpoint."
+        )
     return ckpt_path
 
 

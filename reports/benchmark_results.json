@@ -4,8 +4,8 @@
     "benchmark_version": "2026.1-CANONICAL",
     "metric_contract_version": "v2.0-audited-confusion-matrix",
     "evaluator_version": "eval_batch.py/v2.0-audited",
-    "timestamp": "2026-09-24T16:08:25.229321+00:00",
-    "git_commit": "d7a9f1fb46f4b28dced68ac109bc1ef015bc175b",
+    "timestamp": "2026-09-24T17:20:23.950555+00:00",
+    "git_commit": "c4f94212e0749919710662a75e690f16c7dc119a",
     "checkpoint": "checkpoint_gate_25000_frozen.pt",
     "checkpoint_path": "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt",
     "checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
@@ -39,7 +39,7 @@
     "seed": 42,
     "device": "cpu",
     "status": "AUTHORITATIVE",
-    "total_benchmark_runtime_s": 63.23606038093567
+    "total_benchmark_runtime_s": 105.45013546943665
   },
   "schedulers": {
     "SmartScan_DRQN_MoE": {
@@ -62,7 +62,7 @@
         "n_false_alarms": 0,
         "n_missed_dwells": 112,
         "n_true_negatives": 2781,
-        "evaluation_runtime_s": 28.088507413864136
+        "evaluation_runtime_s": 45.45955467224121
       },
       "scenario_breakdown": {
         "config_117": {
@@ -297,7 +297,7 @@
         "n_false_alarms": 0,
         "n_missed_dwells": 9,
         "n_true_negatives": 4866,
-        "evaluation_runtime_s": 11.715250015258789
+        "evaluation_runtime_s": 19.106738805770874
       },
       "scenario_breakdown": {
         "config_117": {
@@ -532,7 +532,7 @@
         "n_false_alarms": 0,
         "n_missed_dwells": 10,
         "n_true_negatives": 4881,
-        "evaluation_runtime_s": 11.660115480422974
+        "evaluation_runtime_s": 20.431468963623047
       },
       "scenario_breakdown": {
         "config_117": {
@@ -767,7 +767,7 @@
         "n_false_alarms": 0,
         "n_missed_dwells": 23,
         "n_true_negatives": 3292,
-        "evaluation_runtime_s": 11.771310329437256
+        "evaluation_runtime_s": 20.451046466827393
       },
       "scenario_breakdown": {
         "config_117": {
