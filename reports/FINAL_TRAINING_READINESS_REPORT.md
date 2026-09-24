@@ -83,8 +83,8 @@ python -m ew_core.training.train_scheduler `
 ```
 
 ### Verified Evidence Summary (`qualification_run_summary.json`):
-- **Qualification Run ID**: `9744accb-efa5-48bd-b471-aed26971f65d`
-- **Git Commit SHA**: `c4f94212e0749919710662a75e690f16c7dc119a`
+- **Qualification Run ID**: `5bdde57f-24f7-48e1-b372-bda0f2c81b0f`
+- **Git Commit SHA**: `16fc90331e87c5323588d0adbdc1963395abf700`
 - **Parent Checkpoint SHA-256**: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`
 - **Start Global Step**: 25,000
 - **Final Global Step**: 26,000 (1,000 steps executed)

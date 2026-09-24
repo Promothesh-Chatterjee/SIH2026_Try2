@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Provision the frozen Gate-25k baseline checkpoint from Azure Blob Storage.
+"""Provision the frozen Gate-25k baseline checkpoint, baseline evidence package,
+and canonical TSRD test fixture from Azure Blob Storage.
 
 Fail-closed in strict mode (default): any provisioning failure exits non-zero.
 Best-effort mode (--best-effort): tolerates missing Azure credentials but still
@@ -17,13 +18,68 @@ import sys
 import tempfile
 from pathlib import Path
 
-EXPECTED_SHA256 = "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
-CONTAINER = "smartscan-models"
-BLOB_NAME = "scheduler_v2/checkpoint_gate_25000_frozen.pt"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-LOCAL_TARGETS = [
-    "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt",
-    "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt",
+# Complete baseline evidence package + canonical TSRD fixture contract
+PROVISION_TARGETS = [
+    {
+        "container": "smartscan-models",
+        "blob_name": "scheduler_v2/checkpoint_gate_25000_frozen.pt",
+        "local_path": "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt",
+        "expected_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+        "description": "Production Baseline Frozen Checkpoint",
+    },
+    {
+        "container": "smartscan-models",
+        "blob_name": "scheduler_v2/checkpoint_gate_25000_frozen.pt",
+        "local_path": "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt",
+        "expected_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+        "description": "Candidate Mirror Frozen Checkpoint",
+    },
+    {
+        "container": "smartscan-models",
+        "blob_name": "scheduler_v2/SHA256SUMS",
+        "local_path": "experiments/checkpoints/production_baseline/SHA256SUMS",
+        "expected_sha256": "ce220b282b1e97a6a1cd06c429fff1254414dd772ca09be8ef296f51a4e0e621",
+        "description": "Baseline Checksum Manifest (SHA256SUMS)",
+    },
+    {
+        "container": "smartscan-models",
+        "blob_name": "scheduler_v2/baseline_metadata.json",
+        "local_path": "experiments/checkpoints/production_baseline/baseline_metadata.json",
+        "expected_sha256": "9c0b10e45a43fd2d9fd1da2fb62c057e9c8a4fd16734e078d835cf7571c9d330",
+        "description": "Baseline Architecture Metadata",
+    },
+    {
+        "container": "smartscan-models",
+        "blob_name": "scheduler_v2/benchmark_v2_baseline_gate25k.json",
+        "local_path": "experiments/checkpoints/production_baseline/benchmark_v2_baseline_gate25k.json",
+        "expected_sha256": "adf02d70699a3a8225dd67c823cc6679586086e2d86b4f6d4a9e078e2a0b58bd",
+        "description": "Baseline Gate-25k Benchmark Metrics",
+    },
+    {
+        "container": "smartscan-models",
+        "blob_name": "scheduler_v2/benchmark_v2_multiseed_summary.json",
+        "local_path": "experiments/checkpoints/production_baseline/benchmark_v2_multiseed_summary.json",
+        "expected_sha256": "a44e70df97a52ddaa22be23eb81a293be1b3fc120e2595ca5b739c1d0cae81b1",
+        "description": "Baseline Multi-Seed Summary",
+    },
+    {
+        "container": "smartscan-models",
+        "blob_name": "scheduler_v2/baseline_reservoir_5k.pkl",
+        "local_path": "experiments/checkpoints/production_baseline/baseline_reservoir_5k.pkl",
+        "expected_sha256": "edcef07b020563aefeac99fa3b03c2c6a474f07afdac7660e61e336523b8fe0c",
+        "description": "Baseline Reservoir 5k Replay Buffer",
+    },
+    {
+        "container": "tsrd-dataset",
+        "blob_name": "val_stare/config_117.h5",
+        "local_path": "tests/fixtures/canonical_tsrd/stare/val_stare/config_117.h5",
+        "expected_sha256": "073724fbcd3aba8daaf94a68cbcd95ac1cf6f1aaeeab2b4b83df54e9a93dfe3f",
+        "description": "Canonical TSRD STARE Validation Fixture (config_117)",
+    },
 ]
 
 
@@ -36,7 +92,7 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def atomic_download(blob_client, dest: Path) -> None:
+def atomic_download(blob_client, dest: Path, expected_sha: str) -> None:
     """Download blob to a temporary file, verify SHA, then atomically rename.
 
     If the SHA does not match, the temporary file is removed and no partial
@@ -51,11 +107,11 @@ def atomic_download(blob_client, dest: Path) -> None:
         with os.fdopen(fd, "wb") as f:
             blob_client.download_blob().readinto(f)
         actual = sha256_file(tmp_path)
-        if actual != EXPECTED_SHA256:
-            print(f"[FAIL] SHA-256 mismatch after download: {actual}")
+        if actual != expected_sha:
+            print(f"[FAIL] SHA-256 mismatch after download: expected {expected_sha}, got {actual}")
             tmp_path.unlink(missing_ok=True)
             raise ValueError(
-                f"Downloaded file SHA {actual} != expected {EXPECTED_SHA256}"
+                f"Downloaded file SHA {actual} != expected {expected_sha}"
             )
         # Atomic rename (same filesystem)
         shutil.move(str(tmp_path), str(dest))
@@ -108,28 +164,18 @@ def main() -> int:
         print(f"[FAIL] Could not connect to Azure Blob Storage: {e}")
         return 1
 
-    # List blobs for diagnostics
-    try:
-        container_client = client.get_container_client(CONTAINER)
-        blobs = list(container_client.list_blobs())
-        print(f"[INFO] Found {len(blobs)} blob(s) in '{CONTAINER}':")
-        for b in blobs:
-            print(f"       {b.name} ({b.size / 1024 / 1024:.1f} MB)")
-        if not blobs:
-            print("[FAIL] Container is empty — checkpoint not uploaded.")
-            return 1
-    except Exception as e:
-        print(f"[FAIL] Could not list blobs: {e}")
-        return 1
-
-    for local_rel in LOCAL_TARGETS:
-        local = Path(local_rel)
+    for target in PROVISION_TARGETS:
+        local = Path(target["local_path"])
+        expected_sha = target["expected_sha256"]
+        container = target["container"]
+        blob_name = target["blob_name"]
+        desc = target["description"]
 
         # If already present with correct SHA, skip download
         if local.exists():
             actual = sha256_file(local)
-            if actual == EXPECTED_SHA256:
-                print(f"[OK] Already present and verified: {local}")
+            if actual == expected_sha:
+                print(f"[OK] Already present and verified: {local} ({desc})")
                 continue
             else:
                 print(
@@ -137,37 +183,51 @@ def main() -> int:
                 )
                 local.unlink()  # Remove corrupt/wrong file
 
-        print(f"[INFO] Downloading {BLOB_NAME} -> {local}")
+        print(f"[INFO] Downloading [{container}] {blob_name} -> {local} ({desc})")
         try:
             blob_client = client.get_blob_client(
-                container=CONTAINER, blob=BLOB_NAME
+                container=container, blob=blob_name
             )
-            atomic_download(blob_client, local)
-            size_mb = local.stat().st_size / 1024 / 1024
-            print(f"[OK] Downloaded and verified: {local} ({size_mb:.1f} MB)")
+            atomic_download(blob_client, local, expected_sha)
+            size_kb = local.stat().st_size / 1024
+            if size_kb >= 1024:
+                print(f"[OK] Downloaded & verified: {local} ({size_kb / 1024:.1f} MB)")
+            else:
+                print(f"[OK] Downloaded & verified: {local} ({size_kb:.1f} KB)")
         except ResourceNotFoundError:
-            print(f"[FAIL] Blob not found: {CONTAINER}/{BLOB_NAME}")
+            print(f"[FAIL] Blob not found: {container}/{blob_name}")
             return 1
         except ValueError:
-            # SHA mismatch already printed by atomic_download
             return 1
         except Exception as e:
             print(f"[FAIL] Download failed: {e}")
             return 1
 
-    # Final verification: both targets must exist with correct SHA
-    for local_rel in LOCAL_TARGETS:
-        local = Path(local_rel)
+    # Verify all files exist and match SHA
+    for target in PROVISION_TARGETS:
+        local = Path(target["local_path"])
+        expected_sha = target["expected_sha256"]
         if not local.exists():
-            print(f"[FAIL] Expected checkpoint not found: {local}")
+            print(f"[FAIL] Expected file not found after provisioning: {local}")
             return 1
         actual = sha256_file(local)
-        if actual != EXPECTED_SHA256:
+        if actual != expected_sha:
             print(f"[FAIL] Final SHA check failed for {local}: {actual}")
             return 1
 
-    print("[OK] All baseline checkpoint copies provisioned and verified.")
-    print(f"[OK] SHA-256: {EXPECTED_SHA256}")
+    # Full baseline package manifest verification
+    try:
+        from scripts.verify_baseline_gate import verify_sha256sums
+        base_dir = Path("experiments/checkpoints/production_baseline")
+        if not verify_sha256sums(base_dir):
+            print("[FAIL] Baseline package SHA256SUMS manifest verification failed!")
+            return 1
+        print("[OK] Baseline package SHA256SUMS verified across all components.")
+    except Exception as e:
+        print(f"[FAIL] Baseline manifest verification error: {e}")
+        return 1
+
+    print("\n[OK] Complete baseline evidence package and canonical TSRD fixture provisioned and verified.")
     return 0
 
 

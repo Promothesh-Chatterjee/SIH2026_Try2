@@ -100,15 +100,20 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
         WARMUP_COUNT = 5
         MEASURED_COUNT = 20
 
+        session = requests.Session()
+        session.headers.update(headers)
+        adapter = requests.adapters.HTTPAdapter(pool_connections=1, pool_maxsize=1, max_retries=3)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+
         print(f"  Executing {WARMUP_COUNT} warmup requests...")
         warmup_ok = True
         warmup_err = ""
         for w_idx in range(WARMUP_COUNT):
             try:
-                wr = requests.post(
+                wr = session.post(
                     f"{api_url}/predict_bands",
                     json={"obs": [0.0] * 360, "policy_mode": "operational"},
-                    headers=headers,
                     timeout=30,
                 )
                 if wr.status_code != 200:
@@ -132,10 +137,9 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
 
         for i in range(MEASURED_COUNT):
             t0 = time.perf_counter()
-            r = requests.post(
+            r = session.post(
                 f"{api_url}/predict_bands",
                 json={"obs": [0.0] * 360, "policy_mode": "operational"},
-                headers=headers,
                 timeout=30,
             )
             t1 = time.perf_counter()
@@ -209,6 +213,7 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
                     f"server_median={srv_med:.2f}ms vs api_median={lat_median:.2f}ms",
                 ):
                     failures.append("server_telemetry_integrity")
+        session.close()
     except Exception as e:
         check("/predict_bands reachable and testable", False, str(e))
         failures.append("inference_unreachable")

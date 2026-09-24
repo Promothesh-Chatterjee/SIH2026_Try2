@@ -9,7 +9,7 @@
 - **Status**: `AUTHORITATIVE`
 
 ## Git Provenance Flow (Corrected Contract)
-- **Source Code Revision Evaluated (`source_git_commit`)**: `c4f94212e0749919710662a75e690f16c7dc119a`
+- **Source Code Revision Evaluated (`source_git_commit`)**: `46517eb8f6b0aed729d4fe39b81fd364d61e0072`
   - *This represents the exact source tree tested with a clean git working directory.*
 - **Artifact Storage Commit (`artifact_commit`)**: Commit that stores this generated benchmark artifact and report.
 - **Model Checkpoint (`checkpoint_sha256`)**: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`

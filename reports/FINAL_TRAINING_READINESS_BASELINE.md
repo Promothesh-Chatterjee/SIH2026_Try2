@@ -49,8 +49,8 @@ Evaluated across the 10 canonical TSRD scenarios (`config_117`, `config_119`, `c
 
 ## 4. Strict 1,000-Step Qualification Run Evidence (Audited & Verified)
 
-- **Qualification Run ID**: `9744accb-efa5-48bd-b471-aed26971f65d`
-- **Git Commit SHA**: `c4f94212e0749919710662a75e690f16c7dc119a`
+- **Qualification Run ID**: `5bdde57f-24f7-48e1-b372-bda0f2c81b0f`
+- **Git Commit SHA**: `16fc90331e87c5323588d0adbdc1963395abf700`
 - **Training Config SHA-256**: `2b9add4b2a581c9bbf91335825c4855c54c690113e3eb293bccb2b13cea38425`
 - **Model Config SHA-256**: `f9a1a316b0726e37400a5b663b0946372cbbe1a8b6a8dcfa3375e074ea7b1280`
 - **Parent Checkpoint SHA-256**: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`

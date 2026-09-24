@@ -47,6 +47,8 @@ jobs:
           fi
 
       - name: Run test suite with coverage
+        env:
+          TSRD_ROOT: tests/fixtures/canonical_tsrd
         run: |
           pytest ew_core/tests/ --cov=ew_core --cov-report=term-missing
 

@@ -16,15 +16,19 @@ build/
 .oxlint-cache/
 
 # Model checkpoints and run outputs
-checkpoints/
-**/checkpoints/
+/checkpoints/
 runs/
 **/runs/
 results/
-experiments/checkpoints/
-experiments/runs/
-!**/ACTIVE_CHECKPOINT.json
-!**/CHECKPOINT_LOCATION.md
+experiments/checkpoints/*
+!experiments/checkpoints/production_baseline/
+experiments/checkpoints/production_baseline/*
+!experiments/checkpoints/production_baseline/ACTIVE_CHECKPOINT.json
+!experiments/checkpoints/production_baseline/CHECKPOINT_LOCATION.md
+!experiments/checkpoints/production_baseline/baseline_metadata.json
+!experiments/checkpoints/production_baseline/benchmark_v2_baseline_gate25k.json
+!experiments/checkpoints/production_baseline/benchmark_v2_multiseed_summary.json
+!experiments/checkpoints/production_baseline/SHA256SUMS
 
 # CI / Test artefacts & patch scripts
 *_output.txt

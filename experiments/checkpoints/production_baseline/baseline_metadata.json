@@ -1,0 +1,37 @@
+{
+  "model_name": "Gate-25k-R4.2-alpha020",
+  "status": "IMMUTABLE_PRODUCTION_BASELINE",
+  "checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+  "benchmark_version": "2026.1-CANONICAL",
+  "git_commit": "2eabd98d70bfb28b830086e756b2598416d92cef",
+  "architecture": {
+    "obs_dim": 360,
+    "n_bands": 36,
+    "n_modes": 5,
+    "n_actions": 180,
+    "lstm_hidden": 256,
+    "lstm_layers": 2,
+    "band_routing": true,
+    "dueling": true,
+    "aux_heads": [
+      "intercept_prob",
+      "intercept_time_us"
+    ]
+  },
+  "environment": {
+    "n_bands": 36,
+    "dwell_modes": 5,
+    "features_per_band": 10,
+    "ema_alpha": 0.3,
+    "ema_alpha_miss_confirmed": 0.2
+  },
+  "reproduced_metrics": {
+    "mean_ir_pct": 60.45,
+    "agile_ir_pct": 46.7,
+    "sparse_ir_pct": 17.6,
+    "worst_case_ir_pct": 12.4,
+    "pd_pct": 99.85,
+    "pfa": 0.0,
+    "distinct_bands": 29.9
+  }
+}

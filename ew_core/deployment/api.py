@@ -1778,53 +1778,54 @@ def predict_bands(req: PredictBandsRequest, request: Request = None) -> PredictB
         )
 
 # ---- Selection ----------------------------------------------------------
-    if moe is not None:
-        # PT path: SmartScanMoE owns the DRQN recurrent state; capture the
-        # pre-step hidden so the aux predictions below describe the exact
-        # decision context (single forward, no state double-step).
-        with hidden_lock:
-            pre_step_hidden = moe.eager_agent.hidden if moe.eager_agent.hidden is not None else STATE.get("hidden")
-            hidden_state = STATE.get("hidden")
-            action, hidden, attribution = moe.select_action(obs, hidden_state, policy_mode=req.policy_mode)
-            STATE["hidden"] = hidden
-            if hasattr(moe.eager_agent, "last_aux") and moe.eager_agent.last_aux is not None:
-                aux = moe.eager_agent.last_aux
-                prob = float(aux["intercept_prob"][0, -1, int(action)].item())
-                pred_time_us = float(aux["intercept_time_us"][0, -1, int(action)].item())
-            else:
-                prob, pred_time_us = _aux_for_action(moe.eager_agent.drqn, obs, action, pre_step_hidden)
-            moe.update(action)
-            STATE["hidden_state_ready"] = True
-    else:
-        # ONNX eager path: real q / intercept_prob / intercept_time_us from the
-        # exported DRQN. Attribution is computed from those real Q-values plus
-        # the real revisit-age feature inside obs (index 4 of each 10-feature
-        # band block) — matching the MoE fusion semantics without fabricating.
-        inp = obs.reshape(1, 1, -1).astype(np.float32)
-        q, q_prob, q_time = onnx_sess.run(None, {"obs": inp})
-        q_last = q[0, -1] if q.ndim == 3 else q[0]
-        prob_last = q_prob[0, -1] if q_prob.ndim == 3 else q_prob[0]
-        time_last = q_time[0, -1] if q_time.ndim == 3 else q_time[0]
+    with torch.inference_mode():
+        if moe is not None:
+            # PT path: SmartScanMoE owns the DRQN recurrent state; capture the
+            # pre-step hidden so the aux predictions below describe the exact
+            # decision context (single forward, no state double-step).
+            with hidden_lock:
+                pre_step_hidden = moe.eager_agent.hidden if moe.eager_agent.hidden is not None else STATE.get("hidden")
+                hidden_state = STATE.get("hidden")
+                action, hidden, attribution = moe.select_action(obs, hidden_state, policy_mode=req.policy_mode)
+                STATE["hidden"] = hidden
+                if hasattr(moe.eager_agent, "last_aux") and moe.eager_agent.last_aux is not None:
+                    aux = moe.eager_agent.last_aux
+                    prob = float(aux["intercept_prob"][0, -1, int(action)].item())
+                    pred_time_us = float(aux["intercept_time_us"][0, -1, int(action)].item())
+                else:
+                    prob, pred_time_us = _aux_for_action(moe.eager_agent.drqn, obs, action, pre_step_hidden)
+                moe.update(action)
+                STATE["hidden_state_ready"] = True
+        else:
+            # ONNX eager path: real q / intercept_prob / intercept_time_us from the
+            # exported DRQN. Attribution is computed from those real Q-values plus
+            # the real revisit-age feature inside obs (index 4 of each 10-feature
+            # band block) — matching the MoE fusion semantics without fabricating.
+            inp = obs.reshape(1, 1, -1).astype(np.float32)
+            q, q_prob, q_time = onnx_sess.run(None, {"obs": inp})
+            q_last = q[0, -1] if q.ndim == 3 else q[0]
+            prob_last = q_prob[0, -1] if q_prob.ndim == 3 else q_prob[0]
+            time_last = q_time[0, -1] if q_time.ndim == 3 else q_time[0]
 
-        moe_cfg = STATE.get("model_cfg", {}).get("smartscan_moe", {})
-        eager_w = float(moe_cfg.get("eager_weight", 0.6))
-        revisit_w = float(moe_cfg.get("revisit_weight", 0.4))
-        q_norm = _minmax_norm(np.asarray(q_last, dtype=np.float32))
-        rev_band = np.clip(obs[REVISIT_AGE_IDX::OBS_FEATURES_PER_BAND][:n_bands], 0.0, 1.0)
-        rev_action = np.repeat(rev_band.astype(np.float32), n_modes)
-        fused = eager_w * q_norm + revisit_w * rev_action
-        action = int(np.argmax(fused))
-        eager_contrib = eager_w * q_norm[action]
-        revisit_contrib = revisit_w * rev_action[action]
-        total = eager_contrib + revisit_contrib + 1e-8
-        attribution = {
-            "eager_pct": float(eager_contrib / total),
-            "revisit_pct": float(revisit_contrib / total),
-            "selected_band": band_of_action(action, n_modes),
-            "selected_mode": int(mode_of_action(action, n_modes)),
-        }
-        prob = float(prob_last[action])
-        pred_time_us = float(time_last[action])
+            moe_cfg = STATE.get("model_cfg", {}).get("smartscan_moe", {})
+            eager_w = float(moe_cfg.get("eager_weight", 0.6))
+            revisit_w = float(moe_cfg.get("revisit_weight", 0.4))
+            q_norm = _minmax_norm(np.asarray(q_last, dtype=np.float32))
+            rev_band = np.clip(obs[REVISIT_AGE_IDX::OBS_FEATURES_PER_BAND][:n_bands], 0.0, 1.0)
+            rev_action = np.repeat(rev_band.astype(np.float32), n_modes)
+            fused = eager_w * q_norm + revisit_w * rev_action
+            action = int(np.argmax(fused))
+            eager_contrib = eager_w * q_norm[action]
+            revisit_contrib = revisit_w * rev_action[action]
+            total = eager_contrib + revisit_contrib + 1e-8
+            attribution = {
+                "eager_pct": float(eager_contrib / total),
+                "revisit_pct": float(revisit_contrib / total),
+                "selected_band": band_of_action(action, n_modes),
+                "selected_mode": int(mode_of_action(action, n_modes)),
+            }
+            prob = float(prob_last[action])
+            pred_time_us = float(time_last[action])
 
     band = band_of_action(action, n_modes)
     mode = mode_of_action(action, n_modes)
