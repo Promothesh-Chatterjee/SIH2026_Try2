@@ -92,6 +92,12 @@ environment:
   max_pulses: 50000
   chunk_mode: "random"
   max_steps_per_episode: 1000
+  receiver:
+    sensitivity_dbm: -110.0
+    cfar_guard_cells: 2
+    cfar_ref_cells: 8
+    cfar_pfa: 0.001
+    noise_floor_isolation: true
   belief:
     ema_alpha: 0.30
     ema_alpha_miss_confirmed: 0.20
