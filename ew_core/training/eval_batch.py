@@ -96,7 +96,7 @@ def build_canonical_eval_batch(
             h5_path = val_files[scen_idx % len(val_files)]
             scen_idx += 1
             try:
-                records = load_h5_records(h5_path)
+                records = load_h5_records(h5_path, chunk_mode="first")
                 env = CognitiveRFScanEnv(env_cfg, records=records, seed=seed + len(batch_list))
                 obs, _ = env.reset()
                 seq_obs = [obs]
@@ -250,6 +250,7 @@ def run_evaluation(
                     freq_max_mhz=18000.0,
                     time_horizon_us=30000000.0,
                     max_pulses=50000,
+                    chunk_mode="first",
                 )
             else:
                 logger.warning("Scenario %s not found in %s; falling back to synthetic records", scen_id, val_dir)
