@@ -90,6 +90,7 @@ environment:
   frequency_step_mhz: 500.0
   time_horizon_us: 30000000.0
   max_pulses: 50000
+  chunk_mode: "random"
   max_steps_per_episode: 1000
   belief:
     ema_alpha: 0.30
@@ -128,6 +129,7 @@ validation:
   n_files: 10
   seed: 42
   allow_synthetic_fallback: false
+  chunk_mode: "first"
 
 # ── Telemetry ────────────────────────────────────────────────────────────────
 telemetry:

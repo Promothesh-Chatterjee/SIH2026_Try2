@@ -529,6 +529,7 @@ def train_scheduler(
     observation_mode = train_cfg.get("observation_mode", "scan")
 
     # For scheduler training: RF world uses STARE (latent truth), receiver observes through IBW
+    train_chunk_mode = str(env_config.get("chunk_mode", "random"))
     if world_mode == "stare":
         train_source = ScenarioSource(
             data_root=data_dir,
@@ -541,8 +542,9 @@ def train_scheduler(
             seed=seed,
             source_type="world",
             allow_synthetic_fallback=training_mode == "synthetic",
+            chunk_mode=train_chunk_mode,
         )
-        logger.info("Scheduler training: RF world source = TSRD STARE (latent truth)")
+        logger.info("Scheduler training: RF world source = TSRD STARE (latent truth, chunk_mode=%s)", train_chunk_mode)
     else:
         # Fallback for compatibility
         train_source = ScenarioSource(
@@ -555,8 +557,9 @@ def train_scheduler(
             max_pulses=int(env_config.get("max_pulses", 50000)),
             seed=seed,
             allow_synthetic_fallback=training_mode == "synthetic",
+            chunk_mode=train_chunk_mode,
         )
-        logger.warning("Scheduler training: RF world source = %s (non-standard)", world_mode)
+        logger.warning("Scheduler training: RF world source = %s (non-standard, chunk_mode=%s)", world_mode, train_chunk_mode)
 
     # One env; reset() draws a fresh random TSRD file each episode.
     # Semantic memory explicitly disabled during training for clean DRQN ablation baseline
@@ -737,6 +740,7 @@ def train_scheduler(
         time_horizon_us=float(env_config.get("time_horizon_us", 0.0)) or None,
         max_pulses=int(env_config.get("max_pulses", 50000)),
         allow_synthetic_fallback=False,
+        chunk_mode=str(val_cfg.get("chunk_mode", "first")),
     )
     (run.dir / "validation_set.json").write_text(
         json.dumps(coerce(val_set.manifest()), indent=2), encoding="utf-8"

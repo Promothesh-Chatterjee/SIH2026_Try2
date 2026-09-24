@@ -43,6 +43,7 @@ class FixedValidationSet:
         time_horizon_us: float | None = None,
         max_pulses: int = 50000,
         allow_synthetic_fallback: bool = False,
+        chunk_mode: str = "first",
     ) -> None:
         self.subset = subset
         self.mode = mode
@@ -53,6 +54,7 @@ class FixedValidationSet:
         self.time_horizon_us = time_horizon_us
         self.max_pulses = max_pulses
         self.allow_synthetic_fallback = allow_synthetic_fallback
+        self.chunk_mode = chunk_mode
 
         candidate_pool = ScenarioSource(
             data_root=data_root,
@@ -65,6 +67,7 @@ class FixedValidationSet:
             seed=seed,
             source_type="world",
             allow_synthetic_fallback=allow_synthetic_fallback,
+            chunk_mode=chunk_mode,
         )
         self.candidates = sorted(list(getattr(candidate_pool, "eligible_files", [])))
         self._cursor = 0
@@ -83,6 +86,7 @@ class FixedValidationSet:
                     freq_max_mhz=freq_max_mhz,
                     time_horizon_us=time_horizon_us,
                     max_pulses=max_pulses,
+                    chunk_mode=chunk_mode,
                 )
             except Exception as exc:  # pragma: no cover - defensive
                 self.skipped.append((scenario_id, f"load error: {exc}"))
@@ -137,6 +141,7 @@ class FixedValidationSet:
             freq_max_mhz=self.freq_max_mhz,
             time_horizon_us=self.time_horizon_us,
             max_pulses=self.max_pulses,
+            chunk_mode=self.chunk_mode,
         )
 
     def current_scenario_id(self) -> str:

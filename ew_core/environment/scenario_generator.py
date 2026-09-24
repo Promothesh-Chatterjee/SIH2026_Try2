@@ -83,6 +83,8 @@ def load_h5_records(
     freq_max_mhz: float = 18000.0,
     time_horizon_us: Optional[float] = None,
     max_pulses: int = 50000,
+    chunk_mode: str = "random",
+    seed: int | None = None,
 ) -> list[PulseRecord]:
     """Load a single TSRD-style .h5 file into PulseRecords (file-local labels).
 
@@ -92,6 +94,11 @@ def load_h5_records(
             :func:`records_from_array` so out-of-band pulses are actually dropped).
         time_horizon_us: Optional toa upper bound (also forwarded).
         max_pulses: Cap on pulses loaded (keeps episodes bounded).
+        chunk_mode: How to sample when total pulses in .h5 > max_pulses:
+            - "random": pick random start index in [0, total - max_pulses], take contiguous slice
+            - "first": take [:max_pulses] (deterministic for evaluation)
+            - "uniform": subsample evenly across full scenario duration
+        seed: Optional RNG seed for "random" chunk mode.
 
     Returns:
         List of PulseRecord. ToA is normalised so the earliest surviving pulse
@@ -102,8 +109,23 @@ def load_h5_records(
 
     path = Path(path)
     with h5py.File(str(path), "r") as handle:
-        data = handle["data"][:max_pulses]
-        labels = handle["labels"][:max_pulses] if "labels" in handle else None
+        total = handle["data"].shape[0]
+        if total <= max_pulses:
+            data = handle["data"][:]
+            labels = handle["labels"][:] if "labels" in handle else None
+        else:
+            if chunk_mode == "random":
+                rng = np.random.default_rng(seed)
+                start_idx = int(rng.integers(0, total - max_pulses + 1))
+                data = handle["data"][start_idx : start_idx + max_pulses]
+                labels = handle["labels"][start_idx : start_idx + max_pulses] if "labels" in handle else None
+            elif chunk_mode == "uniform":
+                indices = np.round(np.linspace(0, total - 1, max_pulses)).astype(np.int64)
+                data = handle["data"][indices]
+                labels = handle["labels"][indices] if "labels" in handle else None
+            else:  # "first"
+                data = handle["data"][:max_pulses]
+                labels = handle["labels"][:max_pulses] if "labels" in handle else None
     records = records_from_array(
         data,
         labels,
@@ -623,11 +645,13 @@ class ScenarioSource:
         synthetic: bool = False,
         source_type: str = "observation",  # "world" (STARE) or "observation" (SCAN)
         allow_synthetic_fallback: bool = True,
+        chunk_mode: str = "random",
     ) -> None:
         self.freq_min_mhz = freq_min_mhz
         self.freq_max_mhz = freq_max_mhz
         self.time_horizon_us = time_horizon_us
         self.max_pulses = max_pulses
+        self.chunk_mode = chunk_mode
         self._rng = np.random.default_rng(seed)
         self.files: list[Path] = []
         self.eligible_files: list[Path] = []
@@ -709,6 +733,8 @@ class ScenarioSource:
                     freq_max_mhz=self.freq_max_mhz,
                     time_horizon_us=self.time_horizon_us,
                     max_pulses=self.max_pulses,
+                    chunk_mode=self.chunk_mode,
+                    seed=int(self._rng.integers(0, 2**31)),
                 )
             except Exception as exc:
                 logger.warning(
