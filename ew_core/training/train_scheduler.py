@@ -919,6 +919,8 @@ def train_scheduler(
     }
     consecutive_ooms = 0
     consecutive_val_failures = 0
+    qualification_finite_loss = True
+    qualification_finite_gradients = True
 
     # Final immutable-parent pre-flight immediately before any training interaction/update.
     # Qualification runs always require the canonical Gate-25k frozen parent.
@@ -1211,9 +1213,14 @@ def train_scheduler(
                         n_modes=n_modes,
                     )
                     if not np.isfinite(loss_val) or upd_stats.get("skipped_nan", False):
+                        qualification_finite_loss = False
+                        qualification_finite_gradients = False
                         update_integrity_counters["n_updates_skipped_nan"] += 1
                         raise RuntimeError(f"Non-finite DRQN update at step {global_step}; training aborted.")
                     else:
+                        if not np.isfinite(float(upd_stats.get("gradient_norm", 0.0))):
+                            qualification_finite_gradients = False
+                            raise RuntimeError(f"Non-finite gradient norm at step {global_step}; training aborted.")
                         update_integrity_counters["n_updates_completed"] += 1
                         consecutive_ooms = 0
                     if upd_stats and not upd_stats.get("skipped_nan", False):
@@ -1830,6 +1837,8 @@ def train_scheduler(
             "output_dir": str(output_dir),
             "checkpoint_path": str(final_path),
             "integrity": update_integrity_counters,
+            "finite_loss": bool(qualification_finite_loss),
+            "finite_gradients": bool(qualification_finite_gradients),
             "device": str(device),
             "dataset_root": str(data_dir),
             "dataset_fingerprint": data_fingerprint,
