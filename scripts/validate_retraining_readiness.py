@@ -277,9 +277,11 @@ class ReadinessGateEvaluator:
                 self.log_gate("DEPLOY", g, False, "SKIPPED by CLI flag")
             return
 
+        headers = {"X-SmartScan-API-Key": self.api_key} if self.api_key else {}
+
         # 31. Live Health Probe
         try:
-            req = urllib.request.Request(f"{self.api_url}/health", headers={"X-API-Key": self.api_key})
+            req = urllib.request.Request(f"{self.api_url}/health", headers=headers)
             with urllib.request.urlopen(req, timeout=10) as resp:
                 h_data = json.loads(resp.read().decode())
                 h_status = (resp.status == 200 and h_data.get("status") == "ok")
@@ -290,7 +292,7 @@ class ReadinessGateEvaluator:
 
         # 32. Live Readiness Probe
         try:
-            req = urllib.request.Request(f"{self.api_url}/ready", headers={"X-API-Key": self.api_key})
+            req = urllib.request.Request(f"{self.api_url}/ready", headers=headers)
             with urllib.request.urlopen(req, timeout=10) as resp:
                 r_data = json.loads(resp.read().decode())
                 r_status = (resp.status == 200 and r_data.get("model_loaded") is True)
@@ -300,7 +302,7 @@ class ReadinessGateEvaluator:
 
         # 33. Live Benchmark API Contract
         try:
-            req = urllib.request.Request(f"{self.api_url}/api/benchmark", headers={"X-API-Key": self.api_key})
+            req = urllib.request.Request(f"{self.api_url}/api/benchmark", headers=headers)
             with urllib.request.urlopen(req, timeout=10) as resp:
                 b_live = json.loads(resp.read().decode())
                 scheds = list(b_live.get("schedulers", {}).keys())
@@ -313,16 +315,16 @@ class ReadinessGateEvaluator:
         latencies = []
         try:
             dummy_obs = [0.0] * CANONICAL_OBS_DIM
-            payload = json.dumps({"observation": dummy_obs, "deterministic": True}).encode()
-            headers = {"X-API-Key": self.api_key, "Content-Type": "application/json"}
+            payload = json.dumps({"obs": dummy_obs, "policy_mode": "operational"}).encode()
+            post_headers = {**headers, "Content-Type": "application/json"}
             # 5 warmup + 10 measurement requests
             for _ in range(5):
-                req = urllib.request.Request(f"{self.api_url}/predict_bands", data=payload, headers=headers)
+                req = urllib.request.Request(f"{self.api_url}/predict_bands", data=payload, headers=post_headers)
                 urllib.request.urlopen(req, timeout=5).read()
 
             for _ in range(10):
                 t0 = time.time()
-                req = urllib.request.Request(f"{self.api_url}/predict_bands", data=payload, headers=headers)
+                req = urllib.request.Request(f"{self.api_url}/predict_bands", data=payload, headers=post_headers)
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     resp.read()
                 latencies.append((time.time() - t0) * 1000.0)
