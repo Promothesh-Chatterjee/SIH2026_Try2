@@ -62,7 +62,7 @@ jobs:
 
       - name: Run smoke test against live AKS endpoint
         run: |
-          pip install requests websocket-client --quiet
+          pip install requests websocket-client "numpy==1.26.4" --quiet
           python scripts/smoke_test.py \
             --api_url "${{ secrets.AKS_ENDPOINT || 'http://172.198.227.59' }}" \
             --api_key "${{ secrets.SMARTSCAN_API_KEY }}"

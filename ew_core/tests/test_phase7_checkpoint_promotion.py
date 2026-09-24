@@ -415,3 +415,34 @@ def test_deployment_loader_rejects_unapproved_scheduler_checkpoint(tmp_path, mon
         # Trigger lifespan startup
         import asyncio
         asyncio.run(lifespan(app).__aenter__())
+
+
+# Test 17: Explicit checkpoint-promotion prohibition during qualification
+def test_qualification_run_checkpoint_promotion_prohibition(tmp_path):
+    """Refinement 4: Qualification runs must strictly prohibit checkpoint promotion.
+    1. Production baseline files and SHA-256 remain strictly unchanged.
+    2. Attempted promotion of qualification/quarantined checkpoints fails closed.
+    """
+    baseline_path = Path("experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt")
+    assert baseline_path.exists(), "Frozen baseline file must exist"
+    actual_sha = hashlib.sha256(baseline_path.read_bytes()).hexdigest()
+    assert actual_sha == EXPECTED_BASELINE_SHA256, "Frozen baseline SHA-256 must be bit-exact"
+
+    # Simulate quarantined qualification checkpoint
+    quarantine_dir = tmp_path / "quarantine"
+    quarantine_dir.mkdir()
+    qual_ckpt = quarantine_dir / "final.pt"
+    qual_sha = _create_mock_checkpoint(qual_ckpt, 26000)
+
+    # Attempted promotion targeting production_baseline must raise CheckpointSecurityError
+    guard = CheckpointGuard(tmp_path / "candidate_dir")
+    with pytest.raises(CheckpointSecurityError, match="CRITICAL PATH SAFETY VIOLATION"):
+        guard.validate_path_safety("experiments/checkpoints/production_baseline/final.pt")
+
+    # Negative test: attempted activation of quarantined qualification file must FAIL closed
+    rep = _create_mock_report(qual_ckpt, qual_sha)
+    promoted, _, details = evaluate_promotion(rep, candidate_path=qual_ckpt)
+    guard.promote_checkpoint(qual_ckpt, details)
+    with pytest.raises(QuarantinedCheckpointError):
+        guard.get_active_checkpoint()
+

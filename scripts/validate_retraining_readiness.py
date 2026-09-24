@@ -329,6 +329,62 @@ class ReadinessGateEvaluator:
         doc_pass = ("-110.0 dBm" in rep_md and "-140.0 dBm" not in rep_md)
         self.log_gate("LOCAL", "BENCHMARK_DOC_CONSISTENCY", doc_pass, "Markdown report grounded at -110.0 dBm without contradictory -140.0 dBm")
 
+        # 31. Qualification Run Evidence Freshness and Integrity
+        q_dir = REPO_ROOT / "experiments/checkpoints/quarantine"
+        manifest_p = q_dir / "qualification_run_manifest.json"
+        summary_p = q_dir / "qualification_run_summary.json"
+        if not manifest_p.exists() or not summary_p.exists():
+            self.log_gate(
+                "LOCAL",
+                "QUALIFICATION_EVIDENCE_FRESHNESS",
+                False,
+                f"Missing qualification evidence in {q_dir} (manifest={manifest_p.exists()}, summary={summary_p.exists()})"
+            )
+        else:
+            try:
+                m_data = json.loads(manifest_p.read_text(encoding="utf-8"))
+                s_data = json.loads(summary_p.read_text(encoding="utf-8"))
+                run_id_match = bool(m_data.get("run_id") and m_data.get("run_id") == s_data.get("run_id"))
+                parent_sha_ok = bool(s_data.get("parent_checkpoint_sha256") == EXPECTED_FROZEN_SHA256)
+                steps_ok = bool(
+                    s_data.get("start_global_step") == 25000 and
+                    s_data.get("final_global_step") == 26000 and
+                    s_data.get("qualification_steps_completed") == 1000
+                )
+                updates_attempted = s_data.get("optimizer_updates_attempted", 0)
+                updates_completed = s_data.get("optimizer_updates_completed", 0)
+                updates_ok = bool(updates_attempted > 0 and updates_completed == updates_attempted)
+                skips_zero = bool(
+                    s_data.get("skipped_nan", -1) == 0 and
+                    s_data.get("skipped_assertion", -1) == 0 and
+                    s_data.get("skipped_oom", -1) == 0 and
+                    s_data.get("other_update_failures", -1) == 0 and
+                    s_data.get("validation_failures", -1) == 0
+                )
+                finite_grads = bool(s_data.get("finite_gradients") is True)
+                timestamps_ok = bool(
+                    s_data.get("qualification_started_at_utc") and
+                    s_data.get("qualification_completed_at_utc") and
+                    s_data.get("qualification_completed_at_utc") >= s_data.get("qualification_started_at_utc")
+                )
+                quarantine_isolated = ("quarantine" in s_data.get("checkpoint_output_dir", "").lower())
+
+                q_pass = bool(
+                    run_id_match and parent_sha_ok and steps_ok and
+                    updates_ok and skips_zero and finite_grads and
+                    timestamps_ok and quarantine_isolated
+                )
+                detail = (
+                    f"run_id={m_data.get('run_id', '')[:8]}... "
+                    f"steps={s_data.get('qualification_steps_completed')}/1000 "
+                    f"updates={updates_completed}/{updates_attempted} "
+                    f"skips_zero={skips_zero} "
+                    f"quarantine={quarantine_isolated}"
+                )
+                self.log_gate("LOCAL", "QUALIFICATION_EVIDENCE_FRESHNESS", q_pass, detail)
+            except Exception as e:
+                self.log_gate("LOCAL", "QUALIFICATION_EVIDENCE_FRESHNESS", False, f"Failed parsing qualification evidence: {e}")
+
     def evaluate_deployment_gates(self):
         print("\n" + "=" * 78)
         print("  STAGE 2: LIVE DEPLOYMENT OPERATIONAL VERIFICATION (5 GATES)")
@@ -341,7 +397,7 @@ class ReadinessGateEvaluator:
 
         headers = {"X-SmartScan-API-Key": self.api_key} if self.api_key else {}
 
-        # 31. Live Health Probe
+        # 32. Live Health Probe
         try:
             req = urllib.request.Request(f"{self.api_url}/health", headers=headers)
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -352,7 +408,7 @@ class ReadinessGateEvaluator:
             self.log_gate("DEPLOY", "DEPLOY_HEALTH", False, f"Request failed: {e}")
             h_data = {}
 
-        # 32. Live Readiness Probe
+        # 33. Live Readiness Probe
         try:
             req = urllib.request.Request(f"{self.api_url}/ready", headers=headers)
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -362,7 +418,7 @@ class ReadinessGateEvaluator:
         except Exception as e:
             self.log_gate("DEPLOY", "DEPLOY_READINESS", False, f"Request failed: {e}")
 
-        # 33. Live Benchmark API Contract
+        # 34. Live Benchmark API Contract
         try:
             req = urllib.request.Request(f"{self.api_url}/api/benchmark", headers=headers)
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -373,31 +429,33 @@ class ReadinessGateEvaluator:
         except Exception as e:
             self.log_gate("DEPLOY", "DEPLOY_BENCHMARK_CONTRACT", False, f"Request failed: {e}")
 
-        # 34. Live Inference Latency SLA (< 500 ms)
+        # 35. Live Inference Latency SLA (< 500 ms) — 5 warmup + 20 measured
         latencies = []
         try:
+            import numpy as np
             dummy_obs = [0.0] * CANONICAL_OBS_DIM
             payload = json.dumps({"obs": dummy_obs, "policy_mode": "operational"}).encode()
             post_headers = {**headers, "Content-Type": "application/json"}
-            # 5 warmup + 10 measurement requests
             for _ in range(5):
                 req = urllib.request.Request(f"{self.api_url}/predict_bands", data=payload, headers=post_headers)
-                urllib.request.urlopen(req, timeout=5).read()
+                urllib.request.urlopen(req, timeout=10).read()
 
-            for _ in range(10):
-                t0 = time.time()
+            for _ in range(20):
+                t0 = time.perf_counter()
                 req = urllib.request.Request(f"{self.api_url}/predict_bands", data=payload, headers=post_headers)
-                with urllib.request.urlopen(req, timeout=5) as resp:
+                with urllib.request.urlopen(req, timeout=10) as resp:
                     resp.read()
-                latencies.append((time.time() - t0) * 1000.0)
+                latencies.append((time.perf_counter() - t0) * 1000.0)
 
-            median_lat = float(sorted(latencies)[len(latencies) // 2])
-            lat_pass = (median_lat < 500.0)
-            self.log_gate("DEPLOY", "DEPLOY_INFERENCE_LATENCY", lat_pass, f"Median={median_lat:.1f}ms (< 500ms SLA), Max={max(latencies):.1f}ms")
+            lat_arr = np.array(latencies, dtype=np.float64)
+            median_lat = float(np.median(lat_arr))
+            p95_lat = float(np.percentile(lat_arr, 95, method="linear"))
+            lat_pass = bool(median_lat < 500.0 and p95_lat < 500.0)
+            self.log_gate("DEPLOY", "DEPLOY_INFERENCE_LATENCY", lat_pass, f"Median={median_lat:.1f}ms, p95={p95_lat:.1f}ms (< 500ms SLA), Max={np.max(lat_arr):.1f}ms")
         except Exception as e:
             self.log_gate("DEPLOY", "DEPLOY_INFERENCE_LATENCY", False, f"Inference request failed: {e}")
 
-        # 35. Live Deployment Provenance Checkpoint SHA
+        # 36. Live Deployment Provenance Checkpoint SHA
         ckpt_sha_live = h_data.get("checkpoint_sha256") if isinstance(h_data, dict) else None
         prov_pass = (ckpt_sha_live == EXPECTED_FROZEN_SHA256)
         ckpt_sha_str = ckpt_sha_live[:16] if ckpt_sha_live else "None"
@@ -409,17 +467,16 @@ class ReadinessGateEvaluator:
 
         local_pass = all(p for p, _ in self.local_results.values())
         deployment_gates = list(self.deploy_results.values())
-        deploy_pass = all(p for p, _ in deployment_gates) if (deployment_gates and not self.skip_deployment) else True
-        overall_ready = local_pass and (deploy_pass or self.skip_deployment)
+        deploy_pass = all(p for p, _ in deployment_gates) if (deployment_gates and not self.skip_deployment) else False
 
         print("\n" + "=" * 78)
-        print("  FINAL QUALIFICATION VERDICT")
+        print("  FINAL QUALIFICATION VERDICTS")
         print("=" * 78)
         print(f"LOCAL_RETRAINING_READY = {'TRUE' if local_pass else 'FALSE'}")
-        print(f"DEPLOYMENT_VERIFIED    = {'TRUE' if (deploy_pass and not self.skip_deployment) else ('SKIPPED' if self.skip_deployment else 'FALSE')}")
+        print(f"DEPLOYMENT_READY       = {'TRUE' if deploy_pass else ('SKIPPED' if self.skip_deployment else 'FALSE')}")
         print("-" * 78)
-        print(f"RETRAINING_READY (local) = {'TRUE' if local_pass else 'FALSE'}")
-        print(f"RETRAINING_READY (overall) = {'TRUE' if (local_pass and deploy_pass and not self.skip_deployment) else ('TRUE (local-only)' if (local_pass and self.skip_deployment) else 'FALSE')}")
+        print(f"TRAINING READY — {'GO' if local_pass else 'NO-GO'}")
+        print(f"FULL OPERATIONAL READY — {'GO' if (local_pass and deploy_pass) else 'NO-GO'}")
         print("=" * 78 + "\n")
 
         if not local_pass:

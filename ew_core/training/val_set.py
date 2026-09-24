@@ -98,6 +98,14 @@ class FixedValidationSet:
 
         self.validation_set_id = self._make_id()
         if not self.files_used:
+            msg = (
+                f"FixedValidationSet FAIL-CLOSED: no usable validation files from {len(self.candidates)} candidates "
+                f"(seed={self.seed}, n_files={self.n_files}, skipped={len(self.skipped)}). "
+                f"allow_synthetic_fallback={self.allow_synthetic_fallback}"
+            )
+            if not self.allow_synthetic_fallback:
+                logger.error(msg)
+                raise RuntimeError(msg)
             logger.warning(
                 "FixedValidationSet: no usable validation files from %d candidates (seed=%d, n_files=%d) — validation will be skipped",
                 len(self.candidates), self.seed, self.n_files,

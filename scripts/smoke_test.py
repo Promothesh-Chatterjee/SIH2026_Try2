@@ -93,36 +93,93 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
         failures.append("auth_unreachable")
 
     # --- TEST 4: Neural inference ---
-    print("\n[4/6] Neural Inference (/predict_bands)")
+    print("\n[4/6] Neural Inference (/predict_bands) — Multi-Sample Latency SLA")
     try:
-        # First call can be slow (model warmup). Make a warmup call first.
-        try:
-            requests.post(f"{api_url}/predict_bands",
-                          json={"obs": [0.0]*360, "policy_mode": "operational"},
-                          headers=headers, timeout=30)
-        except Exception:
-            pass
-        # Now time the real call
-        t0 = time.time()
-        r = requests.post(f"{api_url}/predict_bands",
-                          json={"obs": [0.0]*360, "policy_mode": "operational"},
-                          headers=headers, timeout=30)
-        latency_ms = (time.time() - t0) * 1000
-        ok = r.status_code == 200
-        if not check("/predict_bands HTTP 200", ok, f"got {r.status_code}"):
-            failures.append("inference")
-        if ok:
+        import numpy as np
+
+        WARMUP_COUNT = 5
+        MEASURED_COUNT = 20
+
+        print(f"  Executing {WARMUP_COUNT} warmup requests...")
+        for _ in range(WARMUP_COUNT):
+            try:
+                requests.post(f"{api_url}/predict_bands",
+                              json={"obs": [0.0]*360, "policy_mode": "operational"},
+                              headers=headers, timeout=30)
+            except Exception:
+                pass
+
+        print(f"  Measuring {MEASURED_COUNT} inference round-trips...")
+        api_latencies_ms = []
+        server_latencies_ms = []
+        last_action = None
+        has_action_field = True
+        inference_http_ok = True
+
+        for i in range(MEASURED_COUNT):
+            t0 = time.perf_counter()
+            r = requests.post(f"{api_url}/predict_bands",
+                              json={"obs": [0.0]*360, "policy_mode": "operational"},
+                              headers=headers, timeout=30)
+            t1 = time.perf_counter()
+            dt_ms = (t1 - t0) * 1000.0
+            api_latencies_ms.append(dt_ms)
+
+            if r.status_code != 200:
+                inference_http_ok = False
+                continue
+
             data = r.json()
-            has_action = ("action" in data or "selected_action" in data)
-            if not check("Response has 'action' field", has_action, str(list(data.keys())[:5])):
-                failures.append("inference_missing_action")
-            if not check("Latency < 500ms (post-warmup)", latency_ms < 500, f"{latency_ms:.0f}ms"):
-                failures.append("inference_latency")
-            action = data.get("action", data.get("selected_action", -1))
-            if not check("Action in valid range [0, 179]", 0 <= action <= 179, f"action={action}"):
-                failures.append("inference_action_range")
+            if not ("action" in data or "selected_action" in data):
+                has_action_field = False
+            last_action = data.get("action", data.get("selected_action", -1))
+
+            # Telemetry integrity: server inference latency
+            server_inf_time = None
+            if "inference_time_ms" in data:
+                server_inf_time = float(data["inference_time_ms"])
+            elif "latency_ms" in data:
+                server_inf_time = float(data["latency_ms"])
+            elif "X-Inference-Time-Ms" in r.headers:
+                server_inf_time = float(r.headers["X-Inference-Time-Ms"])
+
+            if server_inf_time is not None:
+                server_latencies_ms.append(server_inf_time)
+
+        if not check("/predict_bands HTTP 200 across measured samples", inference_http_ok):
+            failures.append("inference_http")
+
+        if not check("Response has 'action' field", has_action_field):
+            failures.append("inference_missing_action")
+
+        if not check("Action in valid range [0, 179]", last_action is not None and 0 <= last_action <= 179, f"action={last_action}"):
+            failures.append("inference_action_range")
+
+        # Latency statistics & SLA evaluation
+        if api_latencies_ms:
+            lat_arr = np.array(api_latencies_ms, dtype=np.float64)
+            lat_median = float(np.median(lat_arr))
+            lat_p95 = float(np.percentile(lat_arr, 95, method="linear"))
+            lat_min = float(np.min(lat_arr))
+            lat_max = float(np.max(lat_arr))
+
+            print(f"    API Latencies (N={len(lat_arr)}): min={lat_min:.1f}ms, med={lat_median:.1f}ms, p95={lat_p95:.1f}ms, max={lat_max:.1f}ms")
+
+            if not check("API Round-Trip Median < 500ms", lat_median < 500.0, f"median={lat_median:.1f}ms"):
+                failures.append("inference_latency_median_sla")
+
+            if not check("API Round-Trip p95 < 500ms (Deployment SLA)", lat_p95 < 500.0, f"p95={lat_p95:.1f}ms"):
+                failures.append("inference_latency_p95_sla")
+
+            if server_latencies_ms:
+                srv_arr = np.array(server_latencies_ms, dtype=np.float64)
+                srv_med = float(np.median(srv_arr))
+                srv_ok = bool(np.all(np.isfinite(srv_arr)) and np.all(srv_arr > 0) and srv_med < lat_median)
+                check("Server Inference Monotonic Telemetry Integrity", srv_ok, f"server_median={srv_med:.2f}ms")
+            else:
+                print("    ℹ️  Server inference duration header/field not populated in API response payload (informational)")
     except Exception as e:
-        check("/predict_bands reachable", False, str(e))
+        check("/predict_bands reachable and testable", False, str(e))
         failures.append("inference_unreachable")
 
     # --- TEST 5: Benchmark endpoint ---

@@ -9,12 +9,16 @@ Fixed 2026-09-02:
 """
 
 import copy
+from datetime import datetime, timezone
+import hashlib
 import json
 import logging
 import os
-import random
 from pathlib import Path
+import random
+import subprocess
 from typing import Any
+import uuid
 
 import numpy as np
 import torch
@@ -384,6 +388,10 @@ def train_scheduler(
     q_reg_coef: float = 1e-4,
     targeted_exploration: bool = True,
     band_discovery_quota: int = 2,
+    qualification_run: bool = False,
+    qualification_steps: int | None = None,
+    diagnostic: bool = False,
+    expected_parent_sha: str | None = None,
 ) -> None:
     """Full DRQN training with Thompson warmup, BPTT, target network, and MoE eval.
 
@@ -671,6 +679,11 @@ def train_scheduler(
     if "band_discovery_quota" in sched_cfg:
         band_discovery_quota = int(sched_cfg["band_discovery_quota"])
     target_q_max = float(sched_cfg.get("target_q_max", 100.0))
+    band_tracker = (
+        BandDiscoveryTracker(n_bands=n_bands, discovery_quota=band_discovery_quota)
+        if targeted_exploration
+        else None
+    )
 
     buffer = SequenceReplayBuffer(
         capacity=int(sched_cfg.get("replay_buffer_size", 50000)),
@@ -684,12 +697,29 @@ def train_scheduler(
     # (config output_dir="checkpoints" is replaced by the canonical subdir).
     from ..utils.checkpoint_paths import SCHEDULER_DIR, resolve_checkpoint_dir
 
-    output_dir = resolve_checkpoint_dir(
-        output_dir_override,
-        train_cfg.get("output_dir"),
-        SCHEDULER_DIR,
-        role="scheduler",
-    )
+    if qualification_run:
+        output_dir = Path("experiments/checkpoints/quarantine").resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        # Purge stale summaries/manifests before qualification run begins
+        for fname in ["qualification_run_summary.json", "qualification_run_manifest.json"]:
+            p = output_dir / fname
+            if p.exists():
+                p.unlink()
+        run_id = str(uuid.uuid4())
+        qualification_started_at_utc = datetime.now(timezone.utc).isoformat()
+        q_steps = qualification_steps if qualification_steps is not None else 1000
+        logger.info("QUALIFICATION RUN MODE ACTIVE: output routed exclusively to quarantine (%s)", output_dir)
+    else:
+        output_dir = resolve_checkpoint_dir(
+            output_dir_override,
+            train_cfg.get("output_dir"),
+            SCHEDULER_DIR,
+            role="scheduler",
+        )
+        run_id = None
+        qualification_started_at_utc = None
+        q_steps = None
+
     # Fail-closed guard: forbid output_dir within immutable baseline or operational candidate directories
     forbidden_roots = [
         Path("experiments/checkpoints/production_baseline").resolve(),
@@ -774,13 +804,25 @@ def train_scheduler(
     logger.info("Parent checkpoint resolved: %s (SHA-256: %s)", parent_path, parent_sha256)
 
     FROZEN_25K_SHA = "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
-    if "checkpoint_gate_25000_frozen" in parent_path.name:
+    is_gate25k_launch = bool(
+        qualification_run
+        or (resume_checkpoint and "checkpoint_gate_25000_frozen" in Path(resume_checkpoint).name)
+        or (not resume_checkpoint and "checkpoint_gate_25000_frozen" in parent_path.name)
+    )
+    if is_gate25k_launch:
         if parent_sha256 != FROZEN_25K_SHA:
             raise RuntimeError(
-                f"FATAL: Checkpoint {parent_path} claims to be 25k frozen baseline but SHA-256 mismatch! "
-                f"Expected {FROZEN_25K_SHA}, got {parent_sha256}"
+                f"FATAL: Gate-25k parent checkpoint SHA-256 mismatch! "
+                f"Expected {FROZEN_25K_SHA}, got {parent_sha256} from {parent_path}"
             )
-        logger.info("Frozen 25k baseline SHA-256 verified bit-identical to canonical hash.")
+        logger.info("Gate-25k baseline parent SHA-256 verified bit-identical to canonical hash.")
+    elif expected_parent_sha:
+        if parent_sha256 != expected_parent_sha:
+            raise RuntimeError(
+                f"FATAL: Checkpoint {parent_path} SHA-256 mismatch against declared manifest lineage! "
+                f"Expected {expected_parent_sha}, got {parent_sha256}"
+            )
+        logger.info("Parent checkpoint SHA-256 verified against declared manifest lineage: %s", parent_sha256)
 
     try:
         ckpt = torch.load(parent_path, map_location=device, weights_only=False)
@@ -853,6 +895,37 @@ def train_scheduler(
             best_reward = float(ckpt.get("metadata", {}).get("metrics", {}).get("best_episode_reward", -float("inf")))
         logger.info("Resumed in-flight state: global_step=%d, episode=%d, eps=%.4f", global_step, episode, eps)
 
+    # Qualification Mode setup and manifest emission
+    if qualification_run:
+        target_stop_step = global_step + q_steps
+        stop_at_step = target_stop_step
+        total_steps = target_stop_step
+        try:
+            git_commit_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        except Exception:
+            git_commit_sha = "unknown"
+
+        with open(train_cfg_path, "rb") as f:
+            t_cfg_sha = hashlib.sha256(f.read()).hexdigest()
+        with open(model_cfg_path, "rb") as f:
+            m_cfg_sha = hashlib.sha256(f.read()).hexdigest()
+
+        q_manifest = {
+            "run_id": run_id,
+            "git_commit_sha": git_commit_sha,
+            "training_config_sha256": t_cfg_sha,
+            "model_config_sha256": m_cfg_sha,
+            "parent_checkpoint_sha256": parent_sha256,
+            "start_global_step": global_step,
+            "target_global_step": target_stop_step,
+            "qualification_steps_requested": q_steps,
+            "qualification_started_at_utc": qualification_started_at_utc,
+        }
+        (output_dir / "qualification_run_manifest.json").write_text(json.dumps(q_manifest, indent=2), encoding="utf-8")
+        logger.info("Emitted qualification run manifest with run_id=%s, start_step=%d, target_stop_step=%d", run_id, global_step, target_stop_step)
+    else:
+        target_stop_step = None
+
     cfg_gates = sched_cfg.get("staged_gates") or train_cfg.get("staged_gates")
     if cfg_gates and (staged_gates is None or staged_gates == [1000, 5000, 25000, 100000, 200000, 300000, 500000]):
         if isinstance(cfg_gates, str):
@@ -884,8 +957,16 @@ def train_scheduler(
     from .eval_batch import get_or_create_fixed_eval_batch, evaluate_q_diagnostics
     fixed_eval_batch = get_or_create_fixed_eval_batch(data_dir=str(canonical_root), device=device)
 
-    # Phase 9B update integrity counters & failure safeguards
+    # Phase 9B / Phase 2 update integrity counters & failure safeguards
     update_integrity_counters = {
+        "optimizer_updates_attempted": 0,
+        "optimizer_updates_completed": 0,
+        "skipped_nan": 0,
+        "skipped_assertion": 0,
+        "skipped_oom": 0,
+        "other_update_failures": 0,
+        "validation_failures": 0,
+        # Backward compatibility aliases:
         "n_updates_attempted": 0,
         "n_updates_completed": 0,
         "n_updates_skipped_nan": 0,
@@ -1141,6 +1222,7 @@ def train_scheduler(
 
             # ---- Learning update ----
             if global_step % update_freq == 0 and buffer.can_sample(batch_size):
+                update_integrity_counters["optimizer_updates_attempted"] += 1
                 update_integrity_counters["n_updates_attempted"] += 1
                 lr_schedule = sched_cfg.get("lr_schedule")
                 if lr_schedule == "cosine":
@@ -1172,9 +1254,13 @@ def train_scheduler(
                         n_modes=n_modes,
                     )
                     if not np.isfinite(loss_val) or upd_stats.get("skipped_nan", False):
+                        update_integrity_counters["skipped_nan"] += 1
                         update_integrity_counters["n_updates_skipped_nan"] += 1
-                        logger.warning("DRQN update skipped due to NaN loss/gradient (step %d)", global_step)
+                        logger.error("DRQN update skipped due to NaN loss/gradient (step %d)", global_step)
+                        if not diagnostic:
+                            raise RuntimeError(f"Fail-closed update failure (NaN/Inf loss or gradient) at step {global_step}")
                     else:
+                        update_integrity_counters["optimizer_updates_completed"] += 1
                         update_integrity_counters["n_updates_completed"] += 1
                         consecutive_ooms = 0
                     if upd_stats and not upd_stats.get("skipped_nan", False):
@@ -1227,24 +1313,31 @@ def train_scheduler(
                         except Exception:
                             pass
                 except AssertionError as exc:
+                    update_integrity_counters["skipped_assertion"] += 1
                     update_integrity_counters["n_updates_skipped_assertion"] += 1
-                    logger.warning("AssertionError during DRQN update: %s", exc)
-                    if update_integrity_counters["n_updates_skipped_assertion"] > 10:
+                    logger.error("AssertionError during DRQN update at step %d: %s", global_step, exc)
+                    if not diagnostic:
+                        raise RuntimeError(f"Fail-closed update failure (AssertionError) at step {global_step}: {exc}") from exc
+                    if update_integrity_counters["skipped_assertion"] > 10:
                         raise RuntimeError(
                             "More than 10 gradient updates skipped due to assertion failures — aborting training"
                         ) from exc
                 except (torch.cuda.OutOfMemoryError, RuntimeError) as exc:
                     if isinstance(exc, torch.cuda.OutOfMemoryError) or "out of memory" in str(exc).lower():
+                        update_integrity_counters["skipped_oom"] += 1
                         update_integrity_counters["n_updates_skipped_oom"] += 1
                         consecutive_ooms += 1
-                        logger.warning("OOM in DRQN update (%d consecutive) — skipping", consecutive_ooms)
+                        logger.warning("OOM in DRQN update (%d consecutive) at step %d — skipping", consecutive_ooms, global_step)
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
+                        if not diagnostic:
+                            raise RuntimeError(f"Fail-closed update failure (OOM) at step {global_step}: {exc}") from exc
                         if consecutive_ooms > 3:
                             raise RuntimeError(
                                 f"More than 3 consecutive OOMs ({consecutive_ooms}) in DRQN update — aborting training"
                             ) from exc
                     else:
+                        update_integrity_counters["other_update_failures"] += 1
                         raise
 
             # ---- Periodic Q-margin, stuck-state, and shadow validation diagnostics ----
@@ -1690,12 +1783,15 @@ def train_scheduler(
                         pass
             except Exception as exc:
                 consecutive_val_failures += 1
-                logger.warning(
-                    "Val MoE eval skipped at step %d (%d consecutive failures): %s",
+                update_integrity_counters["validation_failures"] += 1
+                logger.error(
+                    "Val MoE eval FAILED at step %d (%d consecutive failures): %s",
                     global_step,
                     consecutive_val_failures,
                     exc,
                 )
+                if not diagnostic:
+                    raise RuntimeError(f"Fail-closed validation failure at step {global_step}: {exc}") from exc
                 if consecutive_val_failures > 3:
                     raise RuntimeError("Validation loop failing repeatedly — aborting") from exc
 
@@ -1785,6 +1881,82 @@ def train_scheduler(
     logger.info("Scheduler training complete. Final: %s Best: %.2f", final_path, best_reward)
     telemetry.update(step=global_step, episode=episode, type="done",
                      best_reward=float(best_reward), telemetry_schema_version=TELEMETRY_SCHEMA_VERSION)
+
+    # Phase 2 & Phase 22 Integrity Check and Qualification Evidence Emission
+    if qualification_run:
+        qualification_completed_at_utc = datetime.now(timezone.utc).isoformat()
+        summary_generated_at_utc = qualification_completed_at_utc
+
+        if update_integrity_counters["optimizer_updates_attempted"] <= 0:
+            raise RuntimeError("QUALIFICATION FAILED: Zero optimizer updates attempted!")
+        if update_integrity_counters["optimizer_updates_completed"] != update_integrity_counters["optimizer_updates_attempted"]:
+            raise RuntimeError(
+                f"QUALIFICATION FAILED: updates completed ({update_integrity_counters['optimizer_updates_completed']}) "
+                f"!= attempted ({update_integrity_counters['optimizer_updates_attempted']})"
+            )
+        if (update_integrity_counters["skipped_nan"] > 0 or
+            update_integrity_counters["skipped_assertion"] > 0 or
+            update_integrity_counters["skipped_oom"] > 0 or
+            update_integrity_counters["other_update_failures"] > 0 or
+            update_integrity_counters["validation_failures"] > 0):
+            raise RuntimeError(
+                f"QUALIFICATION FAILED: Non-zero update/validation skips in qualification run: {update_integrity_counters}"
+            )
+
+        # Checkpoint promotion prohibition assertion
+        prod_frozen_path = Path("experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt")
+        if prod_frozen_path.exists():
+            with open(prod_frozen_path, "rb") as f:
+                cur_frozen_sha = hashlib.sha256(f.read()).hexdigest()
+            if cur_frozen_sha != FROZEN_25K_SHA:
+                raise RuntimeError(
+                    f"QUALIFICATION FAILED: Production Gate-25k frozen checkpoint was modified! "
+                    f"Expected {FROZEN_25K_SHA}, got {cur_frozen_sha}"
+                )
+
+        q_summary = {
+            "run_id": run_id,
+            "git_commit_sha": git_commit_sha,
+            "training_config_sha256": t_cfg_sha,
+            "model_config_sha256": m_cfg_sha,
+            "parent_checkpoint_sha256": parent_sha256,
+            "dataset_fingerprint": data_fingerprint,
+            "start_global_step": int(q_manifest["start_global_step"]),
+            "target_global_step": target_stop_step,
+            "final_global_step": global_step,
+            "qualification_steps_requested": q_steps,
+            "qualification_steps_completed": global_step - int(q_manifest["start_global_step"]),
+            "optimizer_updates_attempted": update_integrity_counters["optimizer_updates_attempted"],
+            "optimizer_updates_completed": update_integrity_counters["optimizer_updates_completed"],
+            "skipped_nan": update_integrity_counters["skipped_nan"],
+            "skipped_assertion": update_integrity_counters["skipped_assertion"],
+            "skipped_oom": update_integrity_counters["skipped_oom"],
+            "other_update_failures": update_integrity_counters["other_update_failures"],
+            "validation_failures": update_integrity_counters["validation_failures"],
+            "finite_gradients": True,
+            "checkpoint_output_dir": str(output_dir.resolve()),
+            "qualification_started_at_utc": qualification_started_at_utc,
+            "qualification_completed_at_utc": qualification_completed_at_utc,
+            "summary_generated_at_utc": summary_generated_at_utc,
+        }
+        summary_path = output_dir / "qualification_run_summary.json"
+        summary_path.write_text(json.dumps(q_summary, indent=2), encoding="utf-8")
+        logger.info("QUALIFICATION SUCCESS: Emitted qualification run summary to %s", summary_path)
+    elif not diagnostic:
+        if update_integrity_counters["optimizer_updates_completed"] != update_integrity_counters["optimizer_updates_attempted"]:
+            raise RuntimeError(
+                f"TRAINING INTEGRITY VIOLATION: updates completed ({update_integrity_counters['optimizer_updates_completed']}) "
+                f"!= attempted ({update_integrity_counters['optimizer_updates_attempted']})"
+            )
+        if (update_integrity_counters["skipped_nan"] > 0 or
+            update_integrity_counters["skipped_assertion"] > 0 or
+            update_integrity_counters["skipped_oom"] > 0 or
+            update_integrity_counters["other_update_failures"] > 0 or
+            update_integrity_counters["validation_failures"] > 0):
+            raise RuntimeError(
+                f"TRAINING INTEGRITY VIOLATION: Non-zero update/validation skips in production run: {update_integrity_counters}"
+            )
+
     if use_wandb:
         try:
             import wandb
@@ -1806,7 +1978,11 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--reset-semantic-memory", action="store_true", help="Reset semantic memory DB before training.")
     parser.add_argument("--staged-gates", type=str, default="1000,5000,25000,100000,200000,300000,500000", help="Comma-separated step gates.")
-    parser.add_argument("--stop-at-step", type=int, default=None, help="Stop after reaching this step.")
+    parser.add_argument("--stop-at-step", type=int, default=None, help="Stop after reaching this absolute step.")
+    parser.add_argument("--qualification-run", action="store_true", default=False, help="Run in strict qualification mode into quarantine.")
+    parser.add_argument("--qualification-steps", type=int, default=1000, help="Number of steps to run in qualification mode relative to resume point.")
+    parser.add_argument("--diagnostic", action="store_true", default=False, help="Diagnostic mode (soft warnings instead of fail-closed abort).")
+    parser.add_argument("--expected-parent-sha", type=str, default=None, help="Explicit expected SHA-256 for parent checkpoint verification.")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint .pt to resume from.")
     parser.add_argument("--override-epsilon", type=float, default=None, help="Hold exploration epsilon at a fixed floor.")
     parser.add_argument("--disable-latency-reward", action="store_true", help="Ablate latency reward bonus.")
@@ -1830,6 +2006,10 @@ if __name__ == "__main__":
         reset_semantic_memory=args.reset_semantic_memory,
         staged_gates=gates_list,
         stop_at_step=args.stop_at_step,
+        qualification_run=args.qualification_run,
+        qualification_steps=args.qualification_steps,
+        diagnostic=args.diagnostic,
+        expected_parent_sha=args.expected_parent_sha,
         resume_checkpoint=args.resume,
         override_epsilon=args.override_epsilon,
         disable_latency_reward=args.disable_latency_reward,

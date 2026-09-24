@@ -181,9 +181,7 @@ PYEOF
             python scripts/validate_pipeline.py
             # This exits non-zero on any validation failure
           else
-            echo "[WARN] Checkpoint not provisioned — running structural-only validation"
-            echo "[INFO] This is acceptable in CI without Azure provisioning secret."
-            echo "[INFO] Set AZURE_STORAGE_CONNECTION_STRING secret for full validation."
-            python scripts/validate_pipeline.py --structural-only || true
-            # structural-only must not fail CI — it is explicitly a reduced check
+            echo "::warning::CI running in REDUCED / INCOMPLETE QUALIFICATION mode (checkpoint not provisioned)"
+            echo "[INFO] Running structural-only validation..."
+            python scripts/validate_pipeline.py --structural-only
           fi

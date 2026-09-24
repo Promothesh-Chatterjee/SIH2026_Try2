@@ -2,14 +2,14 @@
 
 ## Authoritative Benchmark Identification
 - **Path**: `reports/benchmark_results.json`
-- **Benchmark Artifact SHA-256**: `c928c375a14968ef8cca91d7987fde450e634c12d0eb18877f8ecf7231f0e261`
+- **Benchmark Artifact SHA-256**: `9b33380989171272143244280efe8e4db3d668c95461a2fa3c9111d20ec683fa`
 - **Schema Version**: `2026.1-CANONICAL`
 - **Evaluator**: `eval_batch.py/v2.0-audited`
 - **Metric Contract Version**: `v2.0-audited-confusion-matrix`
 - **Status**: `AUTHORITATIVE`
 
 ## Git Provenance Flow (Corrected Contract)
-- **Source Code Revision Evaluated (`source_git_commit`)**: `1f99fe4aff3c294fe1b2df1a1b51b01a1e3e1223`
+- **Source Code Revision Evaluated (`source_git_commit`)**: `c5a23fadcf8edbffc3be006b75d8e258ddbb6964`
   - *This represents the exact source tree tested with a clean git working directory.*
 - **Artifact Storage Commit (`artifact_commit`)**: Commit that stores this generated benchmark artifact and report.
 - **Model Checkpoint (`checkpoint_sha256`)**: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`
@@ -24,16 +24,25 @@
 ### Authoritative Performance Summary
 | Scheduler | Pd (%) | Pfa (%) | S_min (dBm) | Intercept Rate (%) | Avg Reward | TP | FN | FP | TN | Total Dwells |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **SmartScan_DRQN_MoE** | **26.24%** | **0.00%** | **-110.0 dBm** | **7.74%** | **-0.948** | 387 | 1088 | 0 | 3525 | 5000 |
-| **Random** | **88.06%** | **0.00%** | **-110.0 dBm** | **2.36%** | **-1.121** | 118 | 16 | 0 | 4866 | 5000 |
-| **RoundRobin** | **91.60%** | **0.00%** | **-110.0 dBm** | **2.18%** | **-1.140** | 109 | 10 | 0 | 4881 | 5000 |
-| **HighestOccupancy** | **29.37%** | **0.00%** | **-110.0 dBm** | **3.26%** | **-1.117** | 163 | 392 | 0 | 4445 | 5000 |
+| **SmartScan_DRQN_MoE** | **94.95%** | **0.00%** | **-110.0 dBm** | **42.14%** | **5.346** | 2107 | 112 | 0 | 2781 | 5000 |
+| **Random** | **93.28%** | **0.00%** | **-110.0 dBm** | **2.50%** | **-0.763** | 125 | 9 | 0 | 4866 | 5000 |
+| **RoundRobin** | **91.60%** | **0.00%** | **-110.0 dBm** | **2.18%** | **-0.806** | 109 | 10 | 0 | 4881 | 5000 |
+| **HighestOccupancy** | **98.65%** | **0.00%** | **-110.0 dBm** | **33.70%** | **4.052** | 1685 | 23 | 0 | 3292 | 5000 |
 
 ### Mathematical Invariants (Strictly Satisfied)
 1. **Dwell Conservation**: $TP + FN + FP + TN == 5000$ dwells for every scheduler.
-2. **Probability of Detection**: $P_d = \frac{TP}{TP + FN}$ identically holds ($387 / (387 + 1088) = 0.26237 \to 26.24\%$).
+   - `SmartScan_DRQN_MoE`: $2107 + 112 + 0 + 2781 = 5000$
+   - `Random`: $125 + 9 + 0 + 4866 = 5000$
+   - `RoundRobin`: $109 + 10 + 0 + 4881 = 5000$
+   - `HighestOccupancy`: $1685 + 23 + 0 + 3292 = 5000$
+2. **Probability of Detection**: $P_d = \frac{TP}{TP + FN}$ identically holds:
+   - `SmartScan_DRQN_MoE`: $2107 / (2107 + 112) = 2107 / 2219 = 0.9495 \to 94.95\%$
+   - `Random`: $125 / (125 + 9) = 125 / 134 = 0.9328 \to 93.28\%$
+   - `RoundRobin`: $109 / (109 + 10) = 109 / 119 = 0.9160 \to 91.60\%$
+   - `HighestOccupancy`: $1685 / (1685 + 23) = 1685 / 1708 = 0.9865 \to 98.65\%$
 3. **Probability of False Alarm**: Canonical decision-level $P_{fa} = \frac{FP}{FP + TN} = 0.00\%$. In deterministic evaluation, $P_{fa}=0$ reflects the simulated receiver model having zero unprompted triggers, not an empirical proof of zero noise false alarms in real RF hardware.
 4. **Sensitivity**: Receiver minimum detectable signal floor $S_{min} = -110.0$ dBm (grounded in the 39 dB processing gain channelized receiver model).
+5. **Operational Superiority**: `SmartScan_DRQN_MoE` outperforms all baselines with Intercept Rate of **42.14%** (vs 33.70% for HighestOccupancy, 2.50% for Random, 2.18% for RoundRobin) and Average Reward of **5.346** (vs 4.052 for HighestOccupancy, -0.763 for Random, -0.806 for RoundRobin).
 
 ## Archived (superseded)
 - `reports/archive/benchmark_results_gate25k_baseline.json`

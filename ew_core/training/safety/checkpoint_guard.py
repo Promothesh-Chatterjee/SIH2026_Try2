@@ -200,7 +200,7 @@ class CheckpointGuard:
             target_path = target_path.resolve()
 
         # Quarantine check
-        if "QUARANTINED" in target_path.name or ".quarantine" in str(target_path).lower():
+        if "QUARANTINED" in target_path.name or "quarantine" in str(target_path).lower():
             raise QuarantinedCheckpointError(
                 f"Active checkpoint '{target_path.name}' is marked as QUARANTINED! Refusing activation."
             )
@@ -208,7 +208,7 @@ class CheckpointGuard:
         if not target_path.is_file():
             quarantine_dir = self.output_dir / ".quarantine"
             renamed_candidates = list(self.output_dir.glob(f"{target_path.stem}*QUARANTINED*"))
-            if (quarantine_dir.exists() and (quarantine_dir / target_path.name).exists()) or ".quarantine" in str(target_path).lower():
+            if (quarantine_dir.exists() and (quarantine_dir / target_path.name).exists()) or "quarantine" in str(target_path).lower():
                 raise QuarantinedCheckpointError(
                     f"Active checkpoint '{target_path.name}' was quarantined at {quarantine_dir / target_path.name}!"
                 )

@@ -391,14 +391,33 @@ class CognitiveRFScanEnv(gym.Env):
         self.dwell_time_us: float = self.base_dwell_time_us  # default mode multiplier 1.0
         self.frequency_step_mhz: float = float(config.get("frequency_step_mhz", RF_FREQUENCY_STEP_MHZ))
         self.detection_threshold_db: float = float(config.get("detection_threshold_db", -140.0))
-        from ew_core.environment.receiver_model import compute_band_sensitivities, CFARDetector
+        from ew_core.environment.receiver_model import (
+            compute_band_sensitivities,
+            CFARDetector,
+            CFAR_FALSE_ALARM_PROB,
+            CFAR_GUARD_CELLS,
+            CFAR_REFERENCE_CELLS,
+        )
+        recv_cfg = config.get("receiver", {})
+        if not isinstance(recv_cfg, dict):
+            recv_cfg = {}
+        cfar_pfa = float(recv_cfg.get("cfar_pfa", config.get("cfar_pfa", CFAR_FALSE_ALARM_PROB)))
+        cfar_guard = int(recv_cfg.get("cfar_guard_cells", config.get("cfar_guard_cells", CFAR_GUARD_CELLS)))
+        cfar_ref = int(recv_cfg.get("cfar_ref_cells", config.get("cfar_ref_cells", CFAR_REFERENCE_CELLS)))
+
         self._band_sensitivities_dbm = compute_band_sensitivities(
             n_bands=self.n_bands,
             base_ibw_mhz=self.ibw_mhz,
             noise_figure_db=float(config.get("noise_figure_db", 6.0)),
             snr_min_db=float(config.get("snr_min_db", 10.0)),
         )
-        self._cfar = CFARDetector(n_bands=self.n_bands)
+        self._cfar = CFARDetector(
+            n_bands=self.n_bands,
+            pfa=cfar_pfa,
+            guard_cells=cfar_guard,
+            ref_cells=cfar_ref,
+        )
+        assert abs(self._cfar.pfa - cfar_pfa) < 1e-9, f"CFAR Pfa mismatch: {self._cfar.pfa} vs {cfar_pfa}"
         # Use the mean physics-based sensitivity as the receiver base threshold.
         # This replaces the legacy -140.0 dBm placeholder with a computed value.
         # Per-band CFAR thresholds in step() will further refine this per dwell.
