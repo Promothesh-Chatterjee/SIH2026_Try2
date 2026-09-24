@@ -1,0 +1,49 @@
+# Benchmark Evaluation Configuration — Stage 3 Canonical Benchmark
+# Based on Scientific Operational Audit FINAL 2026-09-24
+
+benchmark_version: "2026.1-CANONICAL"
+schema_version: "2026.1-CANONICAL"
+metric_contract: "v2.0-audited-confusion-matrix"
+status: "AUTHORITATIVE"
+
+# Execution parameters
+seed: 42
+device: "cpu"
+n_steps_per_scenario: 500
+n_total_dwells: 5000
+
+# Canonical 10 evaluation scenarios from TSRD
+scenarios:
+  - "config_117"
+  - "config_119"
+  - "config_143"
+  - "config_194"
+  - "config_195"
+  - "config_241"
+  - "config_29"
+  - "config_42"
+  - "config_64"
+  - "config_96"
+
+# Exactly 4 required benchmark schedulers
+schedulers:
+  - "SmartScan_DRQN_MoE"
+  - "Random"
+  - "RoundRobin"
+  - "HighestOccupancy"
+
+# Baseline Gate-25k frozen checkpoint
+checkpoint: "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"
+checkpoint_sha256: "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+dataset_fingerprint: "bedfa2b53c00004190705e18dff73c28ca49ffe23a130469ec3db7d5b131dbb2"
+
+# Output artifact destination
+output_path: "reports/benchmark_results.json"
+
+# Strict physical receiver parameters: grounded at -110.0 dBm (never -140 dBm)
+receiver:
+  sensitivity_dbm: -110.0
+  cfar_guard_cells: 2
+  cfar_ref_cells: 8
+  cfar_pfa: 0.001
+  noise_floor_isolation: true

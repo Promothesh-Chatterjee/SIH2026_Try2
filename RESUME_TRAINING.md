@@ -4,6 +4,18 @@ Phase-1 controlled continuation. Run this **on your local machine** with the TSR
 
 ---
 
+## Controlled Warm-Start Semantics & Lineage Contract
+
+This continuation run implements strict controlled warm-start semantics from the canonical Gate-25k candidate:
+- **Model weights**: Warm-started from Gate-25k frozen checkpoint (`checkpoint_gate_25000_frozen.pt`, SHA-256: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`).
+- **Optimizer state**: Fresh Adam (`lr=2.5e-5`, cosine schedule) — NOT restored from checkpoint. This prevents momentum vector explosion from the old uncalibrated loss landscape.
+- **Replay buffer**: Starts empty (`SequenceReplayBuffer`, capacity 50,000) — populated fresh under the corrected reward v2 landscape and noise-isolated CFAR observations.
+- **Epsilon schedule**: Starts at $\epsilon = 0.50$ (not $1.0$, not $0.05$) — balances exploration with adapted policy exploitation over a gentle decay (`exploration_schedule: slower`).
+- **Step counter**: Starts at global step 25,000, runs to 100,000 (75,000 new gradient/interaction steps).
+- **Total training steps**: 100,000 steps across the full lifecycle (Gate-25k + 75k continuation).
+
+---
+
 ## Prerequisites
 
 Before launching, verify:
