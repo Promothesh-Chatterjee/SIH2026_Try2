@@ -398,7 +398,22 @@ class CognitiveRFScanEnv(gym.Env):
             noise_figure_db=float(config.get("noise_figure_db", 6.0)),
             snr_min_db=float(config.get("snr_min_db", 10.0)),
         )
-        self._cfar = CFARDetector(n_bands=self.n_bands)
+        receiver_cfg = config.get("receiver", {})
+        cfar_pfa = float(receiver_cfg.get("cfar_pfa", 0.001))
+        cfar_guard_cells = int(receiver_cfg.get("cfar_guard_cells", 2))
+        cfar_ref_cells = int(receiver_cfg.get("cfar_ref_cells", 8))
+        self._cfar = CFARDetector(
+            n_bands=self.n_bands,
+            pfa=cfar_pfa,
+            guard_cells=cfar_guard_cells,
+            ref_cells=cfar_ref_cells,
+        )
+        if abs(self._cfar.pfa - cfar_pfa) > 1e-12 or self._cfar.guard_cells != cfar_guard_cells or self._cfar.ref_cells != cfar_ref_cells:
+            raise RuntimeError(
+                "CFAR configuration mismatch: "
+                f"effective=(pfa={self._cfar.pfa},guard={self._cfar.guard_cells},ref={self._cfar.ref_cells}) "
+                f"configured=(pfa={cfar_pfa},guard={cfar_guard_cells},ref={cfar_ref_cells})"
+            )
         # Use the mean physics-based sensitivity as the receiver base threshold.
         # This replaces the legacy -140.0 dBm placeholder with a computed value.
         # Per-band CFAR thresholds in step() will further refine this per dwell.
