@@ -7,6 +7,7 @@ Usage:
 
 Exit codes: 0 = all tests passed, 1 = one or more tests failed
 """
+import os
 import sys
 import time
 import argparse
@@ -212,9 +213,9 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SmartScan EW Smoke Test")
-    parser.add_argument("--api_url", default="http://172.198.227.59",
+    parser.add_argument("--api_url", default=os.environ.get("AKS_ENDPOINT", "http://172.198.227.59"),
                         help="Base URL of the SmartScan API")
-    parser.add_argument("--api_key", default="",
+    parser.add_argument("--api_key", default=os.environ.get("SMARTSCAN_API_KEY", ""),
                         help="API key for authentication (X-SmartScan-API-Key header)")
     args = parser.parse_args()
     success = run_smoke_test(args.api_url, args.api_key)

@@ -64,7 +64,7 @@ jobs:
         run: |
           pip install requests websocket-client --quiet
           python scripts/smoke_test.py \
-            --api_url http://172.198.227.59 \
+            --api_url "${{ secrets.AKS_ENDPOINT || 'http://172.198.227.59' }}" \
             --api_key "${{ secrets.SMARTSCAN_API_KEY }}"
 
       - name: Stop AKS cluster to save credits (post-deploy)
