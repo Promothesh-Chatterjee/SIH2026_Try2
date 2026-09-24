@@ -78,23 +78,36 @@ class EWMetrics:
     n_missed_dwells: int = 0
     n_true_negatives: int = 0
     canonical_pfa: float = 0.0
+    tp: int = 0
+    fn: int = 0
+    fp: int = 0
+    tn: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize Figures of Merit to dictionary."""
+        tp_val = int(self.tp or self.n_intercepts)
+        fn_val = int(self.fn or self.n_missed_dwells)
+        fp_val = int(self.fp or self.n_false_alarms)
+        tn_val = int(self.tn or self.n_true_negatives)
         return {
             "pd": float(self.pd),
             "pfa": float(self.pfa),
             "sensitivity_dbm": float(self.sensitivity_dbm),
             "avg_intercept_rate": float(self.avg_intercept_rate),
+            "mean_intercept_rate": float(self.avg_intercept_rate),
             "avg_reward": float(self.avg_reward),
             "pct_correct_predictions": float(self.pct_correct_predictions),
             "avg_intercept_time_error_us": float(self.avg_intercept_time_error_us),
-            "n_intercepts": int(self.n_intercepts),
-            "n_false_alarms": int(self.n_false_alarms),
+            "tp": tp_val,
+            "fn": fn_val,
+            "fp": fp_val,
+            "tn": tn_val,
+            "n_intercepts": tp_val,
+            "n_false_alarms": fp_val,
             "n_total_transmissions": int(self.n_total_transmissions),
             "n_receiver_dwells": int(self.n_receiver_dwells),
-            "n_missed_dwells": int(self.n_missed_dwells),
-            "n_true_negatives": int(self.n_true_negatives),
+            "n_missed_dwells": fn_val,
+            "n_true_negatives": tn_val,
             "canonical_pfa": float(self.canonical_pfa),
         }
 
@@ -325,25 +338,13 @@ def compute_all_metrics(
     fp = 0
     tn = 0
     
-    # If explicit false alarms logged, use them; otherwise verify against active_bands_per_step
-    explicit_false_alarms = episode_log.get("false_alarms", None)
-    if explicit_false_alarms is not None:
-        fp = int(sum(1 for f in explicit_false_alarms if f))
-        tp = int(sum(1 for h in hits if h))
-        missed_raw = episode_log.get("missed_dwells", 0)
-        if isinstance(missed_raw, (list, tuple)):
-            fn = int(sum(1 for m in missed_raw if m))
-        else:
-            fn = int(missed_raw)
-        tn = max(0, n_dwells - tp - fn - fp)
-    else:
+    # If active_bands_per_step and chosen_bands are provided, compute ground-truth TP, FN, FP, TN directly
+    if chosen_bands and active_bands_per_step and len(chosen_bands) == n_dwells and len(active_bands_per_step) == n_dwells:
         for t in range(n_dwells):
-            b_chosen = chosen_bands[t] if t < len(chosen_bands) else -1
-            active_b = active_bands_per_step[t] if t < len(active_bands_per_step) else []
+            b_chosen = chosen_bands[t]
+            active_b = active_bands_per_step[t]
             hit = bool(hits[t])
-
-            is_active_band = b_chosen in active_b
-            if is_active_band:
+            if b_chosen in active_b:
                 if hit:
                     tp += 1
                 else:
@@ -353,6 +354,33 @@ def compute_all_metrics(
                     fp += 1
                 else:
                     tn += 1
+    else:
+        explicit_false_alarms = episode_log.get("false_alarms", None)
+        if explicit_false_alarms is not None:
+            fp = int(sum(1 for f in explicit_false_alarms if f))
+            missed_raw = episode_log.get("missed_dwells", 0)
+            if isinstance(missed_raw, (list, tuple)):
+                fn = int(sum(1 for m in missed_raw if m))
+            else:
+                fn = int(missed_raw)
+            total_hits = int(sum(1 for h in hits if h))
+            tp = max(0, total_hits - fp)
+            tn = max(0, n_dwells - tp - fn - fp)
+        else:
+            for t in range(n_dwells):
+                b_chosen = chosen_bands[t] if t < len(chosen_bands) else -1
+                active_b = active_bands_per_step[t] if t < len(active_bands_per_step) else []
+                hit = bool(hits[t])
+                if b_chosen in active_b:
+                    if hit:
+                        tp += 1
+                    else:
+                        fn += 1
+                else:
+                    if hit:
+                        fp += 1
+                    else:
+                        tn += 1
 
     # Total emitter transmission opportunities across all bands
     if "n_total_transmissions" in episode_log:
@@ -371,8 +399,8 @@ def compute_all_metrics(
     act_times = episode_log.get("actual_times", [])
 
     pd = compute_pd(n_true_positives=tp, n_false_negatives=fn)
-    pfa = compute_pfa(n_false_alarms=fp, n_receiver_dwells=n_dwells)
     canonical_pfa = compute_canonical_pfa(n_false_alarms=fp, n_true_negatives=tn)
+    pfa = canonical_pfa  # Authoritative decision-level Pfa = FP / (FP + TN)
     avg_intercept_rate = compute_avg_intercept_rate(hits)
     avg_reward = compute_avg_reward(rewards)
     pct_correct = compute_pct_correct_predictions(hits, active_mask)
@@ -393,4 +421,8 @@ def compute_all_metrics(
         n_missed_dwells=fn,
         n_true_negatives=tn,
         canonical_pfa=canonical_pfa,
+        tp=tp,
+        fn=fn,
+        fp=fp,
+        tn=tn,
     )

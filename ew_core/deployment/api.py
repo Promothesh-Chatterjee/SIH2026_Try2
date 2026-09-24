@@ -373,6 +373,8 @@ class HealthResponse(BaseModel):
     operational_mode_ready: bool = True
     exploration_enabled: bool = False
     readiness_failures: List[str] = Field(default_factory=list)
+    benchmark_artifact_sha256: Optional[str] = None
+    benchmark_schema_version: Optional[str] = None
 
 
 class MissionStartRequest(BaseModel):
@@ -987,6 +989,20 @@ async def lifespan(app: FastAPI):  # type: ignore
         logger.warning("Could not initialize CognitiveRFScanEnv at startup: %s", env_exc)
         STATE["env"] = None
 
+    # Warmup inference to eliminate cold-start latency spikes
+    try:
+        if STATE.get("moe") is not None:
+            logger.info("Executing inference warmup pass on SmartScanMoE...")
+            dummy_obs = np.zeros(CANONICAL_OBS_DIM, dtype=np.float32)
+            with hidden_lock:
+                _w_act, _w_h, _w_attr = STATE["moe"].select_action(dummy_obs, STATE.get("hidden"), policy_mode="operational")
+                STATE["moe"].reset()
+                STATE["hidden"] = None
+                STATE["hidden_state_ready"] = True
+            logger.info("Inference warmup complete.")
+    except Exception as warm_exc:
+        logger.warning("Inference warmup notice: %s", warm_exc)
+
     yield
     # Shutdown: close DB
     try:
@@ -1109,11 +1125,25 @@ async def readiness_probe():
         issues.append(f"dataset_unavailable: {e}")
     if issues:
         raise HTTPException(status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE, detail={"not_ready": issues})
+    bench_sha, bench_ver = _get_benchmark_meta()
+    global _CACHED_GIT_REV
+    if "_CACHED_GIT_REV" not in globals() or not _CACHED_GIT_REV:
+        _CACHED_GIT_REV = os.getenv("GIT_COMMIT")
+        if not _CACHED_GIT_REV:
+            try:
+                import subprocess
+                _CACHED_GIT_REV = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+            except Exception:
+                _CACHED_GIT_REV = "unknown"
+
     return {
         "status": "ready",
         "model_loaded": True,
         "dataset_root": get_tsrd_root(),
         "scenarios_count": len(list_scenarios("val")),
+        "git_revision": _CACHED_GIT_REV,
+        "benchmark_artifact_sha256": bench_sha,
+        "benchmark_schema_version": bench_ver,
         "ts": time.time(),
     }
 
@@ -1205,18 +1235,132 @@ async def run_scenario(request: Request, scenario_id: str = "config_119", n_step
     return results
 
 
+REQUIRED_BENCHMARK_SCHEDULERS = {
+    "SmartScan_DRQN_MoE",
+    "Random",
+    "RoundRobin",
+    "HighestOccupancy",
+}
+
+REQUIRED_SUMMARY_NUMERIC_FIELDS = [
+    "pd",
+    "pfa",
+    "sensitivity_dbm",
+    "avg_intercept_rate",
+    "avg_reward",
+    "pct_correct_predictions",
+    "avg_intercept_time_error_us",
+    "tp",
+    "fn",
+    "fp",
+    "tn",
+]
+
+
+def _get_benchmark_meta() -> tuple[Optional[str], Optional[str]]:
+    """Return (artifact_sha256, schema_version) for reports/benchmark_results.json."""
+    import hashlib
+    bench_p = Path("reports/benchmark_results.json")
+    if not bench_p.exists():
+        bench_p = PACKAGE_ROOT / "reports/benchmark_results.json"
+    if not bench_p.exists():
+        return None, None
+    try:
+        content = bench_p.read_bytes()
+        sha = hashlib.sha256(content).hexdigest()
+        b_data = json.loads(content.decode("utf-8"))
+        ver = b_data.get("metadata", {}).get("schema_version", b_data.get("metadata", {}).get("benchmark_version"))
+        return sha, ver
+    except Exception:
+        return None, None
+
+
+def validate_benchmark_payload(data: dict) -> None:
+    """Strictly validate benchmark schema and metrics; fail closed on any malformation."""
+    import math
+
+    if not isinstance(data, dict):
+        raise HTTPException(
+            status_code=500,
+            detail="Benchmark artifact is malformed: root must be a JSON object",
+        )
+    if "metadata" not in data or not isinstance(data["metadata"], dict):
+        raise HTTPException(
+            status_code=500,
+            detail="Benchmark artifact is malformed: missing or invalid 'metadata' object",
+        )
+    if "schedulers" not in data or not isinstance(data["schedulers"], dict):
+        raise HTTPException(
+            status_code=500,
+            detail="Benchmark artifact is malformed: missing or invalid 'schedulers' object",
+        )
+
+    schedulers = data["schedulers"]
+    if len(schedulers) != 4:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Benchmark artifact invalid: expected exactly 4 schedulers, found {len(schedulers)}: {list(schedulers.keys())}",
+        )
+
+    missing = REQUIRED_BENCHMARK_SCHEDULERS - set(schedulers.keys())
+    if missing:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Benchmark artifact missing required schedulers: {sorted(list(missing))}",
+        )
+
+    for name in REQUIRED_BENCHMARK_SCHEDULERS:
+        sched_entry = schedulers[name]
+        if not isinstance(sched_entry, dict) or "summary" not in sched_entry or not isinstance(sched_entry["summary"], dict):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Benchmark scheduler '{name}' is missing valid 'summary' dictionary",
+            )
+        summary = sched_entry["summary"]
+        for field in REQUIRED_SUMMARY_NUMERIC_FIELDS:
+            if field not in summary:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Benchmark scheduler '{name}' summary missing required field '{field}'",
+                )
+            val = summary[field]
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Benchmark scheduler '{name}' summary field '{field}' must be numeric (int/float), got {type(val).__name__} = {val!r}",
+                )
+            if math.isnan(val) or math.isinf(val):
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Benchmark scheduler '{name}' summary field '{field}' must be finite, got {val}",
+                )
+
+
+BENCHMARK_RESULTS_PATH = Path("reports/benchmark_results.json")
+
+
 @app.get("/api/benchmark", tags=["evaluation"])
 async def get_benchmark():
     """Serve the pre-computed benchmark results for the frontend table."""
-    bench_path = Path("reports/benchmark_results.json")
+    bench_path = BENCHMARK_RESULTS_PATH
     if not bench_path.exists():
         bench_path = PACKAGE_ROOT / "reports/benchmark_results.json"
     if not bench_path.exists():
         raise HTTPException(
-            status_code=404,
-            detail="Benchmark not yet run. Execute scripts/benchmark.py first.",
+            status_code=500,
+            detail="Benchmark artifact missing: Execute scripts/benchmark.py first.",
         )
-    data = json.loads(bench_path.read_text(encoding="utf-8"))
+    try:
+        raw_text = bench_path.read_text(encoding="utf-8")
+        data = json.loads(raw_text)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Benchmark artifact corrupt or unparseable: {e}",
+        )
+
+    validate_benchmark_payload(data)
+
     if "schedulers" in data and "results" not in data:
         data["results"] = {
             s: val.get("summary", val) for s, val in data["schedulers"].items()
@@ -1297,7 +1441,7 @@ def health(response: Response = Response()) -> HealthResponse:
     # Resolve benchmark metadata
     bench_ver = "2026.1-CANONICAL"
     global _CACHED_GIT_REV
-    if "_CACHED_GIT_REV" not in globals():
+    if "_CACHED_GIT_REV" not in globals() or not _CACHED_GIT_REV:
         _CACHED_GIT_REV = os.getenv("GIT_COMMIT")
         if not _CACHED_GIT_REV:
             try:
@@ -1306,6 +1450,8 @@ def health(response: Response = Response()) -> HealthResponse:
             except Exception:
                 _CACHED_GIT_REV = "unknown"
     git_rev = _CACHED_GIT_REV
+
+    bench_sha, bench_schema_ver = _get_benchmark_meta()
 
     return HealthResponse(
         status="ok" if overall_healthy else "degraded",
@@ -1328,6 +1474,8 @@ def health(response: Response = Response()) -> HealthResponse:
         operational_mode_ready=operational_ready,
         exploration_enabled=expl_en,
         readiness_failures=readiness_failures,
+        benchmark_artifact_sha256=bench_sha,
+        benchmark_schema_version=bench_schema_ver,
     )
 
 
@@ -1569,7 +1717,12 @@ def predict_bands(req: PredictBandsRequest, request: Request = None) -> PredictB
             hidden_state = STATE.get("hidden")
             action, hidden, attribution = moe.select_action(obs, hidden_state, policy_mode=req.policy_mode)
             STATE["hidden"] = hidden
-            prob, pred_time_us = _aux_for_action(moe.eager_agent.drqn, obs, action, pre_step_hidden)
+            if hasattr(moe.eager_agent, "last_aux") and moe.eager_agent.last_aux is not None:
+                aux = moe.eager_agent.last_aux
+                prob = float(aux["intercept_prob"][0, -1, int(action)].item())
+                pred_time_us = float(aux["intercept_time_us"][0, -1, int(action)].item())
+            else:
+                prob, pred_time_us = _aux_for_action(moe.eager_agent.drqn, obs, action, pre_step_hidden)
             moe.update(action)
             STATE["hidden_state_ready"] = True
     else:

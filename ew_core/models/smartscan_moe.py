@@ -62,15 +62,13 @@ class SmartScanMoE(nn.Module):
             self.drqn = drqn
             self.device = torch.device(device) if isinstance(device, str) else device
             self.hidden: tuple[torch.Tensor, torch.Tensor] | None = None
+            self.last_aux: dict[str, torch.Tensor] | None = None
             self.n_bands = drqn.n_bands
             self.n_actions = drqn.n_actions
 
         def reset(self, batch_size: int = 1) -> None:
-            """Reset LSTM hidden state.
-
-            Args:
-                batch_size: Batch size for hidden init.
-            """
+            """Reset LSTM hidden state."""
+            self.last_aux = None
             try:
                 self.hidden = self.drqn.init_hidden(batch_size, self.device)
             except Exception:
@@ -104,6 +102,7 @@ class SmartScanMoE(nn.Module):
             with torch.inference_mode():
                 q, _aux, h = self.drqn(obs_b, hx)
                 self.hidden = h
+                self.last_aux = _aux
                 # Last timestep, first batch
                 q_last = q[0, -1].detach().cpu().numpy()
             return q_last, h

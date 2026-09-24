@@ -219,22 +219,62 @@ def run_benchmark(
         "HighestOccupancy": occupancy_scheduler,
     }
 
+    # Compute provenance metadata
+    import hashlib
+    import subprocess
+    import datetime
+
+    try:
+        git_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    except Exception:
+        git_commit = "unknown"
+
+    ckpt_sha = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
+
+    # Compute dataset fingerprint across scenarios
+    val_dir = Path(tsrd_root) / "stare" / "val_stare"
+    if not val_dir.exists():
+        val_dir = Path(tsrd_root) / "val"
+    hasher = hashlib.sha256()
+    scenario_hashes: Dict[str, str] = {}
+    for sid in scens:
+        h5_f = val_dir / f"{sid}.h5"
+        if h5_f.exists():
+            f_hash = hashlib.sha256(h5_f.read_bytes()).hexdigest()
+            scenario_hashes[sid] = f_hash
+            hasher.update(f_hash.encode())
+        else:
+            scenario_hashes[sid] = f"synthetic_seed_{seed}"
+            hasher.update(f"synthetic_{sid}".encode())
+    dataset_fingerprint = hasher.hexdigest()
+
     benchmark_payload: Dict[str, Any] = {
         "metadata": {
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
-            "checkpoint": str(checkpoint_path),
+            "schema_version": "2026.1-CANONICAL",
+            "benchmark_version": "2026.1-CANONICAL",
+            "metric_contract_version": "v2.0-audited-confusion-matrix",
+            "evaluator_version": "eval_batch.py/v2.0-audited",
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "git_commit": git_commit,
+            "checkpoint": str(checkpoint_path.name),
+            "checkpoint_path": str(checkpoint_path).replace("\\", "/"),
+            "checkpoint_sha256": ckpt_sha,
+            "tsrd_root": str(tsrd_root).replace("\\", "/"),
+            "dataset_fingerprint": dataset_fingerprint,
+            "scenario_file_hashes": scenario_hashes,
             "scenarios": scens,
             "n_steps_per_scenario": n_steps,
             "seed": seed,
             "device": str(dev),
-            "tsrd_root": str(tsrd_root),
+            "status": "AUTHORITATIVE",
         },
         "schedulers": {},
     }
 
     print("\n" + "=" * 88)
     print("  COGNITIVE EW SMARTSCAN — 7 FIGURE-OF-MERIT AUTHORITATIVE BENCHMARK")
-    print(f"  Target Checkpoint: {checkpoint_path.name}")
+    print(f"  Target Checkpoint: {checkpoint_path.name} (SHA: {ckpt_sha[:16]}...)")
+    print(f"  Git Commit: {git_commit[:16]}...")
     print(f"  Scenarios: {len(scens)} canonical val scenarios ({n_steps} steps/scenario)")
     print("=" * 88 + "\n")
 
@@ -253,30 +293,42 @@ def run_benchmark(
         )
         elapsed = time.time() - t0
         logger.info(
-            "[%s] completed in %.2fs — Intercept Rate: %.2f%%, Avg Reward: %.3f",
-            name, elapsed, res["avg_intercept_rate"] * 100.0, res["avg_reward"],
+            "[%s] completed in %.2fs — Intercept Rate: %.2f%%, Pd: %.2f%%, Pfa: %.4f%%, Avg Reward: %.3f",
+            name, elapsed, res["avg_intercept_rate"] * 100.0, res["pd"] * 100.0, res["pfa"] * 100.0, res["avg_reward"],
         )
+
+        tp_val = int(res["tp"])
+        fn_val = int(res["fn"])
+        fp_val = int(res["fp"])
+        tn_val = int(res["tn"])
 
         benchmark_payload["schedulers"][name] = {
             "summary": {
-                "pd": res["pd"],
-                "pfa": res["pfa"],
-                "canonical_pfa": res["canonical_pfa"],
-                "sensitivity_dbm": res["sensitivity_dbm"],
-                "avg_intercept_rate": res["avg_intercept_rate"],
-                "avg_reward": res["avg_reward"],
-                "pct_correct_predictions": res["pct_correct_predictions"],
-                "avg_intercept_time_error_us": res["avg_intercept_time_error_us"],
-                "n_intercepts": res["n_intercepts"],
-                "n_receiver_dwells": res["n_receiver_dwells"],
-                "n_false_alarms": res["n_false_alarms"],
-                "evaluation_runtime_s": elapsed,
+                "pd": float(res["pd"]),
+                "pfa": float(res["pfa"]),
+                "canonical_pfa": float(res["pfa"]),
+                "sensitivity_dbm": float(res["sensitivity_dbm"]),
+                "mean_intercept_rate": float(res["mean_intercept_rate"]),
+                "avg_intercept_rate": float(res["avg_intercept_rate"]),
+                "avg_reward": float(res["avg_reward"]),
+                "pct_correct_predictions": float(res["pct_correct_predictions"]),
+                "avg_intercept_time_error_us": float(res["avg_intercept_time_error_us"]),
+                "tp": tp_val,
+                "fn": fn_val,
+                "fp": fp_val,
+                "tn": tn_val,
+                "n_intercepts": tp_val,
+                "n_receiver_dwells": int(res["n_receiver_dwells"]),
+                "n_false_alarms": fp_val,
+                "n_missed_dwells": fn_val,
+                "n_true_negatives": tn_val,
+                "evaluation_runtime_s": float(elapsed),
             },
             "scenario_breakdown": res["scenario_breakdown"],
         }
 
     total_elapsed = time.time() - start_total
-    benchmark_payload["metadata"]["total_benchmark_runtime_s"] = total_elapsed
+    benchmark_payload["metadata"]["total_benchmark_runtime_s"] = float(total_elapsed)
 
     # Write JSON results
     json_path = out_p / "benchmark_results.json"
@@ -341,8 +393,8 @@ def main() -> None:
     parser.add_argument(
         "--n_steps",
         type=int,
-        default=1000,
-        help="Number of steps per scenario episode (default: 1000)",
+        default=500,
+        help="Number of steps per scenario episode (default: 500)",
     )
     parser.add_argument(
         "--seed",

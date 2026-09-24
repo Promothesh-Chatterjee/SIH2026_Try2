@@ -375,35 +375,49 @@ def run_evaluation(
             if terminated or truncated:
                 break
 
-        # Compute all 7 FoMs for this scenario
-        metrics = compute_all_metrics(episode_log)
+        # Compute all 7 FoMs for this scenario with physics sensitivity
+        sens_val = float(getattr(eval_env.receiver, "sensitivity_dbm", -110.0))
+        metrics = compute_all_metrics(episode_log, min_detectable_signal_dbm=sens_val)
         scenario_metrics[scen_name] = metrics
 
     # 4. Aggregate across scenarios
-    avg_pd = float(np.mean([m.pd for m in scenario_metrics.values()]))
-    avg_pfa = float(np.mean([m.pfa for m in scenario_metrics.values()]))
-    avg_canonical_pfa = float(np.mean([m.canonical_pfa for m in scenario_metrics.values()]))
+    total_tp = int(sum(m.tp for m in scenario_metrics.values()))
+    total_fn = int(sum(m.fn for m in scenario_metrics.values()))
+    total_fp = int(sum(m.fp for m in scenario_metrics.values()))
+    total_tn = int(sum(m.tn for m in scenario_metrics.values()))
+    total_dwells = int(sum(m.n_receiver_dwells for m in scenario_metrics.values()))
+
+    # True decision-level aggregate Pd = TP / (TP + FN), Pfa = FP / (FP + TN)
+    denom_pd = total_tp + total_fn
+    agg_pd = float(total_tp / denom_pd) if denom_pd > 0 else 0.0
+    denom_pfa = total_fp + total_tn
+    agg_pfa = float(total_fp / denom_pfa) if denom_pfa > 0 else 0.0
+
     avg_sensitivity = float(np.mean([m.sensitivity_dbm for m in scenario_metrics.values()]))
     avg_rate = float(np.mean([m.avg_intercept_rate for m in scenario_metrics.values()]))
     avg_reward = float(np.mean([m.avg_reward for m in scenario_metrics.values()]))
     avg_pct_correct = float(np.mean([m.pct_correct_predictions for m in scenario_metrics.values()]))
     avg_time_error = float(np.mean([m.avg_intercept_time_error_us for m in scenario_metrics.values()]))
-    total_intercepts = int(sum(m.n_intercepts for m in scenario_metrics.values()))
-    total_dwells = int(sum(m.n_receiver_dwells for m in scenario_metrics.values()))
-    total_false_alarms = int(sum(m.n_false_alarms for m in scenario_metrics.values()))
 
     return {
-        "pd": avg_pd,
-        "pfa": avg_pfa,
-        "canonical_pfa": avg_canonical_pfa,
+        "pd": agg_pd,
+        "pfa": agg_pfa,
+        "canonical_pfa": agg_pfa,
         "sensitivity_dbm": avg_sensitivity,
         "avg_intercept_rate": avg_rate,
+        "mean_intercept_rate": avg_rate,
         "avg_reward": avg_reward,
         "pct_correct_predictions": avg_pct_correct,
         "avg_intercept_time_error_us": avg_time_error,
-        "n_intercepts": total_intercepts,
+        "tp": total_tp,
+        "fn": total_fn,
+        "fp": total_fp,
+        "tn": total_tn,
+        "n_intercepts": total_tp,
         "n_receiver_dwells": total_dwells,
-        "n_false_alarms": total_false_alarms,
+        "n_false_alarms": total_fp,
+        "n_missed_dwells": total_fn,
+        "n_true_negatives": total_tn,
         "scenario_breakdown": {
             name: m.to_dict() for name, m in scenario_metrics.items()
         },

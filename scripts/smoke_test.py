@@ -52,22 +52,28 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
     try:
         r = requests.get(f"{api_url}/health", timeout=15)
         ok = r.status_code == 200 or (r.status_code == 503 and r.json().get("status") in ["ok", "degraded"])
-        if not check("/health returns HTTP 200", ok, f"got {r.status_code}"): failures.append("health")
+        if not check("/health returns HTTP 200", ok, f"got {r.status_code}"):
+            failures.append("health")
     except Exception as e:
-        check("/health reachable", False, str(e)); failures.append("health_unreachable")
+        check("/health reachable", False, str(e))
+        failures.append("health_unreachable")
 
     # --- TEST 2: Readiness probe ---
     print("\n[2/6] Readiness Probe (/ready)")
     try:
         r = requests.get(f"{api_url}/ready", timeout=20)
         ok = r.status_code == 200
-        if not check("/ready returns HTTP 200", ok, f"got {r.status_code}"): failures.append("ready")
+        if not check("/ready returns HTTP 200", ok, f"got {r.status_code}"):
+            failures.append("ready")
         if ok:
             data = r.json()
-            check("model_loaded == true", data.get("model_loaded") is True, str(data.get("model_loaded")))
-            check("dataset_root is set", bool(data.get("dataset_root")), data.get("dataset_root", "missing"))
+            if not check("model_loaded == true", data.get("model_loaded") is True, str(data.get("model_loaded"))):
+                failures.append("ready_model_not_loaded")
+            if not check("dataset_root is set", bool(data.get("dataset_root")), data.get("dataset_root", "missing")):
+                failures.append("ready_dataset_missing")
     except Exception as e:
-        check("/ready reachable", False, str(e)); failures.append("ready_unreachable")
+        check("/ready reachable", False, str(e))
+        failures.append("ready_unreachable")
 
     # --- TEST 3: Auth is enforced ---
     print("\n[3/6] Authentication")
@@ -83,6 +89,7 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
             check("No API key configured — auth check skipped", True)
     except Exception as e:
         check("Auth endpoint reachable", False, str(e))
+        failures.append("auth_unreachable")
 
     # --- TEST 4: Neural inference ---
     print("\n[4/6] Neural Inference (/predict_bands)")
@@ -93,43 +100,76 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
                           headers=headers, timeout=30)
         latency_ms = (time.time() - t0) * 1000
         ok = r.status_code == 200
-        if not check("/predict_bands HTTP 200", ok, f"got {r.status_code}"): failures.append("inference")
+        if not check("/predict_bands HTTP 200", ok, f"got {r.status_code}"):
+            failures.append("inference")
         if ok:
             data = r.json()
             has_action = ("action" in data or "selected_action" in data)
-            check("Response has 'action' field", has_action, str(list(data.keys())[:5]))
-            check("Latency < 500ms", latency_ms < 500, f"{latency_ms:.0f}ms")
+            if not check("Response has 'action' field", has_action, str(list(data.keys())[:5])):
+                failures.append("inference_missing_action")
+            if not check("Latency < 500ms", latency_ms < 500, f"{latency_ms:.0f}ms"):
+                failures.append("inference_latency")
             action = data.get("action", data.get("selected_action", -1))
-            check("Action in valid range [0, 179]", 0 <= action <= 179, f"action={action}")
+            if not check("Action in valid range [0, 179]", 0 <= action <= 179, f"action={action}"):
+                failures.append("inference_action_range")
     except Exception as e:
-        check("/predict_bands reachable", False, str(e)); failures.append("inference_unreachable")
+        check("/predict_bands reachable", False, str(e))
+        failures.append("inference_unreachable")
 
     # --- TEST 5: Benchmark endpoint ---
     print("\n[5/6] Benchmark Data (/api/benchmark)")
     try:
         r = requests.get(f"{api_url}/api/benchmark", headers=headers, timeout=15)
         ok = r.status_code == 200
-        if not check("/api/benchmark HTTP 200", ok, f"got {r.status_code}"): failures.append("benchmark")
+        if not check("/api/benchmark HTTP 200", ok, f"got {r.status_code}"):
+            failures.append("benchmark")
         if ok:
             data = r.json()
             schedulers = list(data.get("schedulers", {}).keys())
-            check("SmartScan_DRQN_MoE in results", "SmartScan_DRQN_MoE" in schedulers,
-                  f"found: {schedulers}")
-            check("All 4 schedulers present", len(schedulers) == 4, f"count={len(schedulers)}")
+            if not check("SmartScan_DRQN_MoE in results", "SmartScan_DRQN_MoE" in schedulers, f"found: {schedulers}"):
+                failures.append("benchmark_missing_drqn")
+
+            expected_schedulers = ["SmartScan_DRQN_MoE", "Random", "RoundRobin", "HighestOccupancy"]
+            if not check("All 4 schedulers present", len(schedulers) == 4, f"count={len(schedulers)}"):
+                failures.append("benchmark_scheduler_count")
+
+            for req_sched in expected_schedulers:
+                if req_sched not in schedulers:
+                    check(f"Scheduler '{req_sched}' present", False, "missing from benchmark")
+                    failures.append(f"benchmark_missing_{req_sched.lower()}")
+
             drqn = data.get("schedulers", {}).get("SmartScan_DRQN_MoE", {}).get("summary", {})
             for fom, (op, threshold, label) in THRESHOLDS.items():
                 val = drqn.get(fom, None)
                 if val is None:
-                    check(f"FoM '{fom}' present", False, "missing from response"); failures.append(fom)
+                    check(f"FoM '{fom}' present", False, "missing from response")
+                    failures.append(f"benchmark_missing_{fom}")
                     continue
+
+                if isinstance(val, bool) or not isinstance(val, (int, float)):
+                    check(f"FoM '{fom}' valid numeric type", False, f"expected finite numeric, got {type(val).__name__}='{val}'")
+                    failures.append(f"benchmark_invalid_type_{fom}")
+                    continue
+
+                import math
+                if math.isnan(val) or math.isinf(val):
+                    check(f"FoM '{fom}' is finite", False, f"got {val}")
+                    failures.append(f"benchmark_non_finite_{fom}")
+                    continue
+
                 if op == ">=":   passed = val >= threshold
                 elif op == "<=": passed = val <= threshold
-                elif op == "<":  passed = True  # reward is negative — any value valid
+                elif op == "<":  passed = val < threshold
                 else:            passed = True
+
                 if not check(f"FoM '{fom}' = {val:.4f} ({label})", passed):
-                    failures.append(fom)
+                    failures.append(f"benchmark_threshold_{fom}")
+    except requests.exceptions.RequestException as e:
+        check("/api/benchmark reachable", False, str(e))
+        failures.append("benchmark_unreachable")
     except Exception as e:
-        check("/api/benchmark reachable", False, str(e)); failures.append("benchmark_unreachable")
+        check("/api/benchmark response valid", False, str(e))
+        failures.append("benchmark_invalid_schema")
 
     # --- TEST 6: WebSocket ---
     print("\n[6/6] WebSocket Metrics Stream (/ws/metrics)")
