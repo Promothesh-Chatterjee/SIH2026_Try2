@@ -384,6 +384,8 @@ def train_scheduler(
     q_reg_coef: float = 1e-4,
     targeted_exploration: bool = True,
     band_discovery_quota: int = 2,
+    qualification_run: bool = False,
+    qualification_steps: int | None = None,
 ) -> None:
     """Full DRQN training with Thompson warmup, BPTT, target network, and MoE eval.
 
@@ -405,6 +407,8 @@ def train_scheduler(
         q_reg_coef: Weight of Q^2 regularization loss (default 1e-4).
         targeted_exploration: Enable Phase 9B-R3 36-band targeted discovery exploration.
         band_discovery_quota: Discovery visit quota per band per episode (default 2).
+        qualification_run: Strict pre-retraining qualification mode; quarantine-only output.
+        qualification_steps: Relative number of global steps to execute from the resumed parent.
     """
     with open(model_cfg_path) as f:
         full_cfg = yaml.safe_load(f)
@@ -662,7 +666,18 @@ def train_scheduler(
     batch_size = int(sched_cfg.get("batch_size", 32))
     update_freq = int(sched_cfg.get("update_freq", 4))
     target_update_freq = int(sched_cfg.get("target_update_freq", 1000))
-    total_steps = int(stop_at_step) if stop_at_step is not None else int(sched_cfg.get("total_timesteps", 500000))
+    if qualification_run:
+        if stop_at_step is not None:
+            raise ValueError("qualification_run is mutually exclusive with --stop-at-step; use --qualification-steps.")
+        if qualification_steps is None or int(qualification_steps) <= 0:
+            raise ValueError("qualification_run requires qualification_steps > 0")
+        total_steps = start_step + int(qualification_steps)
+        logger.info(
+            "QUALIFICATION MODE: start_global_step=%d qualification_steps=%d target_global_step=%d",
+            start_step, int(qualification_steps), total_steps,
+        )
+    else:
+        total_steps = int(stop_at_step) if stop_at_step is not None else int(sched_cfg.get("total_timesteps", 500000))
     target_q_max = float(sched_cfg.get("target_q_max", target_q_max))
     target_q_min = float(sched_cfg.get("target_q_min", target_q_min))
     q_reg_coef = float(sched_cfg.get("q_reg_coef", q_reg_coef))
@@ -690,6 +705,14 @@ def train_scheduler(
         SCHEDULER_DIR,
         role="scheduler",
     )
+    if qualification_run:
+        if qualification_steps is None or int(qualification_steps) <= 0:
+            raise ValueError("qualification_run requires qualification_steps > 0")
+        output_dir = (REPO_ROOT / "experiments" / "checkpoints" / "quarantine").resolve()
+        logger.info(
+            "QUALIFICATION MODE: forcing isolated quarantine output at %s; production checkpoint paths are immutable.",
+            output_dir,
+        )
     # Fail-closed guard: forbid output_dir within immutable baseline or operational candidate directories
     forbidden_roots = [
         Path("experiments/checkpoints/production_baseline").resolve(),
@@ -891,9 +914,24 @@ def train_scheduler(
         "n_updates_skipped_nan": 0,
         "n_updates_skipped_assertion": 0,
         "n_updates_skipped_oom": 0,
+        "n_updates_other_failures": 0,
+        "n_validation_failures": 0,
     }
     consecutive_ooms = 0
     consecutive_val_failures = 0
+
+    # Final immutable-parent pre-flight immediately before any training interaction/update.
+    # Qualification runs always require the canonical Gate-25k frozen parent.
+    import hashlib as _hashlib
+    _preflight_hash = _hashlib.sha256(parent_path.read_bytes()).hexdigest()
+    if qualification_run or "checkpoint_gate_25000_frozen" in parent_path.name:
+        if _preflight_hash != FROZEN_25K_SHA:
+            raise RuntimeError(
+                "IMMUTABLE PARENT SHA-256 CORRUPTED immediately before training: "
+                f"{_preflight_hash} != {FROZEN_25K_SHA}"
+            )
+    parent_sha256 = _preflight_hash
+    logger.info("Pre-training parent SHA-256 verified: %s", parent_sha256)
 
     while global_step < total_steps:
         obs, _ = env.reset()
@@ -1152,6 +1190,7 @@ def train_scheduler(
                     for param_group in optimizer.param_groups:
                         param_group["lr"] = current_lr
                 try:
+                    update_integrity_counters["n_updates_attempted"] += 1
                     batch = buffer.sample(batch_size, target_hit_seq_fraction=0.40)
                     upd_stats: dict = {}
                     loss_val = _do_drqn_update(
@@ -1173,7 +1212,7 @@ def train_scheduler(
                     )
                     if not np.isfinite(loss_val) or upd_stats.get("skipped_nan", False):
                         update_integrity_counters["n_updates_skipped_nan"] += 1
-                        logger.warning("DRQN update skipped due to NaN loss/gradient (step %d)", global_step)
+                        raise RuntimeError(f"Non-finite DRQN update at step {global_step}; training aborted.")
                     else:
                         update_integrity_counters["n_updates_completed"] += 1
                         consecutive_ooms = 0
@@ -1228,24 +1267,18 @@ def train_scheduler(
                             pass
                 except AssertionError as exc:
                     update_integrity_counters["n_updates_skipped_assertion"] += 1
-                    logger.warning("AssertionError during DRQN update: %s", exc)
-                    if update_integrity_counters["n_updates_skipped_assertion"] > 10:
-                        raise RuntimeError(
-                            "More than 10 gradient updates skipped due to assertion failures — aborting training"
-                        ) from exc
+                    raise RuntimeError("DRQN update assertion failure — training aborted.") from exc
                 except (torch.cuda.OutOfMemoryError, RuntimeError) as exc:
                     if isinstance(exc, torch.cuda.OutOfMemoryError) or "out of memory" in str(exc).lower():
                         update_integrity_counters["n_updates_skipped_oom"] += 1
-                        consecutive_ooms += 1
-                        logger.warning("OOM in DRQN update (%d consecutive) — skipping", consecutive_ooms)
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
-                        if consecutive_ooms > 3:
-                            raise RuntimeError(
-                                f"More than 3 consecutive OOMs ({consecutive_ooms}) in DRQN update — aborting training"
-                            ) from exc
-                    else:
-                        raise
+                        raise RuntimeError("DRQN optimizer update OOM — training aborted.") from exc
+                    update_integrity_counters["n_updates_other_failures"] += 1
+                    raise RuntimeError("DRQN optimizer update runtime failure — training aborted.") from exc
+                except Exception as exc:
+                    update_integrity_counters["n_updates_other_failures"] += 1
+                    raise RuntimeError("Unexpected DRQN optimizer update failure — training aborted.") from exc
 
             # ---- Periodic Q-margin, stuck-state, and shadow validation diagnostics ----
             if global_step % 500 == 0:
@@ -1727,7 +1760,32 @@ def train_scheduler(
             logger.info("Reached stop_at_step=%d — concluding training run", stop_at_step)
             break
 
-    final_ckpt_name = f"checkpoint_phase11_step_{global_step}.pt" if "phase11" in str(output_dir).lower() else "final.pt"
+    # Production and qualification runs must have zero skipped/failed optimizer or validation events.
+    if update_integrity_counters["n_updates_completed"] != update_integrity_counters["n_updates_attempted"]:
+        raise RuntimeError(
+            "TRAINING INTEGRITY VIOLATION: completed "
+            f"({update_integrity_counters['n_updates_completed']}) != attempted "
+            f"({update_integrity_counters['n_updates_attempted']})."
+        )
+    if any(
+        update_integrity_counters[k] > 0
+        for k in (
+            "n_updates_skipped_nan",
+            "n_updates_skipped_assertion",
+            "n_updates_skipped_oom",
+            "n_updates_other_failures",
+            "n_validation_failures",
+        )
+    ):
+        raise RuntimeError(
+            "TRAINING INTEGRITY VIOLATION: non-zero update/validation failure counters: "
+            f"{update_integrity_counters}"
+        )
+
+    final_ckpt_name = (
+        f"qualification_step_{global_step}.pt" if qualification_run
+        else (f"checkpoint_phase11_step_{global_step}.pt" if "phase11" in str(output_dir).lower() else "final.pt")
+    )
     final_path = output_dir / final_ckpt_name
     from ..utils.checkpoint_meta import build_train_metadata, save_state, write_checkpoint_metadata
 
@@ -1756,6 +1814,32 @@ def train_scheduler(
     else:
         artifacts_list.append("best.pt")
     write_checkpoint_metadata(output_dir / "metadata.json", final_meta, artifacts=artifacts_list)
+
+    if qualification_run:
+        qualification_summary = {
+            "schema_version": "qualification_run_summary.v1",
+            "status": "PASS",
+            "parent_checkpoint": str(parent_path),
+            "parent_sha256": parent_sha256,
+            "expected_parent_sha256": FROZEN_25K_SHA,
+            "start_global_step": int(start_step),
+            "target_global_step": int(total_steps),
+            "final_global_step": int(global_step),
+            "qualification_steps_requested": int(qualification_steps or 0),
+            "qualification_steps_completed": int(global_step - start_step),
+            "output_dir": str(output_dir),
+            "checkpoint_path": str(final_path),
+            "integrity": update_integrity_counters,
+            "device": str(device),
+            "dataset_root": str(data_dir),
+            "dataset_fingerprint": data_fingerprint,
+            "run_id": run.run_id,
+        }
+        (output_dir / "qualification_run_summary.json").write_text(
+            json.dumps(coerce(qualification_summary), indent=2),
+            encoding="utf-8",
+        )
+
     from ..utils.experiment_manifest import write_experiment_manifest
 
     manifest = write_experiment_manifest(
@@ -1806,7 +1890,9 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--reset-semantic-memory", action="store_true", help="Reset semantic memory DB before training.")
     parser.add_argument("--staged-gates", type=str, default="1000,5000,25000,100000,200000,300000,500000", help="Comma-separated step gates.")
-    parser.add_argument("--stop-at-step", type=int, default=None, help="Stop after reaching this step.")
+    parser.add_argument("--stop-at-step", type=int, default=None, help="Absolute global step at which to stop.")
+    parser.add_argument("--qualification-run", action="store_true", help="Strict pre-retraining qualification; quarantine-only output and fail-closed integrity.")
+    parser.add_argument("--qualification-steps", type=int, default=None, help="Relative number of steps to execute from the resumed checkpoint in qualification mode.")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint .pt to resume from.")
     parser.add_argument("--override-epsilon", type=float, default=None, help="Hold exploration epsilon at a fixed floor.")
     parser.add_argument("--disable-latency-reward", action="store_true", help="Ablate latency reward bonus.")
@@ -1839,5 +1925,7 @@ if __name__ == "__main__":
         q_reg_coef=args.q_reg_coef,
         targeted_exploration=args.targeted_exploration,
         band_discovery_quota=args.band_discovery_quota,
+        qualification_run=args.qualification_run,
+        qualification_steps=args.qualification_steps,
     )
 
