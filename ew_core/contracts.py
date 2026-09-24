@@ -39,6 +39,7 @@ FEATURE_ORDER: tuple[str, ...] = (
     "agility",
     "priority",
 )
+CANONICAL_BELIEF_FEATURE_NAMES: tuple[str, ...] = FEATURE_ORDER
 
 # Canonical dwell-mode taxonomy (order is the mode index — do not reorder).
 DWELL_MODES: tuple[str, ...] = (
