@@ -44,7 +44,7 @@
   "schedulers": {
     "SmartScan_DRQN_MoE": {
       "summary": {
-        "pd": 0.26237288135593223,
+        "pd": 0.26237,
         "pfa": 0.0,
         "canonical_pfa": 0.0,
         "sensitivity_dbm": -110.0,
