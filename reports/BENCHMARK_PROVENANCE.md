@@ -34,3 +34,7 @@
 2. **Probability of Detection**: $P_d = \frac{TP}{TP + FN}$ identically holds ($387 / (387 + 1088) = 0.26237 \to 26.24\%$).
 3. **Probability of False Alarm**: Canonical decision-level $P_{fa} = \frac{FP}{FP + TN} = 0.00\%$. In deterministic evaluation, $P_{fa}=0$ reflects the simulated receiver model having zero unprompted triggers, not an empirical proof of zero noise false alarms in real RF hardware.
 4. **Sensitivity**: Receiver minimum detectable signal floor $S_{min} = -110.0$ dBm (grounded in the 39 dB processing gain channelized receiver model).
+
+## Archived (superseded)
+- `reports/archive/benchmark_results_gate25k_baseline.json`
+  - **Reason**: Used decision-level-only Pd (FN not tracked from missed dwells). The FN=0 bug inflated Pd to ~99.86%. Fixed in v2.0-audited. IR was measured differently (per-observation not per-dwell).
