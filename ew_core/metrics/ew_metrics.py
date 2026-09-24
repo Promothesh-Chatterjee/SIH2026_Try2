@@ -71,24 +71,61 @@ class EWMetrics:
     avg_reward: float
     pct_correct_predictions: float
     avg_intercept_time_error_us: float
-    n_intercepts: int
-    n_false_alarms: int
-    n_total_transmissions: int
-    n_receiver_dwells: int
+    n_intercepts: int = 0
+    n_false_alarms: int = 0
+    n_total_transmissions: int = 0
+    n_receiver_dwells: int = 0
     n_missed_dwells: int = 0
     n_true_negatives: int = 0
     canonical_pfa: float = 0.0
-    tp: int = 0
-    fn: int = 0
-    fp: int = 0
-    tn: int = 0
+    tp: int | None = None
+    fn: int | None = None
+    fp: int | None = None
+    tn: int | None = None
+
+    def __post_init__(self):
+        # Harmonize TP <-> n_intercepts
+        if self.tp is None:
+            object.__setattr__(self, "tp", int(self.n_intercepts))
+        elif int(self.tp) != int(self.n_intercepts):
+            raise ValueError(
+                f"Conflicting values provided for canonical tp ({self.tp}) and alias n_intercepts ({self.n_intercepts})"
+            )
+        object.__setattr__(self, "n_intercepts", int(self.tp))
+
+        # Harmonize FN <-> n_missed_dwells
+        if self.fn is None:
+            object.__setattr__(self, "fn", int(self.n_missed_dwells))
+        elif int(self.fn) != int(self.n_missed_dwells):
+            raise ValueError(
+                f"Conflicting values provided for canonical fn ({self.fn}) and alias n_missed_dwells ({self.n_missed_dwells})"
+            )
+        object.__setattr__(self, "n_missed_dwells", int(self.fn))
+
+        # Harmonize FP <-> n_false_alarms
+        if self.fp is None:
+            object.__setattr__(self, "fp", int(self.n_false_alarms))
+        elif int(self.fp) != int(self.n_false_alarms):
+            raise ValueError(
+                f"Conflicting values provided for canonical fp ({self.fp}) and alias n_false_alarms ({self.n_false_alarms})"
+            )
+        object.__setattr__(self, "n_false_alarms", int(self.fp))
+
+        # Harmonize TN <-> n_true_negatives
+        if self.tn is None:
+            object.__setattr__(self, "tn", int(self.n_true_negatives))
+        elif int(self.tn) != int(self.n_true_negatives):
+            raise ValueError(
+                f"Conflicting values provided for canonical tn ({self.tn}) and alias n_true_negatives ({self.n_true_negatives})"
+            )
+        object.__setattr__(self, "n_true_negatives", int(self.tn))
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize Figures of Merit to dictionary."""
-        tp_val = int(self.tp or self.n_intercepts)
-        fn_val = int(self.fn or self.n_missed_dwells)
-        fp_val = int(self.fp or self.n_false_alarms)
-        tn_val = int(self.tn or self.n_true_negatives)
+        """Serialize Figures of Merit to dictionary without truthiness-based fallbacks."""
+        tp_val = int(self.tp)
+        fn_val = int(self.fn)
+        fp_val = int(self.fp)
+        tn_val = int(self.tn)
         return {
             "pd": float(self.pd),
             "pfa": float(self.pfa),
@@ -338,12 +375,18 @@ def compute_all_metrics(
     fp = 0
     tn = 0
     
-    # If active_bands_per_step and chosen_bands are provided, compute ground-truth TP, FN, FP, TN directly
-    if chosen_bands and active_bands_per_step and len(chosen_bands) == n_dwells and len(active_bands_per_step) == n_dwells:
-        for t in range(n_dwells):
+    # Single source of truth for decision-level confusion matrix accounting
+    # For every receiver dwell:
+    # Selected band active + detected -> TP
+    # Selected band active + not detected -> FN
+    # Selected band inactive + detected -> FP
+    # Selected band inactive + not detected -> TN
+    if chosen_bands and active_bands_per_step and len(chosen_bands) > 0:
+        n_eval = min(n_dwells, len(chosen_bands), len(active_bands_per_step))
+        for t in range(n_eval):
             b_chosen = chosen_bands[t]
             active_b = active_bands_per_step[t]
-            hit = bool(hits[t])
+            hit = bool(hits[t]) if t < len(hits) else False
             if b_chosen in active_b:
                 if hit:
                     tp += 1
@@ -354,33 +397,39 @@ def compute_all_metrics(
                     fp += 1
                 else:
                     tn += 1
-    else:
-        explicit_false_alarms = episode_log.get("false_alarms", None)
-        if explicit_false_alarms is not None:
+        if n_eval < n_dwells:
+            tn += (n_dwells - n_eval)
+    elif "false_alarms" in episode_log or "missed_dwells" in episode_log:
+        explicit_false_alarms = episode_log.get("false_alarms", [])
+        if isinstance(explicit_false_alarms, (list, tuple)):
             fp = int(sum(1 for f in explicit_false_alarms if f))
-            missed_raw = episode_log.get("missed_dwells", 0)
-            if isinstance(missed_raw, (list, tuple)):
-                fn = int(sum(1 for m in missed_raw if m))
-            else:
-                fn = int(missed_raw)
-            total_hits = int(sum(1 for h in hits if h))
-            tp = max(0, total_hits - fp)
-            tn = max(0, n_dwells - tp - fn - fp)
         else:
-            for t in range(n_dwells):
-                b_chosen = chosen_bands[t] if t < len(chosen_bands) else -1
-                active_b = active_bands_per_step[t] if t < len(active_bands_per_step) else []
-                hit = bool(hits[t])
-                if b_chosen in active_b:
-                    if hit:
-                        tp += 1
-                    else:
-                        fn += 1
-                else:
-                    if hit:
-                        fp += 1
-                    else:
-                        tn += 1
+            fp = int(explicit_false_alarms or 0)
+        missed_raw = episode_log.get("missed_dwells", 0)
+        if isinstance(missed_raw, (list, tuple)):
+            fn = int(sum(1 for m in missed_raw if m))
+        else:
+            fn = int(missed_raw or 0)
+        total_hits = int(sum(1 for h in hits if h))
+        tp = max(0, total_hits - fp)
+        tn = max(0, n_dwells - tp - fn - fp)
+    else:
+        # Fallback when only hits are logged:
+        tp = int(sum(1 for h in hits if h))
+        fn = 0
+        fp = 0
+        tn = max(0, n_dwells - tp)
+
+    # Invariant enforcement
+    if (tp + fn + fp + tn) != n_dwells:
+        if (tp + fn + fp) <= n_dwells:
+            tn = n_dwells - (tp + fn + fp)
+        else:
+            raise ValueError(
+                f"Confusion matrix counters do not sum to total dwells: "
+                f"TP={tp}, FN={fn}, FP={fp}, TN={tn}, sum={tp+fn+fp+tn} != n_dwells={n_dwells}"
+            )
+    assert tp >= 0 and fn >= 0 and fp >= 0 and tn >= 0, f"Negative counters: TP={tp}, FN={fn}, FP={fp}, TN={tn}"
 
     # Total emitter transmission opportunities across all bands
     if "n_total_transmissions" in episode_log:

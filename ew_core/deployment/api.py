@@ -1309,6 +1309,26 @@ def validate_benchmark_payload(data: dict) -> None:
             detail=f"Benchmark artifact missing required schedulers: {sorted(list(missing))}",
         )
 
+    meta = data["metadata"]
+    from ew_core.utils.checkpoint_paths import EXPECTED_FROZEN_SHA256
+
+    ckpt_sha = meta.get("checkpoint_sha256")
+    if ckpt_sha != EXPECTED_FROZEN_SHA256:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Benchmark artifact checkpoint SHA mismatch: {ckpt_sha} != {EXPECTED_FROZEN_SHA256}",
+        )
+    if not meta.get("dataset_fingerprint"):
+        raise HTTPException(
+            status_code=500,
+            detail="Benchmark artifact missing dataset_fingerprint in metadata",
+        )
+    if meta.get("schema_version") != "2026.1-CANONICAL":
+        raise HTTPException(
+            status_code=500,
+            detail=f"Benchmark artifact schema version invalid: {meta.get('schema_version')}",
+        )
+
     for name in REQUIRED_BENCHMARK_SCHEDULERS:
         sched_entry = schedulers[name]
         if not isinstance(sched_entry, dict) or "summary" not in sched_entry or not isinstance(sched_entry["summary"], dict):
@@ -1334,6 +1354,55 @@ def validate_benchmark_payload(data: dict) -> None:
                     status_code=500,
                     detail=f"Benchmark scheduler '{name}' summary field '{field}' must be finite, got {val}",
                 )
+
+        tp = int(summary["tp"])
+        fn = int(summary["fn"])
+        fp = int(summary["fp"])
+        tn = int(summary["tn"])
+        n_dwells = int(summary.get("n_receiver_dwells", 5000))
+        pd = float(summary["pd"])
+        pfa = float(summary["pfa"])
+
+        if any(c < 0 for c in [tp, fn, fp, tn]):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Benchmark scheduler '{name}' has negative confusion counters: TP={tp}, FN={fn}, FP={fp}, TN={tn}",
+            )
+
+        if not (0.0 <= pd <= 1.0) or not (0.0 <= pfa <= 1.0):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Benchmark scheduler '{name}' pd ({pd}) or pfa ({pfa}) out of bounds [0, 1]",
+            )
+
+        if (tp + fn + fp + tn) != n_dwells:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Benchmark scheduler '{name}' counter sum ({tp+fn+fp+tn}) != n_receiver_dwells ({n_dwells})",
+            )
+
+        denom_pd = tp + fn
+        expected_pd = float(tp / denom_pd) if denom_pd > 0 else 0.0
+        if abs(pd - expected_pd) > 1e-4:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Benchmark scheduler '{name}' pd ({pd}) does not match TP/(TP+FN) ({expected_pd})",
+            )
+
+        denom_pfa = fp + tn
+        expected_pfa = float(fp / denom_pfa) if denom_pfa > 0 else 0.0
+        if abs(pfa - expected_pfa) > 1e-4:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Benchmark scheduler '{name}' pfa ({pfa}) does not match FP/(FP+TN) ({expected_pfa})",
+            )
+
+        breakdown = sched_entry.get("scenario_breakdown")
+        if not isinstance(breakdown, dict) or len(breakdown) < 10:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Benchmark scheduler '{name}' missing valid scenario breakdown (must contain 10 canonical scenarios)",
+            )
 
 
 BENCHMARK_RESULTS_PATH = Path("reports/benchmark_results.json")

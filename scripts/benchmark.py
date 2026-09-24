@@ -330,6 +330,51 @@ def run_benchmark(
     total_elapsed = time.time() - start_total
     benchmark_payload["metadata"]["total_benchmark_runtime_s"] = float(total_elapsed)
 
+    # Pre-publish self-audit
+    total_dwells_expected = len(scens) * n_steps
+    from ew_core.utils.checkpoint_paths import EXPECTED_FROZEN_SHA256
+    if ckpt_sha != EXPECTED_FROZEN_SHA256:
+        raise RuntimeError(f"Audit failure: Checkpoint SHA mismatch: {ckpt_sha} != {EXPECTED_FROZEN_SHA256}")
+
+    for sid, h in scenario_hashes.items():
+        if h.startswith("synthetic"):
+            raise RuntimeError(f"Audit failure: Scenario {sid} used synthetic fallback! Real TSRD required.")
+
+    for s_name in ["SmartScan_DRQN_MoE", "Random", "RoundRobin", "HighestOccupancy"]:
+        if s_name not in benchmark_payload["schedulers"]:
+            raise RuntimeError(f"Audit failure: Missing required scheduler '{s_name}'")
+        s_summary = benchmark_payload["schedulers"][s_name]["summary"]
+        s_tp = s_summary["tp"]
+        s_fn = s_summary["fn"]
+        s_fp = s_summary["fp"]
+        s_tn = s_summary["tn"]
+        s_pd = s_summary["pd"]
+        s_pfa = s_summary["pfa"]
+
+        if any(c < 0 for c in [s_tp, s_fn, s_fp, s_tn]):
+            raise RuntimeError(f"Audit failure: Scheduler '{s_name}' has negative confusion counters")
+
+        if (s_tp + s_fn + s_fp + s_tn) != total_dwells_expected:
+            raise RuntimeError(
+                f"Audit failure: Scheduler '{s_name}' counter sum ({s_tp+s_fn+s_fp+s_tn}) != expected ({total_dwells_expected})"
+            )
+
+        denom_pd = s_tp + s_fn
+        exp_pd = float(s_tp / denom_pd) if denom_pd > 0 else 0.0
+        if abs(s_pd - exp_pd) > 1e-4:
+            raise RuntimeError(f"Audit failure: Scheduler '{s_name}' Pd mismatch: {s_pd} != {exp_pd}")
+
+        denom_pfa = s_fp + s_tn
+        exp_pfa = float(s_fp / denom_pfa) if denom_pfa > 0 else 0.0
+        if abs(s_pfa - exp_pfa) > 1e-4:
+            raise RuntimeError(f"Audit failure: Scheduler '{s_name}' Pfa mismatch: {s_pfa} != {exp_pfa}")
+
+        s_breakdown = benchmark_payload["schedulers"][s_name]["scenario_breakdown"]
+        if len(s_breakdown) != len(scens):
+            raise RuntimeError(f"Audit failure: Scheduler '{s_name}' breakdown missing scenarios")
+
+    logger.info("All pre-publish invariant and provenance audits PASSED. Writing authoritative artifact.")
+
     # Write JSON results
     json_path = out_p / "benchmark_results.json"
     with open(json_path, "w", encoding="utf-8") as f:
@@ -342,9 +387,14 @@ def run_benchmark(
     report_content = f"""# Electronic Warfare Receiver Scheduling Benchmark Report
 
 **Evaluation Timestamp**: {benchmark_payload['metadata']['timestamp']}  
-**Checkpoint**: `{checkpoint_path.name}`  
-**Dataset**: `{tsrd_root}` ({len(scens)} validation scenarios)  
+**Checkpoint**: `{checkpoint_path.name}` (SHA: `{ckpt_sha}`)  
+**Source Git Commit**: `{git_commit}`  
+**Dataset**: `{tsrd_root}` ({len(scens)} validation scenarios, Fingerprint: `{dataset_fingerprint}`)  
 **Steps per Scenario**: {n_steps} (Total dwells per policy: {len(scens) * n_steps})  
+
+## System Hierarchy
+- **Proposed Operational System**: `SmartScan_DRQN_MoE` (Cognitive ML Scheduler)
+- **Reference Baselines**: `Random`, `RoundRobin`, `HighestOccupancy` (Classical comparison baselines)
 
 ## Authoritative Figures of Merit Comparison
 
@@ -352,8 +402,8 @@ def run_benchmark(
 
 > [!NOTE]
 > - **$P_d$ (Probability of Detection)**: Measures detection efficacy on monitored active bands ($TP / (TP + FN)$).
-> - **$P_{{fa}}$ (Probability of False Alarm)**: Dwell-normalized false alarm frequency ($FP / N_{{dwells}}$).
-> - **Sensitivity**: Receiver minimum detectable signal floor ($S_{{min}} = -140.0$ dBm with physics-based noise figure).
+> - **$P_{{fa}}$ (Probability of False Alarm)**: Canonical decision-level false alarm rate ($FP / (FP + TN)$). In deterministic evaluation against simulated scenarios, $P_{{fa}} = 0$ is a property of the simulated receiver model (having zero unprompted trigger events), not an empirical claim of zero noise false alarms in real hardware.
+> - **Sensitivity**: Receiver minimum detectable signal floor ($S_{{min}} = -110.0$ dBm under the 39 dB processing gain channelized receiver model).
 > - **Intercept Rate**: Direct operational yield ($Hits / N_{{dwells}}$).
 > - **Time Error**: Mean absolute timing alignment error ($|t_{{predicted}} - t_{{actual}}|$) in microseconds.
 """
