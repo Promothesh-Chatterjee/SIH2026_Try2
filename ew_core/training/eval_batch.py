@@ -114,7 +114,12 @@ def build_canonical_eval_batch(
             except Exception as exc:
                 logger.warning("Could not sample from %s: %s", h5_path, exc)
 
-        # Fallback if no files: diverse random states
+        if not allow_synthetic_fallback:
+            raise RuntimeError(
+                f"Canonical evaluation batch construction failed for {h5_path}; "
+                "synthetic/random fallback is disabled."
+            )
+        # Explicit diagnostic-only fallback.
         fallback_seq = rng.uniform(0.0, 1.0, size=(seq_len, CANONICAL_N_BANDS * 10)).astype(np.float32)
         batch_list.append(fallback_seq)
 
@@ -126,6 +131,7 @@ def get_or_create_fixed_eval_batch(
     cache_path: Path | str = CANONICAL_EVAL_BATCH_PATH,
     data_dir: str = "D:/TSRD",
     device: torch.device = torch.device("cpu"),
+    allow_synthetic_fallback: bool = False,
 ) -> torch.Tensor:
     """Load canonical evaluation batch from disk, or create and persist if missing."""
     p = Path(cache_path)
