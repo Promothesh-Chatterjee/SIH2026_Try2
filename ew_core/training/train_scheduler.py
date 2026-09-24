@@ -299,6 +299,12 @@ def _do_drqn_update(
     optimizer.zero_grad()
     loss.backward()
     pre_clip_grad_norm = torch.nn.utils.clip_grad_norm_(online_drqn.parameters(), 1.0)
+    pre_gn = float(pre_clip_grad_norm.item()) if torch.is_tensor(pre_clip_grad_norm) else float(pre_clip_grad_norm)
+    if not (np.isfinite(pre_gn) and np.isfinite(float(loss.item()))):
+        optimizer.zero_grad()
+        if stats is not None:
+            stats["skipped_nan"] = True
+        return float("nan")
     optimizer.step()
     if stats is not None:
         loss_mask_t = loss_mask
@@ -874,8 +880,16 @@ def train_scheduler(
     from .eval_batch import get_or_create_fixed_eval_batch, evaluate_q_diagnostics
     fixed_eval_batch = get_or_create_fixed_eval_batch(data_dir=str(canonical_root), device=device)
 
-    # Phase 9B-R3: Band discovery tracker for targeted exploration
-    band_tracker = BandDiscoveryTracker(n_bands=n_bands, discovery_quota=band_discovery_quota) if targeted_exploration else None
+    # Phase 9B update integrity counters & failure safeguards
+    update_integrity_counters = {
+        "n_updates_attempted": 0,
+        "n_updates_completed": 0,
+        "n_updates_skipped_nan": 0,
+        "n_updates_skipped_assertion": 0,
+        "n_updates_skipped_oom": 0,
+    }
+    consecutive_ooms = 0
+    consecutive_val_failures = 0
 
     while global_step < total_steps:
         obs, _ = env.reset()
@@ -1123,6 +1137,7 @@ def train_scheduler(
 
             # ---- Learning update ----
             if global_step % update_freq == 0 and buffer.can_sample(batch_size):
+                update_integrity_counters["n_updates_attempted"] += 1
                 lr_schedule = sched_cfg.get("lr_schedule")
                 if lr_schedule == "cosine":
                     total_train_steps = max(1, total_steps - start_step)
@@ -1152,7 +1167,13 @@ def train_scheduler(
                         n_bands=n_bands,
                         n_modes=n_modes,
                     )
-                    if upd_stats:
+                    if not np.isfinite(loss_val) or upd_stats.get("skipped_nan", False):
+                        update_integrity_counters["n_updates_skipped_nan"] += 1
+                        logger.warning("DRQN update skipped due to NaN loss/gradient (step %d)", global_step)
+                    else:
+                        update_integrity_counters["n_updates_completed"] += 1
+                        consecutive_ooms = 0
+                    if upd_stats and not upd_stats.get("skipped_nan", False):
                         if "reward_baseline" in upd_stats:
                             reward_baseline = float(upd_stats["reward_baseline"])
                         ep_learn["n_updates"] += 1
@@ -1201,12 +1222,24 @@ def train_scheduler(
                             wandb.log({"train/loss": loss_val, "train/eps": float(eps), "step": global_step})
                         except Exception:
                             pass
-                except AssertionError:
-                    pass
-                except RuntimeError as exc:
-                    if "out of memory" in str(exc).lower():
-                        logger.warning("OOM in DRQN update — skipping")
-                        torch.cuda.empty_cache()
+                except AssertionError as exc:
+                    update_integrity_counters["n_updates_skipped_assertion"] += 1
+                    logger.warning("AssertionError during DRQN update: %s", exc)
+                    if update_integrity_counters["n_updates_skipped_assertion"] > 10:
+                        raise RuntimeError(
+                            "More than 10 gradient updates skipped due to assertion failures — aborting training"
+                        ) from exc
+                except (torch.cuda.OutOfMemoryError, RuntimeError) as exc:
+                    if isinstance(exc, torch.cuda.OutOfMemoryError) or "out of memory" in str(exc).lower():
+                        update_integrity_counters["n_updates_skipped_oom"] += 1
+                        consecutive_ooms += 1
+                        logger.warning("OOM in DRQN update (%d consecutive) — skipping", consecutive_ooms)
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        if consecutive_ooms > 3:
+                            raise RuntimeError(
+                                f"More than 3 consecutive OOMs ({consecutive_ooms}) in DRQN update — aborting training"
+                            ) from exc
                     else:
                         raise
 
@@ -1255,6 +1288,7 @@ def train_scheduler(
                 target_drqn.load_state_dict(online_drqn.state_dict())
 
             # ---- Staged Promotion Gate Evaluation ----
+            logger.info("Evaluation Checkpoint [step %d] | Update Integrity Counters: %s", global_step, update_integrity_counters)
             gate_evaluator.check_and_run(
                 global_step=global_step,
                 episode=episode,
@@ -1520,6 +1554,7 @@ def train_scheduler(
 
         # Periodic MoE evaluation on fixed val scenarios every 5000 steps
         if episode > 0 and global_step % 5000 == 0 and val_set.files_used:
+            logger.info("Periodic Val Checkpoint [step %d] | Update Integrity Counters: %s", global_step, update_integrity_counters)
             try:
                 val_env = CognitiveRFScanEnv(
                     env_config,
@@ -1562,7 +1597,7 @@ def train_scheduler(
                                     hidden_v,
                                     mode_selection="flat_argmax",
                                     tau=0.0,
-                                )
+                                    )
                             else:
                                 a_v, hidden_v, _ = moe.select_action(obs_v, hidden_v)
                         obs_v, rew_v, term_v, trunc_v, _ = val_env.step(a_v)
@@ -1639,6 +1674,7 @@ def train_scheduler(
                 val_record["scenario_details"] = coerce(scenario_details)
                 telemetry.update(**val_record)
                 avg_val = core_val["val_reward"]
+                consecutive_val_failures = 0
                 logger.info("  Val MoE avg_reward %.2f (scenarios=%s)", avg_val,
                             [d["scenario_id"] for d in scenario_details])
                 if use_wandb:
@@ -1649,7 +1685,15 @@ def train_scheduler(
                     except Exception:
                         pass
             except Exception as exc:
-                logger.warning("Val MoE eval skipped at step %d: %s", global_step, exc)
+                consecutive_val_failures += 1
+                logger.warning(
+                    "Val MoE eval skipped at step %d (%d consecutive failures): %s",
+                    global_step,
+                    consecutive_val_failures,
+                    exc,
+                )
+                if consecutive_val_failures > 3:
+                    raise RuntimeError("Validation loop failing repeatedly — aborting") from exc
 
         if ep_reward > best_reward:
             best_reward = ep_reward
