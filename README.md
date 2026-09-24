@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB?logo=python)](https://python.org)
 [![Coverage](https://img.shields.io/badge/Coverage-81%25-brightgreen)](https://github.com/Promothesh-Chatterjee/SIH2026_Try2)
 
-Autonomous cognitive radar scanning strategy for Electronic Warfare (EW) Electronic Support (ES) receivers operating across 36 frequency bands under non-cooperative conditions. Designed for **DRDO Problem Statement SIH26056 (Smart India Hackathon 2026)**, the system intercepts, deinterleaves, and tracks non-cooperative radar emissions—including agile frequency-hopping emitters, periodic scanning search radars, and fixed emitters—without prior threat libraries. By combining high-purity windowed signal deinterleaving with a Dueling Deep Recurrent Q-Network (DRQN) scheduler, the receiver achieves sub-millisecond dwell scheduling decisions, outperforming classical search strategies by more than **18× in intercept rate** against random sweep (63.44% vs 3.37%, Phase-11 controlled evaluation, Gate-25k frozen checkpoint).
+Autonomous cognitive radar scanning strategy for Electronic Warfare (EW) Electronic Support (ES) receivers operating across 36 frequency bands under non-cooperative conditions. Designed for **DRDO Problem Statement SIH26056 (Smart India Hackathon 2026)**, the system intercepts, deinterleaves, and tracks non-cooperative radar emissions—including agile frequency-hopping emitters, periodic scanning search radars, and fixed emitters—without prior threat libraries. By combining high-purity windowed signal deinterleaving with a Dueling Deep Recurrent Q-Network (DRQN) scheduler, the receiver achieves sub-millisecond dwell scheduling decisions. The SmartScan DRQN-MoE achieves 3.3× higher dwell-level intercept rate versus random sweep (7.74% vs 2.36%) in canonical Gate-25k evaluation. Gate-100k retraining targets a further 8× improvement to ≥65% IR.
 
 ---
 
@@ -63,33 +63,31 @@ Autonomous cognitive radar scanning strategy for Electronic Warfare (EW) Electro
                         ▼                                         ▼
          ┌──────────────────────────────┐          ┌──────────────────────────────┐
          │        FastAPI Server        │          │   Interactive Web Dashboard  │
-         │  /api/v1/metrics             │ ───────► │   https://sih-2026-try2      │
-         │  /api/v1/spectrum            │          │   .vercel.app                │
+         │  /api/v1/metrics             │ ───────► │   http://172.198.227.59      │
+         │  /api/v1/spectrum            │          │   (Azure AKS)                │
          └──────────────────────────────┘          └──────────────────────────────┘
 ```
 
 ---
 
-## Figures of Merit (Validation Results)
+## Figures of Merit (Canonical Gate-25k Results)
 
-Evaluation conducted on the 36-band RF environment ($T_{\text{steps}} = 1000$) with a multi-threat mix (frequency-hopping agile emitter + periodic scanning emitter) comparing the trained DRQN scheduler against the classical Round-Robin baseline:
+| Metric | Definition | Gate-25k Result (Canonical v2.0) |
+|---|---|---|
+| Probability of Detection (Pd) | TP / (TP + FN) at selected band | **26.24%** |
+| Probability of False Alarm (Pfa) | FP / (FP + TN) | **0.00%** |
+| Receiver Sensitivity | Physics-computed via Friis | **~-110 dBm** |
+| Avg Intercept Rate (IR) | Hits / total dwells | **7.74%** |
+| Avg Reward | Mean per-dwell reward | **-0.948** |
+| Correct Decisions | (TP+TN) / N | **38.84%** |
+| Avg Intercept Time Error | MAE of predicted vs actual ToA | **419.67 µs** |
 
-| # | Figure of Merit (FoM) | Formula / Definition | Baseline (Round-Robin) | Achieved (DRQN Agent) | Target / Spec |
-|:---:|:---|:---|:---:|:---:|:---:|
-| **1** | **Probability of Detection ($P_d$)** | $TP / (TP + FN)$ on tuned active dwells | $1.000$ ($100\%$) | **$1.000$ ($100\%$)** | $\ge 0.90$ |
-| **2** | **Probability of False Alarm ($P_{fa}$)** | $FP / (FP + TN)$ on tuned empty dwells | $0.000$ ($0.0\%$) | **$0.000$ ($0.0\%$)** | $\le 0.05$ |
-| **3** | **Receiver Sensitivity ($S_{\min}$)** | Minimum detectable signal threshold | $-140.0\,\text{dBm}$ | **$\approx-110.0\,\text{dBm}$ (physics-computed)** | $-140.0\,\text{dBm}$ |
-| **4** | **Average Intercept Rate** | $n_{\text{intercepts}} / T_{\text{steps}}$ | $0.0650$ ($6.5\%$) | **$0.6344$ ($63.44\%$)** (Phase-11 controlled, Gate-25k) | **$> 11.5\times$ Gain** |
-| **5** | **Average Reward per Dwell** | Mean environment reinforcement return | $+0.0650$ | **See Phase-11 report** | Positive & maximal |
-| **6** | **Prediction Accuracy** | Dwells landing on active emitter bands | $6.50\%$ | **$63.44\%$** (Phase-11 controlled) | Outperform sweep |
-| **7** | **Avg Intercept Time Error** | Temporal ToA deviation on intercept | $0.00\,\mu\text{s}$ | **$0.00\,\mu\text{s}$** | $< 5.00\,\mu\text{s}$ |
-
-> **Benchmark context**: The figures above reflect the authoritative Phase-11 
-> controlled evaluation of the frozen Gate-25k checkpoint (25,000 training steps) 
-> on TSRD real-signal data. Decision-level Pd = 99.86%, Pfa = 0.00%. Sensitivity 
-> is computed via the Friis noise formula (NF=6dB, BW=500MHz, SNR_min=10dB) 
-> yielding ~−110 dBm per band rather than the legacy −140 dBm placeholder. 
-> Training is ongoing toward Gate-100k; updated figures will be published upon promotion.
+> **Benchmark context:** All results above are from the canonical Gate-25k
+> evaluation (benchmark v2.0-audited-confusion-matrix, 10 fixed TSRD
+> validation scenarios, 500 dwells/scenario). Earlier results (60–63% IR,
+> 99.86% Pd) used a different evaluation contract and are archived in
+> `reports/archive/`. They are **not** comparable to the current results.
+> Gate-100k retraining targets: IR ≥ 65%, Pd ≥ 99%, worst-case IR ≥ 20%.
 
 ---
 
@@ -154,7 +152,7 @@ To preserve compute credits when not conducting demonstrations:
 az aks start --name smartscan-aks --resource-group smartscan-rg
 
 # 2. Run operational smoke test against live endpoint
-python scripts/smoke_test.py --api_url http://172.198.227.59 --api_key smartscan-sih2026-demo-key
+python scripts/smoke_test.py --api_url http://172.198.227.59 --api_key $SMARTSCAN_API_KEY
 
 # 3. Stop / Pause AKS cluster (freezes compute billing at $0.00)
 az aks stop --name smartscan-aks --resource-group smartscan-rg
