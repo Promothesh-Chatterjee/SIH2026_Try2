@@ -252,6 +252,11 @@ def run_evaluation(
                     max_pulses=50000,
                     chunk_mode="first",
                 )
+            elif policy_mode == "operational":
+                raise FileNotFoundError(
+                    f"Operational evaluation requires real TSRD scenario file: {h5_path} not found! "
+                    f"Synthetic fallback is prohibited in operational mode."
+                )
             else:
                 logger.warning("Scenario %s not found in %s; falling back to synthetic records", scen_id, val_dir)
                 records = synthetic_records(seed=seed + scen_idx)
@@ -339,8 +344,8 @@ def run_evaluation(
                         if p.target_band == band:
                             pred_toa = float(p.next_expected_toa)
                             break
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Temporal prediction query failed in eval_batch: %s", exc)
 
             # Step environment
             obs, reward, terminated, truncated, info = eval_env.step(action)

@@ -90,7 +90,7 @@ class ReadinessGateEvaluator:
 
     def evaluate_local_gates(self):
         print("\n" + "=" * 78)
-        print("  STAGE 1: LOCAL PRE-RETRAINING QUALIFICATION (30 GATES)")
+        print("  STAGE 1: LOCAL PRE-RETRAINING QUALIFICATION (31 GATES)")
         print("=" * 78)
 
         # 1. Check frozen checkpoint SHA
@@ -148,7 +148,7 @@ class ReadinessGateEvaluator:
                 stats_json = json.loads(fit_stats_path.read_text(encoding="utf-8"))
                 hash_match = (stats_json.get("stats_hash") == EXPECTED_NORMALIZATION_HASH)
             except Exception:
-                pass
+                hash_match = False
         self.log_gate("LOCAL", "NORMALIZATION_STATS_EXISTS", has_stats and hash_match, f"Fit stats {fit_stats_path.name} exists={has_stats} hash_match={hash_match}")
 
         # 8. 360-D observation contract
@@ -342,18 +342,39 @@ class ReadinessGateEvaluator:
             )
         else:
             try:
+                try:
+                    cur_git_head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+                except Exception:
+                    cur_git_head = "unknown"
+
+                t_cfg_path = REPO_ROOT / "configs/training_config_resume_100k.yaml"
+                m_cfg_path = REPO_ROOT / "configs/model_config.yaml"
+                cur_t_cfg_sha = hashlib.sha256(t_cfg_path.read_bytes()).hexdigest() if t_cfg_path.exists() else ""
+                cur_m_cfg_sha = hashlib.sha256(m_cfg_path.read_bytes()).hexdigest() if m_cfg_path.exists() else ""
+
                 m_data = json.loads(manifest_p.read_text(encoding="utf-8"))
                 s_data = json.loads(summary_p.read_text(encoding="utf-8"))
+
                 run_id_match = bool(m_data.get("run_id") and m_data.get("run_id") == s_data.get("run_id"))
                 parent_sha_ok = bool(s_data.get("parent_checkpoint_sha256") == EXPECTED_FROZEN_SHA256)
+                steps_requested_ok = bool(s_data.get("qualification_steps_requested") == 1000)
                 steps_ok = bool(
                     s_data.get("start_global_step") == 25000 and
                     s_data.get("final_global_step") == 26000 and
-                    s_data.get("qualification_steps_completed") == 1000
+                    s_data.get("qualification_steps_completed") == 1000 and
+                    steps_requested_ok
                 )
                 updates_attempted = s_data.get("optimizer_updates_attempted", 0)
                 updates_completed = s_data.get("optimizer_updates_completed", 0)
-                updates_ok = bool(updates_attempted > 0 and updates_completed == updates_attempted)
+                finite_gradient_updates = s_data.get("finite_gradient_updates", 0)
+                non_finite_gradient_updates = s_data.get("non_finite_gradient_updates", 0)
+
+                updates_ok = bool(
+                    updates_attempted > 0 and
+                    updates_completed == updates_attempted and
+                    finite_gradient_updates == updates_completed and
+                    non_finite_gradient_updates == 0
+                )
                 skips_zero = bool(
                     s_data.get("skipped_nan", -1) == 0 and
                     s_data.get("skipped_assertion", -1) == 0 and
@@ -361,25 +382,32 @@ class ReadinessGateEvaluator:
                     s_data.get("other_update_failures", -1) == 0 and
                     s_data.get("validation_failures", -1) == 0
                 )
-                finite_grads = bool(s_data.get("finite_gradients") is True)
+                finite_grads = bool(s_data.get("finite_gradients") is True and finite_gradient_updates > 0)
                 timestamps_ok = bool(
                     s_data.get("qualification_started_at_utc") and
                     s_data.get("qualification_completed_at_utc") and
-                    s_data.get("qualification_completed_at_utc") >= s_data.get("qualification_started_at_utc")
+                    s_data.get("summary_generated_at_utc") and
+                    s_data.get("qualification_completed_at_utc") >= s_data.get("qualification_started_at_utc") and
+                    s_data.get("summary_generated_at_utc") >= s_data.get("qualification_started_at_utc")
                 )
                 quarantine_isolated = ("quarantine" in s_data.get("checkpoint_output_dir", "").lower())
+
+                git_match = bool(cur_git_head != "unknown" and s_data.get("git_commit_sha") == cur_git_head)
+                t_cfg_match = bool(cur_t_cfg_sha and s_data.get("training_config_sha256") == cur_t_cfg_sha)
+                m_cfg_match = bool(cur_m_cfg_sha and s_data.get("model_config_sha256") == cur_m_cfg_sha)
 
                 q_pass = bool(
                     run_id_match and parent_sha_ok and steps_ok and
                     updates_ok and skips_zero and finite_grads and
-                    timestamps_ok and quarantine_isolated
+                    timestamps_ok and quarantine_isolated and
+                    git_match and t_cfg_match and m_cfg_match
                 )
                 detail = (
                     f"run_id={m_data.get('run_id', '')[:8]}... "
                     f"steps={s_data.get('qualification_steps_completed')}/1000 "
                     f"updates={updates_completed}/{updates_attempted} "
-                    f"skips_zero={skips_zero} "
-                    f"quarantine={quarantine_isolated}"
+                    f"finite_grads={finite_gradient_updates}/{updates_completed} "
+                    f"git_match={git_match} configs_match={t_cfg_match and m_cfg_match}"
                 )
                 self.log_gate("LOCAL", "QUALIFICATION_EVIDENCE_FRESHNESS", q_pass, detail)
             except Exception as e:

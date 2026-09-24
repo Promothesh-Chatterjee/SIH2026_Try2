@@ -679,8 +679,8 @@ class CognitiveRFScanEnv(gym.Env):
                     if p.target_band == band and p.confidence >= 0.4:
                         is_predicted_band = True
                         break
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Predictor query failed in step: %s", exc)
 
         # --- Mode semantics beyond dwell length (Phase 5) --------------------
         # REVISIT prioritizes a previously observed / overdue band: re-confirm it
@@ -1160,7 +1160,8 @@ class CognitiveRFScanEnv(gym.Env):
                 current_time_us=float(current_time_us),
                 horizon_us=float(max(horizon_us * 2.0, self.base_dwell_time_us * 4.0)),
             )
-        except Exception:
+        except Exception as exc:
+            logger.debug("Periodic interceptor schedule lookup failed: %s", exc)
             return None
         for entry in schedule:
             if int(entry.get("expected_band", -1)) == int(band):

@@ -320,6 +320,7 @@ class PredictBandsResponse(BaseModel):
     predicted_intercept_time_us: float = Field(..., description="DRQN aux prediction: expected time-to-intercept (µs)")
     attribution: dict[str, Any] = Field(..., description="Real attribution: eager_pct / revisit_pct and mode semantics when available")
     latency_ms: float = Field(..., description="Inference latency in ms")
+    server_inference_latency_ms: float = Field(..., description="Server-side inference execution latency in ms")
 
 
 class DeinterleaveRequest(BaseModel):
@@ -1890,6 +1891,7 @@ def predict_bands(req: PredictBandsRequest, request: Request = None) -> PredictB
         predicted_intercept_time_us=pred_time_us,
         attribution=attribution,
         latency_ms=latency,
+        server_inference_latency_ms=latency,
     )
 
 

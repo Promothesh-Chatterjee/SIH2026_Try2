@@ -300,16 +300,34 @@ def _do_drqn_update(
         aux_loss = bce + huber
         loss = loss + aux_coef * aux_loss
 
+    if stats is not None:
+        stats["optimizer_update_attempted"] = True
+
     optimizer.zero_grad()
     loss.backward()
+
+    # Refinement 2: Inspect EVERY parameter gradient before clipping & before optimizer.step()
+    all_finite_grads = True
+    for p in online_drqn.parameters():
+        if p.grad is not None:
+            if not torch.all(torch.isfinite(p.grad)):
+                all_finite_grads = False
+                break
+    if stats is not None:
+        stats["finite_gradients"] = all_finite_grads
+
     pre_clip_grad_norm = torch.nn.utils.clip_grad_norm_(online_drqn.parameters(), 1.0)
     pre_gn = float(pre_clip_grad_norm.item()) if torch.is_tensor(pre_clip_grad_norm) else float(pre_clip_grad_norm)
-    if not (np.isfinite(pre_gn) and np.isfinite(float(loss.item()))):
+    if not (all_finite_grads and np.isfinite(pre_gn) and np.isfinite(float(loss.item()))):
         optimizer.zero_grad()
         if stats is not None:
             stats["skipped_nan"] = True
+            stats["finite_gradients"] = False
         return float("nan")
+
     optimizer.step()
+    if stats is not None:
+        stats["optimizer_update_completed"] = True
     if stats is not None:
         loss_mask_t = loss_mask
         qm = q_all[loss_mask_t].detach()
@@ -966,6 +984,8 @@ def train_scheduler(
         "skipped_oom": 0,
         "other_update_failures": 0,
         "validation_failures": 0,
+        "finite_gradient_updates": 0,
+        "non_finite_gradient_updates": 0,
         # Backward compatibility aliases:
         "n_updates_attempted": 0,
         "n_updates_completed": 0,
@@ -1034,8 +1054,8 @@ def train_scheduler(
             if hasattr(moe, "set_periodic_urgency_vector") and getattr(env, "belief", None) is not None:
                 try:
                     moe.set_periodic_urgency_vector(np.asarray(env.belief.periodic_urgency, dtype=np.float32))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Failed to set periodic urgency vector on MoE: %s", exc)
             rel_step = max(0, global_step - start_step) if is_baseline_restart else global_step
             if override_epsilon is not None:
                 eps = float(override_epsilon)
@@ -1222,8 +1242,6 @@ def train_scheduler(
 
             # ---- Learning update ----
             if global_step % update_freq == 0 and buffer.can_sample(batch_size):
-                update_integrity_counters["optimizer_updates_attempted"] += 1
-                update_integrity_counters["n_updates_attempted"] += 1
                 lr_schedule = sched_cfg.get("lr_schedule")
                 if lr_schedule == "cosine":
                     total_train_steps = max(1, total_steps - start_step)
@@ -1253,13 +1271,21 @@ def train_scheduler(
                         n_bands=n_bands,
                         n_modes=n_modes,
                     )
+                    if upd_stats.get("optimizer_update_attempted", False):
+                        update_integrity_counters["optimizer_updates_attempted"] += 1
+                        update_integrity_counters["n_updates_attempted"] += 1
+                        if upd_stats.get("finite_gradients", False):
+                            update_integrity_counters["finite_gradient_updates"] += 1
+                        else:
+                            update_integrity_counters["non_finite_gradient_updates"] += 1
+
                     if not np.isfinite(loss_val) or upd_stats.get("skipped_nan", False):
                         update_integrity_counters["skipped_nan"] += 1
                         update_integrity_counters["n_updates_skipped_nan"] += 1
                         logger.error("DRQN update skipped due to NaN loss/gradient (step %d)", global_step)
                         if not diagnostic:
                             raise RuntimeError(f"Fail-closed update failure (NaN/Inf loss or gradient) at step {global_step}")
-                    else:
+                    elif upd_stats.get("optimizer_update_completed", False):
                         update_integrity_counters["optimizer_updates_completed"] += 1
                         update_integrity_counters["n_updates_completed"] += 1
                         consecutive_ooms = 0
@@ -1823,6 +1849,62 @@ def train_scheduler(
             logger.info("Reached stop_at_step=%d — concluding training run", stop_at_step)
             break
 
+    # Phase 2 & Phase 22 Integrity Check: ASSERT FIRST BEFORE SAVING FINAL CHECKPOINT
+    if qualification_run:
+        qualification_completed_at_utc = datetime.now(timezone.utc).isoformat()
+        summary_generated_at_utc = qualification_completed_at_utc
+
+        if update_integrity_counters["optimizer_updates_attempted"] <= 0:
+            raise RuntimeError("QUALIFICATION FAILED: Zero optimizer updates attempted!")
+        if update_integrity_counters["optimizer_updates_completed"] != update_integrity_counters["optimizer_updates_attempted"]:
+            raise RuntimeError(
+                f"QUALIFICATION FAILED: updates completed ({update_integrity_counters['optimizer_updates_completed']}) "
+                f"!= attempted ({update_integrity_counters['optimizer_updates_attempted']})"
+            )
+        if update_integrity_counters["non_finite_gradient_updates"] > 0:
+            raise RuntimeError(
+                f"QUALIFICATION FAILED: {update_integrity_counters['non_finite_gradient_updates']} non-finite gradient updates detected!"
+            )
+        if update_integrity_counters["finite_gradient_updates"] != update_integrity_counters["optimizer_updates_completed"]:
+            raise RuntimeError(
+                f"QUALIFICATION FAILED: finite gradient updates ({update_integrity_counters['finite_gradient_updates']}) "
+                f"!= completed ({update_integrity_counters['optimizer_updates_completed']})"
+            )
+        if (update_integrity_counters["skipped_nan"] > 0 or
+            update_integrity_counters["skipped_assertion"] > 0 or
+            update_integrity_counters["skipped_oom"] > 0 or
+            update_integrity_counters["other_update_failures"] > 0 or
+            update_integrity_counters["validation_failures"] > 0):
+            raise RuntimeError(
+                f"QUALIFICATION FAILED: Non-zero update/validation skips in qualification run: {update_integrity_counters}"
+            )
+
+        # Checkpoint promotion prohibition assertion
+        prod_frozen_path = Path("experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt")
+        if prod_frozen_path.exists():
+            with open(prod_frozen_path, "rb") as f:
+                cur_frozen_sha = hashlib.sha256(f.read()).hexdigest()
+            if cur_frozen_sha != FROZEN_25K_SHA:
+                raise RuntimeError(
+                    f"QUALIFICATION FAILED: Production Gate-25k frozen checkpoint was modified! "
+                    f"Expected {FROZEN_25K_SHA}, got {cur_frozen_sha}"
+                )
+    elif not diagnostic:
+        if update_integrity_counters["optimizer_updates_completed"] != update_integrity_counters["optimizer_updates_attempted"]:
+            raise RuntimeError(
+                f"TRAINING INTEGRITY VIOLATION: updates completed ({update_integrity_counters['optimizer_updates_completed']}) "
+                f"!= attempted ({update_integrity_counters['optimizer_updates_attempted']})"
+            )
+        if (update_integrity_counters["skipped_nan"] > 0 or
+            update_integrity_counters["skipped_assertion"] > 0 or
+            update_integrity_counters["skipped_oom"] > 0 or
+            update_integrity_counters["other_update_failures"] > 0 or
+            update_integrity_counters["validation_failures"] > 0):
+            raise RuntimeError(
+                f"TRAINING INTEGRITY VIOLATION: Non-zero update/validation skips in production run: {update_integrity_counters}"
+            )
+
+    # Integrity assertions passed: now save final checkpoint and metadata
     final_ckpt_name = f"checkpoint_phase11_step_{global_step}.pt" if "phase11" in str(output_dir).lower() else "final.pt"
     final_path = output_dir / final_ckpt_name
     from ..utils.checkpoint_meta import build_train_metadata, save_state, write_checkpoint_metadata
@@ -1882,38 +1964,7 @@ def train_scheduler(
     telemetry.update(step=global_step, episode=episode, type="done",
                      best_reward=float(best_reward), telemetry_schema_version=TELEMETRY_SCHEMA_VERSION)
 
-    # Phase 2 & Phase 22 Integrity Check and Qualification Evidence Emission
     if qualification_run:
-        qualification_completed_at_utc = datetime.now(timezone.utc).isoformat()
-        summary_generated_at_utc = qualification_completed_at_utc
-
-        if update_integrity_counters["optimizer_updates_attempted"] <= 0:
-            raise RuntimeError("QUALIFICATION FAILED: Zero optimizer updates attempted!")
-        if update_integrity_counters["optimizer_updates_completed"] != update_integrity_counters["optimizer_updates_attempted"]:
-            raise RuntimeError(
-                f"QUALIFICATION FAILED: updates completed ({update_integrity_counters['optimizer_updates_completed']}) "
-                f"!= attempted ({update_integrity_counters['optimizer_updates_attempted']})"
-            )
-        if (update_integrity_counters["skipped_nan"] > 0 or
-            update_integrity_counters["skipped_assertion"] > 0 or
-            update_integrity_counters["skipped_oom"] > 0 or
-            update_integrity_counters["other_update_failures"] > 0 or
-            update_integrity_counters["validation_failures"] > 0):
-            raise RuntimeError(
-                f"QUALIFICATION FAILED: Non-zero update/validation skips in qualification run: {update_integrity_counters}"
-            )
-
-        # Checkpoint promotion prohibition assertion
-        prod_frozen_path = Path("experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt")
-        if prod_frozen_path.exists():
-            with open(prod_frozen_path, "rb") as f:
-                cur_frozen_sha = hashlib.sha256(f.read()).hexdigest()
-            if cur_frozen_sha != FROZEN_25K_SHA:
-                raise RuntimeError(
-                    f"QUALIFICATION FAILED: Production Gate-25k frozen checkpoint was modified! "
-                    f"Expected {FROZEN_25K_SHA}, got {cur_frozen_sha}"
-                )
-
         q_summary = {
             "run_id": run_id,
             "git_commit_sha": git_commit_sha,
@@ -1928,12 +1979,18 @@ def train_scheduler(
             "qualification_steps_completed": global_step - int(q_manifest["start_global_step"]),
             "optimizer_updates_attempted": update_integrity_counters["optimizer_updates_attempted"],
             "optimizer_updates_completed": update_integrity_counters["optimizer_updates_completed"],
+            "finite_gradient_updates": update_integrity_counters["finite_gradient_updates"],
+            "non_finite_gradient_updates": update_integrity_counters["non_finite_gradient_updates"],
             "skipped_nan": update_integrity_counters["skipped_nan"],
             "skipped_assertion": update_integrity_counters["skipped_assertion"],
             "skipped_oom": update_integrity_counters["skipped_oom"],
             "other_update_failures": update_integrity_counters["other_update_failures"],
             "validation_failures": update_integrity_counters["validation_failures"],
-            "finite_gradients": True,
+            "finite_gradients": (
+                update_integrity_counters["finite_gradient_updates"] > 0
+                and update_integrity_counters["non_finite_gradient_updates"] == 0
+                and update_integrity_counters["finite_gradient_updates"] == update_integrity_counters["optimizer_updates_completed"]
+            ),
             "checkpoint_output_dir": str(output_dir.resolve()),
             "qualification_started_at_utc": qualification_started_at_utc,
             "qualification_completed_at_utc": qualification_completed_at_utc,
@@ -1942,20 +1999,6 @@ def train_scheduler(
         summary_path = output_dir / "qualification_run_summary.json"
         summary_path.write_text(json.dumps(q_summary, indent=2), encoding="utf-8")
         logger.info("QUALIFICATION SUCCESS: Emitted qualification run summary to %s", summary_path)
-    elif not diagnostic:
-        if update_integrity_counters["optimizer_updates_completed"] != update_integrity_counters["optimizer_updates_attempted"]:
-            raise RuntimeError(
-                f"TRAINING INTEGRITY VIOLATION: updates completed ({update_integrity_counters['optimizer_updates_completed']}) "
-                f"!= attempted ({update_integrity_counters['optimizer_updates_attempted']})"
-            )
-        if (update_integrity_counters["skipped_nan"] > 0 or
-            update_integrity_counters["skipped_assertion"] > 0 or
-            update_integrity_counters["skipped_oom"] > 0 or
-            update_integrity_counters["other_update_failures"] > 0 or
-            update_integrity_counters["validation_failures"] > 0):
-            raise RuntimeError(
-                f"TRAINING INTEGRITY VIOLATION: Non-zero update/validation skips in production run: {update_integrity_counters}"
-            )
 
     if use_wandb:
         try:

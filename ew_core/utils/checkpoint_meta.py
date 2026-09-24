@@ -10,6 +10,7 @@ loaders already unwrap a nested ``state_dict``.
 from __future__ import annotations
 
 import datetime
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -18,6 +19,8 @@ from typing import Any
 import torch
 
 from ..contracts import FEATURE_ORDER as _FEATURE_ORDER
+
+logger = logging.getLogger(__name__)
 
 # Backward-compatible list export for checkpoint metadata callers.
 FEATURE_ORDER = list(_FEATURE_ORDER)
@@ -35,8 +38,8 @@ def current_git_revision() -> str:
         )
         if out.returncode == 0 and out.stdout.strip():
             return out.stdout.strip()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Failed getting git revision: %s", exc)
     return "unknown"
 
 

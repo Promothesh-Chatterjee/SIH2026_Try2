@@ -96,8 +96,8 @@ class SmartScanMoE(nn.Module):
             obs_b = obs_b.to(self.device)
             try:
                 self.drqn.to(self.device)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("self.drqn.to(self.device) failed: %s", exc)
             hx = hidden if hidden is not None else self.hidden
             with torch.inference_mode():
                 q, _aux, h = self.drqn(obs_b, hx)

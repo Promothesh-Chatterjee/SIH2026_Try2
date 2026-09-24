@@ -2,14 +2,14 @@
 
 ## Authoritative Benchmark Identification
 - **Path**: `reports/benchmark_results.json`
-- **Benchmark Artifact SHA-256**: `9b33380989171272143244280efe8e4db3d668c95461a2fa3c9111d20ec683fa`
+- **Benchmark Artifact SHA-256**: `b5267892d4f837d9eeaaeee4c5adaccce5219836d21ee30f59afad0aa5dcece9`
 - **Schema Version**: `2026.1-CANONICAL`
 - **Evaluator**: `eval_batch.py/v2.0-audited`
 - **Metric Contract Version**: `v2.0-audited-confusion-matrix`
 - **Status**: `AUTHORITATIVE`
 
 ## Git Provenance Flow (Corrected Contract)
-- **Source Code Revision Evaluated (`source_git_commit`)**: `c5a23fadcf8edbffc3be006b75d8e258ddbb6964`
+- **Source Code Revision Evaluated (`source_git_commit`)**: `d7a9f1fb46f4b28dced68ac109bc1ef015bc175b`
   - *This represents the exact source tree tested with a clean git working directory.*
 - **Artifact Storage Commit (`artifact_commit`)**: Commit that stores this generated benchmark artifact and report.
 - **Model Checkpoint (`checkpoint_sha256`)**: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`

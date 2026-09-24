@@ -1825,8 +1825,8 @@ def generate_dataset_report(
                     amp_min = min(amp_min, float(np.min(amps)))
                     amp_max = max(amp_max, float(np.max(amps)))
                     noise_count += int(np.sum(labels == -1))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed parsing sample stats for %s: %s", fp, exc)
 
         return pulses, emitters, duration
 

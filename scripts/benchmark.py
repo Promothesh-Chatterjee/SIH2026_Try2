@@ -69,24 +69,22 @@ CANONICAL_SCENARIOS = [
 ]
 
 DEFAULT_CHECKPOINT = "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"
-FALLBACK_CHECKPOINTS = [
-    "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt",
-    "experiments/checkpoints/scheduler/checkpoint_gate_25000_frozen.pt",
-]
+FROZEN_25K_SHA = "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
 
 
 def resolve_checkpoint(path: str | None) -> Path:
-    """Resolve checkpoint file with fallback options."""
-    if path and Path(path).exists():
-        return Path(path)
-    if Path(DEFAULT_CHECKPOINT).exists():
-        return Path(DEFAULT_CHECKPOINT)
-    for fb in FALLBACK_CHECKPOINTS:
-        if Path(fb).exists():
-            return Path(fb)
-    raise FileNotFoundError(
-        f"Could not locate valid checkpoint. Checked: {path}, {DEFAULT_CHECKPOINT}, {FALLBACK_CHECKPOINTS}"
-    )
+    """Strictly resolve requested checkpoint file without silent fallback paths."""
+    ckpt_path = Path(path) if path else Path(DEFAULT_CHECKPOINT)
+    if not ckpt_path.exists():
+        raise FileNotFoundError(f"Requested benchmark checkpoint not found: {ckpt_path}")
+    import hashlib
+    actual_sha = hashlib.sha256(ckpt_path.read_bytes()).hexdigest()
+    if ckpt_path.name == "checkpoint_gate_25000_frozen.pt" or "gate_25000" in ckpt_path.name:
+        if actual_sha != FROZEN_25K_SHA:
+            raise ValueError(
+                f"Checkpoint SHA mismatch for {ckpt_path}! Expected {FROZEN_25K_SHA}, got {actual_sha}"
+            )
+    return ckpt_path
 
 
 def load_smartscan_moe(
@@ -231,21 +229,41 @@ def run_benchmark(
 
     ckpt_sha = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
 
+    # Assert canonical runtime receiver settings
+    from ew_core.environment.receiver_model import (
+        RECEIVER_SENSITIVITY_DBM,
+        CFAR_FALSE_ALARM_PROB,
+        CFAR_GUARD_CELLS,
+        CFAR_REFERENCE_CELLS,
+    )
+    if abs(RECEIVER_SENSITIVITY_DBM - (-110.0)) > 1e-3:
+        raise ValueError(f"Receiver sensitivity contract violation: {RECEIVER_SENSITIVITY_DBM} != -110.0 dBm")
+    if CFAR_GUARD_CELLS != 2:
+        raise ValueError(f"CFAR guard cells contract violation: {CFAR_GUARD_CELLS} != 2")
+    if CFAR_REFERENCE_CELLS != 8:
+        raise ValueError(f"CFAR reference cells contract violation: {CFAR_REFERENCE_CELLS} != 8")
+    if abs(CFAR_FALSE_ALARM_PROB - 0.001) > 1e-6:
+        raise ValueError(f"CFAR Pfa contract violation: {CFAR_FALSE_ALARM_PROB} != 0.001")
+
     # Compute dataset fingerprint across scenarios
     val_dir = Path(tsrd_root) / "stare" / "val_stare"
     if not val_dir.exists():
         val_dir = Path(tsrd_root) / "val"
+    if not val_dir.exists():
+        raise FileNotFoundError(f"Validation dataset directory not found: {val_dir}")
+
     hasher = hashlib.sha256()
     scenario_hashes: Dict[str, str] = {}
     for sid in scens:
         h5_f = val_dir / f"{sid}.h5"
-        if h5_f.exists():
-            f_hash = hashlib.sha256(h5_f.read_bytes()).hexdigest()
-            scenario_hashes[sid] = f_hash
-            hasher.update(f_hash.encode())
-        else:
-            scenario_hashes[sid] = f"synthetic_seed_{seed}"
-            hasher.update(f"synthetic_{sid}".encode())
+        if not h5_f.exists():
+            raise FileNotFoundError(
+                f"Canonical benchmark requires real TSRD scenario file: {h5_f} not found! "
+                f"Synthetic fallback substitution is strictly prohibited."
+            )
+        f_hash = hashlib.sha256(h5_f.read_bytes()).hexdigest()
+        scenario_hashes[sid] = f_hash
+        hasher.update(f_hash.encode())
     dataset_fingerprint = hasher.hexdigest()
 
     benchmark_payload: Dict[str, Any] = {

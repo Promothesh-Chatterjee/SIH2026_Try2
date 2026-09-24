@@ -27,8 +27,6 @@ DEFAULT_IBW_MHZ = 500.0      # MHz — instantaneous bandwidth per band (from co
 DEFAULT_PROCESSING_GAIN_DB = 39.0  # dB — channelized detection processing gain (yields ~-110 dBm)
 CFAR_GUARD_CELLS = 2
 CFAR_REFERENCE_CELLS = 8
-CFAR_GUARD_CELLS = 2
-CFAR_REFERENCE_CELLS = 8
 CFAR_FALSE_ALARM_PROB = 1e-3  # Authoritative Pfa target for CFAR threshold (reconciled with benchmark_stage3.yaml)
 
 
@@ -63,6 +61,9 @@ def compute_sensitivity_dbm(
     # Convert to dBm and add noise figure + SNR threshold - processing gain
     sensitivity_dbm = noise_floor_dbw + 30.0 + noise_figure_db + snr_min_db - processing_gain_db
     return float(sensitivity_dbm)
+
+
+RECEIVER_SENSITIVITY_DBM: float = float(round(compute_sensitivity_dbm(), 1))  # -110.0 dBm
 
 
 def compute_band_sensitivities(

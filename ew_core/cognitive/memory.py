@@ -134,8 +134,8 @@ class SemanticMemory:
                 )
                 self.write_emitter(prof)
                 return
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Could not write emitter from kwargs: %s", exc)
         # fallback: if EmitterProfile passed
         if args and isinstance(args[0], EmitterProfile):
             self.write_emitter(args[0])
@@ -250,8 +250,8 @@ class SemanticMemory:
         """Close DB connection."""
         try:
             self.conn.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("DB connection close failed: %s", exc)
 
 
 class EpisodicMemory:

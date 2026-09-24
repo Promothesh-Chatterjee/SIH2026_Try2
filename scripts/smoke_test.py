@@ -101,13 +101,27 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
         MEASURED_COUNT = 20
 
         print(f"  Executing {WARMUP_COUNT} warmup requests...")
-        for _ in range(WARMUP_COUNT):
+        warmup_ok = True
+        warmup_err = ""
+        for w_idx in range(WARMUP_COUNT):
             try:
-                requests.post(f"{api_url}/predict_bands",
-                              json={"obs": [0.0]*360, "policy_mode": "operational"},
-                              headers=headers, timeout=30)
-            except Exception:
-                pass
+                wr = requests.post(
+                    f"{api_url}/predict_bands",
+                    json={"obs": [0.0] * 360, "policy_mode": "operational"},
+                    headers=headers,
+                    timeout=30,
+                )
+                if wr.status_code != 200:
+                    warmup_ok = False
+                    warmup_err = f"warmup request {w_idx + 1} returned HTTP {wr.status_code}"
+                    break
+            except Exception as e:
+                warmup_ok = False
+                warmup_err = f"warmup request {w_idx + 1} raised: {e}"
+                break
+
+        if not check(f"All {WARMUP_COUNT} warmup requests succeeded", warmup_ok, warmup_err):
+            failures.append("warmup_failure")
 
         print(f"  Measuring {MEASURED_COUNT} inference round-trips...")
         api_latencies_ms = []
@@ -118,9 +132,12 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
 
         for i in range(MEASURED_COUNT):
             t0 = time.perf_counter()
-            r = requests.post(f"{api_url}/predict_bands",
-                              json={"obs": [0.0]*360, "policy_mode": "operational"},
-                              headers=headers, timeout=30)
+            r = requests.post(
+                f"{api_url}/predict_bands",
+                json={"obs": [0.0] * 360, "policy_mode": "operational"},
+                headers=headers,
+                timeout=30,
+            )
             t1 = time.perf_counter()
             dt_ms = (t1 - t0) * 1000.0
             api_latencies_ms.append(dt_ms)
@@ -136,10 +153,12 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
 
             # Telemetry integrity: server inference latency
             server_inf_time = None
-            if "inference_time_ms" in data:
-                server_inf_time = float(data["inference_time_ms"])
+            if "server_inference_latency_ms" in data:
+                server_inf_time = float(data["server_inference_latency_ms"])
             elif "latency_ms" in data:
                 server_inf_time = float(data["latency_ms"])
+            elif "inference_time_ms" in data:
+                server_inf_time = float(data["inference_time_ms"])
             elif "X-Inference-Time-Ms" in r.headers:
                 server_inf_time = float(r.headers["X-Inference-Time-Ms"])
 
@@ -171,13 +190,25 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
             if not check("API Round-Trip p95 < 500ms (Deployment SLA)", lat_p95 < 500.0, f"p95={lat_p95:.1f}ms"):
                 failures.append("inference_latency_p95_sla")
 
-            if server_latencies_ms:
+            if not check(
+                "Server inference latency telemetry present across all measured samples",
+                len(server_latencies_ms) == MEASURED_COUNT,
+                f"received {len(server_latencies_ms)}/{MEASURED_COUNT}",
+            ):
+                failures.append("server_telemetry_missing")
+            else:
                 srv_arr = np.array(server_latencies_ms, dtype=np.float64)
                 srv_med = float(np.median(srv_arr))
-                srv_ok = bool(np.all(np.isfinite(srv_arr)) and np.all(srv_arr > 0) and srv_med < lat_median)
-                check("Server Inference Monotonic Telemetry Integrity", srv_ok, f"server_median={srv_med:.2f}ms")
-            else:
-                print("    ℹ️  Server inference duration header/field not populated in API response payload (informational)")
+                srv_finite = bool(np.all(np.isfinite(srv_arr)))
+                srv_positive = bool(np.all(srv_arr > 0))
+                srv_lt_api = bool(srv_med < lat_median)
+                srv_ok = srv_finite and srv_positive and srv_lt_api
+                if not check(
+                    "Server Inference Monotonic Telemetry Integrity (finite, >0, server_median < api_median)",
+                    srv_ok,
+                    f"server_median={srv_med:.2f}ms vs api_median={lat_median:.2f}ms",
+                ):
+                    failures.append("server_telemetry_integrity")
     except Exception as e:
         check("/predict_bands reachable and testable", False, str(e))
         failures.append("inference_unreachable")

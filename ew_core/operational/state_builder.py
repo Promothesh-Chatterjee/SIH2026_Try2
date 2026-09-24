@@ -186,8 +186,8 @@ class OperationalStateBuilder:
                         try:
                             sp = spatial_tracker.get_spatial_priority(tid, current_time_us)
                             prios.append(float(sp))
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug("spatial_tracker priority query failed: %s", exc)
                 if prios:
                     spatial_priorities[b] = float(np.max(prios))
 
