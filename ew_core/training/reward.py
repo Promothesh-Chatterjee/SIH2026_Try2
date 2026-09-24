@@ -404,7 +404,9 @@ def receiver_reward_components_v2(
     novel_emitter: bool = False,
     had_any_opportunity: bool = False,
     selected_active: bool | None = None,
+    selected_band_active: bool | None = None,
     detected: bool | None = None,
+    hit: bool | None = None,
     other_bands_active: bool | None = None,
     false_detection: bool | None = None,
     intercept_time_us: float | None = None,
@@ -447,9 +449,11 @@ def receiver_reward_components_v2(
       - "dwell_cost_normalized": dwell_norm is fixed to 1.0, eliminating the 2.5x penalty on unintercepted long dwells.
       - "time_normalized": scales the total reward by (500.0 / dwell_us) to represent reward per standard time slot.
     """
-    is_sel_active = bool(selected_active if selected_active is not None else ground_truth_active)
+    sel_active_candidate = selected_active if selected_active is not None else selected_band_active
+    is_sel_active = bool(sel_active_candidate if sel_active_candidate is not None else _extra.get("selected_band_active", ground_truth_active))
     detections = getattr(observation, "detections", []) if observation is not None else []
-    is_detected = bool(detected if detected is not None else (len(detections) > 0))
+    hit_flag = hit if hit is not None else _extra.get("hit", None)
+    is_detected = bool(detected if detected is not None else (hit_flag if hit_flag is not None else (len(detections) > 0)))
     dwell_us = max(0.0, float(getattr(observation, "dwell_time_us", 500.0))) if observation is not None else 500.0
 
     if reward_variant == "dwell_cost_normalized":
@@ -512,9 +516,24 @@ def receiver_reward_components_v2(
     # This is the key credit-assignment fix for the miss_rate gradient problem.
     missed_coverage_penalty = 0.0
     if not is_sel_active and other_bands_active:
-        # How many active opportunities were missed?
-        n_missed = max(0, int(getattr(belief, 'n_bands', 36)) - 1) if belief else 1
-        opportunity_scale = min(1.0, float(n_missed) / 8.0)  # saturate at 8+ active bands
+        # Use the ACTUAL number of currently active alternative bands,
+        # not the total spectrum size. This is the correct credit-assignment signal.
+        # actual_active_alternatives: count of bands that are active AND NOT selected
+        if hasattr(belief, "active_band_mask") and belief.active_band_mask is not None:
+            active_mask = np.asarray(belief.active_band_mask, dtype=bool)
+            # Exclude the currently selected band
+            if band is not None and 0 <= band < len(active_mask):
+                active_mask_copy = active_mask.copy()
+                active_mask_copy[band] = False
+                n_active_alternatives = int(active_mask_copy.sum())
+            else:
+                n_active_alternatives = int(active_mask.sum())
+        else:
+            # Fallback: use a conservative estimate of 1 active alternative
+            # (do not inflate penalty using total spectrum size)
+            n_active_alternatives = 1 if other_bands_active else 0
+
+        opportunity_scale = min(1.0, float(n_active_alternatives) / 4.0)
         missed_coverage_penalty = float(w_miss) * 0.25 * opportunity_scale
         # Scale by belief miss_rate of chosen band: if we had high miss_rate here,
         # penalise more (we should have known this band was poor)
@@ -573,6 +592,7 @@ def receiver_reward_components_v2(
     penalty_per_ms = float(penalty_total / dwell_ms)
 
     return {
+        "total": float(total),
         "reward": float(total),
         "interception_reward": float(interception_reward),
         "latency_reward": float(latency_reward),
