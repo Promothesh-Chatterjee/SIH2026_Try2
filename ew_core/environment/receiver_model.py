@@ -100,12 +100,20 @@ class CFARDetector:
         n_bands: int = 36,
         window_size: int = 64,
         pfa: float = CFAR_FALSE_ALARM_PROB,
+        guard_cells: int = CFAR_GUARD_CELLS,
+        ref_cells: int = CFAR_REFERENCE_CELLS,
     ) -> None:
         self.n_bands = int(n_bands)
         self.window_size = int(window_size)
         self.pfa = float(pfa)
+        self.guard_cells = int(guard_cells)
+        self.ref_cells = int(ref_cells)
+        if not (0.0 < self.pfa < 1.0):
+            raise ValueError(f"CFAR pfa must be in (0,1), got {self.pfa}")
+        if self.guard_cells < 0 or self.ref_cells <= 0:
+            raise ValueError(f"Invalid CFAR cells: guard={self.guard_cells}, ref={self.ref_cells}")
         # CFAR multiplier for CA-CFAR: alpha = N * (Pfa^(-1/N) - 1)
-        n_ref = CFAR_REFERENCE_CELLS * 2
+        n_ref = self.ref_cells * 2
         self.alpha = float(n_ref * (self.pfa ** (-1.0 / n_ref) - 1.0))
         self._noise_windows: list[list[float]] = [[] for _ in range(self.n_bands)]
 
@@ -130,11 +138,11 @@ class CFARDetector:
         if not (0 <= band < self.n_bands):
             return float(sensitivity_dbm)
         w = self._noise_windows[band]
-        if len(w) < CFAR_REFERENCE_CELLS * 2 + 1:
+        if len(w) < self.ref_cells * 2 + 1:
             return float(sensitivity_dbm)  # not enough history yet
         # CA-CFAR: threshold = alpha * mean(reference cells)
         noise_power_linear = np.mean(
-            [10.0 ** (p / 10.0) for p in w[-CFAR_REFERENCE_CELLS * 2:]]
+            [10.0 ** (p / 10.0) for p in w[-self.ref_cells * 2:]]
         )
         threshold_linear = self.alpha * noise_power_linear
         threshold_dbm = 10.0 * np.log10(max(threshold_linear, 1e-30))
