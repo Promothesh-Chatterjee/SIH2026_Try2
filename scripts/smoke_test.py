@@ -95,32 +95,48 @@ def run_smoke_test(api_url: str, api_key: str) -> bool:
     # --- TEST 4: Neural inference ---
     print("\n[4/6] Neural Inference (/predict_bands)")
     try:
-        # First call can be slow (model warmup). Make a warmup call first.
-        try:
-            requests.post(f"{api_url}/predict_bands",
-                          json={"obs": [0.0]*360, "policy_mode": "operational"},
-                          headers=headers, timeout=30)
-        except Exception:
-            pass
-        # Now time the real call
-        t0 = time.time()
-        r = requests.post(f"{api_url}/predict_bands",
-                          json={"obs": [0.0]*360, "policy_mode": "operational"},
-                          headers=headers, timeout=30)
-        latency_ms = (time.time() - t0) * 1000
-        ok = r.status_code == 200
-        if not check("/predict_bands HTTP 200", ok, f"got {r.status_code}"):
-            failures.append("inference")
-        if ok:
+        payload = {"obs": [0.0]*360, "policy_mode": "operational"}
+        # Warm the model before measuring. Warmup failures are deployment failures.
+        for warmup_idx in range(5):
+            r_warm = requests.post(
+                f"{api_url}/predict_bands", json=payload, headers=headers, timeout=30
+            )
+            if r_warm.status_code != 200:
+                raise RuntimeError(f"Warmup request {warmup_idx + 1}/5 failed: HTTP {r_warm.status_code}")
+
+        round_trip_latencies = []
+        server_latencies = []
+        measured_responses = []
+        for sample_idx in range(20):
+            t0 = time.perf_counter()
+            r = requests.post(f"{api_url}/predict_bands", json=payload, headers=headers, timeout=30)
+            api_latency_ms = (time.perf_counter() - t0) * 1000.0
+            if r.status_code != 200:
+                raise RuntimeError(f"Measured request {sample_idx + 1}/20 failed: HTTP {r.status_code}")
             data = r.json()
-            has_action = ("action" in data or "selected_action" in data)
-            if not check("Response has 'action' field", has_action, str(list(data.keys())[:5])):
-                failures.append("inference_missing_action")
-            if not check("Latency < 500ms (post-warmup)", latency_ms < 500, f"{latency_ms:.0f}ms"):
-                failures.append("inference_latency")
-            action = data.get("action", data.get("selected_action", -1))
-            if not check("Action in valid range [0, 179]", 0 <= action <= 179, f"action={action}"):
-                failures.append("inference_action_range")
+            round_trip_latencies.append(api_latency_ms)
+            measured_responses.append(data)
+            server_ms = data.get("server_inference_latency_ms")
+            if server_ms is not None:
+                server_latencies.append(float(server_ms))
+
+        import numpy as np
+        median_api = float(np.percentile(round_trip_latencies, 50, method="linear"))
+        p95_api = float(np.percentile(round_trip_latencies, 95, method="linear"))
+        print(f"  API round-trip latency: min={min(round_trip_latencies):.1f}ms median={median_api:.1f}ms p95={p95_api:.1f}ms max={max(round_trip_latencies):.1f}ms std={np.std(round_trip_latencies):.1f}ms")
+        if server_latencies:
+            print(f"  Server inference latency: min={min(server_latencies):.1f}ms median={np.median(server_latencies):.1f}ms p95={np.percentile(server_latencies,95,method='linear'):.1f}ms max={max(server_latencies):.1f}ms")
+        if not check("API median latency < 500ms", median_api < 500.0, f"{median_api:.1f}ms"):
+            failures.append("inference_latency_median")
+        if not check("API p95 latency < 500ms", p95_api < 500.0, f"{p95_api:.1f}ms"):
+            failures.append("inference_latency_p95")
+        data = measured_responses[-1]
+        has_action = ("action" in data or "selected_action" in data)
+        if not check("Response has 'action' field", has_action, str(list(data.keys())[:5])):
+            failures.append("inference_missing_action")
+        action = data.get("action", data.get("selected_action", -1))
+        if not check("Action in valid range [0, 179]", 0 <= action <= 179, f"action={action}"):
+            failures.append("inference_action_range")
     except Exception as e:
         check("/predict_bands reachable", False, str(e))
         failures.append("inference_unreachable")
