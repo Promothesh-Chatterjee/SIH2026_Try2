@@ -152,6 +152,33 @@ def run_agent(
     return metrics, log, truth_matrix
 
 
+def run_structural_checks() -> None:
+    """Run only structural checks (contracts, imports, configs, metrics). No checkpoint needed."""
+    print("=" * 70)
+    print("Cognitive EW SmartScan — Structural Pipeline Validation (CI Mode)")
+    print("=" * 70)
+    from ew_core.contracts import (
+        CANONICAL_OBS_DIM,
+        CANONICAL_N_BANDS,
+        CANONICAL_N_MODES,
+        CANONICAL_N_ACTIONS,
+    )
+    assert CANONICAL_OBS_DIM == 360, f"obs_dim mismatch: {CANONICAL_OBS_DIM}"
+    assert CANONICAL_N_BANDS == 36, f"n_bands mismatch: {CANONICAL_N_BANDS}"
+    assert CANONICAL_N_MODES == 5, f"n_modes mismatch: {CANONICAL_N_MODES}"
+    assert CANONICAL_N_ACTIONS == 180, f"n_actions mismatch: {CANONICAL_N_ACTIONS}"
+
+    sens = compute_sensitivity_dbm()
+    assert -130.0 <= sens <= -90.0, f"Sensitivity out of range: {sens}"
+
+    # Verify baseline sweep runs structurally
+    metrics, _ = run_baseline(n_bands=36, t_steps=50, seed=42)
+    assert metrics.n_receiver_dwells == 50
+    print(f"[OK] Contracts verified (obs_dim=360, actions=180, sensitivity={sens:.1f} dBm)")
+    print(f"[OK] Baseline simulation functional (50 dwells completed)")
+    print(">>> Structural validation SUCCESSFUL (exit code 0). <<<\n")
+
+
 def main() -> int:
     import argparse
 
@@ -162,7 +189,17 @@ def main() -> int:
         default=CANONICAL_PRODUCTION_BASELINE,
         help="Path to trained DRQN checkpoint",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--structural-only",
+        action="store_true",
+        help="Run only structural checks (no checkpoint required)",
+    )
+    args, _ = parser.parse_known_args()
+
+    if args.structural_only:
+        print("[STRUCTURAL-ONLY] Skipping checkpoint-dependent validation.")
+        run_structural_checks()
+        sys.exit(0)
 
     print("=" * 70)
     print("Cognitive EW SmartScan — Full Pipeline Validation (Phase 4)")
@@ -182,14 +219,10 @@ def main() -> int:
     ckpt_path = args.checkpoint
     print(f"\n[2/3] Loading scheduler agent from {ckpt_path} and evaluating on RF spectrum...")
     if not ckpt_path.is_file():
-        print(
-            f"\n[SKIP] Checkpoint not available at {ckpt_path}\n"
-            f"       This is expected in CI where *.pt files are gitignored.\n"
-            f"       Pipeline validation requires the checkpoint to be provisioned.\n"
-            f"       Run locally with D:/TSRD checkpoint or provision via CI artifact.\n"
-            f"       Exiting with code 0 (structural validation only).\n"
+        raise FileNotFoundError(
+            f"Strict checkpoint required for full validation: '{ckpt_path}' does not exist. "
+            f"Use --structural-only for structural-only checks."
         )
-        return 0
     agent_model = load_agent(ckpt_path, n_bands=n_bands, obs_dim=360, n_modes=5)
     agent_metrics, agent_log, truth_matrix = run_agent(
         agent_model=agent_model,
