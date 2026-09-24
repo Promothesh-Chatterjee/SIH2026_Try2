@@ -737,9 +737,17 @@ class CognitiveRFScanEnv(gym.Env):
 
         # Update CFAR noise floor estimate for this band
         if hasattr(self, "_cfar"):
-            observed_amp = [float(getattr(d, "amplitude_db", -140.0)) for d in getattr(observation, "detections", [])]
-            noise_est = max(observed_amp) if observed_amp else float(self._band_sensitivities_dbm[band])
-            self._cfar.update(band, noise_est)
+            # CFAR reference must use the noise floor, NOT detected signal amplitudes.
+            # The noise floor is estimated from the receiver's background power
+            # when NO signal is present (i.e., the minimum received power estimate).
+            # Use the receiver's estimated noise floor for this band.
+            noise_floor_estimate_dbm = float(self._band_sensitivities_dbm[band]) - 3.0
+            # The -3 dB margin accounts for measurement uncertainty around the
+            # sensitivity threshold. This is an independent background estimate,
+            # not contaminated by any detected pulse.
+            self._cfar.update(band, noise_floor_estimate_dbm)
+            # NOTE: Do NOT call cfar.update() with detection amplitudes.
+            # Detected pulses are signals, not reference noise cells.
 
         # 5. Perception pipeline: accumulate PDWs and run deinterleaving
         detections = getattr(observation, "detections", [])

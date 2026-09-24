@@ -110,7 +110,12 @@ class CFARDetector:
         self._noise_windows: list[list[float]] = [[] for _ in range(self.n_bands)]
 
     def update(self, band: int, power_dbm: float) -> None:
-        """Update noise estimate for a band with a new power observation."""
+        """Update the background noise reference for a band.
+
+        IMPORTANT: Only call this with estimated background noise power,
+        NEVER with detected signal amplitudes. Signal contamination of the
+        noise reference window will invalidate the CFAR threshold computation.
+        """
         if 0 <= band < self.n_bands:
             w = self._noise_windows[band]
             w.append(float(power_dbm))
