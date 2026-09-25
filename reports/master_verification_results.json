@@ -1,12 +1,12 @@
 {
   "orchestrator_version": "1.0.0",
-  "timestamp_utc": "2026-09-25T19:27:21Z",
+  "timestamp_utc": "2026-09-25T20:04:30Z",
   "provenance": {
     "scientific_evaluation_source_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
-    "verification_orchestrator_commit": "a4bb2debb56f8403237943f1704db5ccd8f45ada",
+    "verification_orchestrator_commit": "a7ed026a5f5894fd9238d5b81fd43d78ec7c3c38",
     "note": "scientific_evaluation_source_commit represents the git revision under which TSRD benchmark evaluations were executed. verification_orchestrator_commit represents the verifier runtime revision."
   },
-  "source_git_commit": "a4bb2debb56f8403237943f1704db5ccd8f45ada",
+  "source_git_commit": "a7ed026a5f5894fd9238d5b81fd43d78ec7c3c38",
   "total_gates": 15,
   "passed_gates": 15,
   "failed_gates": 0,
