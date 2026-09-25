@@ -122,6 +122,44 @@ class TestCheckpointContract(unittest.TestCase):
         self.assertAlmostEqual(loaded["epsilon"], 0.15)
         self.assertEqual(loaded["mode"], CheckpointMode.EXACT_CONTINUATION.value)
 
+    def test_rng_exact_reproducibility(self):
+        """Verify RNG restoration reproduces exact pseudo-random sequences."""
+        model = DummyModel()
+        torch.manual_seed(42)
+        np.random.seed(42)
+
+        # Generate a baseline value
+        expected_torch = torch.randn(5)
+        expected_np = np.random.rand(5)
+
+        # Reset seeds and save
+        torch.manual_seed(42)
+        np.random.seed(42)
+        ckpt_path = self.dir_path / "test_rng.pt"
+        save_hardened_checkpoint(
+            path=ckpt_path,
+            mode=CheckpointMode.EXACT_CONTINUATION,
+            model=model,
+        )
+
+        # Advance RNG states
+        _ = torch.randn(100)
+        _ = np.random.rand(100)
+
+        # Load and restore RNG
+        load_hardened_checkpoint(
+            path=ckpt_path,
+            expected_mode=CheckpointMode.EXACT_CONTINUATION,
+            model=model,
+            restore_rng=True,
+        )
+
+        restored_torch = torch.randn(5)
+        restored_np = np.random.rand(5)
+
+        self.assertTrue(torch.allclose(expected_torch, restored_torch))
+        self.assertTrue(np.allclose(expected_np, restored_np))
+
     def test_validate_checkpoint_healthy_and_corrupt(self):
         model = DummyModel()
         ckpt_path = self.dir_path / "valid.pt"

@@ -1,207 +1,467 @@
 {
   "experiment": "receiver_sensitivity_power_sweep_calibration",
-  "timestamp_utc": "2026-09-25T15:32:28.960578+00:00",
+  "timestamp_utc": "2026-09-25T16:52:20.819483+00:00",
   "status": "VALIDATED",
   "calibration_criteria": {
     "target_pd": 0.9,
     "target_pfa": 0.001,
-    "noise_model": "AWGN with CFAR adaptive thresholding",
-    "trials_per_power_level": 500,
-    "seed": 42
+    "noise_model": "AWGN with CA-CFAR adaptive background thresholding",
+    "trials_per_power_level": 1000,
+    "seed": 42,
+    "fine_sweep_active": true
+  },
+  "detector_pfa_verification": {
+    "noise_only_trials": 5000,
+    "false_alarms": 0,
+    "empirical_pfa": 0.0,
+    "pfa_ci_95": [
+      0.0,
+      0.000767698826032772
+    ],
+    "conforms_to_pfa_target": true
   },
   "summary": {
     "theoretical_sensitivity_floor_dbm": -110.0,
     "empirical_detection_sensitivity_dbm": -104.0,
     "margin_db": 6.0,
-    "conforms_to_specification": false,
-    "scientific_note": "Theoretical sensitivity floor S_min = -110.0 dBm is derived from Friis kTB + NF + SNR - G_p. Empirical sensitivity S_emp = -104.0 dBm is the measured signal power required for Pd >= 90% under CA-CFAR adaptive background thresholding. Both metrics are independently tracked."
+    "detector_calibration_validity": true,
+    "system_requirement_compliance": {
+      "status": "NO_FORMAL_REQUIREMENT_SPECIFIED",
+      "description": "No formal empirical sensitivity compliance threshold defined in project specification.",
+      "empirical_sensitivity_measured_dbm": -104.0
+    },
+    "scientific_note": "Theoretical sensitivity floor S_min = -110.0 dBm is derived from Friis kTB + NF + SNR - G_p. Empirical sensitivity S_emp = -104.0 dBm is the measured signal power required for Pd >= 90% under CA-CFAR adaptive background thresholding. Both metrics are independently tracked without conflating the theoretical receiver noise floor with the empirical operational sensitivity."
   },
   "power_sweep": [
     {
       "input_power_dbm": -125.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -124.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -123.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -122.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -121.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -120.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -119.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -118.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -117.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -116.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -115.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -114.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -113.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -112.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
+    },
+    {
+      "input_power_dbm": -111.5,
+      "trials": 1000,
+      "detections": 0,
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -111.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
+    },
+    {
+      "input_power_dbm": -110.5,
+      "trials": 1000,
+      "detections": 0,
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -110.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
+    },
+    {
+      "input_power_dbm": -109.5,
+      "trials": 1000,
+      "detections": 0,
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -109.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
+    },
+    {
+      "input_power_dbm": -108.5,
+      "trials": 1000,
+      "detections": 0,
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -108.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
+    },
+    {
+      "input_power_dbm": -107.5,
+      "trials": 1000,
+      "detections": 0,
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
     },
     {
       "input_power_dbm": -107.0,
-      "trials": 500,
+      "trials": 1000,
       "detections": 0,
-      "measured_pd": 0.0
+      "measured_pd": 0.0,
+      "pd_ci_95": [
+        2.168404344971009e-19,
+        0.003826742985773031
+      ]
+    },
+    {
+      "input_power_dbm": -106.5,
+      "trials": 1000,
+      "detections": 5,
+      "measured_pd": 0.005,
+      "pd_ci_95": [
+        0.002137539015826211,
+        0.011650936540089089
+      ]
     },
     {
       "input_power_dbm": -106.0,
-      "trials": 500,
-      "detections": 2,
-      "measured_pd": 0.004
+      "trials": 1000,
+      "detections": 38,
+      "measured_pd": 0.038,
+      "pd_ci_95": [
+        0.027809022096838804,
+        0.05172688842201548
+      ]
+    },
+    {
+      "input_power_dbm": -105.5,
+      "trials": 1000,
+      "detections": 140,
+      "measured_pd": 0.14,
+      "pd_ci_95": [
+        0.1198686127845999,
+        0.16288664216515672
+      ]
     },
     {
       "input_power_dbm": -105.0,
-      "trials": 500,
-      "detections": 168,
-      "measured_pd": 0.336
+      "trials": 1000,
+      "detections": 444,
+      "measured_pd": 0.444,
+      "pd_ci_95": [
+        0.4134778208425458,
+        0.47495077437186073
+      ]
+    },
+    {
+      "input_power_dbm": -104.5,
+      "trials": 1000,
+      "detections": 815,
+      "measured_pd": 0.815,
+      "pd_ci_95": [
+        0.7897439996504325,
+        0.8378451522685304
+      ]
     },
     {
       "input_power_dbm": -104.0,
-      "trials": 500,
-      "detections": 489,
-      "measured_pd": 0.978
+      "trials": 1000,
+      "detections": 978,
+      "measured_pd": 0.978,
+      "pd_ci_95": [
+        0.9669143535396397,
+        0.9854272801659613
+      ]
+    },
+    {
+      "input_power_dbm": -103.5,
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
     },
     {
       "input_power_dbm": -103.0,
-      "trials": 500,
-      "detections": 500,
-      "measured_pd": 1.0
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
+    },
+    {
+      "input_power_dbm": -102.5,
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
     },
     {
       "input_power_dbm": -102.0,
-      "trials": 500,
-      "detections": 500,
-      "measured_pd": 1.0
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
+    },
+    {
+      "input_power_dbm": -101.5,
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
     },
     {
       "input_power_dbm": -101.0,
-      "trials": 500,
-      "detections": 500,
-      "measured_pd": 1.0
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
+    },
+    {
+      "input_power_dbm": -100.5,
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
     },
     {
       "input_power_dbm": -100.0,
-      "trials": 500,
-      "detections": 500,
-      "measured_pd": 1.0
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
     },
     {
       "input_power_dbm": -99.0,
-      "trials": 500,
-      "detections": 500,
-      "measured_pd": 1.0
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
     },
     {
       "input_power_dbm": -98.0,
-      "trials": 500,
-      "detections": 500,
-      "measured_pd": 1.0
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
     },
     {
       "input_power_dbm": -97.0,
-      "trials": 500,
-      "detections": 500,
-      "measured_pd": 1.0
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
     },
     {
       "input_power_dbm": -96.0,
-      "trials": 500,
-      "detections": 500,
-      "measured_pd": 1.0
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
     },
     {
       "input_power_dbm": -95.0,
-      "trials": 500,
-      "detections": 500,
-      "measured_pd": 1.0
+      "trials": 1000,
+      "detections": 1000,
+      "measured_pd": 1.0,
+      "pd_ci_95": [
+        0.9961732570142269,
+        0.9999999999999999
+      ]
     }
   ]
 }

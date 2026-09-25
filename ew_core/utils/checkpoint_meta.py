@@ -256,6 +256,7 @@ def load_hardened_checkpoint(
         lr_state = raw.get("lr_scheduler_state_dict")
         replay_manifest = raw.get("replay_manifest")
         rng_state = raw.get("rng_state")
+        cuda_rng_state = raw.get("cuda_rng_state")
         np_rng_state = raw.get("np_rng_state")
         py_rng_state = raw.get("py_rng_state")
     elif isinstance(raw, dict):
@@ -330,6 +331,11 @@ def load_hardened_checkpoint(
                 rng_restored = True
             except Exception:
                 pass
+        if cuda_rng_state is not None and torch.cuda.is_available():
+            try:
+                torch.cuda.set_rng_state_all(cuda_rng_state)
+            except Exception as exc:
+                logger.warning("Could not restore CUDA RNG state: %s", exc)
         if np_rng_state is not None:
             try:
                 np.random.set_state(np_rng_state)

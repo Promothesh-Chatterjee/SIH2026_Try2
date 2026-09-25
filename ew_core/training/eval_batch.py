@@ -208,6 +208,8 @@ def run_evaluation(
     policy_mode: str = "operational",
     data_dir: str | Path = "D:/TSRD",
     device: str | torch.device = "cpu",
+    dataset_subset: str | None = None,
+    scenario_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Unified evaluation harness computing all 7 PS Figures of Merit.
 
@@ -220,14 +222,23 @@ def run_evaluation(
         policy_mode: 'operational' (deterministic) or 'demo' (exploratory).
         data_dir: Root dataset directory.
         device: Torch execution device for neural models.
+        dataset_subset: Optional explicit subset directory under stare (e.g. 'val_stare', 'test_stare').
+        scenario_dir: Optional explicit direct directory containing .h5 scenarios.
 
     Returns:
         Dict containing all 7 aggregate Figures of Merit and per-scenario breakdown.
     """
     dev = torch.device(device) if isinstance(device, str) else device
-    val_dir = Path(data_dir) / "stare" / "val_stare"
-    if not val_dir.exists():
-        val_dir = Path(data_dir) / "val"
+    if scenario_dir is not None:
+        target_dir = Path(scenario_dir)
+    elif dataset_subset is not None:
+        target_dir = Path(data_dir) / "stare" / dataset_subset
+        if not target_dir.exists():
+            target_dir = Path(data_dir) / dataset_subset
+    else:
+        target_dir = Path(data_dir) / "stare" / "val_stare"
+        if not target_dir.exists():
+            target_dir = Path(data_dir) / "val"
 
     if scenario_ids is None or len(scenario_ids) == 0:
         if env is not None:
@@ -242,13 +253,18 @@ def run_evaluation(
     for scen_idx, (scen_name, scen_id) in enumerate(active_scenarios):
         # 1. Resolve pulse records & environment
         if scen_id is not None:
-            candidates = [
-                val_dir / f"{scen_id}.h5",
-                Path(data_dir) / "stare" / "test_stare" / f"{scen_id}.h5",
-                Path(data_dir) / "stare" / "train_stare" / f"{scen_id}.h5",
-                Path(data_dir) / f"{scen_id}.h5",
-            ]
-            h5_path = next((p for p in candidates if p.exists()), candidates[0])
+            if scenario_dir is not None or dataset_subset is not None:
+                # Explicit routing: never guess or fall back to other split directories
+                h5_path = target_dir / f"{scen_id}.h5"
+            else:
+                candidates = [
+                    target_dir / f"{scen_id}.h5",
+                    Path(data_dir) / "stare" / "val_stare" / f"{scen_id}.h5",
+                    Path(data_dir) / "stare" / "test_stare" / f"{scen_id}.h5",
+                    Path(data_dir) / "stare" / "train_stare" / f"{scen_id}.h5",
+                    Path(data_dir) / f"{scen_id}.h5",
+                ]
+                h5_path = next((p for p in candidates if p.exists()), candidates[0])
             if h5_path.exists():
                 records = load_h5_records(
                     h5_path,

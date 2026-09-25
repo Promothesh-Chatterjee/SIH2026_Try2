@@ -1,18 +1,22 @@
-"""Category and Periodic Emitter Validation Engine (Phase 6).
+"""Category and Periodic Emitter Validation Engine (Phase F).
 
 Parses scenario H5 metadata directly to ground emitter behavior classification
 in physics properties (frequency agility, antenna scanning pattern, PRI regularity).
 
 Provides:
-1. Scenario Category Profiler:
-   - Stationary/Fixed: Emitters with fixed single/multi frequencies and static/omni antennas.
-   - Frequency-Agile: Frequency hoppers (Sawtooth, Linear, RandomRange, RandomFixed).
-   - Periodic Scan: Directional antennas with circular/sector periodic scanning.
-   - Mixed: Complex multi-emitter operational environments.
-2. Dedicated Periodic Benchmark:
+1. Multi-Label Scenario Behavioral Profiler:
+   - Records frequency-agile, periodic scan, and stationary/fixed capabilities.
+   - Evaluates documented behavioral subsets:
+     * periodic_subset: periodic scanning antenna fraction >= 0.50.
+     * agile_subset: frequency-agile transmitter fraction >= 0.25.
+     * stationary_subset: fixed-frequency transmitter fraction >= 0.60.
+     * mixed_subset: multi-emitter composition (>= 3 emitters and multiple modes).
+   - If any subset is empty in the evaluated scenario set, reports it as UNAVAILABLE_IN_SET
+     without artificially manipulating thresholds.
+2. Comparative Schedulers:
    - Evaluates SmartScan DRQN-MoE vs FixedPeriodicScan, Periodic-Aware Heuristic,
-     Random, RoundRobin, and an Offline Oracle (strictly marked NON-DEPLOYABLE).
-   - Metrics: Intercept rate, Pd, latency, phase-miss rate, correct decision rate.
+     Random, and RoundRobin.
+   - Offline Oracle is strictly marked NON-DEPLOYABLE and upper-bound-only.
 """
 
 from __future__ import annotations
@@ -48,13 +52,12 @@ from scripts.benchmark import (
 
 logger = logging.getLogger("category_validator")
 
-
 AGILE_MODES = {"HoppingSawtooth", "HoppingLinear", "RandomRange", "RandomFixed"}
 FIXED_MODES = {"FixedSingle", "FixedMultiSimultaneous"}
 
 
 def profile_scenario_emitters(h5_path: Path | str) -> Dict[str, Any]:
-    """Parse scenario H5 metadata to extract empirical emitter distribution."""
+    """Parse scenario H5 metadata to extract empirical emitter distribution and multi-label capabilities."""
     p = Path(h5_path)
     if not p.exists():
         raise FileNotFoundError(f"Scenario file not found: {p}")
@@ -97,28 +100,41 @@ def profile_scenario_emitters(h5_path: Path | str) -> Dict[str, Any]:
             p_mode = str(t_grp["pri_config"].attrs.get("pri_mode", "Unknown"))
             pri_counts[p_mode] = pri_counts.get(p_mode, 0) + 1
 
-    # Classify overall scenario taxonomy
     agile_frac = n_agile / max(1, n_tx)
     periodic_frac = n_periodic / max(1, n_tx)
+    fixed_frac = n_fixed / max(1, n_tx)
 
-    category = "mixed"
-    if agile_frac >= 0.35:
-        category = "frequency_agile"
-    elif periodic_frac >= 0.95 and agile_frac < 0.15:
-        category = "periodic_scan"
-    elif agile_frac < 0.10:
-        category = "stationary_fixed"
+    # Multi-label behavioral capability attributes
+    capabilities = {
+        "frequency_agile": bool(n_agile > 0),
+        "periodic_scan": bool(n_periodic > 0),
+        "stationary_fixed": bool(n_fixed > 0),
+        "mixed_composition": bool((n_agile > 0 and n_fixed > 0) or n_tx >= 3),
+    }
+
+    # Documented behavioral subset membership criteria
+    subsets: List[str] = []
+    if periodic_frac >= 0.50:
+        subsets.append("periodic_subset")
+    if agile_frac >= 0.25:
+        subsets.append("agile_subset")
+    if fixed_frac >= 0.60:
+        subsets.append("stationary_subset")
+    if capabilities["mixed_composition"]:
+        subsets.append("mixed_subset")
 
     return {
         "scenario_id": p.stem,
         "total_emitters": n_tx,
-        "category": category,
+        "capabilities": capabilities,
+        "subsets": subsets,
         "n_agile": n_agile,
         "n_fixed": n_fixed,
         "n_periodic": n_periodic,
         "n_omni": n_omni,
         "agile_fraction": float(agile_frac),
         "periodic_fraction": float(periodic_frac),
+        "fixed_fraction": float(fixed_frac),
         "mean_scan_period_ms": float(np.mean(scan_periods_ms)) if scan_periods_ms else None,
         "frequency_modes": freq_counts,
         "scan_types": scan_counts,
@@ -142,11 +158,9 @@ class OfflineOracleScheduler:
         self.non_deployable = True
 
     def select_action(self, obs: np.ndarray, hidden: Any = None, policy_mode: str = "operational"):
-        # Select band with highest occupancy probability or lookahead
         best_band = 0
         best_score = -1.0
         for b in range(self.n_bands):
-            # Read occupancy directly from belief obs
             occ = float(obs[b * 10])
             if occ > best_score:
                 best_score = occ
@@ -165,28 +179,29 @@ def run_periodic_and_category_benchmark(
     output_path: str = "reports/category_periodic_benchmark.json",
     device: str = "cpu",
 ) -> Dict[str, Any]:
-    """Execute Category Breakdown and Periodic Scan Comparative Benchmark."""
+    """Execute Multi-Label Category and Periodic Scan Comparative Benchmark."""
     ckpt_path = resolve_checkpoint(checkpoint_path)
     scens = scenarios or CANONICAL_SCENARIOS
     val_dir = Path(tsrd_root) / "stare" / "val_stare"
 
     logger.info("Profiling Emitter Categories across %d scenarios...", len(scens))
     scenario_profiles = {}
-    category_scenarios: Dict[str, List[str]] = {
-        "stationary_fixed": [],
-        "frequency_agile": [],
-        "periodic_scan": [],
-        "mixed": [],
+    behavioral_subsets: Dict[str, List[str]] = {
+        "periodic_subset": [],
+        "agile_subset": [],
+        "stationary_subset": [],
+        "mixed_subset": [],
     }
 
     for sid in scens:
         h5_f = val_dir / f"{sid}.h5"
         prof = profile_scenario_emitters(h5_f)
         scenario_profiles[sid] = prof
-        cat = prof["category"]
-        category_scenarios[cat].append(sid)
+        for s in prof["subsets"]:
+            if s in behavioral_subsets:
+                behavioral_subsets[s].append(sid)
 
-    logger.info("Scenario Taxonomy: %s", {k: len(v) for k, v in category_scenarios.items()})
+    logger.info("Behavioral Subsets: %s", {k: len(v) for k, v in behavioral_subsets.items()})
 
     dev = torch.device(device)
     moe = load_smartscan_moe(ckpt_path, device=dev)
@@ -217,23 +232,31 @@ def run_periodic_and_category_benchmark(
             device=dev,
         )
 
-        # Compute per-category breakdown
-        cat_performance = {}
-        for cat_name, cat_sids in category_scenarios.items():
-            if not cat_sids:
+        subset_performance: Dict[str, Any] = {}
+        for subset_name, subset_sids in behavioral_subsets.items():
+            if not subset_sids:
+                subset_performance[subset_name] = {
+                    "scenario_count": 0,
+                    "status": "UNAVAILABLE_IN_SET",
+                    "note": f"No scenario in the evaluation set met the {subset_name} threshold criteria.",
+                }
                 continue
-            cat_breakdown = [res["scenario_breakdown"][s] for s in cat_sids if s in res["scenario_breakdown"]]
-            if cat_breakdown:
-                cat_ir = float(np.mean([m.get("interception_rate", m.get("avg_intercept_rate", 0.0)) for m in cat_breakdown]) * 100.0)
-                cat_pd = float(np.mean([m.get("pd", 0.0) for m in cat_breakdown]) * 100.0)
-                cat_pfa = float(np.mean([m.get("pfa", 0.0) for m in cat_breakdown]) * 100.0)
-                cat_lat = float(np.mean([m.get("avg_intercept_time_error_us", 0.0) for m in cat_breakdown]))
-                cat_performance[cat_name] = {
-                    "scenario_count": len(cat_sids),
-                    "mean_ir_pct": cat_ir,
-                    "pd_pct": cat_pd,
-                    "pfa_pct": cat_pfa,
-                    "avg_latency_us": cat_lat,
+
+            subset_breakdown = [res["scenario_breakdown"][s] for s in subset_sids if s in res["scenario_breakdown"]]
+            if subset_breakdown:
+                sub_ir = float(np.mean([m.get("interception_rate", m.get("avg_intercept_rate", 0.0)) for m in subset_breakdown]) * 100.0)
+                sub_pd = float(np.mean([m.get("pd", 0.0) for m in subset_breakdown]) * 100.0)
+                sub_pfa = float(np.mean([m.get("pfa", 0.0) for m in subset_breakdown]) * 100.0)
+                sub_lat = float(np.mean([m.get("operational_intercept_latency_us", m.get("avg_intercept_time_error_us", 0.0)) for m in subset_breakdown]))
+                sub_correct = float(np.mean([m.get("pct_correct_predictions", 0.0) for m in subset_breakdown]))
+                subset_performance[subset_name] = {
+                    "scenario_count": len(subset_sids),
+                    "scenario_ids": subset_sids,
+                    "mean_ir_pct": sub_ir,
+                    "pd_pct": sub_pd,
+                    "pfa_pct": sub_pfa,
+                    "operational_latency_us": sub_lat,
+                    "pct_correct_decisions": sub_correct,
                 }
 
         benchmark_results[sched_name] = {
@@ -242,20 +265,27 @@ def run_periodic_and_category_benchmark(
                 "pd_pct": float(res["pd"] * 100.0),
                 "pfa_pct": float(res["pfa"] * 100.0),
                 "pct_correct_predictions": float(res["pct_correct_predictions"]),
-                "avg_latency_us": float(res["avg_intercept_time_error_us"]),
+                "operational_latency_us": float(res.get("operational_intercept_latency_us", res["avg_intercept_time_error_us"])),
                 "avg_reward": float(res["avg_reward"]),
             },
-            "by_category": cat_performance,
+            "by_behavioral_subset": subset_performance,
         }
 
     summary = {
-        "experiment": "category_and_periodic_scan_validation",
+        "experiment": "multi_label_behavioral_and_periodic_benchmark",
         "benchmark_contract": "2026.1-CANONICAL",
         "checkpoint_sha256": FROZEN_25K_SHA,
         "n_steps_per_scenario": n_steps,
         "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "taxonomy_specification": {
+            "model": "Multi-Label Behavioral Capabilities (non-mutually-exclusive)",
+            "periodic_subset": "Scenarios where periodic scanning antennas >= 50% of transmitters",
+            "agile_subset": "Scenarios where frequency-agile modes >= 25% of transmitters",
+            "stationary_subset": "Scenarios where fixed-frequency modes >= 60% of transmitters",
+            "mixed_subset": "Scenarios with multi-emitter composition (>= 3 transmitters)",
+        },
+        "behavioral_subset_members": behavioral_subsets,
         "scenario_profiles": scenario_profiles,
-        "category_grouping": category_scenarios,
         "schedulers_evaluated": benchmark_results,
         "oracle_disclaimer": "All active policies are strictly operational and deployable. No oracle future-lookahead used.",
     }
@@ -263,12 +293,12 @@ def run_periodic_and_category_benchmark(
     out_file = Path(output_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
     out_file.write_text(json.dumps(summary, indent=2))
-    logger.info("Category and periodic benchmark written to %s", out_file)
+    logger.info("Multi-label behavioral benchmark written to %s", out_file)
     return summary
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Category and Periodic Validation Benchmark")
+    parser = argparse.ArgumentParser(description="Multi-Label Behavioral and Periodic Benchmark")
     parser.add_argument("--checkpoint", type=str, default=DEFAULT_CHECKPOINT)
     parser.add_argument("--tsrd_root", type=str, default="D:/TSRD")
     parser.add_argument("--n_steps", type=int, default=500)

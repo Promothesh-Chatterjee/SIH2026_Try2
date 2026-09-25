@@ -1,20 +1,86 @@
 {
-  "experiment": "category_and_periodic_scan_validation",
+  "experiment": "multi_label_behavioral_and_periodic_benchmark",
   "benchmark_contract": "2026.1-CANONICAL",
   "checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
   "n_steps_per_scenario": 500,
-  "timestamp_utc": "2026-09-25T15:38:57.571174+00:00",
+  "timestamp_utc": "2026-09-25T16:55:38.176705+00:00",
+  "taxonomy_specification": {
+    "model": "Multi-Label Behavioral Capabilities (non-mutually-exclusive)",
+    "periodic_subset": "Scenarios where periodic scanning antennas >= 50% of transmitters",
+    "agile_subset": "Scenarios where frequency-agile modes >= 25% of transmitters",
+    "stationary_subset": "Scenarios where fixed-frequency modes >= 60% of transmitters",
+    "mixed_subset": "Scenarios with multi-emitter composition (>= 3 transmitters)"
+  },
+  "behavioral_subset_members": {
+    "periodic_subset": [
+      "config_117",
+      "config_119",
+      "config_143",
+      "config_194",
+      "config_195",
+      "config_241",
+      "config_29",
+      "config_42",
+      "config_64",
+      "config_96"
+    ],
+    "agile_subset": [
+      "config_117",
+      "config_143",
+      "config_194",
+      "config_195",
+      "config_241",
+      "config_42",
+      "config_64",
+      "config_96"
+    ],
+    "stationary_subset": [
+      "config_117",
+      "config_119",
+      "config_194",
+      "config_195",
+      "config_241",
+      "config_29",
+      "config_42",
+      "config_64",
+      "config_96"
+    ],
+    "mixed_subset": [
+      "config_117",
+      "config_119",
+      "config_143",
+      "config_194",
+      "config_195",
+      "config_241",
+      "config_29",
+      "config_42",
+      "config_64",
+      "config_96"
+    ]
+  },
   "scenario_profiles": {
     "config_117": {
       "scenario_id": "config_117",
       "total_emitters": 22,
-      "category": "frequency_agile",
+      "capabilities": {
+        "frequency_agile": true,
+        "periodic_scan": true,
+        "stationary_fixed": true,
+        "mixed_composition": true
+      },
+      "subsets": [
+        "periodic_subset",
+        "agile_subset",
+        "stationary_subset",
+        "mixed_subset"
+      ],
       "n_agile": 8,
       "n_fixed": 14,
       "n_periodic": 21,
       "n_omni": 1,
       "agile_fraction": 0.36363636363636365,
       "periodic_fraction": 0.9545454545454546,
+      "fixed_fraction": 0.6363636363636364,
       "mean_scan_period_ms": 7583.333333333333,
       "frequency_modes": {
         "FixedSingle": 13,
@@ -37,13 +103,24 @@
     "config_119": {
       "scenario_id": "config_119",
       "total_emitters": 62,
-      "category": "mixed",
+      "capabilities": {
+        "frequency_agile": true,
+        "periodic_scan": true,
+        "stationary_fixed": true,
+        "mixed_composition": true
+      },
+      "subsets": [
+        "periodic_subset",
+        "stationary_subset",
+        "mixed_subset"
+      ],
       "n_agile": 15,
       "n_fixed": 47,
       "n_periodic": 59,
       "n_omni": 3,
       "agile_fraction": 0.24193548387096775,
       "periodic_fraction": 0.9516129032258065,
+      "fixed_fraction": 0.7580645161290323,
       "mean_scan_period_ms": 21537.652633408423,
       "frequency_modes": {
         "RandomRange": 7,
@@ -68,13 +145,24 @@
     "config_143": {
       "scenario_id": "config_143",
       "total_emitters": 9,
-      "category": "frequency_agile",
+      "capabilities": {
+        "frequency_agile": true,
+        "periodic_scan": true,
+        "stationary_fixed": true,
+        "mixed_composition": true
+      },
+      "subsets": [
+        "periodic_subset",
+        "agile_subset",
+        "mixed_subset"
+      ],
       "n_agile": 4,
       "n_fixed": 5,
       "n_periodic": 9,
       "n_omni": 0,
       "agile_fraction": 0.4444444444444444,
       "periodic_fraction": 1.0,
+      "fixed_fraction": 0.5555555555555556,
       "mean_scan_period_ms": 3537.037037037037,
       "frequency_modes": {
         "FixedMultiSimultaneous": 1,
@@ -94,13 +182,25 @@
     "config_194": {
       "scenario_id": "config_194",
       "total_emitters": 66,
-      "category": "mixed",
+      "capabilities": {
+        "frequency_agile": true,
+        "periodic_scan": true,
+        "stationary_fixed": true,
+        "mixed_composition": true
+      },
+      "subsets": [
+        "periodic_subset",
+        "agile_subset",
+        "stationary_subset",
+        "mixed_subset"
+      ],
       "n_agile": 19,
       "n_fixed": 47,
       "n_periodic": 62,
       "n_omni": 4,
       "agile_fraction": 0.2878787878787879,
       "periodic_fraction": 0.9393939393939394,
+      "fixed_fraction": 0.7121212121212122,
       "mean_scan_period_ms": 27749.714406471412,
       "frequency_modes": {
         "FixedSingle": 38,
@@ -124,13 +224,25 @@
     "config_195": {
       "scenario_id": "config_195",
       "total_emitters": 65,
-      "category": "frequency_agile",
+      "capabilities": {
+        "frequency_agile": true,
+        "periodic_scan": true,
+        "stationary_fixed": true,
+        "mixed_composition": true
+      },
+      "subsets": [
+        "periodic_subset",
+        "agile_subset",
+        "stationary_subset",
+        "mixed_subset"
+      ],
       "n_agile": 23,
       "n_fixed": 42,
       "n_periodic": 63,
       "n_omni": 2,
       "agile_fraction": 0.35384615384615387,
       "periodic_fraction": 0.9692307692307692,
+      "fixed_fraction": 0.6461538461538462,
       "mean_scan_period_ms": 34318.52882253371,
       "frequency_modes": {
         "FixedSingle": 34,
@@ -155,13 +267,25 @@
     "config_241": {
       "scenario_id": "config_241",
       "total_emitters": 41,
-      "category": "mixed",
+      "capabilities": {
+        "frequency_agile": true,
+        "periodic_scan": true,
+        "stationary_fixed": true,
+        "mixed_composition": true
+      },
+      "subsets": [
+        "periodic_subset",
+        "agile_subset",
+        "stationary_subset",
+        "mixed_subset"
+      ],
       "n_agile": 13,
       "n_fixed": 28,
       "n_periodic": 41,
       "n_omni": 0,
       "agile_fraction": 0.3170731707317073,
       "periodic_fraction": 1.0,
+      "fixed_fraction": 0.6829268292682927,
       "mean_scan_period_ms": 7877.128039433677,
       "frequency_modes": {
         "RandomRange": 8,
@@ -184,13 +308,24 @@
     "config_29": {
       "scenario_id": "config_29",
       "total_emitters": 49,
-      "category": "mixed",
+      "capabilities": {
+        "frequency_agile": true,
+        "periodic_scan": true,
+        "stationary_fixed": true,
+        "mixed_composition": true
+      },
+      "subsets": [
+        "periodic_subset",
+        "stationary_subset",
+        "mixed_subset"
+      ],
       "n_agile": 11,
       "n_fixed": 38,
       "n_periodic": 47,
       "n_omni": 2,
       "agile_fraction": 0.22448979591836735,
       "periodic_fraction": 0.9591836734693877,
+      "fixed_fraction": 0.7755102040816326,
       "mean_scan_period_ms": 35455.71453774175,
       "frequency_modes": {
         "RandomRange": 2,
@@ -214,13 +349,25 @@
     "config_42": {
       "scenario_id": "config_42",
       "total_emitters": 51,
-      "category": "mixed",
+      "capabilities": {
+        "frequency_agile": true,
+        "periodic_scan": true,
+        "stationary_fixed": true,
+        "mixed_composition": true
+      },
+      "subsets": [
+        "periodic_subset",
+        "agile_subset",
+        "stationary_subset",
+        "mixed_subset"
+      ],
       "n_agile": 17,
       "n_fixed": 34,
       "n_periodic": 50,
       "n_omni": 1,
       "agile_fraction": 0.3333333333333333,
       "periodic_fraction": 0.9803921568627451,
+      "fixed_fraction": 0.6666666666666666,
       "mean_scan_period_ms": 5754.479222698242,
       "frequency_modes": {
         "FixedSingle": 26,
@@ -244,13 +391,25 @@
     "config_64": {
       "scenario_id": "config_64",
       "total_emitters": 85,
-      "category": "mixed",
+      "capabilities": {
+        "frequency_agile": true,
+        "periodic_scan": true,
+        "stationary_fixed": true,
+        "mixed_composition": true
+      },
+      "subsets": [
+        "periodic_subset",
+        "agile_subset",
+        "stationary_subset",
+        "mixed_subset"
+      ],
       "n_agile": 26,
       "n_fixed": 59,
       "n_periodic": 81,
       "n_omni": 4,
       "agile_fraction": 0.3058823529411765,
       "periodic_fraction": 0.9529411764705882,
+      "fixed_fraction": 0.6941176470588235,
       "mean_scan_period_ms": 29635.207618337998,
       "frequency_modes": {
         "FixedSingle": 57,
@@ -274,13 +433,25 @@
     "config_96": {
       "scenario_id": "config_96",
       "total_emitters": 88,
-      "category": "mixed",
+      "capabilities": {
+        "frequency_agile": true,
+        "periodic_scan": true,
+        "stationary_fixed": true,
+        "mixed_composition": true
+      },
+      "subsets": [
+        "periodic_subset",
+        "agile_subset",
+        "stationary_subset",
+        "mixed_subset"
+      ],
       "n_agile": 30,
       "n_fixed": 58,
       "n_periodic": 85,
       "n_omni": 3,
       "agile_fraction": 0.3409090909090909,
       "periodic_fraction": 0.9659090909090909,
+      "fixed_fraction": 0.6590909090909091,
       "mean_scan_period_ms": 23865.94198324628,
       "frequency_modes": {
         "FixedMultiSimultaneous": 12,
@@ -303,24 +474,6 @@
       }
     }
   },
-  "category_grouping": {
-    "stationary_fixed": [],
-    "frequency_agile": [
-      "config_117",
-      "config_143",
-      "config_195"
-    ],
-    "periodic_scan": [],
-    "mixed": [
-      "config_119",
-      "config_194",
-      "config_241",
-      "config_29",
-      "config_42",
-      "config_64",
-      "config_96"
-    ]
-  },
   "schedulers_evaluated": {
     "SmartScan_DRQN_MoE": {
       "overall": {
@@ -328,23 +481,86 @@
         "pd_pct": 94.95268138801262,
         "pfa_pct": 0.0,
         "pct_correct_predictions": 97.76,
-        "avg_latency_us": 279.77113370847536,
+        "operational_latency_us": 279.77113370847536,
         "avg_reward": 5.103718792679381
       },
-      "by_category": {
-        "frequency_agile": {
-          "scenario_count": 3,
-          "mean_ir_pct": 57.4,
-          "pd_pct": 90.40450588837686,
+      "by_behavioral_subset": {
+        "periodic_subset": {
+          "scenario_count": 10,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 42.14000000000001,
+          "pd_pct": 83.69920234872708,
           "pfa_pct": 0.0,
-          "avg_latency_us": 283.78285481714147
+          "operational_latency_us": 279.77113370847536,
+          "pct_correct_decisions": 97.76
         },
-        "mixed": {
-          "scenario_count": 7,
-          "mean_ir_pct": 35.6,
-          "pd_pct": 80.8255008317343,
+        "agile_subset": {
+          "scenario_count": 8,
+          "scenario_ids": [
+            "config_117",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 51.65,
+          "pd_pct": 90.0650360743104,
           "pfa_pct": 0.0,
-          "avg_latency_us": 278.0518246619043
+          "operational_latency_us": 245.53942317252606,
+          "pct_correct_decisions": 97.8
+        },
+        "stationary_subset": {
+          "scenario_count": 9,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 45.82222222222223,
+          "pd_pct": 85.06260578429993,
+          "pfa_pct": 0.0,
+          "operational_latency_us": 247.1504880711455,
+          "pct_correct_decisions": 97.9111111111111
+        },
+        "mixed_subset": {
+          "scenario_count": 10,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 42.14000000000001,
+          "pd_pct": 83.69920234872708,
+          "pfa_pct": 0.0,
+          "operational_latency_us": 279.77113370847536,
+          "pct_correct_decisions": 97.76
         }
       }
     },
@@ -354,23 +570,86 @@
         "pd_pct": 99.39678284182307,
         "pfa_pct": 0.0,
         "pct_correct_predictions": 99.82,
-        "avg_latency_us": 94.78798469081232,
+        "operational_latency_us": 94.78798469081232,
         "avg_reward": 3.4706989331721068
       },
-      "by_category": {
-        "frequency_agile": {
-          "scenario_count": 3,
-          "mean_ir_pct": 42.6,
-          "pd_pct": 99.90338164251207,
+      "by_behavioral_subset": {
+        "periodic_subset": {
+          "scenario_count": 10,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 29.659999999999997,
+          "pd_pct": 59.55434782608695,
           "pfa_pct": 0.0,
-          "avg_latency_us": 217.31020235748497
+          "operational_latency_us": 94.78798469081232,
+          "pct_correct_decisions": 99.82
         },
-        "mixed": {
-          "scenario_count": 7,
-          "mean_ir_pct": 24.114285714285717,
-          "pd_pct": 42.26190476190476,
+        "agile_subset": {
+          "scenario_count": 8,
+          "scenario_ids": [
+            "config_117",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 37.074999999999996,
+          "pd_pct": 74.4429347826087,
           "pfa_pct": 0.0,
-          "avg_latency_us": 42.2784628336669
+          "operational_latency_us": 118.4849808635154,
+          "pct_correct_decisions": 99.82499999999999
+        },
+        "stationary_subset": {
+          "scenario_count": 9,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 32.911111111111104,
+          "pd_pct": 55.06038647342994,
+          "pfa_pct": 0.0,
+          "operational_latency_us": 55.705399656458134,
+          "pct_correct_decisions": 99.8
+        },
+        "mixed_subset": {
+          "scenario_count": 10,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 29.659999999999997,
+          "pd_pct": 59.55434782608695,
+          "pfa_pct": 0.0,
+          "operational_latency_us": 94.78798469081232,
+          "pct_correct_decisions": 99.82
         }
       }
     },
@@ -380,23 +659,86 @@
         "pd_pct": 96.53179190751445,
         "pfa_pct": 0.0,
         "pct_correct_predictions": 99.76,
-        "avg_latency_us": 72.05812187358393,
+        "operational_latency_us": 72.05812187358393,
         "avg_reward": -0.1089721680925376
       },
-      "by_category": {
-        "frequency_agile": {
-          "scenario_count": 3,
-          "mean_ir_pct": 8.466666666666667,
-          "pd_pct": 96.10169491525423,
+      "by_behavioral_subset": {
+        "periodic_subset": {
+          "scenario_count": 10,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 6.68,
+          "pd_pct": 57.61838726245505,
           "pfa_pct": 0.0,
-          "avg_latency_us": 128.52230378951148
+          "operational_latency_us": 72.05812187358393,
+          "pct_correct_decisions": 99.76
         },
-        "mixed": {
-          "scenario_count": 7,
-          "mean_ir_pct": 5.914285714285715,
-          "pd_pct": 41.125541125541126,
+        "agile_subset": {
+          "scenario_count": 8,
+          "scenario_ids": [
+            "config_117",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 8.35,
+          "pd_pct": 72.02298407806882,
           "pfa_pct": 0.0,
-          "avg_latency_us": 47.85918676675783
+          "operational_latency_us": 90.0726523419799,
+          "pct_correct_decisions": 99.75
+        },
+        "stationary_subset": {
+          "scenario_count": 9,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 7.222222222222223,
+          "pd_pct": 54.02043029161674,
+          "pfa_pct": 0.0,
+          "operational_latency_us": 64.80763541509324,
+          "pct_correct_decisions": 99.75555555555555
+        },
+        "mixed_subset": {
+          "scenario_count": 10,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 6.68,
+          "pd_pct": 57.61838726245505,
+          "pfa_pct": 0.0,
+          "operational_latency_us": 72.05812187358393,
+          "pct_correct_decisions": 99.76
         }
       }
     },
@@ -406,23 +748,86 @@
         "pd_pct": 91.59663865546219,
         "pfa_pct": 0.0,
         "pct_correct_predictions": 99.8,
-        "avg_latency_us": 153.71368427579364,
+        "operational_latency_us": 153.71368427579364,
         "avg_reward": -0.8057073754461109
       },
-      "by_category": {
-        "frequency_agile": {
-          "scenario_count": 3,
-          "mean_ir_pct": 2.933333333333333,
-          "pd_pct": 100.0,
+      "by_behavioral_subset": {
+        "periodic_subset": {
+          "scenario_count": 10,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 2.18,
+          "pd_pct": 67.12418300653594,
           "pfa_pct": 0.0,
-          "avg_latency_us": 206.7686115244709
+          "operational_latency_us": 153.71368427579364,
+          "pct_correct_decisions": 99.8
         },
-        "mixed": {
-          "scenario_count": 7,
-          "mean_ir_pct": 1.8571428571428572,
-          "pd_pct": 53.034547152194214,
+        "agile_subset": {
+          "scenario_count": 8,
+          "scenario_ids": [
+            "config_117",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 2.7,
+          "pd_pct": 71.40522875816993,
           "pfa_pct": 0.0,
-          "avg_latency_us": 130.97585831207485
+          "operational_latency_us": 129.77491784474205,
+          "pct_correct_decisions": 99.8
+        },
+        "stationary_subset": {
+          "scenario_count": 9,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 2.355555555555556,
+          "pd_pct": 63.4713144517066,
+          "pfa_pct": 0.0,
+          "operational_latency_us": 133.83233438051147,
+          "pct_correct_decisions": 99.77777777777777
+        },
+        "mixed_subset": {
+          "scenario_count": 10,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 2.18,
+          "pd_pct": 67.12418300653594,
+          "pfa_pct": 0.0,
+          "operational_latency_us": 153.71368427579364,
+          "pct_correct_decisions": 99.8
         }
       }
     },
@@ -432,23 +837,86 @@
         "pd_pct": 93.28358208955224,
         "pfa_pct": 0.0,
         "pct_correct_predictions": 99.82,
-        "avg_latency_us": 97.77874041497815,
+        "operational_latency_us": 97.77874041497815,
         "avg_reward": -0.7650332603759877
       },
-      "by_category": {
-        "frequency_agile": {
-          "scenario_count": 3,
-          "mean_ir_pct": 3.8666666666666667,
-          "pd_pct": 100.0,
+      "by_behavioral_subset": {
+        "periodic_subset": {
+          "scenario_count": 10,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 2.5,
+          "pd_pct": 61.66666666666666,
           "pfa_pct": 0.0,
-          "avg_latency_us": 150.89364284939236
+          "operational_latency_us": 97.77874041497815,
+          "pct_correct_decisions": 99.82000000000001
         },
-        "mixed": {
-          "scenario_count": 7,
-          "mean_ir_pct": 1.9142857142857146,
-          "pd_pct": 45.23809523809524,
+        "agile_subset": {
+          "scenario_count": 8,
+          "scenario_ids": [
+            "config_117",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 3.125,
+          "pd_pct": 77.08333333333334,
           "pfa_pct": 0.0,
-          "avg_latency_us": 75.01521080022918
+          "operational_latency_us": 122.22342551872268,
+          "pct_correct_decisions": 99.9
+        },
+        "stationary_subset": {
+          "scenario_count": 9,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 2.7333333333333334,
+          "pd_pct": 57.4074074074074,
+          "pfa_pct": 0.0,
+          "operational_latency_us": 86.85485046108681,
+          "pct_correct_decisions": 99.80000000000001
+        },
+        "mixed_subset": {
+          "scenario_count": 10,
+          "scenario_ids": [
+            "config_117",
+            "config_119",
+            "config_143",
+            "config_194",
+            "config_195",
+            "config_241",
+            "config_29",
+            "config_42",
+            "config_64",
+            "config_96"
+          ],
+          "mean_ir_pct": 2.5,
+          "pd_pct": 61.66666666666666,
+          "pfa_pct": 0.0,
+          "operational_latency_us": 97.77874041497815,
+          "pct_correct_decisions": 99.82000000000001
         }
       }
     }
