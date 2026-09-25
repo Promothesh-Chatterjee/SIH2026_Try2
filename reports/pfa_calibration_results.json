@@ -1,6 +1,6 @@
 {
   "experiment": "detector_cfar_pfa_calibration",
-  "timestamp_utc": "2026-09-25T16:52:12.829629+00:00",
+  "timestamp_utc": "2026-09-25T18:14:36.458654+00:00",
   "status": "VALIDATED",
   "detector_configuration": {
     "n_bands": 36,

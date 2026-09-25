@@ -1,8 +1,8 @@
 # Electronic Warfare Receiver Scheduling Benchmark Report
 
-**Evaluation Timestamp**: 2026-09-25T16:50:54.392709+00:00  
+**Evaluation Timestamp**: 2026-09-25T18:12:33.905781+00:00  
 **Checkpoint**: `checkpoint_gate_25000_frozen.pt` (SHA: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`)  
-**Source Git Commit**: `b8aab752787662fbfd30949b8b903b20d9faba3d`  
+**Source Git Commit**: `43ca6c35199ee6a4435c1eecf27512c5466ad02e`  
 **Dataset**: `D:/TSRD` (10 validation scenarios, Fingerprint: `bedfa2b53c00004190705e18dff73c28ca49ffe23a130469ec3db7d5b131dbb2`)  
 **Steps per Scenario**: 500 (Total dwells per policy: 5000)  
 

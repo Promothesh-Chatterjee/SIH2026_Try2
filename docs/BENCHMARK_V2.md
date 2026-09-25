@@ -7,7 +7,7 @@
 ## 1. Provenance & Artifact Identity
 
 - **Benchmark Version**: `2026.1-CANONICAL`
-- **Git Commit**: `c321c6ad9e36cb262b63a942e69119ba6dc89dac`
+- **Git Commit**: `43ca6c35199ee6a4435c1eecf27512c5466ad02e`
 - **Reference Candidate Checkpoint**: `experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt`
   - SHA-256: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`
 - **Normalization Statistics**: `experiments/checkpoints/deinterleaver/normalization_stats.json`

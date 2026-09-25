@@ -4,10 +4,10 @@
     "benchmark_version": "2026.1-CANONICAL",
     "metric_contract_version": "v2.0-audited-confusion-matrix",
     "evaluator_version": "eval_batch.py/v2.0-audited",
-    "timestamp": "2026-09-25T16:50:54.392709+00:00",
-    "git_commit": "b8aab752787662fbfd30949b8b903b20d9faba3d",
+    "timestamp": "2026-09-25T18:12:33.905781+00:00",
+    "git_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
     "checkpoint": "checkpoint_gate_25000_frozen.pt",
-    "checkpoint_path": "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt",
+    "checkpoint_path": "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt",
     "checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
     "tsrd_root": "D:/TSRD",
     "dataset_fingerprint": "bedfa2b53c00004190705e18dff73c28ca49ffe23a130469ec3db7d5b131dbb2",
@@ -39,7 +39,7 @@
     "seed": 42,
     "device": "cpu",
     "status": "AUTHORITATIVE",
-    "total_benchmark_runtime_s": 64.55937480926514
+    "total_benchmark_runtime_s": 110.19604420661926
   },
   "schedulers": {
     "SmartScan_DRQN_MoE": {
@@ -62,7 +62,7 @@
         "n_false_alarms": 0,
         "n_missed_dwells": 112,
         "n_true_negatives": 2781,
-        "evaluation_runtime_s": 27.560168027877808
+        "evaluation_runtime_s": 45.46807050704956
       },
       "scenario_breakdown": {
         "config_117": {
@@ -327,7 +327,7 @@
         "n_false_alarms": 0,
         "n_missed_dwells": 9,
         "n_true_negatives": 4866,
-        "evaluation_runtime_s": 12.178141355514526
+        "evaluation_runtime_s": 21.363810539245605
       },
       "scenario_breakdown": {
         "config_117": {
@@ -592,7 +592,7 @@
         "n_false_alarms": 0,
         "n_missed_dwells": 10,
         "n_true_negatives": 4881,
-        "evaluation_runtime_s": 12.210158824920654
+        "evaluation_runtime_s": 21.25106406211853
       },
       "scenario_breakdown": {
         "config_117": {
@@ -857,7 +857,7 @@
         "n_false_alarms": 0,
         "n_missed_dwells": 23,
         "n_true_negatives": 3292,
-        "evaluation_runtime_s": 12.609913349151611
+        "evaluation_runtime_s": 22.11178755760193
       },
       "scenario_breakdown": {
         "config_117": {

@@ -71,7 +71,8 @@
     "config_96": "69b6a1072a28e711efe9d0da09d851ebfbd28cc0b564d7c9d2bbb1db4d6dd232"
   },
 
-  "git_commit": "b8aab752787662fbfd30949b8b903b20d9faba3d",
+  "git_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
+  "source_git_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
 
   "historical_results_NON_COMPARABLE": {
     "note": "These results used different evaluation contracts and are NOT comparable to the current canonical results.",

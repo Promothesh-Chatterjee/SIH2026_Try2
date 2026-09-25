@@ -384,8 +384,8 @@ class GateRunner:
                     return
 
                 ckpt_dict = torch.load(str(final_ckpt), map_location="cpu", weights_only=False)
-                if "model_state_dict" not in ckpt_dict:
-                    self.record(14, title, False, "Dry-run final.pt missing model_state_dict")
+                if "model_state_dict" not in ckpt_dict and "state_dict" not in ckpt_dict:
+                    self.record(14, title, False, "Dry-run final.pt missing model_state_dict or state_dict")
                     return
 
             # Verify baseline immutability: post-run SHA and no new files

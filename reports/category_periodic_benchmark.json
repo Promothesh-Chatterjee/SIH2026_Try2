@@ -3,7 +3,7 @@
   "benchmark_contract": "2026.1-CANONICAL",
   "checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
   "n_steps_per_scenario": 500,
-  "timestamp_utc": "2026-09-25T16:55:38.176705+00:00",
+  "timestamp_utc": "2026-09-25T18:20:36.304767+00:00",
   "taxonomy_specification": {
     "model": "Multi-Label Behavioral Capabilities (non-mutually-exclusive)",
     "periodic_subset": "Scenarios where periodic scanning antennas >= 50% of transmitters",

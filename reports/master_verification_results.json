@@ -1,0 +1,101 @@
+{
+  "orchestrator_version": "1.0.0",
+  "timestamp_utc": "2026-09-25T18:30:35Z",
+  "source_git_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
+  "total_gates": 15,
+  "passed_gates": 15,
+  "failed_gates": 0,
+  "retraining_status": "UNLOCKED",
+  "gate_results": [
+    {
+      "gate_id": 1,
+      "title": "Frozen Checkpoint Bit-Exact SHA-256 Check",
+      "passed": true,
+      "detail": "Verified SHA-256: 7a99c659affda277..."
+    },
+    {
+      "gate_id": 2,
+      "title": "Production Baseline & Immutability Test Suite",
+      "passed": true,
+      "detail": "All 10 immutability tests passed"
+    },
+    {
+      "gate_id": 3,
+      "title": "Confusion-Matrix Metric Invariants & Regression Tests",
+      "passed": true,
+      "detail": "Metric invariants (TP+FN+FP+TN, Pd, Pfa, CorrectRate) passed"
+    },
+    {
+      "gate_id": 4,
+      "title": "Reward v2 Audited Semantics & Penalty Tests",
+      "passed": true,
+      "detail": "Reward v2 audit tests passed"
+    },
+    {
+      "gate_id": 5,
+      "title": "Causal Information Barrier & Anti-Leakage Tests",
+      "passed": true,
+      "detail": "Future pulse invariance and emitter ID isolation passed"
+    },
+    {
+      "gate_id": 6,
+      "title": "Checkpoint Serialization & RNG Restoration Contract Tests",
+      "passed": true,
+      "detail": "WEIGHTS_ONLY and TRAINING_RESUME modes verified"
+    },
+    {
+      "gate_id": 7,
+      "title": "CFAR Detector Pfa Calibration Verification",
+      "passed": true,
+      "detail": "Empirical Pfa=0.000000, 95% CI High=0.000128 <= Target 0.001 (Conforms: True)"
+    },
+    {
+      "gate_id": 8,
+      "title": "Detector Sensitivity Calibration Verification",
+      "passed": true,
+      "detail": "Validity=True, NoiseFloor=-110.0 dBm, S_emp=-104.0 dBm (Pd=0.98, CI=[0.9669143535396397, 0.9854272801659613]), Pfa_CI_high=0.000768"
+    },
+    {
+      "gate_id": 9,
+      "title": "Authoritative Canonical 7-FoM Benchmark Verification",
+      "passed": true,
+      "detail": "SmartScan: Pd=94.95% (req>=90.0%), Pfa=0.0000% (req<=0.1%), IR=42.14% (req>=40.0%), Correct=97.76% (req>=95.0%)"
+    },
+    {
+      "gate_id": 10,
+      "title": "Multi-Seed Deterministic Reproducibility Verification",
+      "passed": true,
+      "detail": "Mean IR=42.14%, Seed Std=0.0000% (Deterministic)"
+    },
+    {
+      "gate_id": 11,
+      "title": "Multi-Label Behavioral & Periodic Scan Taxonomy Benchmark Verification",
+      "passed": true,
+      "detail": "TaxonomyRecomputed=True, SmartScan IR=42.14% vs RoundRobin IR=2.18%"
+    },
+    {
+      "gate_id": 12,
+      "title": "Held-Out Test Set Isolation & SHA-256 Verification",
+      "passed": true,
+      "detail": "Verified 10/10 held-out scenarios via test_stare directory"
+    },
+    {
+      "gate_id": 13,
+      "title": "Held-Out Comparative IR Verification & Metric Tradeoffs",
+      "passed": true,
+      "detail": "SmartScan IR=45.44% (Highest), Latency=384.7\u00b5s, Pd=91.87% | HighestOccupancy IR=32.60%, Latency=180.7\u00b5s, Pd=96.74%"
+    },
+    {
+      "gate_id": 14,
+      "title": "Controlled Continuation Retraining Pipeline Smoke Check",
+      "passed": true,
+      "detail": "50-step dry run verified: final.pt valid, baseline immutable (SHA exact)"
+    },
+    {
+      "gate_id": 15,
+      "title": "Repository Provenance & Manifest Integrity Audit",
+      "passed": true,
+      "detail": "Status='IMMUTABLE \u00e2\u20ac\u201d DO NOT MODIFY OR OVERWRITE', Checkpoint SHA validated, Git-tracked=True, SHA256SUMS=True, MetadataOK=True"
+    }
+  ]
+}

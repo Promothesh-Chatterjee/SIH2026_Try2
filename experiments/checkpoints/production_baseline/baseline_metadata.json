@@ -4,7 +4,8 @@
   "checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
   "benchmark_version": "2026.1-CANONICAL",
   "metric_contract": "v2.0-audited-confusion-matrix",
-  "git_commit": "17260c7edbe644820ba06e5ae4f209cc5234c464",
+  "git_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
+  "source_git_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
   "architecture": {
     "scheduler": "V2_DRQN / SmartScan_DRQN_MoE",
     "obs_dim": 360,

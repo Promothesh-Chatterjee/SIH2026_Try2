@@ -5,7 +5,7 @@
   "n_steps_per_scenario": 500,
   "total_dwells_per_policy": 5000,
   "seed": 42,
-  "timestamp_utc": "2026-09-25T16:56:50.501034+00:00",
+  "timestamp_utc": "2026-09-25T18:22:52.524805+00:00",
   "manifest_used": "experiments/test_set/TEST_SET_MANIFEST.json",
   "test_dataset_directory": "D:/TSRD/stare/test_stare",
   "verified_scenario_hashes": {

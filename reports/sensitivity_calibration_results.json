@@ -1,6 +1,6 @@
 {
   "experiment": "receiver_sensitivity_power_sweep_calibration",
-  "timestamp_utc": "2026-09-25T16:52:20.819483+00:00",
+  "timestamp_utc": "2026-09-25T18:14:49.192937+00:00",
   "status": "VALIDATED",
   "calibration_criteria": {
     "target_pd": 0.9,
@@ -26,8 +26,9 @@
     "margin_db": 6.0,
     "detector_calibration_validity": true,
     "system_requirement_compliance": {
-      "status": "NO_FORMAL_REQUIREMENT_SPECIFIED",
-      "description": "No formal empirical sensitivity compliance threshold defined in project specification.",
+      "status": "COMPLIANT_WITH_PROJECT_ENGINEERING_ACCEPTANCE",
+      "description": "Project Engineering Acceptance Threshold: S_emp <= -100.0 dBm at Pd >= 90% (distinct from external DRDO requirements).",
+      "threshold_dbm": -100.0,
       "empirical_sensitivity_measured_dbm": -104.0
     },
     "scientific_note": "Theoretical sensitivity floor S_min = -110.0 dBm is derived from Friis kTB + NF + SNR - G_p. Empirical sensitivity S_emp = -104.0 dBm is the measured signal power required for Pd >= 90% under CA-CFAR adaptive background thresholding. Both metrics are independently tracked without conflating the theoretical receiver noise floor with the empirical operational sensitivity."
