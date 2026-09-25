@@ -7,13 +7,13 @@
 ## 1. Provenance & Artifact Identity
 
 - **Benchmark Version**: `2026.1-CANONICAL`
-- **Git Commit**: `17260c7edbe644820ba06e5ae4f209cc5234c464`
-- **Reference Candidate Checkpoint**: `experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt`
+- **Git Commit**: `c321c6ad9e36cb262b63a942e69119ba6dc89dac`
+- **Reference Candidate Checkpoint**: `experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt`
   - SHA-256: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`
 - **Normalization Statistics**: `experiments/checkpoints/deinterleaver/normalization_stats.json`
   - SHA-256: `a36a11d865b575cda2ab5e12dfeb9f5d5046af04322e654814d851c87a619b0b`
 - **Model Config**: `configs/model_config.yaml` (SHA-256: `f9a1a316b0726e37400a5b663b0946372cbbe1a8b6a8dcfa3375e074ea7b1280`)
-- **Training Config**: `configs/training_config.yaml` (SHA-256: `b727908e8d695307c98000f931b75ff604176a93b241bc3f53cc93757b3e5ec4`)
+- **Training Config**: `configs/training_config.yaml` (SHA-256: `7806572c593ba037dc9ff9b90c56d58f9c9f4e92c4d0d06a87adaed168f4c93a`)
 - **Metric Engine Version**: `v2.0-audited-confusion-matrix`
 
 ## 2. Action & Observation Space Contracts
@@ -51,3 +51,16 @@
 
 - EMA Detection Smoothing: `alpha = 0.3`
 - Confirmed Miss Decay: `alpha_miss_confirmed = 0.2`
+
+## 6. Project Engineering Acceptance Thresholds
+
+> **Notice**: The following criteria are explicitly labeled as `PROJECT_ENGINEERING_ACCEPTANCE_THRESHOLD`
+> and represent internal project qualification gates, distinct from external DRDO requirements.
+
+- **Minimum Probability of Detection (Pd)**: `90.0%`
+- **Maximum Probability of False Alarm (Pfa)**: `0.10%`
+- **Empirical Detection Sensitivity Threshold**: `-100.0 dBm` (at Pd >= 90%)
+- **Minimum Mean Intercept Rate (IR)**: `40.0%`
+- **Minimum Average Episodic Reward**: `> 0.0`
+- **Minimum Correct Decision Accuracy**: `95.0%`
+- **Maximum Operational Intercept Latency**: `400.0 µs`

@@ -1,0 +1,97 @@
+{
+  "manifest_version": "1.0",
+  "checkpoint_role": "FROZEN_BASELINE",
+  "checkpoint_name": "Gate-25k-R4.2-alpha020",
+  "training_step": 25000,
+  "status": "IMMUTABLE — DO NOT MODIFY OR OVERWRITE",
+
+  "checkpoint_identity": {
+    "file": "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt",
+    "sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
+  },
+
+  "architecture": {
+    "scheduler": "V2_DRQN / SmartScan_DRQN_MoE",
+    "obs_dim": 360,
+    "n_bands": 36,
+    "band_features": 10,
+    "n_modes": 5,
+    "n_actions": 180,
+    "lstm_hidden": 256,
+    "lstm_layers": 2,
+    "band_routing": true,
+    "dueling": true,
+    "aux_heads": ["intercept_prob", "intercept_time_us"]
+  },
+
+  "canonical_benchmark": {
+    "benchmark_version": "2026.1-CANONICAL",
+    "metric_contract": "v2.0-audited-confusion-matrix",
+    "dwells_per_scenario": 500,
+    "n_scenarios": 10,
+    "total_dwells": 5000,
+    "seed": 42,
+    "action_selection": "SmartScan_DRQN_MoE_Stage3_operational",
+    "results": {
+      "mean_ir_pct": 42.14,
+      "pd_pct": 94.95,
+      "pfa_pct": 0.00,
+      "avg_reward": 5.346,
+      "sensitivity_dbm": -110.0,
+      "avg_intercept_time_error_us": 279.77,
+      "pct_correct_predictions_CORRECTED": 97.76,
+      "pct_correct_predictions_LEGACY_BUG": 72.60,
+      "tp": 2107,
+      "fn": 112,
+      "fp": 0,
+      "tn": 2781,
+      "note": "pct_correct 72.60% was computed using spectrum-wide active mask (bug). Correct value from (TP+TN)/N = 97.76%."
+    }
+  },
+
+  "artifact_hashes": {
+    "checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+    "model_config_sha256": "f9a1a316b0726e37400a5b663b0946372cbbe1a8b6a8dcfa3375e074ea7b1280",
+    "training_config_sha256": "7806572c593ba037dc9ff9b90c56d58f9c9f4e92c4d0d06a87adaed168f4c93a",
+    "training_config_resume_100k_sha256": "409f2c627152ae72681ee440c0b4655b089aa30b45bcf4e6bb852f33fbd8deb8",
+    "normalization_stats_sha256": "a36a11d865b575cda2ab5e12dfeb9f5d5046af04322e654814d851c87a619b0b",
+    "benchmark_stage3_sha256": "89cb128f6b205f8883164725b9369c68d020f24b2ec0603853daffe03c9115be"
+  },
+
+  "scenario_hashes": {
+    "config_117": "073724fbcd3aba8daaf94a68cbcd95ac1cf6f1aaeeab2b4b83df54e9a93dfe3f",
+    "config_119": "64e62300a8722cb4e4e43509b72aae364da5186569437f67432daaa218d1ea8e",
+    "config_143": "0b569ce566cb52523ad7a25f574fb90ba159527bf1d5461e5b192ea82943cdf6",
+    "config_194": "8c38ae60c7494bc572108c3cef599a3599a996332075996e3f8601413732cc7c",
+    "config_195": "2955716ef88741da2e90e2e3a458089901b9072589619bc4fd2b6a001dd5c044",
+    "config_241": "00315037b52d4e8e362f7c625d6a44700f3f8204b116f65fc505b56d5a8e302f",
+    "config_29": "6cd0ba2ce2bcd733b5ce5f66b6b3ea34300786b0ca08ca89da4f9dc8e751c335",
+    "config_42": "6d4ea27d44b3f2fcedee1eb6030566cddbe155abc498a6023076b535502e02f2",
+    "config_64": "f39ac885ef9af18e63ccf555f491ae790b9662e5f33153375fdc67ba8b81756f",
+    "config_96": "69b6a1072a28e711efe9d0da09d851ebfbd28cc0b564d7c9d2bbb1db4d6dd232"
+  },
+
+  "git_commit": "b8aab752787662fbfd30949b8b903b20d9faba3d",
+
+  "historical_results_NON_COMPARABLE": {
+    "note": "These results used different evaluation contracts and are NOT comparable to the current canonical results.",
+    "pre_v2_audit_60pct": {
+      "mean_ir_pct": 60.45,
+      "pd_pct": 99.85,
+      "contract": "pre-v2 per-observation IR, FN=0 bug"
+    },
+    "readme_7pct": {
+      "mean_ir_pct": 7.74,
+      "pd_pct": 26.24,
+      "contract": "unknown legacy contract"
+    }
+  },
+
+  "retraining_contract": {
+    "role": "WEIGHTS_ONLY_RETRAINING_BASELINE",
+    "restore": ["model_weights", "architecture", "observation_action_contract", "preprocessing"],
+    "do_not_restore": ["optimizer_state", "replay_state", "rng_state", "epsilon", "lr_scheduler"],
+    "target_config": "configs/training_config_resume_100k.yaml",
+    "target_gates": [50000, 75000, 100000]
+  }
+}

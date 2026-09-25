@@ -1,12 +1,12 @@
 {
   "benchmark_version": "2026.1-CANONICAL",
-  "git_commit": "17260c7edbe644820ba06e5ae4f209cc5234c464",
+  "git_commit": "c321c6ad9e36cb262b63a942e69119ba6dc89dac",
   "checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
-  "checkpoint_path": "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt",
+  "checkpoint_path": "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt",
   "normalization_sha256": "a36a11d865b575cda2ab5e12dfeb9f5d5046af04322e654814d851c87a619b0b",
   "normalization_path": "experiments/checkpoints/deinterleaver/normalization_stats.json",
   "model_config_sha256": "f9a1a316b0726e37400a5b663b0946372cbbe1a8b6a8dcfa3375e074ea7b1280",
-  "training_config_sha256": "b727908e8d695307c98000f931b75ff604176a93b241bc3f53cc93757b3e5ec4",
+  "training_config_sha256": "7806572c593ba037dc9ff9b90c56d58f9c9f4e92c4d0d06a87adaed168f4c93a",
   "canonical_scenarios": [
     "config_117",
     "config_119",
@@ -62,5 +62,16 @@
     "uncertainty_weight": 0.2,
     "periodic_weight": 0.1,
     "semantic_weight": 0.1
+  },
+  "project_engineering_acceptance": {
+    "label": "PROJECT_ENGINEERING_ACCEPTANCE_THRESHOLD",
+    "description": "Internal project engineering acceptance criteria (not external DRDO mandate)",
+    "pd_min": 0.9,
+    "pfa_max": 0.001,
+    "empirical_sensitivity_requirement_dbm": -100.0,
+    "mean_ir_min": 0.4,
+    "reward_min": 0.0,
+    "correct_decision_min": 95.0,
+    "operational_latency_max_us": 400.0
   }
 }

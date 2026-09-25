@@ -160,6 +160,39 @@ class TestCheckpointContract(unittest.TestCase):
         self.assertTrue(torch.allclose(expected_torch, restored_torch))
         self.assertTrue(np.allclose(expected_np, restored_np))
 
+    def test_cuda_rng_exact_reproducibility(self):
+        """Bit-exact CUDA RNG restoration test if CUDA hardware is available."""
+        if not torch.cuda.is_available():
+            self.skipTest("CUDA not available in this environment; skipping CUDA RNG bit-exact test")
+
+        model = DummyModel()
+        ckpt_path = self.dir_path / "cuda_rng_test.pt"
+
+        torch.cuda.manual_seed_all(42)
+        expected_cuda = torch.randn(5, device="cuda")
+
+        # Reset seed to 42 and capture state
+        torch.cuda.manual_seed_all(42)
+        save_hardened_checkpoint(
+            path=ckpt_path,
+            mode=CheckpointMode.EXACT_CONTINUATION,
+            model=model,
+        )
+
+        # Advance CUDA RNG
+        _ = torch.randn(100, device="cuda")
+
+        # Load and restore RNG
+        load_hardened_checkpoint(
+            path=ckpt_path,
+            expected_mode=CheckpointMode.EXACT_CONTINUATION,
+            model=model,
+            restore_rng=True,
+        )
+
+        restored_cuda = torch.randn(5, device="cuda")
+        self.assertTrue(torch.allclose(expected_cuda, restored_cuda))
+
     def test_validate_checkpoint_healthy_and_corrupt(self):
         model = DummyModel()
         ckpt_path = self.dir_path / "valid.pt"

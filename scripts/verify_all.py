@@ -168,10 +168,38 @@ class GateRunner:
         valid = summary.get("detector_calibration_validity", False)
         floor = summary.get("theoretical_sensitivity_floor_dbm", 0.0)
         s_emp = summary.get("empirical_detection_sensitivity_dbm", 0.0)
-        passed = valid and (floor == -110.0) and (s_emp <= -100.0)
+
+        # Inspect actual power sweep entries
+        power_sweep = data.get("power_sweep", [])
+        if not power_sweep:
+            self.record(8, title, False, "No power_sweep entries found in report")
+            return
+
+        # Find power sweep point corresponding to s_emp
+        match_pt = next((pt for pt in power_sweep if abs(pt.get("input_power_dbm", 999.0) - s_emp) < 1e-3), None)
+        if match_pt is None:
+            self.record(8, title, False, f"Empirical sensitivity {s_emp} dBm not found in power_sweep table")
+            return
+
+        emp_pd = match_pt.get("measured_pd", 0.0)
+        emp_ci = match_pt.get("pd_ci_95", [])
+        has_ci = isinstance(emp_ci, (list, tuple)) and len(emp_ci) == 2
+
+        # Check noise-only Pfa verification
+        pfa_verif = data.get("detector_pfa_verification", {})
+        pfa_ci_high = pfa_verif.get("pfa_ci_95", [0.0, 1.0])[1] if isinstance(pfa_verif.get("pfa_ci_95"), list) else 1.0
+
+        passed = (
+            valid
+            and (floor == -110.0)
+            and (s_emp <= -100.0)
+            and (emp_pd >= 0.90)
+            and has_ci
+            and (pfa_ci_high <= 0.0010)
+        )
         self.record(
             8, title, passed,
-            f"Validity={valid}, Theoretical Floor={floor} dBm, Empirical Detection S_min={s_emp} dBm"
+            f"Validity={valid}, NoiseFloor={floor} dBm, S_emp={s_emp} dBm (Pd={emp_pd:.2f}, CI={emp_ci}), Pfa_CI_high={pfa_ci_high:.6f}"
         )
 
     def gate_9_canonical_benchmark(self):
@@ -182,6 +210,20 @@ class GateRunner:
             return
         with open(rpt_file, "r") as f:
             data = json.load(f)
+
+        # Load project engineering acceptance thresholds from benchmark contract
+        contract_file = REPO_ROOT / "ew_core" / "checkpoints" / "benchmark_contract.json"
+        if contract_file.exists():
+            with open(contract_file, "r") as cf:
+                contract_data = json.load(cf)
+            req = contract_data.get("project_engineering_acceptance", {})
+        else:
+            req = {}
+        target_pd = req.get("pd_min", 0.90) * 100.0
+        target_pfa = req.get("pfa_max", 0.001) * 100.0
+        target_ir = req.get("mean_ir_min", 0.40) * 100.0
+        target_correct = req.get("correct_decision_min", 95.0)
+
         smartscan = data.get("schedulers", {}).get("SmartScan_DRQN_MoE", {})
         summary = smartscan.get("summary", smartscan)
         pd = summary.get("pd", 0.0)
@@ -194,10 +236,10 @@ class GateRunner:
         if ir <= 1.0:
             ir *= 100.0
         correct = summary.get("pct_correct_predictions", 0.0)
-        passed = (pd >= 90.0) and (pfa <= 0.1) and (ir >= 40.0) and (correct >= 95.0)
+        passed = (pd >= target_pd) and (pfa <= target_pfa) and (ir >= target_ir) and (correct >= target_correct)
         self.record(
             9, title, passed,
-            f"SmartScan: Pd={pd:.2f}%, Pfa={pfa:.4f}%, IR={ir:.2f}%, Correct={correct:.2f}%"
+            f"SmartScan: Pd={pd:.2f}% (req>={target_pd}%), Pfa={pfa:.4f}% (req<={target_pfa}%), IR={ir:.2f}% (req>={target_ir}%), Correct={correct:.2f}% (req>={target_correct}%)"
         )
 
     def gate_10_seed_invariance(self):
@@ -223,11 +265,31 @@ class GateRunner:
             return
         with open(rpt_file, "r") as f:
             data = json.load(f)
+
+        # Recompute taxonomy membership from scenario profiles to verify ground truth consistency
+        profiles = data.get("scenario_profiles", {})
+        recomputed = {
+            "periodic_subset": sorted([k for k, p in profiles.items() if p.get("periodic_fraction", 0.0) >= 0.50]),
+            "agile_subset": sorted([k for k, p in profiles.items() if p.get("agile_fraction", 0.0) >= 0.25]),
+            "stationary_subset": sorted([k for k, p in profiles.items() if p.get("fixed_fraction", 0.0) >= 0.60]),
+            "mixed_subset": sorted([k for k, p in profiles.items() if p.get("total_emitters", 0) >= 3]),
+        }
+        reported_subsets = data.get("behavioral_subset_members", {})
+        membership_matches = True
+        for subset_name, expected_members in recomputed.items():
+            reported = sorted(reported_subsets.get(subset_name, []))
+            if reported != expected_members:
+                membership_matches = False
+                logger.error("Taxonomy mismatch in %s: reported=%s vs recomputed=%s", subset_name, reported, expected_members)
+
         scheds = data.get("schedulers_evaluated", {})
         smartscan_ir = scheds.get("SmartScan_DRQN_MoE", {}).get("overall", {}).get("mean_ir_pct", 0.0)
         rr_ir = scheds.get("RoundRobin", {}).get("overall", {}).get("mean_ir_pct", 0.0)
-        passed = (smartscan_ir > 40.0) and (smartscan_ir > rr_ir)
-        self.record(11, title, passed, f"SmartScan IR={smartscan_ir:.2f}% vs RoundRobin IR={rr_ir:.2f}%")
+        passed = membership_matches and (smartscan_ir > 40.0) and (smartscan_ir > rr_ir)
+        self.record(
+            11, title, passed,
+            f"TaxonomyRecomputed={membership_matches}, SmartScan IR={smartscan_ir:.2f}% vs RoundRobin IR={rr_ir:.2f}%"
+        )
 
     def gate_12_held_out_test_set_isolation(self):
         title = "Held-Out Test Set Isolation & SHA-256 Verification"
@@ -242,10 +304,10 @@ class GateRunner:
             data = json.load(f)
         n_scenarios = len(data.get("verified_scenario_hashes", {}))
         passed = passed_test and (n_scenarios == 10)
-        self.record(12, title, passed, f"Verified 10/10 held-out scenarios via test_stare directory")
+        self.record(12, title, passed, "Verified 10/10 held-out scenarios via test_stare directory")
 
     def gate_13_held_out_superiority(self):
-        title = "Held-Out Superiority vs Heuristic Baselines Verification"
+        title = "Held-Out Comparative IR Verification & Metric Tradeoffs"
         rpt_file = REPO_ROOT / "reports" / "held_out_test_set_results.json"
         if not rpt_file.exists():
             self.record(13, title, False, f"Missing report: {rpt_file}")
@@ -253,16 +315,25 @@ class GateRunner:
         with open(rpt_file, "r") as f:
             data = json.load(f)
         all_s = data.get("all_schedulers", {})
-        ss_ir = all_s.get("SmartScan_DRQN_MoE", {}).get("mean_ir_pct", 0.0)
-        occ_ir = all_s.get("HighestOccupancy", {}).get("mean_ir_pct", 0.0)
-        rr_ir = all_s.get("RoundRobin", {}).get("mean_ir_pct", 0.0)
-        rand_ir = all_s.get("Random", {}).get("mean_ir_pct", 0.0)
+        ss = all_s.get("SmartScan_DRQN_MoE", {})
+        occ = all_s.get("HighestOccupancy", {})
+        rand = all_s.get("Random", {})
+        rr = all_s.get("RoundRobin", {})
 
-        passed = (ss_ir > occ_ir) and (occ_ir > rand_ir) and (rand_ir >= rr_ir)
-        self.record(
-            13, title, passed,
-            f"SmartScan ({ss_ir:.2f}%) > HighestOccupancy ({occ_ir:.2f}%) > Random ({rand_ir:.2f}%) > RoundRobin ({rr_ir:.2f}%)"
+        ss_ir = ss.get("mean_ir_pct", 0.0)
+        occ_ir = occ.get("mean_ir_pct", 0.0)
+        rand_ir = rand.get("mean_ir_pct", 0.0)
+        rr_ir = rr.get("mean_ir_pct", 0.0)
+
+        # Comparative IR superiority check
+        ir_passed = (ss_ir > occ_ir) and (occ_ir > rand_ir) and (rand_ir >= rr_ir)
+
+        # Distinguish confusion-derived metrics (Pd, Pfa, Correct) from trace-derived (IR, Latency, Reward)
+        tradeoff_summary = (
+            f"SmartScan IR={ss_ir:.2f}% (Highest), Latency={ss.get('operational_intercept_latency_us', 0):.1f}µs, Pd={ss.get('pd_pct', 0):.2f}% | "
+            f"HighestOccupancy IR={occ_ir:.2f}%, Latency={occ.get('operational_intercept_latency_us', 0):.1f}µs, Pd={occ.get('pd_pct', 0):.2f}%"
         )
+        self.record(13, title, ir_passed, tradeoff_summary)
 
     def gate_14_retraining_smoke(self):
         title = "Controlled Continuation Retraining Pipeline Smoke Check"
@@ -281,14 +352,53 @@ class GateRunner:
             from scripts.train_controlled_continuation import verify_baseline_checkpoint
             verify_baseline_checkpoint(DEFAULT_BASELINE_CKPT)
 
+            # Record baseline pre-run SHA
+            pre_sha = sha256_file(DEFAULT_BASELINE_CKPT)
+            baseline_dir = REPO_ROOT / "experiments" / "checkpoints" / "production_baseline"
+            pre_files = set(baseline_dir.iterdir())
+
             # Verify resume configs exist and are valid YAML
             import yaml
             cfg1 = yaml.safe_load((REPO_ROOT / "configs" / "training_config_resume_100k.yaml").read_text())
-            cfg2 = yaml.safe_load((REPO_ROOT / "configs" / "model_config.yaml").read_text())
             assert cfg1["scheduler"]["start_step"] == 25000
             assert cfg1["scheduler"]["total_timesteps"] == 100000
 
-            self.record(14, title, True, "Baseline WEIGHTS_ONLY verified; resume configs (25k->100k) and CLI validated")
+            # Execute 50-step dry run in temporary directory
+            import torch
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                smoke_cmd = [
+                    sys.executable,
+                    "scripts/train_controlled_continuation.py",
+                    "--dry-run",
+                    "--dry-run-steps", "50",
+                    "--output-dir", tmp_dir,
+                ]
+                smoke_res = subprocess.run(smoke_cmd, cwd=str(REPO_ROOT), capture_output=True, text=True)
+                if smoke_res.returncode != 0:
+                    self.record(14, title, False, f"Dry-run execution failed: {smoke_res.stderr[-300:]}")
+                    return
+
+                final_ckpt = Path(tmp_dir) / "final.pt"
+                if not final_ckpt.exists():
+                    self.record(14, title, False, "Dry-run did not produce final.pt")
+                    return
+
+                ckpt_dict = torch.load(str(final_ckpt), map_location="cpu", weights_only=False)
+                if "model_state_dict" not in ckpt_dict:
+                    self.record(14, title, False, "Dry-run final.pt missing model_state_dict")
+                    return
+
+            # Verify baseline immutability: post-run SHA and no new files
+            post_sha = sha256_file(DEFAULT_BASELINE_CKPT)
+            post_files = set(baseline_dir.iterdir())
+            if post_sha != pre_sha or post_sha != CANONICAL_FROZEN_SHA:
+                self.record(14, title, False, f"Baseline checkpoint SHA changed during dry run: {post_sha}")
+                return
+            if post_files != pre_files:
+                self.record(14, title, False, "New files detected in production baseline directory after dry run")
+                return
+
+            self.record(14, title, True, "50-step dry run verified: final.pt valid, baseline immutable (SHA exact)")
         except Exception as exc:
             self.record(14, title, False, f"Exception during smoke check: {exc}")
 
@@ -298,12 +408,42 @@ class GateRunner:
         if not manifest_file.exists():
             self.record(15, title, False, f"Missing {manifest_file}")
             return
+
+        # Verify manifest is tracked in git (or staged)
+        git_check = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "experiments/checkpoints/production_baseline/BASELINE_MANIFEST.json"],
+            cwd=str(REPO_ROOT), capture_output=True, text=True
+        )
+        is_tracked = (git_check.returncode == 0)
+
         with open(manifest_file, "r") as f:
             meta = json.load(f)
         status = meta.get("status", "")
         ckpt_sha = meta.get("checkpoint_identity", {}).get("sha256", "")
-        passed = (status.startswith("IMMUTABLE")) and (ckpt_sha == CANONICAL_FROZEN_SHA)
-        self.record(15, title, passed, f"Status='{status}', Checkpoint SHA validated")
+
+        # Verify SHA256SUMS file
+        sha_file = REPO_ROOT / "experiments" / "checkpoints" / "production_baseline" / "SHA256SUMS"
+        has_sha_file = sha_file.exists() and CANONICAL_FROZEN_SHA in sha_file.read_text()
+
+        # Verify baseline_metadata.json
+        meta_file = REPO_ROOT / "experiments" / "checkpoints" / "production_baseline" / "baseline_metadata.json"
+        meta_ok = False
+        if meta_file.exists():
+            with open(meta_file, "r") as f:
+                b_meta = json.load(f)
+            meta_ok = (b_meta.get("checkpoint_sha256") == CANONICAL_FROZEN_SHA)
+
+        passed = (
+            status.startswith("IMMUTABLE")
+            and (ckpt_sha == CANONICAL_FROZEN_SHA)
+            and is_tracked
+            and has_sha_file
+            and meta_ok
+        )
+        self.record(
+            15, title, passed,
+            f"Status='{status}', Checkpoint SHA validated, Git-tracked={is_tracked}, SHA256SUMS={has_sha_file}, MetadataOK={meta_ok}"
+        )
 
     def run_all(self) -> bool:
         logger.info("================================================================================")
@@ -339,6 +479,37 @@ class GateRunner:
             logger.info("  Gate %02d %s: %s", g_num, tag, title)
             if not passed:
                 all_passed = False
+
+        # Emit reports/master_verification_results.json
+        try:
+            curr_commit = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=str(REPO_ROOT), stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except Exception:
+            curr_commit = "UNKNOWN"
+
+        out_report = {
+            "orchestrator_version": "1.0.0",
+            "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "source_git_commit": curr_commit,
+            "total_gates": len(self.results),
+            "passed_gates": sum(1 for _, _, p, _ in self.results if p),
+            "failed_gates": sum(1 for _, _, p, _ in self.results if not p),
+            "retraining_status": "UNLOCKED" if all_passed else "LOCKED",
+            "gate_results": [
+                {
+                    "gate_id": g_num,
+                    "title": title,
+                    "passed": passed,
+                    "detail": detail,
+                }
+                for g_num, title, passed, detail in self.results
+            ]
+        }
+        rpt_path = REPO_ROOT / "reports" / "master_verification_results.json"
+        rpt_path.parent.mkdir(parents=True, exist_ok=True)
+        rpt_path.write_text(json.dumps(out_report, indent=2), encoding="utf-8")
+        logger.info("Saved master verification report to: %s", rpt_path)
 
         logger.info("--------------------------------------------------------------------------------")
         logger.info("Total Gates: %d | Passed: %d | Failed: %d | Duration: %.2fs",

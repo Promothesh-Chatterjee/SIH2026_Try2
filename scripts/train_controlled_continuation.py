@@ -112,8 +112,8 @@ def main():
 
     if args.dry_run:
         stop_at_step = 25000 + args.dry_run_steps
-        staged_gates = [25000 + args.dry_run_steps]
-        logger.info("DRY RUN ACTIVE: Training will execute from 25,000 to %d steps.", stop_at_step)
+        staged_gates = []
+        logger.info("DRY RUN ACTIVE: Training will execute from 25,000 to %d steps with staged_gates=[].", stop_at_step)
     else:
         logger.info("Starting controlled continuation from %s to step %d", baseline_path, stop_at_step)
         logger.info("Gates scheduled: %s", staged_gates)

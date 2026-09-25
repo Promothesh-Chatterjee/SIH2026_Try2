@@ -29,6 +29,7 @@ experiments/checkpoints/production_baseline/*
 !experiments/checkpoints/production_baseline/benchmark_v2_baseline_gate25k.json
 !experiments/checkpoints/production_baseline/benchmark_v2_multiseed_summary.json
 !experiments/checkpoints/production_baseline/SHA256SUMS
+!experiments/checkpoints/production_baseline/BASELINE_MANIFEST.json
 
 # CI / Test artefacts & patch scripts
 *_output.txt

@@ -77,6 +77,19 @@ BELIEF_CONTRACT = {
 }
 
 
+PROJECT_ENGINEERING_ACCEPTANCE = {
+    "label": "PROJECT_ENGINEERING_ACCEPTANCE_THRESHOLD",
+    "description": "Internal project engineering acceptance criteria (not external DRDO mandate)",
+    "pd_min": 0.90,
+    "pfa_max": 0.001,
+    "empirical_sensitivity_requirement_dbm": -100.0,
+    "mean_ir_min": 0.40,
+    "reward_min": 0.0,
+    "correct_decision_min": 95.0,
+    "operational_latency_max_us": 400.0,
+}
+
+
 def _file_sha256(path: Path) -> str:
     """Compute hex SHA256 of file contents."""
     if not path.exists():
@@ -104,8 +117,12 @@ def _git_commit() -> str:
 def get_benchmark_contract(data_root: Path | str | None = None) -> Dict[str, Any]:
     """Assemble complete 14-point benchmark contract payload."""
     frozen_ckpt_path = (
-        REPO_ROOT / "experiments" / "checkpoints" / "scheduler_v2_operational_candidate" / "checkpoint_gate_25000_frozen.pt"
+        REPO_ROOT / "experiments" / "checkpoints" / "production_baseline" / "checkpoint_gate_25000_frozen.pt"
     )
+    if not frozen_ckpt_path.exists():
+        frozen_ckpt_path = (
+            REPO_ROOT / "experiments" / "checkpoints" / "scheduler_v2_operational_candidate" / "checkpoint_gate_25000_frozen.pt"
+        )
     norm_stats_path = REPO_ROOT / "experiments" / "checkpoints" / "deinterleaver" / "normalization_stats.json"
     model_cfg_path = REPO_ROOT / "configs" / "model_config.yaml"
     train_cfg_path = REPO_ROOT / "configs" / "training_config.yaml"
@@ -139,6 +156,7 @@ def get_benchmark_contract(data_root: Path | str | None = None) -> Dict[str, Any
         "action_space": ACTION_SPACE_CONTRACT,
         "observation_dim": OBSERVATION_CONTRACT,
         "belief_configuration": BELIEF_CONTRACT,
+        "project_engineering_acceptance": PROJECT_ENGINEERING_ACCEPTANCE,
     }
     return contract
 
@@ -197,6 +215,19 @@ def generate_benchmark_markdown(contract: Dict[str, Any]) -> str:
         "",
         f"- EMA Detection Smoothing: `alpha = {contract['belief_configuration']['ema_alpha']}`",
         f"- Confirmed Miss Decay: `alpha_miss_confirmed = {contract['belief_configuration']['ema_alpha_miss_confirmed']}`",
+        "",
+        "## 6. Project Engineering Acceptance Thresholds",
+        "",
+        f"> **Notice**: The following criteria are explicitly labeled as `{contract['project_engineering_acceptance']['label']}`",
+        "> and represent internal project qualification gates, distinct from external DRDO requirements.",
+        "",
+        f"- **Minimum Probability of Detection (Pd)**: `{contract['project_engineering_acceptance']['pd_min'] * 100:.1f}%`",
+        f"- **Maximum Probability of False Alarm (Pfa)**: `{contract['project_engineering_acceptance']['pfa_max'] * 100:.2f}%`",
+        f"- **Empirical Detection Sensitivity Threshold**: `{contract['project_engineering_acceptance']['empirical_sensitivity_requirement_dbm']} dBm` (at Pd >= 90%)",
+        f"- **Minimum Mean Intercept Rate (IR)**: `{contract['project_engineering_acceptance']['mean_ir_min'] * 100:.1f}%`",
+        f"- **Minimum Average Episodic Reward**: `> {contract['project_engineering_acceptance']['reward_min']:.1f}`",
+        f"- **Minimum Correct Decision Accuracy**: `{contract['project_engineering_acceptance']['correct_decision_min']:.1f}%`",
+        f"- **Maximum Operational Intercept Latency**: `{contract['project_engineering_acceptance']['operational_latency_max_us']} µs`",
         "",
     ])
     return "\n".join(lines)

@@ -159,8 +159,9 @@ def run_sensitivity_calibration(
             "margin_db": margin_db,
             "detector_calibration_validity": True,
             "system_requirement_compliance": {
-                "status": "NO_FORMAL_REQUIREMENT_SPECIFIED",
-                "description": "No formal empirical sensitivity compliance threshold defined in project specification.",
+                "status": "COMPLIANT_WITH_PROJECT_ENGINEERING_ACCEPTANCE" if (emp_sens is not None and emp_sens <= -100.0) else "NON_COMPLIANT",
+                "description": "Project Engineering Acceptance Threshold: S_emp <= -100.0 dBm at Pd >= 90% (distinct from external DRDO requirements).",
+                "threshold_dbm": -100.0,
                 "empirical_sensitivity_measured_dbm": emp_sens,
             },
             "scientific_note": (
