@@ -22,12 +22,12 @@
 - **Reference Baselines**: `Random`, `RoundRobin`, `HighestOccupancy` (Classical comparison baselines)
 
 ### Authoritative Performance Summary
-| Scheduler | Pd (%) | Pfa (%) | S_min (dBm) | Intercept Rate (%) | Avg Reward | TP | FN | FP | TN | Total Dwells |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **SmartScan_DRQN_MoE** | **94.95%** | **0.00%** | **-110.0 dBm** | **42.14%** | **5.346** | 2107 | 112 | 0 | 2781 | 5000 |
-| **Random** | **93.28%** | **0.00%** | **-110.0 dBm** | **2.50%** | **-0.763** | 125 | 9 | 0 | 4866 | 5000 |
-| **RoundRobin** | **91.60%** | **0.00%** | **-110.0 dBm** | **2.18%** | **-0.806** | 109 | 10 | 0 | 4881 | 5000 |
-| **HighestOccupancy** | **98.65%** | **0.00%** | **-110.0 dBm** | **33.70%** | **4.052** | 1685 | 23 | 0 | 3292 | 5000 |
+| Scheduler | Pd (%) | Pfa (%) | S_min (dBm) | Intercept Rate (%) | Avg Reward | Correct Decisions (%) | TP | FN | FP | TN | Total Dwells |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **SmartScan_DRQN_MoE** | **94.95%** | **0.00%** | **-110.0 dBm** | **42.14%** | **5.346** | **97.76%** | 2107 | 112 | 0 | 2781 | 5000 |
+| **Random** | **93.28%** | **0.00%** | **-110.0 dBm** | **2.50%** | **-0.763** | **99.82%** | 125 | 9 | 0 | 4866 | 5000 |
+| **RoundRobin** | **91.60%** | **0.00%** | **-110.0 dBm** | **2.18%** | **-0.806** | **99.80%** | 109 | 10 | 0 | 4881 | 5000 |
+| **HighestOccupancy** | **98.65%** | **0.00%** | **-110.0 dBm** | **33.70%** | **4.052** | **99.54%** | 1685 | 23 | 0 | 3292 | 5000 |
 
 ### Mathematical Invariants (Strictly Satisfied)
 1. **Dwell Conservation**: $TP + FN + FP + TN == 5000$ dwells for every scheduler.
@@ -43,6 +43,11 @@
 3. **Probability of False Alarm**: Canonical decision-level $P_{fa} = \frac{FP}{FP + TN} = 0.00\%$. In deterministic evaluation, $P_{fa}=0$ reflects the simulated receiver model having zero unprompted triggers, not an empirical proof of zero noise false alarms in real RF hardware.
 4. **Sensitivity**: Receiver minimum detectable signal floor $S_{min} = -110.0$ dBm (grounded in the 39 dB processing gain channelized receiver model).
 5. **Operational Superiority**: `SmartScan_DRQN_MoE` outperforms all baselines with Intercept Rate of **42.14%** (vs 33.70% for HighestOccupancy, 2.50% for Random, 2.18% for RoundRobin) and Average Reward of **5.346** (vs 4.052 for HighestOccupancy, -0.763 for Random, -0.806 for RoundRobin).
+6. **Correct Decision Rate**: $\text{Correct} = \frac{TP + TN}{TP + TN + FP + FN} \times 100$:
+   - `SmartScan_DRQN_MoE`: $(2107 + 2781) / 5000 = 97.76\%$. (The historical 72.60% figure in prior reports was an audited bug in `ew_metrics.py` where dwells were compared against a spectrum-wide active mask instead of the decision-level selected band).
+   - `Random`: $(125 + 4866) / 5000 = 99.82\%$
+   - `RoundRobin`: $(109 + 4881) / 5000 = 99.80\%$
+   - `HighestOccupancy`: $(1685 + 3292) / 5000 = 99.54\%$
 
 ## Archived (superseded)
 - `reports/archive/benchmark_results_gate25k_baseline.json`

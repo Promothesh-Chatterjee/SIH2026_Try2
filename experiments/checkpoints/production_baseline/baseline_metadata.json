@@ -3,8 +3,10 @@
   "status": "IMMUTABLE_PRODUCTION_BASELINE",
   "checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
   "benchmark_version": "2026.1-CANONICAL",
-  "git_commit": "2eabd98d70bfb28b830086e756b2598416d92cef",
+  "metric_contract": "v2.0-audited-confusion-matrix",
+  "git_commit": "17260c7edbe644820ba06e5ae4f209cc5234c464",
   "architecture": {
+    "scheduler": "V2_DRQN / SmartScan_DRQN_MoE",
     "obs_dim": 360,
     "n_bands": 36,
     "n_modes": 5,
@@ -25,13 +27,31 @@
     "ema_alpha": 0.3,
     "ema_alpha_miss_confirmed": 0.2
   },
-  "reproduced_metrics": {
+  "current_canonical_metrics": {
+    "benchmark_version": "2026.1-CANONICAL",
+    "metric_contract": "v2.0-audited-confusion-matrix",
+    "dwells_per_scenario": 500,
+    "n_scenarios": 10,
+    "total_dwells": 5000,
+    "seed": 42,
+    "mean_ir_pct": 42.14,
+    "pd_pct": 94.95,
+    "pfa_pct": 0.0,
+    "pct_correct_predictions": 97.76,
+    "avg_reward": 5.346,
+    "sensitivity_dbm": -110.0,
+    "avg_intercept_time_error_us": 279.77,
+    "confusion_matrix": {
+      "tp": 2107,
+      "fn": 112,
+      "fp": 0,
+      "tn": 2781
+    }
+  },
+  "historical_non_comparable_metrics_pre_v2_audit": {
+    "note": "Archived evaluation contract with per-observation accounting and FN=0 bug. Not comparable to canonical 2026.1.",
     "mean_ir_pct": 60.45,
-    "agile_ir_pct": 46.7,
-    "sparse_ir_pct": 17.6,
-    "worst_case_ir_pct": 12.4,
     "pd_pct": 99.85,
-    "pfa": 0.0,
-    "distinct_bands": 29.9
+    "pfa": 0.0
   }
 }

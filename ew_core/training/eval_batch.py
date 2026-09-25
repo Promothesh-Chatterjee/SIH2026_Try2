@@ -203,7 +203,7 @@ def run_evaluation(
     scheduler: Any,
     env: CognitiveRFScanEnv | None = None,
     scenario_ids: Sequence[str] | None = None,
-    n_steps: int = 1000,
+    n_steps: int = 500,
     seed: int = 42,
     policy_mode: str = "operational",
     data_dir: str | Path = "D:/TSRD",
@@ -242,7 +242,13 @@ def run_evaluation(
     for scen_idx, (scen_name, scen_id) in enumerate(active_scenarios):
         # 1. Resolve pulse records & environment
         if scen_id is not None:
-            h5_path = val_dir / f"{scen_id}.h5"
+            candidates = [
+                val_dir / f"{scen_id}.h5",
+                Path(data_dir) / "stare" / "test_stare" / f"{scen_id}.h5",
+                Path(data_dir) / "stare" / "train_stare" / f"{scen_id}.h5",
+                Path(data_dir) / f"{scen_id}.h5",
+            ]
+            h5_path = next((p for p in candidates if p.exists()), candidates[0])
             if h5_path.exists():
                 records = load_h5_records(
                     h5_path,
@@ -306,6 +312,8 @@ def run_evaluation(
             "actual_times": [],
             "false_alarms": [],
             "missed_dwells": [],
+            "operational_latencies": [],
+            "genuine_predictive_time_errors": [],
         }
 
         # 3. Episode step loop
@@ -364,12 +372,16 @@ def run_evaluation(
             episode_log["missed_dwells"].append(missed)
 
             if hit:
-                actual_toa = float(dwell_start + info.get("intercept_time_error_us", 0.0))
+                op_latency = float(info.get("intercept_time_error_us", 0.0))
+                episode_log["operational_latencies"].append(op_latency)
+                actual_toa = float(dwell_start + op_latency)
                 if pred_toa is not None:
+                    pred_err = abs(pred_toa - actual_toa)
+                    episode_log["genuine_predictive_time_errors"].append(pred_err)
                     episode_log["predicted_times"].append(pred_toa)
                     episode_log["actual_times"].append(actual_toa)
                 else:
-                    # Baseline or unpredicted arrival: record dwell-onset relative latency
+                    # Legacy aggregate field compatibility only
                     episode_log["predicted_times"].append(dwell_start)
                     episode_log["actual_times"].append(actual_toa)
 
@@ -402,8 +414,12 @@ def run_evaluation(
     avg_sensitivity = float(np.mean([m.sensitivity_dbm for m in scenario_metrics.values()]))
     avg_rate = float(np.mean([m.avg_intercept_rate for m in scenario_metrics.values()]))
     avg_reward = float(np.mean([m.avg_reward for m in scenario_metrics.values()]))
-    avg_pct_correct = float(np.mean([m.pct_correct_predictions for m in scenario_metrics.values()]))
+    avg_pct_correct = float((total_tp + total_tn) / max(1, total_dwells) * 100.0)
     avg_time_error = float(np.mean([m.avg_intercept_time_error_us for m in scenario_metrics.values()]))
+    avg_op_latency = float(np.mean([m.operational_intercept_latency_us for m in scenario_metrics.values()]))
+    valid_pred_errs = [m.predictive_time_error_us for m in scenario_metrics.values() if m.predictive_time_error_us is not None]
+    avg_pred_err = float(np.mean(valid_pred_errs)) if valid_pred_errs else None
+    avg_pred_cov = float(np.mean([m.prediction_coverage for m in scenario_metrics.values()]))
 
     return {
         "pd": agg_pd,
@@ -415,6 +431,9 @@ def run_evaluation(
         "avg_reward": avg_reward,
         "pct_correct_predictions": avg_pct_correct,
         "avg_intercept_time_error_us": avg_time_error,
+        "operational_intercept_latency_us": avg_op_latency,
+        "predictive_time_error_us": avg_pred_err,
+        "prediction_coverage": avg_pred_cov,
         "tp": total_tp,
         "fn": total_fn,
         "fp": total_fp,

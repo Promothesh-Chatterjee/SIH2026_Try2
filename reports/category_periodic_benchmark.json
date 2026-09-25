@@ -1,0 +1,457 @@
+{
+  "experiment": "category_and_periodic_scan_validation",
+  "benchmark_contract": "2026.1-CANONICAL",
+  "checkpoint_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+  "n_steps_per_scenario": 500,
+  "timestamp_utc": "2026-09-25T15:38:57.571174+00:00",
+  "scenario_profiles": {
+    "config_117": {
+      "scenario_id": "config_117",
+      "total_emitters": 22,
+      "category": "frequency_agile",
+      "n_agile": 8,
+      "n_fixed": 14,
+      "n_periodic": 21,
+      "n_omni": 1,
+      "agile_fraction": 0.36363636363636365,
+      "periodic_fraction": 0.9545454545454546,
+      "mean_scan_period_ms": 7583.333333333333,
+      "frequency_modes": {
+        "FixedSingle": 13,
+        "HoppingSawtooth": 5,
+        "FixedMultiSimultaneous": 1,
+        "RandomRange": 2,
+        "HoppingLinear": 1
+      },
+      "scan_types": {
+        "Circular": 21,
+        "Omni": 1
+      },
+      "pri_modes": {
+        "Fixed": 8,
+        "Staggered": 12,
+        "SwitchDwell": 1,
+        "Jittered": 1
+      }
+    },
+    "config_119": {
+      "scenario_id": "config_119",
+      "total_emitters": 62,
+      "category": "mixed",
+      "n_agile": 15,
+      "n_fixed": 47,
+      "n_periodic": 59,
+      "n_omni": 3,
+      "agile_fraction": 0.24193548387096775,
+      "periodic_fraction": 0.9516129032258065,
+      "mean_scan_period_ms": 21537.652633408423,
+      "frequency_modes": {
+        "RandomRange": 7,
+        "FixedSingle": 37,
+        "FixedMultiSimultaneous": 10,
+        "RandomFixed": 4,
+        "HoppingSawtooth": 2,
+        "HoppingLinear": 2
+      },
+      "scan_types": {
+        "Circular": 59,
+        "Omni": 3
+      },
+      "pri_modes": {
+        "SwitchDwell": 12,
+        "Fixed": 29,
+        "Staggered": 14,
+        "Jittered": 6,
+        "Sliding": 1
+      }
+    },
+    "config_143": {
+      "scenario_id": "config_143",
+      "total_emitters": 9,
+      "category": "frequency_agile",
+      "n_agile": 4,
+      "n_fixed": 5,
+      "n_periodic": 9,
+      "n_omni": 0,
+      "agile_fraction": 0.4444444444444444,
+      "periodic_fraction": 1.0,
+      "mean_scan_period_ms": 3537.037037037037,
+      "frequency_modes": {
+        "FixedMultiSimultaneous": 1,
+        "FixedSingle": 4,
+        "RandomFixed": 2,
+        "HoppingLinear": 2
+      },
+      "scan_types": {
+        "Circular": 9
+      },
+      "pri_modes": {
+        "SwitchDwell": 2,
+        "Fixed": 1,
+        "Staggered": 6
+      }
+    },
+    "config_194": {
+      "scenario_id": "config_194",
+      "total_emitters": 66,
+      "category": "mixed",
+      "n_agile": 19,
+      "n_fixed": 47,
+      "n_periodic": 62,
+      "n_omni": 4,
+      "agile_fraction": 0.2878787878787879,
+      "periodic_fraction": 0.9393939393939394,
+      "mean_scan_period_ms": 27749.714406471412,
+      "frequency_modes": {
+        "FixedSingle": 38,
+        "FixedMultiSimultaneous": 9,
+        "HoppingSawtooth": 8,
+        "HoppingLinear": 3,
+        "RandomRange": 5,
+        "RandomFixed": 3
+      },
+      "scan_types": {
+        "Circular": 62,
+        "Omni": 4
+      },
+      "pri_modes": {
+        "Fixed": 26,
+        "SwitchDwell": 18,
+        "Staggered": 16,
+        "Jittered": 6
+      }
+    },
+    "config_195": {
+      "scenario_id": "config_195",
+      "total_emitters": 65,
+      "category": "frequency_agile",
+      "n_agile": 23,
+      "n_fixed": 42,
+      "n_periodic": 63,
+      "n_omni": 2,
+      "agile_fraction": 0.35384615384615387,
+      "periodic_fraction": 0.9692307692307692,
+      "mean_scan_period_ms": 34318.52882253371,
+      "frequency_modes": {
+        "FixedSingle": 34,
+        "RandomFixed": 4,
+        "RandomRange": 8,
+        "HoppingLinear": 5,
+        "HoppingSawtooth": 6,
+        "FixedMultiSimultaneous": 8
+      },
+      "scan_types": {
+        "Omni": 2,
+        "Circular": 63
+      },
+      "pri_modes": {
+        "Fixed": 29,
+        "SwitchDwell": 8,
+        "Jittered": 9,
+        "Staggered": 18,
+        "Sliding": 1
+      }
+    },
+    "config_241": {
+      "scenario_id": "config_241",
+      "total_emitters": 41,
+      "category": "mixed",
+      "n_agile": 13,
+      "n_fixed": 28,
+      "n_periodic": 41,
+      "n_omni": 0,
+      "agile_fraction": 0.3170731707317073,
+      "periodic_fraction": 1.0,
+      "mean_scan_period_ms": 7877.128039433677,
+      "frequency_modes": {
+        "RandomRange": 8,
+        "FixedSingle": 27,
+        "FixedMultiSimultaneous": 1,
+        "HoppingLinear": 3,
+        "RandomFixed": 2
+      },
+      "scan_types": {
+        "Circular": 41
+      },
+      "pri_modes": {
+        "Jittered": 5,
+        "Fixed": 16,
+        "Staggered": 11,
+        "Sliding": 1,
+        "SwitchDwell": 8
+      }
+    },
+    "config_29": {
+      "scenario_id": "config_29",
+      "total_emitters": 49,
+      "category": "mixed",
+      "n_agile": 11,
+      "n_fixed": 38,
+      "n_periodic": 47,
+      "n_omni": 2,
+      "agile_fraction": 0.22448979591836735,
+      "periodic_fraction": 0.9591836734693877,
+      "mean_scan_period_ms": 35455.71453774175,
+      "frequency_modes": {
+        "RandomRange": 2,
+        "FixedSingle": 27,
+        "FixedMultiSimultaneous": 11,
+        "HoppingSawtooth": 4,
+        "HoppingLinear": 4,
+        "RandomFixed": 1
+      },
+      "scan_types": {
+        "Circular": 47,
+        "Omni": 2
+      },
+      "pri_modes": {
+        "Jittered": 4,
+        "Fixed": 20,
+        "SwitchDwell": 12,
+        "Staggered": 13
+      }
+    },
+    "config_42": {
+      "scenario_id": "config_42",
+      "total_emitters": 51,
+      "category": "mixed",
+      "n_agile": 17,
+      "n_fixed": 34,
+      "n_periodic": 50,
+      "n_omni": 1,
+      "agile_fraction": 0.3333333333333333,
+      "periodic_fraction": 0.9803921568627451,
+      "mean_scan_period_ms": 5754.479222698242,
+      "frequency_modes": {
+        "FixedSingle": 26,
+        "RandomRange": 4,
+        "RandomFixed": 3,
+        "HoppingSawtooth": 6,
+        "FixedMultiSimultaneous": 8,
+        "HoppingLinear": 4
+      },
+      "scan_types": {
+        "Circular": 50,
+        "Omni": 1
+      },
+      "pri_modes": {
+        "SwitchDwell": 9,
+        "Jittered": 9,
+        "Fixed": 19,
+        "Staggered": 14
+      }
+    },
+    "config_64": {
+      "scenario_id": "config_64",
+      "total_emitters": 85,
+      "category": "mixed",
+      "n_agile": 26,
+      "n_fixed": 59,
+      "n_periodic": 81,
+      "n_omni": 4,
+      "agile_fraction": 0.3058823529411765,
+      "periodic_fraction": 0.9529411764705882,
+      "mean_scan_period_ms": 29635.207618337998,
+      "frequency_modes": {
+        "FixedSingle": 57,
+        "HoppingLinear": 7,
+        "HoppingSawtooth": 9,
+        "RandomRange": 7,
+        "RandomFixed": 3,
+        "FixedMultiSimultaneous": 2
+      },
+      "scan_types": {
+        "Omni": 4,
+        "Circular": 81
+      },
+      "pri_modes": {
+        "Fixed": 49,
+        "Jittered": 10,
+        "SwitchDwell": 10,
+        "Staggered": 16
+      }
+    },
+    "config_96": {
+      "scenario_id": "config_96",
+      "total_emitters": 88,
+      "category": "mixed",
+      "n_agile": 30,
+      "n_fixed": 58,
+      "n_periodic": 85,
+      "n_omni": 3,
+      "agile_fraction": 0.3409090909090909,
+      "periodic_fraction": 0.9659090909090909,
+      "mean_scan_period_ms": 23865.94198324628,
+      "frequency_modes": {
+        "FixedMultiSimultaneous": 12,
+        "HoppingSawtooth": 13,
+        "FixedSingle": 46,
+        "HoppingLinear": 9,
+        "RandomRange": 7,
+        "RandomFixed": 1
+      },
+      "scan_types": {
+        "Circular": 85,
+        "Omni": 3
+      },
+      "pri_modes": {
+        "SwitchDwell": 12,
+        "Staggered": 26,
+        "Fixed": 43,
+        "Jittered": 6,
+        "Sliding": 1
+      }
+    }
+  },
+  "category_grouping": {
+    "stationary_fixed": [],
+    "frequency_agile": [
+      "config_117",
+      "config_143",
+      "config_195"
+    ],
+    "periodic_scan": [],
+    "mixed": [
+      "config_119",
+      "config_194",
+      "config_241",
+      "config_29",
+      "config_42",
+      "config_64",
+      "config_96"
+    ]
+  },
+  "schedulers_evaluated": {
+    "SmartScan_DRQN_MoE": {
+      "overall": {
+        "mean_ir_pct": 42.14000000000001,
+        "pd_pct": 94.95268138801262,
+        "pfa_pct": 0.0,
+        "pct_correct_predictions": 97.76,
+        "avg_latency_us": 279.77113370847536,
+        "avg_reward": 5.103718792679381
+      },
+      "by_category": {
+        "frequency_agile": {
+          "scenario_count": 3,
+          "mean_ir_pct": 57.4,
+          "pd_pct": 90.40450588837686,
+          "pfa_pct": 0.0,
+          "avg_latency_us": 283.78285481714147
+        },
+        "mixed": {
+          "scenario_count": 7,
+          "mean_ir_pct": 35.6,
+          "pd_pct": 80.8255008317343,
+          "pfa_pct": 0.0,
+          "avg_latency_us": 278.0518246619043
+        }
+      }
+    },
+    "PeriodicScanAware_Heuristic": {
+      "overall": {
+        "mean_ir_pct": 29.659999999999997,
+        "pd_pct": 99.39678284182307,
+        "pfa_pct": 0.0,
+        "pct_correct_predictions": 99.82,
+        "avg_latency_us": 94.78798469081232,
+        "avg_reward": 3.4706989331721068
+      },
+      "by_category": {
+        "frequency_agile": {
+          "scenario_count": 3,
+          "mean_ir_pct": 42.6,
+          "pd_pct": 99.90338164251207,
+          "pfa_pct": 0.0,
+          "avg_latency_us": 217.31020235748497
+        },
+        "mixed": {
+          "scenario_count": 7,
+          "mean_ir_pct": 24.114285714285717,
+          "pd_pct": 42.26190476190476,
+          "pfa_pct": 0.0,
+          "avg_latency_us": 42.2784628336669
+        }
+      }
+    },
+    "FixedPeriodicScan": {
+      "overall": {
+        "mean_ir_pct": 6.68,
+        "pd_pct": 96.53179190751445,
+        "pfa_pct": 0.0,
+        "pct_correct_predictions": 99.76,
+        "avg_latency_us": 72.05812187358393,
+        "avg_reward": -0.1089721680925376
+      },
+      "by_category": {
+        "frequency_agile": {
+          "scenario_count": 3,
+          "mean_ir_pct": 8.466666666666667,
+          "pd_pct": 96.10169491525423,
+          "pfa_pct": 0.0,
+          "avg_latency_us": 128.52230378951148
+        },
+        "mixed": {
+          "scenario_count": 7,
+          "mean_ir_pct": 5.914285714285715,
+          "pd_pct": 41.125541125541126,
+          "pfa_pct": 0.0,
+          "avg_latency_us": 47.85918676675783
+        }
+      }
+    },
+    "RoundRobin": {
+      "overall": {
+        "mean_ir_pct": 2.18,
+        "pd_pct": 91.59663865546219,
+        "pfa_pct": 0.0,
+        "pct_correct_predictions": 99.8,
+        "avg_latency_us": 153.71368427579364,
+        "avg_reward": -0.8057073754461109
+      },
+      "by_category": {
+        "frequency_agile": {
+          "scenario_count": 3,
+          "mean_ir_pct": 2.933333333333333,
+          "pd_pct": 100.0,
+          "pfa_pct": 0.0,
+          "avg_latency_us": 206.7686115244709
+        },
+        "mixed": {
+          "scenario_count": 7,
+          "mean_ir_pct": 1.8571428571428572,
+          "pd_pct": 53.034547152194214,
+          "pfa_pct": 0.0,
+          "avg_latency_us": 130.97585831207485
+        }
+      }
+    },
+    "Random": {
+      "overall": {
+        "mean_ir_pct": 2.5,
+        "pd_pct": 93.28358208955224,
+        "pfa_pct": 0.0,
+        "pct_correct_predictions": 99.82,
+        "avg_latency_us": 97.77874041497815,
+        "avg_reward": -0.7650332603759877
+      },
+      "by_category": {
+        "frequency_agile": {
+          "scenario_count": 3,
+          "mean_ir_pct": 3.8666666666666667,
+          "pd_pct": 100.0,
+          "pfa_pct": 0.0,
+          "avg_latency_us": 150.89364284939236
+        },
+        "mixed": {
+          "scenario_count": 7,
+          "mean_ir_pct": 1.9142857142857146,
+          "pd_pct": 45.23809523809524,
+          "pfa_pct": 0.0,
+          "avg_latency_us": 75.01521080022918
+        }
+      }
+    }
+  },
+  "oracle_disclaimer": "All active policies are strictly operational and deployable. No oracle future-lookahead used."
+}

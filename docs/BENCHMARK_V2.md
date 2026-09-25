@@ -7,13 +7,13 @@
 ## 1. Provenance & Artifact Identity
 
 - **Benchmark Version**: `2026.1-CANONICAL`
-- **Git Commit**: `2eabd98d70bfb28b830086e756b2598416d92cef`
-- **Reference Candidate Checkpoint**: `cognitive_ew_smart_scan/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt`
+- **Git Commit**: `17260c7edbe644820ba06e5ae4f209cc5234c464`
+- **Reference Candidate Checkpoint**: `experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt`
   - SHA-256: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0`
-- **Normalization Statistics**: `cognitive_ew_smart_scan/checkpoints/deinterleaver/normalization_stats.json`
-  - SHA-256: `5dd523d6ce0720958d0eae5946badd1c4061296ffba7fa5883fd3b95625255db`
-- **Model Config**: `configs/model_config.yaml` (SHA-256: `a1442c7d05aa89de9463ecc5193ee93815a01a9aede6095076fca2b2af0460d7`)
-- **Training Config**: `configs/training_config.yaml` (SHA-256: `acb1f56b0cd9b567ff8625ac1289c6532a10d25e0d2019640234b3f42b483d8f`)
+- **Normalization Statistics**: `experiments/checkpoints/deinterleaver/normalization_stats.json`
+  - SHA-256: `a36a11d865b575cda2ab5e12dfeb9f5d5046af04322e654814d851c87a619b0b`
+- **Model Config**: `configs/model_config.yaml` (SHA-256: `f9a1a316b0726e37400a5b663b0946372cbbe1a8b6a8dcfa3375e074ea7b1280`)
+- **Training Config**: `configs/training_config.yaml` (SHA-256: `b727908e8d695307c98000f931b75ff604176a93b241bc3f53cc93757b3e5ec4`)
 - **Metric Engine Version**: `v2.0-audited-confusion-matrix`
 
 ## 2. Action & Observation Space Contracts
@@ -21,13 +21,14 @@
 - **Frequency Spectrum**: 36 Bands (0 to 18,000 MHz, 500 MHz IBW per band)
 - **Dwell Modes**: 5 Modes (0: SHORT 125µs, 1: NORMAL 500µs, 2: LONG 1250µs, 3: REVISIT 500µs, 4: PREEMPTIVE 500-1500µs)
 - **Joint Action Space**: `180` discrete actions (`band * 5 + mode`)
-- **Action Selection Policy**: `flat_argmax`
+- **Raw DRQN Action Selection**: `flat_argmax`
+- **Operational Policy**: `SmartScan_DRQN_MoE` (Stage-3 T1 temporal predictor + spatial guard)
 - **Observation Dimension**: `360` continuous floats (`[0.0, 1.0]`)
   - 10 features per band: occupancy, det_rate, miss_rate, uncertainty, revisit_age, emitter_count, deint_conf, pri_stability, agility, priority
 
 ## 3. Evaluation Horizon & Seed Policy
 
-- **Dwells per Scenario**: `1000` steps
+- **Dwells per Scenario**: `500` steps
 - **Official Demonstration Seed**: `42`
 - **Robustness Verification Seeds**: `[123, 999]`
 

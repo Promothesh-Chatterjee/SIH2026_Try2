@@ -1,138 +1,230 @@
-﻿"""Multi-Seed Comparative Benchmark Suite for Cognitive EW SmartScan.
+"""Canonical Multi-Seed Robustness Evaluator (Phase 5).
 
-Evaluates Random, RoundRobin, HighestOccupancy heuristic baseline,
-Gate-25k-Frozen, and Continuation models across seeds 42, 123, and 999.
-Computes comprehensive statistical distributions (mean ± std, median, min, max)
-over the canonical 10 held-out TSRD validation scenarios.
+Evaluates the exact SmartScan DRQN-MoE operational candidate policy across
+seeds [42, 123, 999] on the 10 canonical held-out TSRD validation scenarios
+at the authoritative 500-dwell evaluation horizon (5,000 dwells per seed,
+15,000 total dwells).
+
+Requirements:
+- Same 10 canonical scenarios: config_117, 119, 143, 194, 195, 241, 29, 42, 64, 96
+- Same 500 dwell horizon (5,000 dwells per policy per seed)
+- Same frozen Gate-25k checkpoint (SHA: 7a99c659...)
+- Same SmartScan MoE operational arbitration (Stage-3 T1 + spatial guard)
+- Real TSRD scenarios only (synthetic fallback strictly prohibited)
+- Comprehensive statistics: mean, std, 95% confidence interval, per-scenario spread,
+  worst-case scenario IR, Pd, Pfa, intercept latency.
 """
 
-import copy
+from __future__ import annotations
+
+import argparse
+import datetime
 import json
 import logging
-import os
 import sys
 from pathlib import Path
+from typing import Any, Dict
+
 import numpy as np
 import torch
-import yaml
 
-sys.path.insert(0, str(Path(".").resolve()))
-sys.path.insert(0, str(Path("ew_core").resolve()))
+repo_root = Path(__file__).resolve().parent.parent
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
 
-from ew_core.models.drqn_scheduler import DRQNScheduler
-from ew_core.environment.cognitive_rf_scan_env import CognitiveRFScanEnv
-from ew_core.training.staged_gate_evaluator import StagedGateEvaluator
-from ew_core.training.val_set import FixedValidationSet
-from ew_core.data.tsrd_root import resolve_tsrd_root
+from ew_core.training.eval_batch import run_evaluation
+from scripts.benchmark import (
+    CANONICAL_SCENARIOS,
+    DEFAULT_CHECKPOINT,
+    FROZEN_25K_SHA,
+    load_smartscan_moe,
+    resolve_checkpoint,
+)
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-logger = logging.getLogger("multi_seed_benchmark")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logger = logging.getLogger("benchmark_multiseed")
 
-def run_multi_seed_benchmark(seeds=[42, 123, 999], continuation_ckpt_path=None):
-    train_cfg_path = Path("configs/training_config.yaml")
-    with open(train_cfg_path, "r", encoding="utf-8") as f:
-        train_cfg = yaml.safe_load(f)
-    model_cfg_path = Path("configs/model_config.yaml")
-    with open(model_cfg_path, "r", encoding="utf-8") as f:
-        model_cfg = yaml.safe_load(f)
 
-    data_dir = resolve_tsrd_root(None, train_cfg)
-    frozen_ckpt_path = Path("experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt")
-    assert frozen_ckpt_path.exists(), f"Frozen checkpoint not found at {frozen_ckpt_path}"
+def compute_ci95(data: list[float] | np.ndarray) -> tuple[float, float]:
+    """Compute 95% Student's t or normal confidence interval."""
+    arr = np.asarray(data, dtype=np.float64)
+    if len(arr) < 2:
+        val = float(arr[0]) if len(arr) == 1 else 0.0
+        return (val, val)
+    mean = float(np.mean(arr))
+    # For small n=3, t_0.025 with df=2 is 4.303
+    t_val = 4.303 if len(arr) == 3 else 1.96
+    se = float(np.std(arr, ddof=1) / np.sqrt(len(arr)))
+    return (max(0.0, mean - t_val * se), mean + t_val * se)
 
-    env_cfg = copy.deepcopy(train_cfg.get("env", {}))
-    reward_cfg = copy.deepcopy(model_cfg.get("reward", {}))
-    full_env_cfg = {**env_cfg, **reward_cfg, "n_bands": 36, "n_modes": 5, "n_actions": 180}
-    full_env_cfg.setdefault("belief", {})
-    full_env_cfg["belief"]["ema_alpha_miss_confirmed"] = 0.20
 
-    # Load frozen 25k candidate
-    ckpt_25k = torch.load(frozen_ckpt_path, map_location="cpu", weights_only=False)
-    drqn_25k = DRQNScheduler(obs_dim=360, n_bands=36, n_modes=5, lstm_hidden=256, lstm_layers=2)
-    drqn_25k.load_state_dict(ckpt_25k["state_dict"])
-    drqn_25k.eval()
+def run_canonical_multiseed_benchmark(
+    checkpoint_path: Path | str | None = None,
+    seeds: list[int] | None = None,
+    n_steps: int = 500,
+    tsrd_root: str = "D:/TSRD",
+    output_path: str = "reports/multiseed_validation_results.json",
+    device: str = "cpu",
+) -> Dict[str, Any]:
+    """Execute authoritative multi-seed evaluation using exact canonical MoE policy."""
+    ckpt_path = resolve_checkpoint(checkpoint_path)
+    seeds_to_run = seeds or [42, 123, 999]
+    dev = torch.device(device)
 
-    # Optional continuation model
-    drqn_cont = None
-    if continuation_ckpt_path and Path(continuation_ckpt_path).exists():
-        ckpt_c = torch.load(continuation_ckpt_path, map_location="cpu", weights_only=False)
-        drqn_cont = DRQNScheduler(obs_dim=360, n_bands=36, n_modes=5, lstm_hidden=256, lstm_layers=2)
-        drqn_cont.load_state_dict(ckpt_c["state_dict"])
-        drqn_cont.eval()
+    logger.info("Initializing Canonical Multi-Seed Benchmark across seeds %s...", seeds_to_run)
+    logger.info("Using Checkpoint: %s (SHA: %s)", ckpt_path.name, FROZEN_25K_SHA[:16])
 
-    val_cfg = train_cfg.get("validation", {})
-    val_set = FixedValidationSet(
-        data_root=data_dir,
-        subset=str(val_cfg.get("subset", "val")),
-        mode="stare",
-        n_files=10,
-        seed=42,
-        allow_synthetic_fallback=False,
-    )
+    per_seed_results: Dict[str, Any] = {}
+    ir_list: list[float] = []
+    pd_list: list[float] = []
+    pfa_list: list[float] = []
+    correct_list: list[float] = []
+    latency_list: list[float] = []
+    worst_case_ir_list: list[float] = []
 
-    results_by_policy = {
-        "Random": [],
-        "RoundRobin": [],
-        "HighestOccupancy heuristic baseline": [],
-        "Gate-25k-Frozen": [],
-    }
-    if drqn_cont is not None:
-        results_by_policy["Continuation-Candidate"] = []
+    # Track per-scenario performance across seeds
+    scenario_ir_history: Dict[str, list[float]] = {s: [] for s in CANONICAL_SCENARIOS}
 
-    for s in seeds:
-        logger.info("Evaluating seed %d across policies...", s)
-        evaluator = StagedGateEvaluator(
-            output_dir=Path("experiments/checkpoints/scheduler_v2_operational_candidate"),
-            gates=[],
-            val_files=val_set.files_used,
-            env_config=full_env_cfg,
-            model_config=model_cfg,
-            train_config=train_cfg,
-            seed=s,
-            device=torch.device("cpu"),
+    for seed in seeds_to_run:
+        logger.info("--- Evaluating Seed %d (500 dwells x 10 scenarios = 5000 dwells) ---", seed)
+        moe = load_smartscan_moe(ckpt_path, device=dev)
+        eval_res = run_evaluation(
+            scheduler=moe,
+            scenario_ids=CANONICAL_SCENARIOS,
+            n_steps=n_steps,
+            seed=seed,
+            policy_mode="operational",
+            data_dir=tsrd_root,
+            device=dev,
         )
-        
-        bench_base = evaluator.evaluate_baseline_hierarchy(
-            drqn_25k,
-            moe=None,
-            n_steps=1000,
-            policies=["random", "round_robin", "highest_occupancy", "drqn"]
+
+        seed_ir = float(eval_res["avg_intercept_rate"] * 100.0)
+        seed_pd = float(eval_res["pd"] * 100.0)
+        seed_pfa = float(eval_res["pfa"] * 100.0)
+        seed_correct = float(eval_res["pct_correct_predictions"])
+        seed_latency = float(eval_res["avg_intercept_time_error_us"])
+
+        # Extract per-scenario IR and worst-case
+        scen_breakdown = eval_res.get("scenario_breakdown", {})
+        scen_irs = {}
+        for scen_name, metrics in scen_breakdown.items():
+            scen_ir = float(metrics.get("interception_rate", metrics.get("avg_intercept_rate", 0.0)) * 100.0)
+            scen_irs[scen_name] = scen_ir
+            if scen_name in scenario_ir_history:
+                scenario_ir_history[scen_name].append(scen_ir)
+
+        worst_scen_ir = float(min(scen_irs.values())) if scen_irs else 0.0
+
+        ir_list.append(seed_ir)
+        pd_list.append(seed_pd)
+        pfa_list.append(seed_pfa)
+        correct_list.append(seed_correct)
+        latency_list.append(seed_latency)
+        worst_case_ir_list.append(worst_scen_ir)
+
+        per_seed_results[str(seed)] = {
+            "seed": seed,
+            "mean_ir_pct": seed_ir,
+            "pd_pct": seed_pd,
+            "pfa_pct": seed_pfa,
+            "pct_correct_predictions": seed_correct,
+            "avg_latency_us": seed_latency,
+            "worst_case_ir_pct": worst_scen_ir,
+            "tp": int(eval_res["tp"]),
+            "fn": int(eval_res["fn"]),
+            "fp": int(eval_res["fp"]),
+            "tn": int(eval_res["tn"]),
+            "per_scenario_ir": scen_irs,
+        }
+        logger.info(
+            "Seed %d Result: IR=%.2f%%, Pd=%.2f%%, Pfa=%.4f%%, Correct=%.2f%%, Worst-Case IR=%.2f%%",
+            seed, seed_ir, seed_pd, seed_pfa, seed_correct, worst_scen_ir
         )
-        pol = bench_base["policies"]
-        results_by_policy["Random"].append(pol["random"]["intercept_rate"] * 100)
-        results_by_policy["RoundRobin"].append(pol["round_robin"]["intercept_rate"] * 100)
-        results_by_policy["HighestOccupancy heuristic baseline"].append(pol["highest_occupancy"]["intercept_rate"] * 100)
-        results_by_policy["Gate-25k-Frozen"].append(pol["drqn"]["intercept_rate"] * 100)
 
-        if drqn_cont is not None:
-            bench_c = evaluator.evaluate_baseline_hierarchy(
-                drqn_cont,
-                moe=None,
-                n_steps=1000,
-                policies=["drqn"]
-            )
-            results_by_policy["Continuation-Candidate"].append(bench_c["policies"]["drqn"]["intercept_rate"] * 100)
+    # Compute comprehensive distribution statistics
+    ir_arr = np.array(ir_list)
+    ci_low, ci_high = compute_ci95(ir_arr)
 
-    summary = {}
-    for pol_name, vals in results_by_policy.items():
-        arr = np.array(vals)
-        summary[pol_name] = {
-            "per_seed": {str(seeds[i]): float(vals[i]) for i in range(len(seeds))},
-            "mean": float(np.mean(arr)),
-            "std": float(np.std(arr)),
-            "median": float(np.median(arr)),
-            "min": float(np.min(arr)),
-            "max": float(np.max(arr)),
+    per_scenario_stats = {}
+    for s_name, s_vals in scenario_ir_history.items():
+        s_arr = np.array(s_vals) if s_vals else np.array([0.0])
+        per_scenario_stats[s_name] = {
+            "mean_ir_pct": float(np.mean(s_arr)),
+            "std_ir_pct": float(np.std(s_arr)),
+            "min_ir_pct": float(np.min(s_arr)),
+            "max_ir_pct": float(np.max(s_arr)),
+            "spread_ir_pct": float(np.max(s_arr) - np.min(s_arr)),
         }
 
-    report_path = Path("experiments/reports/benchmark_v2_multiseed_summary.json")
-    report_path.write_text(json.dumps(summary, indent=2))
-    logger.info("Multi-seed benchmark written to %s", report_path)
+    summary = {
+        "benchmark_contract": "2026.1-CANONICAL",
+        "evaluator": "scripts.benchmark_multiseed",
+        "policy": "SmartScan_DRQN_MoE_Stage3_operational",
+        "checkpoint_sha256": FROZEN_25K_SHA,
+        "n_steps_per_scenario": n_steps,
+        "total_dwells_per_seed": len(CANONICAL_SCENARIOS) * n_steps,
+        "seeds_evaluated": seeds_to_run,
+        "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "aggregate_metrics": {
+            "intercept_rate_pct": {
+                "mean": float(np.mean(ir_arr)),
+                "std": float(np.std(ir_arr)),
+                "median": float(np.median(ir_arr)),
+                "min": float(np.min(ir_arr)),
+                "max": float(np.max(ir_arr)),
+                "ci_95": [float(ci_low), float(ci_high)],
+            },
+            "pd_pct": {
+                "mean": float(np.mean(pd_list)),
+                "std": float(np.std(pd_list)),
+            },
+            "pfa_pct": {
+                "mean": float(np.mean(pfa_list)),
+                "std": float(np.std(pfa_list)),
+            },
+            "pct_correct_predictions": {
+                "mean": float(np.mean(correct_list)),
+                "std": float(np.std(correct_list)),
+            },
+            "worst_case_ir_pct": {
+                "mean": float(np.mean(worst_case_ir_list)),
+                "min": float(np.min(worst_case_ir_list)),
+            },
+            "avg_latency_us": {
+                "mean": float(np.mean(latency_list)),
+                "std": float(np.std(latency_list)),
+            },
+        },
+        "per_seed_results": per_seed_results,
+        "per_scenario_distribution": per_scenario_stats,
+    }
+
+    out_file = Path(output_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    out_file.write_text(json.dumps(summary, indent=2))
+    logger.info("Multi-seed benchmark successfully written to %s", out_file)
     return summary
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--continuation-ckpt", type=str, default=None)
+
+def main():
+    parser = argparse.ArgumentParser(description="Canonical Multi-Seed Robustness Evaluator")
+    parser.add_argument("--checkpoint", type=str, default=DEFAULT_CHECKPOINT)
+    parser.add_argument("--n_steps", type=int, default=500)
+    parser.add_argument("--seeds", type=int, nargs="+", default=[42, 123, 999])
+    parser.add_argument("--tsrd_root", type=str, default="D:/TSRD")
+    parser.add_argument("--output", type=str, default="reports/multiseed_validation_results.json")
+    parser.add_argument("--device", type=str, default="cpu")
     args = parser.parse_args()
-    run_multi_seed_benchmark(continuation_ckpt_path=args.continuation_ckpt)
+
+    run_canonical_multiseed_benchmark(
+        checkpoint_path=args.checkpoint,
+        seeds=args.seeds,
+        n_steps=args.n_steps,
+        tsrd_root=args.tsrd_root,
+        output_path=args.output,
+        device=args.device,
+    )
+
+
+if __name__ == "__main__":
+    main()

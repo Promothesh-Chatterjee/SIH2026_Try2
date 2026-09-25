@@ -19,7 +19,8 @@ training_mode: "real_tsrd"
 # ── Checkpoint ──────────────────────────────────────────────────────────────
 # Phase-1 RESUME: load from Gate-25k frozen baseline.
 # SHA256: 7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0
-scheduler_ckpt: "experiments/checkpoints/scheduler_v2_operational_candidate/checkpoint_gate_25000_frozen.pt"
+scheduler_ckpt: "experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt"
+weights_only: true
 
 # ── Perception ──────────────────────────────────────────────────────────────
 deinterleaver_ckpt: "experiments/checkpoints/deinterleaver/best.pt"
@@ -31,6 +32,7 @@ strict_perception: true
 scheduler:
   version: "v2"
   action_selection_mode: "flat_argmax"
+  weights_only: true
 
   # Resume contract: start counting from step 25k, train to 100k
   start_step: 25000
@@ -59,8 +61,8 @@ scheduler:
   # Thompson warmup: 0 (already past warmup in Gate-25k)
   thompson_warmup_steps: 0
 
-  # Staged gate evaluations: run at 50k and 100k
-  staged_gates: "50000,100000"
+  # Staged gate evaluations: run at 50k, 75k, and 100k
+  staged_gates: "50000,75000,100000"
 
   # Q-value stability
   target_q_max: 100.0

@@ -1,0 +1,111 @@
+{
+  "manifest_name": "HELD_OUT_TEST_SET_MANIFEST",
+  "version": "1.0",
+  "created_at_utc": "2026-09-25T15:38:00Z",
+  "status": "IMMUTABLE_HELD_OUT_EVALUATION_SET",
+  "scientific_role": "FINAL_UNSEEN_GENERALIZATION_ASSESSMENT",
+
+  "partition_contract": {
+    "training_set": {
+      "source_dir": "D:/TSRD/stare/train_stare",
+      "count": 2500,
+      "role": "Agent model training and experience replay buffer collection."
+    },
+    "canonical_validation_set": {
+      "source_dir": "D:/TSRD/stare/val_stare",
+      "scenarios": [
+        "config_117", "config_119", "config_143", "config_194", "config_195",
+        "config_241", "config_29", "config_42", "config_64", "config_96"
+      ],
+      "role": "Canonical intermediate gating and hyperparameter tuning during training."
+    },
+    "held_out_test_set": {
+      "source_dir": "D:/TSRD/stare/test_stare",
+      "count": 10,
+      "role": "Final generalization assessment. STRICT RULE: Must NEVER be used for model selection, reward tuning, or checkpoint gating."
+    }
+  },
+
+  "held_out_test_scenarios": {
+    "config_10": {
+      "file": "config_10.h5",
+      "sha256": "7d3c7ec72aea27a918ad616ba7e8247363d1ba1ada92f064062e6a8c9f58139c",
+      "category": "mixed",
+      "n_emitters": 44,
+      "agile_fraction": 0.1818,
+      "periodic_fraction": 0.9545
+    },
+    "config_25": {
+      "file": "config_25.h5",
+      "sha256": "cad8876e0aaa6abbaf4c0169bba469ec790697db4a799ce344cc68a622bcee9d",
+      "category": "frequency_agile",
+      "n_emitters": 36,
+      "agile_fraction": 0.3889,
+      "periodic_fraction": 0.9722
+    },
+    "config_50": {
+      "file": "config_50.h5",
+      "sha256": "05b5172d0f43df28588f9306ad4d7bc6771152bff199dbe62d93569c0731d05f",
+      "category": "frequency_agile",
+      "n_emitters": 79,
+      "agile_fraction": 0.3924,
+      "periodic_fraction": 0.9494
+    },
+    "config_75": {
+      "file": "config_75.h5",
+      "sha256": "6bc762e84015236c94ea168c84a03c28a94dc679063b1d02464acc43ac35ef60",
+      "category": "mixed",
+      "n_emitters": 34,
+      "agile_fraction": 0.2941,
+      "periodic_fraction": 0.9118
+    },
+    "config_100": {
+      "file": "config_100.h5",
+      "sha256": "fdd8e156b73ecbeebc1118486cc0c9692d65a3ecdd49858e0a67b8416c010c27",
+      "category": "frequency_agile",
+      "n_emitters": 81,
+      "agile_fraction": 0.3704,
+      "periodic_fraction": 0.9506
+    },
+    "config_125": {
+      "file": "config_125.h5",
+      "sha256": "e25db3e2951683e3a35f5479e64c8a58084047f96a1caa6bccf809d1b6cba723",
+      "category": "mixed",
+      "n_emitters": 79,
+      "agile_fraction": 0.2405,
+      "periodic_fraction": 0.9367
+    },
+    "config_150": {
+      "file": "config_150.h5",
+      "sha256": "08e4009503d0657955538807fa6343ea973e5e1f09896c606d329caa3d5aff0f",
+      "category": "mixed",
+      "n_emitters": 46,
+      "agile_fraction": 0.2391,
+      "periodic_fraction": 0.9783
+    },
+    "config_175": {
+      "file": "config_175.h5",
+      "sha256": "da17ca330553281226efafc8ec5968176778975469b0285f71ec09455b70811d",
+      "category": "mixed",
+      "n_emitters": 17,
+      "agile_fraction": 0.2941,
+      "periodic_fraction": 1.0
+    },
+    "config_200": {
+      "file": "config_200.h5",
+      "sha256": "71bfb2b8c82a84ff0fdbb52b42dfdad4c199ee5be12ef1ff022a4891ca39c488",
+      "category": "frequency_agile",
+      "n_emitters": 93,
+      "agile_fraction": 0.3548,
+      "periodic_fraction": 0.9677
+    },
+    "config_225": {
+      "file": "config_225.h5",
+      "sha256": "a10ae8c82d13cf44e960ff80c27a0cd50bff1f5a15087a621bba71672597c7dc",
+      "category": "mixed",
+      "n_emitters": 99,
+      "agile_fraction": 0.3232,
+      "periodic_fraction": 0.9697
+    }
+  }
+}

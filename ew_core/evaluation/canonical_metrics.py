@@ -101,6 +101,10 @@ class CanonicalMetrics:
     first_hit_latency_us: float | None = None
     mission_time_to_first_intercept_ms: float | None = None
     total_mission_time_ms: float = 0.0
+    # 10. Phase 2 Independent Timing Metrics
+    operational_intercept_latency_us: float = 0.0
+    predictive_time_error_us: float | None = None
+    prediction_coverage: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -132,6 +136,9 @@ def compute_canonical_metrics(
     action_counts: np.ndarray | Sequence[int],
     mode_counts: np.ndarray | Sequence[int],
     time_errors_us: list[float] | None = None,
+    operational_intercept_latencies_us: list[float] | None = None,
+    predictive_time_errors_us: list[float] | None = None,
+    prediction_coverage: float | None = None,
     first_detection_time_us: float | None = None,
     discovered_emitters: set[int] | list[int] | None = None,
     all_active_emitters: set[int] | list[int] | None = None,
@@ -166,6 +173,13 @@ def compute_canonical_metrics(
     # Latency / Timing Error
     valid_latencies = [x for x in (time_errors_us or []) if x == x and np.isfinite(x)]
     avg_latency = float(np.mean(valid_latencies)) if valid_latencies else 0.0
+
+    valid_ops = [x for x in (operational_intercept_latencies_us or []) if x == x and np.isfinite(x)]
+    op_latency = float(np.mean(valid_ops)) if valid_ops else avg_latency
+
+    valid_preds = [x for x in (predictive_time_errors_us or []) if x == x and np.isfinite(x)]
+    pred_error = float(np.mean(valid_preds)) if valid_preds else None
+    pred_cov = float(prediction_coverage) if prediction_coverage is not None else (float(len(valid_preds) / max(1, hits)) if hits > 0 else 0.0)
 
     # Counts and distributions
     b_counts = np.asarray(band_counts, dtype=np.int64)
@@ -238,6 +252,9 @@ def compute_canonical_metrics(
         tn=int(tn),
         active_opportunities=denom_pd,
         avg_intercept_time_error_us=avg_latency,
+        operational_intercept_latency_us=op_latency,
+        predictive_time_error_us=pred_error,
+        prediction_coverage=pred_cov,
         first_detection_time_us=first_detection_time_us,
         distinct_bands=distinct_bands,
         distinct_actions=distinct_actions,

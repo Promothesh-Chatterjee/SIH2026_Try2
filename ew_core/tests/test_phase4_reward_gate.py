@@ -146,18 +146,18 @@ class TestTask42TimeNormalizedReward:
             intercept_time_us=125.0,
         )
 
-        # Total rewards are identical because normalized hit time is identical (1.0 - 0.1 = 0.9 -> 8.0 + 4.5 = 12.5)
-        assert res_short["reward"] == pytest.approx(12.5, abs=1e-4)
+        # With mode-independent reference dwell (500us), earlier physical arrivals yield higher latency rewards:
+        assert res_short["reward"] == pytest.approx(12.875, abs=1e-4)
         assert res_norm["reward"] == pytest.approx(12.5, abs=1e-4)
-        assert res_long["reward"] == pytest.approx(12.5, abs=1e-4)
+        assert res_long["reward"] == pytest.approx(11.75, abs=1e-4)
 
-        # Reward per millisecond must scale inversely with dwell duration:
-        # SHORT (0.125 ms): 12.5 / 0.125 = 100.0 / ms
+        # Reward per millisecond scales with arrival speed:
+        # SHORT (0.125 ms): 12.875 / 0.125 = 103.0 / ms
         # NORMAL (0.500 ms): 12.5 / 0.500 = 25.0 / ms
-        # LONG (1.250 ms): 12.5 / 1.250 = 10.0 / ms
-        assert res_short["reward_per_ms"] == pytest.approx(100.0, abs=1e-2)
+        # LONG (1.250 ms): 11.75 / 1.250 = 9.4 / ms
+        assert res_short["reward_per_ms"] == pytest.approx(103.0, abs=1e-2)
         assert res_norm["reward_per_ms"] == pytest.approx(25.0, abs=1e-2)
-        assert res_long["reward_per_ms"] == pytest.approx(10.0, abs=1e-2)
+        assert res_long["reward_per_ms"] == pytest.approx(9.4, abs=1e-2)
 
         # SHORT > NORMAL > LONG in reward per unit mission time:
         assert res_short["reward_per_ms"] > res_norm["reward_per_ms"] > res_long["reward_per_ms"]

@@ -870,9 +870,8 @@ def train_scheduler(
     # Determine restart vs in-flight continuation contract
     is_baseline_restart = (
         ("frozen" in parent_path.name or "production_baseline" in str(parent_path))
-        and resume_checkpoint is None
         and not (isinstance(ckpt, dict) and int(ckpt.get("global_step", 0)) > 25000)
-    )
+    ) or bool(train_cfg.get("weights_only", False) or sched_cfg.get("weights_only", False))
 
     global_step = 0
     episode = 0
@@ -882,7 +881,7 @@ def train_scheduler(
     start_step = int(sched_cfg.get("start_step", 25000 if is_baseline_restart else 0))
 
     if is_baseline_restart:
-        logger.info("Phase 11 restart contract ACTIVE: fresh optimizer, fresh replay, fresh RNG, fresh exploration.")
+        logger.info("Weights-only baseline restart contract ACTIVE: fresh optimizer, fresh replay, fresh RNG, fresh exploration starting at step %d.", start_step)
         global_step = start_step
         episode = 0
         eps = eps_start

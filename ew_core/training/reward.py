@@ -467,6 +467,8 @@ def receiver_reward_components_v2(
     prediction_bonus = 0.0
     miss_penalty = 0.0
     false_alarm_pen = 0.0
+    false_alarm_penalty = 0.0
+    empty_dwell_penalty = 0.0
     redundant_pen = 0.0
     dwell_cost = 0.0
 
@@ -482,7 +484,11 @@ def receiver_reward_components_v2(
             start = float(dwell[0]) if len(dwell) >= 1 else 0.0
             first_time = float(getattr(detections[0], "time_us", start)) if detections else start
             t_hit = max(0.0, first_time - start)
-        latency_fraction = max(0.0, 1.0 - (t_hit / max(1.0, dwell_us)))
+        # D5 FIX: Mode-independent reference scale based on the canonical base dwell (500us).
+        # Eliminates the latency bonus exploit where selecting a LONG dwell inflated
+        # the bonus for the exact same physical intercept arrival time.
+        base_ref_dwell_us = float(_extra.get("base_dwell_time_us", 500.0))
+        latency_fraction = max(0.0, 1.0 - (t_hit / max(1.0, base_ref_dwell_us)))
         latency_reward = float(w_latency * latency_fraction)
 
         # 3. Frequency-Agile Interception Bonus
@@ -503,7 +509,16 @@ def receiver_reward_components_v2(
 
     else:
         # 6. Inactive Band (False Alarm / Empty Dwell)
-        false_alarm_pen = float(w_false_alarm)
+        # D7 FIX: Internally distinguish genuine False Alarm (detected signal on inactive band)
+        # from Empty Dwell (no signal on inactive band), while preserving the numerical total.
+        if is_detected:
+            false_alarm_penalty = float(w_false_alarm)
+            empty_dwell_penalty = 0.0
+        else:
+            false_alarm_penalty = 0.0
+            empty_dwell_penalty = float(w_false_alarm)
+        false_alarm_pen = false_alarm_penalty + empty_dwell_penalty
+
         effective_age = float(band_age) if band_age is not None else (
             float(belief.revisit_age[band]) if (band is not None and belief is not None and hasattr(belief, "revisit_age")) else 10.0
         )
@@ -602,6 +617,9 @@ def receiver_reward_components_v2(
         "miss_penalty": float(miss_penalty),
         "missed_coverage_penalty": float(missed_coverage_penalty),
         "false_alarm_penalty": float(false_alarm_pen),
+        "true_false_alarm_penalty": float(false_alarm_penalty),
+        "empty_dwell_penalty": float(empty_dwell_penalty),
+        "empty_dwell_or_false_alarm_pen": float(false_alarm_pen),
         "redundant_penalty": float(redundant_pen),
         "dwell_cost": float(dwell_cost),
         "lagrangian_pfa_penalty": float(lagrangian_pfa_penalty),

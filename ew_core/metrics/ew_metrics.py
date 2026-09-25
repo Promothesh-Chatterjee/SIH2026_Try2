@@ -71,6 +71,9 @@ class EWMetrics:
     avg_reward: float
     pct_correct_predictions: float
     avg_intercept_time_error_us: float
+    operational_intercept_latency_us: float = 0.0
+    predictive_time_error_us: float | None = None
+    prediction_coverage: float = 0.0
     n_intercepts: int = 0
     n_false_alarms: int = 0
     n_total_transmissions: int = 0
@@ -135,6 +138,9 @@ class EWMetrics:
             "avg_reward": float(self.avg_reward),
             "pct_correct_predictions": float(self.pct_correct_predictions),
             "avg_intercept_time_error_us": float(self.avg_intercept_time_error_us),
+            "operational_intercept_latency_us": float(self.operational_intercept_latency_us),
+            "predictive_time_error_us": float(self.predictive_time_error_us) if self.predictive_time_error_us is not None else None,
+            "prediction_coverage": float(self.prediction_coverage),
             "tp": tp_val,
             "fn": fn_val,
             "fp": fp_val,
@@ -278,27 +284,70 @@ def compute_avg_reward(rewards: Sequence[float] | np.ndarray) -> float:
 def compute_pct_correct_predictions(
     hits: Sequence[bool] | np.ndarray,
     active_mask: Sequence[bool] | np.ndarray,
+    *,
+    tp: int | None = None,
+    tn: int | None = None,
+    fp: int | None = None,
+    fn: int | None = None,
 ) -> float:
-    """Compute Percentage of Correct Predictions across all dwell steps.
+    """Compute Percentage of Correct Decisions across all dwell steps.
+
+    When decision-level confusion-matrix counts (tp, tn, fp, fn) are
+    provided, the authoritative selected-band formula is used:
+
+        pct_correct = (TP + TN) / (TP + TN + FP + FN) × 100
+
+    This is the CANONICAL definition aligned with the SIH evaluation
+    contract: a decision is correct if the scheduler selected a band
+    that was active AND detected it (TP), or selected an inactive band
+    AND did not false-alarm (TN).
 
     Parameters
     ----------
     hits : Sequence[bool] | np.ndarray
         Boolean sequence indicating if each dwell resulted in an interception.
+        Used only in the legacy fallback path.
     active_mask : Sequence[bool] | np.ndarray
         Boolean sequence indicating if any emitter was active during that step.
+        Used only in the legacy fallback path (DEPRECATED — uses spectrum-wide
+        mask rather than selected-band activity, producing incorrect results
+        when active emissions exist on unselected bands).
+    tp : int, optional
+        True Positives from selected-band confusion matrix.
+    tn : int, optional
+        True Negatives from selected-band confusion matrix.
+    fp : int, optional
+        False Positives from selected-band confusion matrix.
+    fn : int, optional
+        False Negatives from selected-band confusion matrix.
 
     Returns
     -------
     float
-        Percentage in [0.0, 100.0]. Returns 0.0 if arrays are empty.
-
-    Note
-    ----
-    A dwell step is counted as correct if:
-    - Receiver intercepted an active emitter (True Positive: hit=True, active=True), OR
-    - Spectrum was silent and receiver did not false-alarm (True Negative: hit=False, active=False).
+        Percentage in [0.0, 100.0]. Returns 0.0 if all inputs are empty/zero.
     """
+    # Authoritative path: use decision-level confusion matrix
+    if tp is not None and tn is not None:
+        _tp = int(tp)
+        _tn = int(tn)
+        _fp = int(fp) if fp is not None else 0
+        _fn = int(fn) if fn is not None else 0
+        total = _tp + _tn + _fp + _fn
+        if total == 0:
+            return 0.0
+        return float((_tp + _tn) / total * 100.0)
+
+    # Legacy fallback (DEPRECATED): spectrum-wide active mask comparison.
+    # This path produces incorrect results when active emissions exist on
+    # unselected bands (marking correct TN decisions as wrong).
+    import warnings
+    warnings.warn(
+        "compute_pct_correct_predictions called without confusion matrix counts. "
+        "Using deprecated spectrum-wide active_mask comparison which may produce "
+        "incorrect results. Pass tp/tn/fp/fn for the canonical selected-band metric.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     h = np.asarray(hits, dtype=bool)
     m = np.asarray(active_mask, dtype=bool)
     if h.size == 0 or m.size == 0:
@@ -452,8 +501,25 @@ def compute_all_metrics(
     pfa = canonical_pfa  # Authoritative decision-level Pfa = FP / (FP + TN)
     avg_intercept_rate = compute_avg_intercept_rate(hits)
     avg_reward = compute_avg_reward(rewards)
-    pct_correct = compute_pct_correct_predictions(hits, active_mask)
+    pct_correct = compute_pct_correct_predictions(hits, active_mask, tp=tp, tn=tn, fp=fp, fn=fn)
     avg_time_error = compute_avg_intercept_time_error(pred_times, act_times)
+
+    # Independent operational latency and predictive error separation (Phase 2)
+    raw_op_latencies = episode_log.get("operational_latencies", [])
+    if raw_op_latencies:
+        valid_ops = [x for x in raw_op_latencies if x is not None and np.isfinite(x)]
+        operational_latency = float(np.mean(valid_ops)) if valid_ops else 0.0
+    else:
+        operational_latency = float(avg_time_error)
+
+    raw_pred_errors = episode_log.get("genuine_predictive_time_errors", [])
+    if raw_pred_errors:
+        valid_preds = [x for x in raw_pred_errors if x is not None and np.isfinite(x)]
+        predictive_error = float(np.mean(valid_preds)) if valid_preds else None
+        prediction_coverage = float(len(valid_preds) / max(1, tp))
+    else:
+        predictive_error = None
+        prediction_coverage = 0.0
 
     return EWMetrics(
         pd=pd,
@@ -463,6 +529,9 @@ def compute_all_metrics(
         avg_reward=avg_reward,
         pct_correct_predictions=pct_correct,
         avg_intercept_time_error_us=avg_time_error,
+        operational_intercept_latency_us=operational_latency,
+        predictive_time_error_us=predictive_error,
+        prediction_coverage=prediction_coverage,
         n_intercepts=tp,
         n_false_alarms=fp,
         n_total_transmissions=n_total_transmissions,

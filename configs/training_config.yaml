@@ -29,8 +29,9 @@ deinterleaver:
 scheduler:
   version: "v2"
   action_selection_mode: "flat_argmax"
+  weights_only: true
   start_step: 25000
-  total_timesteps: 40000
+  total_timesteps: 100000
   freeze_advantage_head: false
   learning_rate: 2.5e-5
   replay_buffer_size: 50000
@@ -40,6 +41,7 @@ scheduler:
   update_freq: 4
   target_update_freq: 250
   thompson_warmup_steps: 0      # Post-warmup continuation (v2 state already trained)
+  staged_gates: "50000,75000,100000"
 
 
 environment:

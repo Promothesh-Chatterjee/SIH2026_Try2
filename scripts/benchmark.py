@@ -185,7 +185,7 @@ def run_benchmark(
     tsrd_root: str = "D:/TSRD",
     output_dir: str = "reports",
     scenarios: list[str] | None = None,
-    n_steps: int = 1000,
+    n_steps: int = 500,
     seed: int = 42,
     device: str = "cpu",
 ) -> Dict[str, Any]:

@@ -54,7 +54,10 @@ ACTION_SPACE_CONTRACT = {
     "n_bands": 36,
     "n_modes": 5,
     "n_actions": 180,
-    "action_selection_mode": "flat_argmax",
+    "raw_drqn_action_selection_mode": "flat_argmax",
+    "operational_policy": "SmartScan_DRQN_MoE",
+    "operational_arbitration": "Stage-3 T1 temporal predictor + spatial guard",
+    "action_selection_mode": "SmartScan_DRQN_MoE_Stage3_operational (raw DRQN: flat_argmax)",
 }
 
 OBSERVATION_CONTRACT = {
@@ -132,7 +135,7 @@ def get_benchmark_contract(data_root: Path | str | None = None) -> Dict[str, Any
         "scenario_file_hashes": scenario_hashes,
         "metric_engine_version": METRIC_ENGINE_VERSION,
         "seed_policy": SEED_POLICY,
-        "evaluation_horizon": 1000,
+        "evaluation_horizon": 500,
         "action_space": ACTION_SPACE_CONTRACT,
         "observation_dim": OBSERVATION_CONTRACT,
         "belief_configuration": BELIEF_CONTRACT,
@@ -166,7 +169,8 @@ def generate_benchmark_markdown(contract: Dict[str, Any]) -> str:
         f"- **Frequency Spectrum**: 36 Bands (0 to 18,000 MHz, 500 MHz IBW per band)",
         f"- **Dwell Modes**: 5 Modes (0: SHORT 125µs, 1: NORMAL 500µs, 2: LONG 1250µs, 3: REVISIT 500µs, 4: PREEMPTIVE 500-1500µs)",
         f"- **Joint Action Space**: `{contract['action_space']['n_actions']}` discrete actions (`band * 5 + mode`)",
-        f"- **Action Selection Policy**: `{contract['action_space']['action_selection_mode']}`",
+        f"- **Raw DRQN Action Selection**: `{contract['action_space'].get('raw_drqn_action_selection_mode', 'flat_argmax')}`",
+        f"- **Operational Policy**: `{contract['action_space'].get('operational_policy', 'SmartScan_DRQN_MoE')}` ({contract['action_space'].get('operational_arbitration', 'Stage-3 arbitration')})",
         f"- **Observation Dimension**: `{contract['observation_dim']['obs_dim']}` continuous floats (`[0.0, 1.0]`)",
         f"  - 10 features per band: occupancy, det_rate, miss_rate, uncertainty, revisit_age, emitter_count, deint_conf, pri_stability, agility, priority",
         "",

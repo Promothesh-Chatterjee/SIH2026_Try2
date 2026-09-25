@@ -196,3 +196,87 @@ class HighestUncertaintyScheduler:
         """
         action, _ = self.act(observation)
         return action
+
+
+class FixedPeriodicScanScheduler:
+    """Fixed cadence periodic scan baseline scheduler.
+
+    Repeatedly scans active/candidate bands with a fixed revisit period,
+    interleaving periodic revisit dwells at fixed intervals.
+    """
+
+    def __init__(self, n_bands: int = 36, n_modes: int = 5, scan_period_steps: int = 6) -> None:
+        self.n_bands = int(n_bands)
+        self.n_modes = int(n_modes)
+        self.scan_period_steps = int(scan_period_steps)
+        self._step = 0
+        self._tracked_bands: list[int] = []
+
+    def reset(self) -> None:
+        self._step = 0
+        self._tracked_bands.clear()
+
+    def update_result(self, hit: bool, band: int) -> None:
+        if hit and band not in self._tracked_bands:
+            self._tracked_bands.append(band)
+
+    def act(self, observation: Any) -> tuple[int, dict[str, Any]]:
+        # Every scan_period_steps, revisit tracked periodic emitter band
+        if self._tracked_bands and (self._step % self.scan_period_steps == 0):
+            idx = (self._step // self.scan_period_steps) % len(self._tracked_bands)
+            band = self._tracked_bands[idx]
+            mode = 3  # REVISIT mode
+        else:
+            band = self._step % self.n_bands
+            mode = 1  # NORMAL mode
+        self._step += 1
+        action = band * self.n_modes + mode
+        return action, {"source": "fixed_periodic_scan", "step": self._step - 1}
+
+    def step(self, observation: Any) -> int:
+        act, _ = self.act(observation)
+        return act
+
+
+class PeriodicScanAwareScheduler:
+    """Periodic-aware heuristic scheduler tracking scan phase offsets.
+
+    Uses belief state revisit urgency and stability features to anticipate
+    periodic emitter main-beam illuminations.
+    """
+
+    def __init__(self, n_bands: int = 36, n_modes: int = 5) -> None:
+        self.n_bands = int(n_bands)
+        self.n_modes = int(n_modes)
+        self._step = 0
+
+    def reset(self) -> None:
+        self._step = 0
+
+    def act(self, observation: Any) -> tuple[int, dict[str, Any]]:
+        # Extract per-band occupancy (feat 0), revisit age (feat 4), pri stability (feat 7), priority (feat 9)
+        obs = np.asarray(observation, dtype=np.float32).flatten()
+        best_band = 0
+        best_score = -1e9
+        for b in range(self.n_bands):
+            offset = b * 10
+            if offset + 9 < len(obs):
+                occ = obs[offset + 0]
+                age = obs[offset + 4]
+                stab = obs[offset + 7]
+                prio = obs[offset + 9]
+                score = occ * 1.5 + stab * 2.0 + age * 1.0 + prio * 1.0
+            else:
+                score = 0.0
+            if score > best_score:
+                best_score = score
+                best_band = b
+
+        mode = 3 if best_score > 2.0 else 1  # REVISIT if strong periodic candidate
+        self._step += 1
+        action = best_band * self.n_modes + mode
+        return action, {"source": "periodic_aware_heuristic", "band": best_band}
+
+    def step(self, observation: Any) -> int:
+        act, _ = self.act(observation)
+        return act

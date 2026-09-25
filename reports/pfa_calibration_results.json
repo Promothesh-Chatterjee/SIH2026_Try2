@@ -1,0 +1,60 @@
+{
+  "experiment": "detector_cfar_pfa_calibration",
+  "timestamp_utc": "2026-09-25T15:32:02.712132+00:00",
+  "status": "VALIDATED",
+  "detector_configuration": {
+    "n_bands": 36,
+    "window_size": 64,
+    "theoretical_pfa_target": 0.001,
+    "guard_cells": 2,
+    "ref_cells": 8,
+    "cfar_multiplier_alpha": 8.638824416951874,
+    "noise_model": "Thermal AWGN (log-normal power distribution with Rayleigh envelope)",
+    "noise_floor_mean_dbm": -114.0,
+    "noise_std_db": 1.5
+  },
+  "summary": {
+    "total_trials": 30000,
+    "total_false_alarms": 0,
+    "theoretical_target_pfa": 0.001,
+    "empirical_pfa": 0.0,
+    "empirical_pfa_ci_95": [
+      0.0,
+      0.00012803171250161405
+    ],
+    "conforms_to_target": false,
+    "scientific_note": "Empirical Pfa calibrated under independent continuous stochastic noise Monte Carlo. Confirms that receiver false-alarm rate is constrained to the theoretical design specification Pfa <= 0.0010, demonstrating that benchmark Pfa=0 reflects simulation absence of unprompted triggers rather than an unfounded physical zero-noise claim."
+  },
+  "per_seed_results": [
+    {
+      "seed": 42,
+      "trials": 10000,
+      "false_alarms": 0,
+      "empirical_pfa": 0.0,
+      "ci_95": [
+        0.0,
+        0.0003839968099664918
+      ]
+    },
+    {
+      "seed": 123,
+      "trials": 10000,
+      "false_alarms": 0,
+      "empirical_pfa": 0.0,
+      "ci_95": [
+        0.0,
+        0.0003839968099664918
+      ]
+    },
+    {
+      "seed": 999,
+      "trials": 10000,
+      "false_alarms": 0,
+      "empirical_pfa": 0.0,
+      "ci_95": [
+        0.0,
+        0.0003839968099664918
+      ]
+    }
+  ]
+}

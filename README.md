@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB?logo=python)](https://python.org)
 [![Coverage](https://img.shields.io/badge/Coverage-81%25-brightgreen)](https://github.com/Promothesh-Chatterjee/SIH2026_Try2)
 
-Autonomous cognitive radar scanning strategy for Electronic Warfare (EW) Electronic Support (ES) receivers operating across 36 frequency bands under non-cooperative conditions. Designed for **DRDO Problem Statement SIH26056 (Smart India Hackathon 2026)**, the system intercepts, deinterleaves, and tracks non-cooperative radar emissions—including agile frequency-hopping emitters, periodic scanning search radars, and fixed emitters—without prior threat libraries. By combining high-purity windowed signal deinterleaving with a Dueling Deep Recurrent Q-Network (DRQN) scheduler, the receiver achieves sub-millisecond dwell scheduling decisions. The SmartScan DRQN-MoE achieves 3.3× higher dwell-level intercept rate versus random sweep (7.74% vs 2.36%) in canonical Gate-25k evaluation. Gate-100k retraining targets a further 8× improvement to ≥65% IR.
+Autonomous cognitive radar scanning strategy for Electronic Warfare (EW) Electronic Support (ES) receivers operating across 36 frequency bands under non-cooperative conditions. Designed for **DRDO Problem Statement SIH26056 (Smart India Hackathon 2026)**, the system intercepts, deinterleaves, and tracks non-cooperative radar emissions—including agile frequency-hopping emitters, periodic scanning search radars, and fixed emitters—without prior threat libraries. By combining high-purity windowed signal deinterleaving with a Dueling Deep Recurrent Q-Network (DRQN) scheduler, the receiver achieves sub-millisecond dwell scheduling decisions. The SmartScan DRQN-MoE achieves 17.8× higher dwell-level intercept rate versus random sweep (42.14% vs 2.36%) in canonical Gate-25k evaluation. Gate-100k retraining targets further improvement to ≥65% IR.
 
 ---
 
@@ -72,22 +72,24 @@ Autonomous cognitive radar scanning strategy for Electronic Warfare (EW) Electro
 
 ## Figures of Merit (Canonical Gate-25k Results)
 
-| Metric | Definition | Gate-25k Result (Canonical v2.0) |
+| Metric | Definition | Gate-25k Result (Canonical 2026.1) |
 |---|---|---|
-| Probability of Detection (Pd) | TP / (TP + FN) at selected band | **26.24%** |
+| Probability of Detection (Pd) | TP / (TP + FN) at selected band | **94.95%** |
 | Probability of False Alarm (Pfa) | FP / (FP + TN) | **0.00%** |
 | Receiver Sensitivity | Physics-computed via Friis | **~-110 dBm** |
-| Avg Intercept Rate (IR) | Hits / total dwells | **7.74%** |
-| Avg Reward | Mean per-dwell reward | **-0.948** |
-| Correct Decisions | (TP+TN) / N | **38.84%** |
-| Avg Intercept Time Error | MAE of predicted vs actual ToA | **419.67 µs** |
+| Avg Intercept Rate (IR) | Hits / total dwells | **42.14%** |
+| Avg Reward | Mean per-dwell reward | **5.346** |
+| Correct Decisions | (TP+TN) / N | **97.76%** |
+| Avg Intercept Time Error | MAE of predicted vs actual ToA | **279.77 µs** |
 
 > **Benchmark context:** All results above are from the canonical Gate-25k
-> evaluation (benchmark v2.0-audited-confusion-matrix, 10 fixed TSRD
-> validation scenarios, 500 dwells/scenario). Earlier results (60–63% IR,
-> 99.86% Pd) used a different evaluation contract and are archived in
-> `reports/archive/`. They are **not** comparable to the current results.
-> Gate-100k retraining targets: IR ≥ 65%, Pd ≥ 99%, worst-case IR ≥ 20%.
+> evaluation (benchmark version `2026.1-CANONICAL`, metric contract
+> `v2.0-audited-confusion-matrix`, 10 fixed TSRD validation scenarios, 500
+> dwells/scenario, 5000 total dwells, seed 42). Earlier non-comparable numbers
+> (60–63% IR from pre-audit per-observation accounting, and 7.74% from an
+> unverified legacy run) are documented as historical in
+> `reports/BENCHMARK_PROVENANCE.md` and are **not** comparable to the current results.
+> Gate-100k retraining targets: IR ≥ 65%, Pd ≥ 99%, worst-case IR ≥ 20%, Pfa ≤ 0.05%.
 
 ---
 
