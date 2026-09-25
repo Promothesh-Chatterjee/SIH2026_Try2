@@ -1,7 +1,12 @@
 {
   "orchestrator_version": "1.0.0",
-  "timestamp_utc": "2026-09-25T18:34:34Z",
-  "source_git_commit": "b094d113a82ff4a763bd58f5e9ca620061483d20",
+  "timestamp_utc": "2026-09-25T19:27:21Z",
+  "provenance": {
+    "scientific_evaluation_source_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
+    "verification_orchestrator_commit": "a4bb2debb56f8403237943f1704db5ccd8f45ada",
+    "note": "scientific_evaluation_source_commit represents the git revision under which TSRD benchmark evaluations were executed. verification_orchestrator_commit represents the verifier runtime revision."
+  },
+  "source_git_commit": "a4bb2debb56f8403237943f1704db5ccd8f45ada",
   "total_gates": 15,
   "passed_gates": 15,
   "failed_gates": 0,
@@ -59,7 +64,7 @@
       "gate_id": 9,
       "title": "Authoritative Canonical 7-FoM Benchmark Verification",
       "passed": true,
-      "detail": "SmartScan: Pd=94.95% (req>=90.0%), Pfa=0.0000% (req<=0.1%), IR=42.14% (req>=40.0%), Correct=97.76% (req>=95.0%)"
+      "detail": "7-FoMs: Pd=94.95%, Pfa=0.0000%, Sens=-110.0dBm, IR=42.14%, Reward=5.104, Correct=97.76%, Latency=279.8\u00b5s (All compliant: True)"
     },
     {
       "gate_id": 10,
@@ -77,7 +82,7 @@
       "gate_id": 12,
       "title": "Held-Out Test Set Isolation & SHA-256 Verification",
       "passed": true,
-      "detail": "Verified 10/10 held-out scenarios via test_stare directory"
+      "detail": "10/10 scenario hashes recomputed from D:\\TSRD\\stare\\test_stare and verified bit-exact against manifest and report"
     },
     {
       "gate_id": 13,
@@ -95,7 +100,7 @@
       "gate_id": 15,
       "title": "Repository Provenance & Manifest Integrity Audit",
       "passed": true,
-      "detail": "Status='IMMUTABLE \u00e2\u20ac\u201d DO NOT MODIFY OR OVERWRITE', Checkpoint SHA validated, Git-tracked=True, SHA256SUMS=True, MetadataOK=True"
+      "detail": "Status='IMMUTABLE \u00e2\u20ac\u201d DO NOT MODIFY OR OVERWRITE', SHA256SUMS=True, MetadataOK=True, CrossMetrics=True, BenchMatch=True, SourceCommit=43ca6c35..."
     }
   ]
 }

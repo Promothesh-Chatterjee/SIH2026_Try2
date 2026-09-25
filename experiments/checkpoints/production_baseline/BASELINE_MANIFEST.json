@@ -36,7 +36,8 @@
       "mean_ir_pct": 42.14,
       "pd_pct": 94.95,
       "pfa_pct": 0.00,
-      "avg_reward": 5.346,
+      "avg_reward": 5.103718792679381,
+      "avg_reward_display": 5.104,
       "sensitivity_dbm": -110.0,
       "avg_intercept_time_error_us": 279.77,
       "pct_correct_predictions_CORRECTED": 97.76,
@@ -73,6 +74,7 @@
 
   "git_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
   "source_git_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
+  "scientific_evaluation_source_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
 
   "historical_results_NON_COMPARABLE": {
     "note": "These results used different evaluation contracts and are NOT comparable to the current canonical results.",

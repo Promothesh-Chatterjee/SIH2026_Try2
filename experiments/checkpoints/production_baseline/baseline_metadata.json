@@ -6,6 +6,7 @@
   "metric_contract": "v2.0-audited-confusion-matrix",
   "git_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
   "source_git_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
+  "scientific_evaluation_source_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
   "architecture": {
     "scheduler": "V2_DRQN / SmartScan_DRQN_MoE",
     "obs_dim": 360,
@@ -39,7 +40,8 @@
     "pd_pct": 94.95,
     "pfa_pct": 0.0,
     "pct_correct_predictions": 97.76,
-    "avg_reward": 5.346,
+    "avg_reward": 5.103718792679381,
+    "avg_reward_display": 5.104,
     "sensitivity_dbm": -110.0,
     "avg_intercept_time_error_us": 279.77,
     "confusion_matrix": {

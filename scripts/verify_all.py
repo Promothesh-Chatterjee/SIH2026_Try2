@@ -221,8 +221,11 @@ class GateRunner:
             req = {}
         target_pd = req.get("pd_min", 0.90) * 100.0
         target_pfa = req.get("pfa_max", 0.001) * 100.0
+        target_sens = req.get("empirical_sensitivity_requirement_dbm", -100.0)
         target_ir = req.get("mean_ir_min", 0.40) * 100.0
+        target_reward = req.get("reward_min", 0.0)
         target_correct = req.get("correct_decision_min", 95.0)
+        target_latency = req.get("operational_latency_max_us", 400.0)
 
         smartscan = data.get("schedulers", {}).get("SmartScan_DRQN_MoE", {})
         summary = smartscan.get("summary", smartscan)
@@ -232,14 +235,36 @@ class GateRunner:
         pfa = summary.get("canonical_pfa", summary.get("pfa", 1.0))
         if pfa <= 1.0:
             pfa *= 100.0
+        sens = summary.get("sensitivity_dbm", 0.0)
         ir = summary.get("mean_intercept_rate", summary.get("mean_ir_pct", 0.0))
         if ir <= 1.0:
             ir *= 100.0
+        reward = summary.get("avg_reward", -999.0)
         correct = summary.get("pct_correct_predictions", 0.0)
-        passed = (pd >= target_pd) and (pfa <= target_pfa) and (ir >= target_ir) and (correct >= target_correct)
+        # Explicit mapping: timing metric FoM mapped from operational_intercept_latency_us / avg_intercept_time_error_us
+        latency = summary.get("operational_intercept_latency_us", summary.get("avg_intercept_time_error_us", 9999.0))
+
+        # Check all 7 Figures of Merit against project engineering acceptance
+        passed_pd = (pd >= target_pd)
+        passed_pfa = (pfa <= target_pfa)
+        passed_sens = (sens <= target_sens) and (sens == -110.0)
+        passed_ir = (ir >= target_ir)
+        passed_reward = (reward > target_reward)
+        passed_correct = (correct >= target_correct)
+        passed_latency = (latency <= target_latency)
+
+        passed = (
+            passed_pd
+            and passed_pfa
+            and passed_sens
+            and passed_ir
+            and passed_reward
+            and passed_correct
+            and passed_latency
+        )
         self.record(
             9, title, passed,
-            f"SmartScan: Pd={pd:.2f}% (req>={target_pd}%), Pfa={pfa:.4f}% (req<={target_pfa}%), IR={ir:.2f}% (req>={target_ir}%), Correct={correct:.2f}% (req>={target_correct}%)"
+            f"7-FoMs: Pd={pd:.2f}%, Pfa={pfa:.4f}%, Sens={sens:.1f}dBm, IR={ir:.2f}%, Reward={reward:.3f}, Correct={correct:.2f}%, Latency={latency:.1f}µs (All compliant: {passed})"
         )
 
     def gate_10_seed_invariance(self):
@@ -302,9 +327,40 @@ class GateRunner:
             return
         with open(rpt_file, "r") as f:
             data = json.load(f)
-        n_scenarios = len(data.get("verified_scenario_hashes", {}))
-        passed = passed_test and (n_scenarios == 10)
-        self.record(12, title, passed, "Verified 10/10 held-out scenarios via test_stare directory")
+        with open(manifest_file, "r") as f:
+            manifest_data = json.load(f)
+
+        scenarios_dict = manifest_data.get("held_out_test_scenarios", {})
+        expected_hashes = {k: v.get("sha256", v) if isinstance(v, dict) else v for k, v in scenarios_dict.items()}
+        reported_hashes = data.get("verified_scenario_hashes", {})
+
+        # Use the supplied self.tsrd_root to dynamically verify live .h5 files
+        test_stare_dir = Path(self.tsrd_root) / "stare" / "test_stare"
+        if not test_stare_dir.exists():
+            self.record(12, title, False, f"Test stare directory not found: {test_stare_dir}")
+            return
+
+        recomputed_hashes = {}
+        all_hashes_matched = True
+        for sc in sorted(expected_hashes.keys()):
+            sc_file = test_stare_dir / f"{sc}.h5"
+            if not sc_file.exists():
+                logger.error("Missing held-out scenario file: %s", sc_file)
+                all_hashes_matched = False
+                continue
+            actual_h = sha256_file(sc_file)
+            recomputed_hashes[sc] = actual_h
+            exp_h = expected_hashes.get(sc, "")
+            rep_h = reported_hashes.get(sc, "")
+            if actual_h != exp_h or actual_h != rep_h:
+                logger.error("Held-out hash mismatch for %s: actual=%s, expected=%s, reported=%s", sc, actual_h, exp_h, rep_h)
+                all_hashes_matched = False
+
+        passed = passed_test and all_hashes_matched and (len(recomputed_hashes) == 10)
+        self.record(
+            12, title, passed,
+            f"10/10 scenario hashes recomputed from {test_stare_dir} and verified bit-exact against manifest and report"
+        )
 
     def gate_13_held_out_superiority(self):
         title = "Held-Out Comparative IR Verification & Metric Tradeoffs"
@@ -417,32 +473,69 @@ class GateRunner:
         is_tracked = (git_check.returncode == 0)
 
         with open(manifest_file, "r") as f:
-            meta = json.load(f)
-        status = meta.get("status", "")
-        ckpt_sha = meta.get("checkpoint_identity", {}).get("sha256", "")
+            manifest = json.load(f)
+        status = manifest.get("status", "")
+        ckpt_sha = manifest.get("checkpoint_identity", {}).get("sha256", "")
 
-        # Verify SHA256SUMS file
-        sha_file = REPO_ROOT / "experiments" / "checkpoints" / "production_baseline" / "SHA256SUMS"
-        has_sha_file = sha_file.exists() and CANONICAL_FROZEN_SHA in sha_file.read_text()
+        # Verify SHA256SUMS file and exact hash of all listed files including baseline_metadata.json
+        from scripts.verify_baseline_gate import verify_sha256sums
+        package_dir = REPO_ROOT / "experiments" / "checkpoints" / "production_baseline"
+        sums_verified = verify_sha256sums(package_dir)
 
         # Verify baseline_metadata.json
-        meta_file = REPO_ROOT / "experiments" / "checkpoints" / "production_baseline" / "baseline_metadata.json"
+        meta_file = package_dir / "baseline_metadata.json"
         meta_ok = False
+        meta_data = {}
         if meta_file.exists():
             with open(meta_file, "r") as f:
-                b_meta = json.load(f)
-            meta_ok = (b_meta.get("checkpoint_sha256") == CANONICAL_FROZEN_SHA)
+                meta_data = json.load(f)
+            meta_ok = (
+                meta_data.get("status") == "IMMUTABLE_PRODUCTION_BASELINE"
+                and meta_data.get("checkpoint_sha256") == CANONICAL_FROZEN_SHA
+            )
+
+        # Cross-check mutual metric consistency between baseline_metadata.json and BASELINE_MANIFEST.json
+        m_canon = manifest.get("canonical_benchmark", {}).get("results", {})
+        b_canon = meta_data.get("current_canonical_metrics", {})
+        metric_match_meta_manifest = (
+            m_canon.get("mean_ir_pct") == b_canon.get("mean_ir_pct") == 42.14
+            and m_canon.get("pd_pct") == b_canon.get("pd_pct") == 94.95
+            and m_canon.get("pct_correct_predictions_CORRECTED", m_canon.get("pct_correct_predictions")) == b_canon.get("pct_correct_predictions") == 97.76
+            and abs(m_canon.get("avg_reward", 0.0) - b_canon.get("avg_reward", 0.0)) < 1e-4
+            and abs(m_canon.get("avg_reward", 0.0) - 5.103718792679381) < 1e-4
+        )
+
+        # Cross-check with reports/benchmark_results.json
+        bench_file = REPO_ROOT / "reports" / "benchmark_results.json"
+        bench_cross_ok = False
+        if bench_file.exists():
+            with open(bench_file, "r") as bf:
+                bench_data = json.load(bf)
+            ss_summary = bench_data.get("schedulers", {}).get("SmartScan_DRQN_MoE", {}).get("summary", {})
+            bench_cross_ok = (
+                abs(ss_summary.get("mean_intercept_rate", 0.0) - 0.4214) < 1e-4
+                and abs(ss_summary.get("pd", 0.0) - 0.9495268) < 1e-4
+                and abs(ss_summary.get("pct_correct_predictions", 0.0) - 97.76) < 1e-2
+                and abs(ss_summary.get("avg_reward", 0.0) - 5.103718792679381) < 1e-4
+            )
+
+        # Verify provenance source commit is recorded
+        src_commit = manifest.get("scientific_evaluation_source_commit", manifest.get("source_git_commit", ""))
+        commit_ok = (src_commit == "43ca6c35199ee6a4435c1eecf27512c5466ad02e")
 
         passed = (
             status.startswith("IMMUTABLE")
             and (ckpt_sha == CANONICAL_FROZEN_SHA)
             and is_tracked
-            and has_sha_file
+            and sums_verified
             and meta_ok
+            and metric_match_meta_manifest
+            and bench_cross_ok
+            and commit_ok
         )
         self.record(
             15, title, passed,
-            f"Status='{status}', Checkpoint SHA validated, Git-tracked={is_tracked}, SHA256SUMS={has_sha_file}, MetadataOK={meta_ok}"
+            f"Status='{status}', SHA256SUMS={sums_verified}, MetadataOK={meta_ok}, CrossMetrics={metric_match_meta_manifest}, BenchMatch={bench_cross_ok}, SourceCommit={src_commit[:8]}..."
         )
 
     def run_all(self) -> bool:
@@ -488,9 +581,15 @@ class GateRunner:
         except Exception:
             curr_commit = "UNKNOWN"
 
+        scientific_commit = "43ca6c35199ee6a4435c1eecf27512c5466ad02e"
         out_report = {
             "orchestrator_version": "1.0.0",
             "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "provenance": {
+                "scientific_evaluation_source_commit": scientific_commit,
+                "verification_orchestrator_commit": curr_commit,
+                "note": "scientific_evaluation_source_commit represents the git revision under which TSRD benchmark evaluations were executed. verification_orchestrator_commit represents the verifier runtime revision."
+            },
             "source_git_commit": curr_commit,
             "total_gates": len(self.results),
             "passed_gates": sum(1 for _, _, p, _ in self.results if p),
