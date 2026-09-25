@@ -5,13 +5,14 @@
 **Three-Tier Provenance Identity Model**:
 - **Scientific Evaluation Source Revision (`scientific_evaluation_source_commit`)**: `43ca6c35199ee6a4435c1eecf27512c5466ad02e`  
   *(Git revision containing algorithms, environments, and benchmark pipelines under which TSRD benchmark evaluations were executed)*
-- **Verification Orchestrator Revision (`verification_orchestrator_commit`)**: `a4bb2debb56f8403237943f1704db5ccd8f45ada`  
+- **Verification Orchestrator Revision (`verification_orchestrator_commit`)**: `a7ed026a5f5894fd9238d5b81fd43d78ec7c3c38`  
   *(Git revision containing the strengthened 15-gate scientific verifier `scripts/verify_all.py`)*
-- **Evidence Package Base Revision (`evidence_package_commit`)**: Package-base release candidate containing synchronized reports, manifests, and master verification artifact
+- **Evidence Package Revision (`evidence_package_commit`)**: `8e587e0e5d2dcce16235ca1e5fb81bab773b415f`  
+  *(Git revision capturing the authoritative 15-gate verification execution results from `a7ed026`)*
 **Evaluation Horizon**: 500 receiver dwells per scenario (5,000 total dwells across 10 scenarios)  
 **Authoritative Baseline Checkpoint**: `experiments/checkpoints/production_baseline/checkpoint_gate_25000_frozen.pt`  
 **Cryptographic Integrity (SHA-256)**: `7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0` (Bit-Exact Verified)  
-**Verification Script**: `scripts/verify_all.py` (Exit Code: 0, 15/15 Gates Passed)  
+**Verification Script**: `scripts/verify_all.py` (Exit Code: 0, 15/15 Gates Passed, Duration: 147.81s)  
 **Retraining Gate Status**: `UNLOCKED` (Awaiting explicit human authorization before execution)
 
 ---
@@ -43,7 +44,7 @@ MASTER VERIFICATION SUMMARY
   Gate 14 [PASS]: Controlled Continuation Retraining Pipeline Smoke Check
   Gate 15 [PASS]: Repository Provenance & Manifest Integrity Audit
 --------------------------------------------------------------------------------
-Total Gates: 15 | Passed: 15 | Failed: 0 | Duration: 166.79s
+Total Gates: 15 | Passed: 15 | Failed: 0 | Duration: 147.81s
 [SUCCESS] ALL 15 VERIFICATION GATES PASSED. Retraining gate is UNLOCKED.
 ================================================================================
 ```

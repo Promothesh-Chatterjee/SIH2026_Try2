@@ -4,7 +4,8 @@
   "provenance": {
     "scientific_evaluation_source_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
     "verification_orchestrator_commit": "a7ed026a5f5894fd9238d5b81fd43d78ec7c3c38",
-    "note": "scientific_evaluation_source_commit represents the git revision under which TSRD benchmark evaluations were executed. verification_orchestrator_commit represents the verifier runtime revision."
+    "evidence_package_commit": "8e587e0e5d2dcce16235ca1e5fb81bab773b415f",
+    "note": "scientific_evaluation_source_commit represents the git revision under which TSRD benchmark evaluations were executed. verification_orchestrator_commit represents the verifier runtime revision. evidence_package_commit represents the git revision capturing the authoritative 15-gate verification execution results."
   },
   "source_git_commit": "a7ed026a5f5894fd9238d5b81fd43d78ec7c3c38",
   "total_gates": 15,
