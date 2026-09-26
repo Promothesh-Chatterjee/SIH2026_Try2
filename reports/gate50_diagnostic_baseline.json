@@ -1,0 +1,62 @@
+{
+  "designation": "DIAGNOSTIC_CANDIDATE_CRITICAL_COLLAPSE",
+  "evaluation_verdict": "FAIL",
+  "verdict_notes": "CRITICAL Policy Collapse flagged: Critical top-band dominance: 99.8% >= 85.0%; Critical low action entropy: 0.348 < 1.000; Behaviorally justified mode concentration: LONG accounts for 100.0% while preserving time-normalized performance",
+  "lineage": {
+    "root_baseline_checkpoint": "experiments\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+    "root_baseline_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+    "intermediate_checkpoint": "experiments\\checkpoints\\scheduler_v2_continuation_100k\\checkpoint_gate_50000.pt",
+    "intermediate_sha256": "f3aab6b824faf8207194594fe52c096ec5b3b00990e37e7c321d4794bfb9d519",
+    "intermediate_report_sha256": "ec7c0ffd35d6a5785624e39053e7fc886d3d38204d0023d4a154b7e3fdbc2be2",
+    "git_commit_head": "b2e2727ba68ee82fa276dbc7d15eb5b8b47ddeb4",
+    "git_tree_status": "modified"
+  },
+  "configurations": {
+    "training_config": "configs\\training_config_resume_100k.yaml",
+    "training_config_sha256": "5740e3995f9a2e0f069c066951b5f18420cb0d1733ed91f0485385e841c86569",
+    "model_config": "configs\\model_config.yaml",
+    "model_config_sha256": "f9a1a316b0726e37400a5b663b0946372cbbe1a8b6a8dcfa3375e074ea7b1280",
+    "deinterleaver_checkpoint_sha256": "b7cc3727b3b1940ac8c06e61f127644c484de69ec16080110dd4ea8c0c44b116",
+    "normalization_stats_sha256": "a36a11d865b575cda2ab5e12dfeb9f5d5046af04322e654814d851c87a619b0b"
+  },
+  "preserved_learning_gains": {
+    "sparse_aggregate_ir": 0.6325,
+    "config_143_ir": 0.646,
+    "config_119_ir": 0.619,
+    "agile_aggregate_ir": 0.614,
+    "config_241_ir": 0.506,
+    "config_29_ir": 0.539,
+    "overall_mean_ir": 0.5612,
+    "worst_case_ir": 0.211,
+    "pd": 0.9899,
+    "pfa": 0.0
+  },
+  "confirmed_critical_collapse_sentinels": {
+    "mode_concentration": {
+      "LONG_fraction": 1.0,
+      "mode_entropy": 0.0,
+      "other_modes_fraction": 0.0
+    },
+    "band_action_concentration": {
+      "action_entropy": 0.34768521034016076,
+      "top_band_fraction_max": 0.998,
+      "distinct_bands_mean": 17.8
+    },
+    "value_instability": {
+      "q_max_observed": 109.43927001953125,
+      "q_std": 71.05139951705932,
+      "target_online_gap": 38.38787050247193
+    }
+  },
+  "training_integrity": {
+    "global_step": 50000,
+    "continuation_steps": 25000,
+    "optimizer_updates_attempted": 6243,
+    "optimizer_updates_completed": 6243,
+    "skipped_nan": 0,
+    "non_finite_gradients": 0,
+    "epsilon_at_step_50k": 0.4005
+  },
+  "operational_promotion_authorized": false,
+  "continuation_to_gate75k_authorized": false
+}

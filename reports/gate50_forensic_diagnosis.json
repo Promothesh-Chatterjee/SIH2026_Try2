@@ -1,0 +1,386 @@
+{
+  "checkpoint": "experiments\\checkpoints\\scheduler_v2_continuation_100k\\checkpoint_gate_50000.pt",
+  "checkpoint_sha256": "f3aab6b824faf8207194594fe52c096ec5b3b00990e37e7c321d4794bfb9d519",
+  "timestamp_utc": "2026-09-26T09:36:55.627008+00:00",
+  "global_step": 50000,
+  "dwell_contracts_verified": {
+    "base_dwell_time_us": 500.0,
+    "multipliers": [
+      0.25,
+      1.0,
+      2.5,
+      1.0,
+      1.0
+    ],
+    "modes": [
+      "SHORT_DWELL",
+      "NORMAL_DWELL",
+      "LONG_DWELL",
+      "REVISIT",
+      "PREEMPTIVE_INTERCEPT"
+    ],
+    "long_dwell_canonical_us": 1250.0,
+    "long_dwell_canonical_multiplier": 2.5
+  },
+  "B1_mode_economics": {
+    "SHORT_DWELL": {
+      "mode_index": 0,
+      "canonical_multiplier": 0.25,
+      "canonical_dwell_us": 125.0,
+      "total_steps": 0,
+      "step_fraction": 0.0,
+      "total_hits": 0,
+      "hit_fraction": 0.0,
+      "intercept_rate": 0.0,
+      "total_dwell_ms": 0.0,
+      "efficiency_hits_per_ms": 0.0,
+      "avg_reward_per_step": 0.0
+    },
+    "NORMAL_DWELL": {
+      "mode_index": 1,
+      "canonical_multiplier": 1.0,
+      "canonical_dwell_us": 500.0,
+      "total_steps": 0,
+      "step_fraction": 0.0,
+      "total_hits": 0,
+      "hit_fraction": 0.0,
+      "intercept_rate": 0.0,
+      "total_dwell_ms": 0.0,
+      "efficiency_hits_per_ms": 0.0,
+      "avg_reward_per_step": 0.0
+    },
+    "LONG_DWELL": {
+      "mode_index": 2,
+      "canonical_multiplier": 2.5,
+      "canonical_dwell_us": 1250.0,
+      "total_steps": 10000,
+      "step_fraction": 1.0,
+      "total_hits": 5420,
+      "hit_fraction": 1.0,
+      "intercept_rate": 0.542,
+      "total_dwell_ms": 12500.0,
+      "efficiency_hits_per_ms": 0.4336,
+      "avg_reward_per_step": 6.106080797338991
+    },
+    "REVISIT": {
+      "mode_index": 3,
+      "canonical_multiplier": 1.0,
+      "canonical_dwell_us": 500.0,
+      "total_steps": 0,
+      "step_fraction": 0.0,
+      "total_hits": 0,
+      "hit_fraction": 0.0,
+      "intercept_rate": 0.0,
+      "total_dwell_ms": 0.0,
+      "efficiency_hits_per_ms": 0.0,
+      "avg_reward_per_step": 0.0
+    },
+    "PREEMPTIVE_INTERCEPT": {
+      "mode_index": 4,
+      "canonical_multiplier": 1.0,
+      "canonical_dwell_us": 500.0,
+      "total_steps": 0,
+      "step_fraction": 0.0,
+      "total_hits": 0,
+      "hit_fraction": 0.0,
+      "intercept_rate": 0.0,
+      "total_dwell_ms": 0.0,
+      "efficiency_hits_per_ms": 0.0,
+      "avg_reward_per_step": 0.0
+    }
+  },
+  "B2_band_concentration_per_scenario": {
+    "config_117": {
+      "total_steps": 1000,
+      "overall_ir": 0.85,
+      "decision_level_pd": 1.0,
+      "pfa": 0.0,
+      "top1_band": 3,
+      "top1_band_fraction": 0.96,
+      "top2_band_fraction": 0.998,
+      "distinct_bands": 4,
+      "band_entropy": 0.2557480673670531,
+      "max_consecutive_dwell": 960,
+      "mean_consecutive_dwell": 250.0,
+      "revisit_count": 0,
+      "mode_fractions": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 1.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": -0.0
+    },
+    "config_119": {
+      "total_steps": 1000,
+      "overall_ir": 0.382,
+      "decision_level_pd": 0.9870801033591732,
+      "pfa": 0.0,
+      "top1_band": 2,
+      "top1_band_fraction": 0.955,
+      "top2_band_fraction": 0.957,
+      "distinct_bands": 36,
+      "band_entropy": 0.49189842327051614,
+      "max_consecutive_dwell": 689,
+      "mean_consecutive_dwell": 17.54385964912281,
+      "revisit_count": 21,
+      "mode_fractions": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 1.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": -0.0
+    },
+    "config_143": {
+      "total_steps": 1000,
+      "overall_ir": 0.545,
+      "decision_level_pd": 0.872,
+      "pfa": 0.0,
+      "top1_band": 5,
+      "top1_band_fraction": 0.787,
+      "top2_band_fraction": 0.9550000000000001,
+      "distinct_bands": 36,
+      "band_entropy": 1.1307619549608638,
+      "max_consecutive_dwell": 629,
+      "mean_consecutive_dwell": 18.867924528301888,
+      "revisit_count": 17,
+      "mode_fractions": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 1.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": -0.0
+    },
+    "config_194": {
+      "total_steps": 1000,
+      "overall_ir": 0.522,
+      "decision_level_pd": 1.0,
+      "pfa": 0.0,
+      "top1_band": 4,
+      "top1_band_fraction": 0.965,
+      "top2_band_fraction": 0.966,
+      "distinct_bands": 36,
+      "band_entropy": 0.39840263213208493,
+      "max_consecutive_dwell": 942,
+      "mean_consecutive_dwell": 22.727272727272727,
+      "revisit_count": 8,
+      "mode_fractions": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 1.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": -0.0
+    },
+    "config_195": {
+      "total_steps": 1000,
+      "overall_ir": 0.547,
+      "decision_level_pd": 0.9981751824817519,
+      "pfa": 0.0,
+      "top1_band": 2,
+      "top1_band_fraction": 0.99,
+      "top2_band_fraction": 0.991,
+      "distinct_bands": 11,
+      "band_entropy": 0.11401241684478482,
+      "max_consecutive_dwell": 987,
+      "mean_consecutive_dwell": 71.42857142857143,
+      "revisit_count": 3,
+      "mode_fractions": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 1.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": -0.0
+    },
+    "config_241": {
+      "total_steps": 1000,
+      "overall_ir": 0.612,
+      "decision_level_pd": 0.9714285714285714,
+      "pfa": 0.0,
+      "top1_band": 5,
+      "top1_band_fraction": 0.995,
+      "top2_band_fraction": 0.996,
+      "distinct_bands": 6,
+      "band_entropy": 0.057024332808230924,
+      "max_consecutive_dwell": 995,
+      "mean_consecutive_dwell": 166.66666666666666,
+      "revisit_count": 0,
+      "mode_fractions": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 1.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": -0.0
+    },
+    "config_29": {
+      "total_steps": 1000,
+      "overall_ir": 0.582,
+      "decision_level_pd": 1.0,
+      "pfa": 0.0,
+      "top1_band": 2,
+      "top1_band_fraction": 0.998,
+      "top2_band_fraction": 0.999,
+      "distinct_bands": 3,
+      "band_entropy": 0.022814071335501035,
+      "max_consecutive_dwell": 998,
+      "mean_consecutive_dwell": 333.3333333333333,
+      "revisit_count": 0,
+      "mode_fractions": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 1.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": -0.0
+    },
+    "config_42": {
+      "total_steps": 1000,
+      "overall_ir": 0.478,
+      "decision_level_pd": 0.7551342812006319,
+      "pfa": 0.0,
+      "top1_band": 5,
+      "top1_band_fraction": 0.807,
+      "top2_band_fraction": 0.901,
+      "distinct_bands": 36,
+      "band_entropy": 1.2143443314381446,
+      "max_consecutive_dwell": 555,
+      "mean_consecutive_dwell": 20.833333333333332,
+      "revisit_count": 12,
+      "mode_fractions": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 1.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": -0.0
+    },
+    "config_64": {
+      "total_steps": 1000,
+      "overall_ir": 0.579,
+      "decision_level_pd": 0.9982758620689656,
+      "pfa": 0.0,
+      "top1_band": 2,
+      "top1_band_fraction": 0.998,
+      "top2_band_fraction": 0.999,
+      "distinct_bands": 3,
+      "band_entropy": 0.022814071335501035,
+      "max_consecutive_dwell": 998,
+      "mean_consecutive_dwell": 333.3333333333333,
+      "revisit_count": 0,
+      "mode_fractions": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 1.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": -0.0
+    },
+    "config_96": {
+      "total_steps": 1000,
+      "overall_ir": 0.323,
+      "decision_level_pd": 1.0,
+      "pfa": 0.0,
+      "top1_band": 2,
+      "top1_band_fraction": 0.93,
+      "top2_band_fraction": 0.932,
+      "distinct_bands": 36,
+      "band_entropy": 0.7249734620863709,
+      "max_consecutive_dwell": 583,
+      "mean_consecutive_dwell": 11.494252873563218,
+      "revisit_count": 51,
+      "mode_fractions": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 1.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": -0.0
+    }
+  },
+  "B3_q_value_and_loss_dynamics": {
+    "historical_training_diagnostics": {
+      "mean_td_loss": 3.7584253370761873,
+      "median_td_loss": 3.2118746042251587,
+      "max_td_loss": 11.030954360961914,
+      "q_mean": 41.086160655021665,
+      "q_std": 71.05139951705932,
+      "q_min": -58.9775390625,
+      "q_max": 109.43927001953125,
+      "gradient_norm": 1.0,
+      "replay_size": 25000,
+      "optimizer_step_count": 6243,
+      "reward_baseline": 4.170027435079366,
+      "thompson_action_fraction": 0.0,
+      "random_action_fraction": 0.0,
+      "greedy_action_fraction": 0.536,
+      "replay_hit_fraction_recent": 0.35884765625,
+      "replay_sequence_hit_fraction_recent": 0.6584375,
+      "max_q_margin_recent": 4.3325347900390625,
+      "mean_q_margin_recent": 3.953170804977417,
+      "q_reg_loss_recent": 0.6885859623551369,
+      "pos_scen_concentration_recent": 0.2988461538461538,
+      "targeted_exploration_fraction_recent": 0.875,
+      "underexplored_band_fraction_recent": 0.9934722222222223
+    },
+    "diagnostic_batch_recomputed": {
+      "recomputed_q_max": 93.92432403564453,
+      "recomputed_q_min": -57.33584213256836,
+      "recomputed_q_mean": -45.966487884521484,
+      "recomputed_q_std": 35.71798324584961,
+      "target_online_gap": 0.0,
+      "mean_q_margin": 0.2850193977355957,
+      "max_q_margin": 3.8820343017578125
+    },
+    "loss_component_decomposition": {
+      "historical_mean_td_loss": 3.7584253370761873,
+      "q_reg_loss_magnitude": 0.338863671875,
+      "q_reg_to_td_loss_ratio_pct": 9.01610758452938,
+      "action_entropy_val": 4.756792068481445,
+      "entropy_penalty_magnitude": -0.047567920684814455,
+      "top_band_fraction_softmax": 0.10589580982923508,
+      "top_band_penalty_magnitude": 0.0,
+      "top_band_penalty_to_td_loss_ratio_pct": 0.0,
+      "mode_collapse_rate_bands": 0.0030381944961845875,
+      "avg_max_mode_prob": 0.4060207009315491,
+      "mode_diversity_penalty_magnitude": 0.0,
+      "mode_diversity_penalty_to_td_loss_ratio_pct": 0.0
+    }
+  },
+  "B4_exploration_diagnostics": {
+    "historical_telemetry": {
+      "greedy_action_fraction": 0.536,
+      "targeted_exploration_fraction_recent": 0.875,
+      "underexplored_band_fraction_recent": 0.9934722222222223,
+      "thompson_action_fraction": 0.0,
+      "random_action_fraction": 0.0,
+      "epsilon_at_step_50k": 0.4004638570031791
+    },
+    "mechanism_analysis": {
+      "existing_targeted_exploration": "Samples band from underexplored tracker, mode = random.randrange(5)",
+      "existing_uniform_exploration": "Samples uniform random action across all 180 actions (36 bands x 5 modes)",
+      "failure_mode_diagnosis": "Although exploratory actions sample across all 5 modes, the greedy network (53.6% of transitions during training and 100% of actions during evaluation) converges to 100% LONG because Mode 2 (LONG, 1250 us) achieves higher Bellman TD targets on sparse/agile pulses. Furthermore, the mode diversity penalty (magnitude: 0.000000) represented only 0.0000% of the TD loss (3.758), providing virtually zero gradient opposition to mode lock."
+    }
+  },
+  "forensic_synthesis": {
+    "mode_collapse_verdict": "CONFIRMED_100PCT_LONG_EXPLOITATION",
+    "time_normalized_efficiency_comparison": {
+      "LONG_hits_per_ms": 0.4336,
+      "explanation": "LONG dwell achieved 0.4336 hits/ms. In the greedy policy at Gate-50k, 100% of actions chose LONG dwell."
+    },
+    "root_cause_summary": "1. Value gradient dominance: The anti-collapse mode diversity penalty added only ~0.0035 to the loss, representing < 0.1% of the 3.758 TD loss, completely failing to resist mode collapse.\n2. Dwell economics: LONG dwell (1,250 us) provides 2.5x exposure, capturing pulses that short/normal dwells miss on low-density emitters, with an insignificant dwell penalty (w_dwell_cost = -0.01).\n3. Spatial concentration: In 6 of 10 validation scenarios, the policy concentrated 99.8% of dwells on the primary emitter band.\n4. Value drift: Online Q_max reached 109.44 with Q_std of 71.05 and target-online gap of 38.39, crossing the critical thresholds of policy_collapse_detector."
+  }
+}

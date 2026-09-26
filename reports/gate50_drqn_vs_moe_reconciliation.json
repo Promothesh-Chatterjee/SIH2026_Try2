@@ -1,0 +1,153 @@
+{
+  "analysis": "Phase B5: DRQN Standalone vs Full MoE Reconciliation",
+  "checkpoint": "experiments\\checkpoints\\scheduler_v2_continuation_100k\\checkpoint_gate_50000.pt",
+  "summary": {
+    "drqn_standalone_mean_ir": 0.5578,
+    "full_moe_mean_ir": 0.5544,
+    "ir_discrepancy_pts": 0.33999999999999586,
+    "inter_policy_step_agreement_pct": 93.76,
+    "inter_policy_step_divergence_pct": 6.239999999999995,
+    "moe_fallback_rate_pct": 4.16,
+    "total_evaluated_steps": 10000
+  },
+  "fallback_reasons_breakdown": {
+    "Occupancy_fallback": 416,
+    "DRQN_operational_active": 9584
+  },
+  "per_scenario_breakdown": {
+    "config_117": {
+      "drqn_steps": 1000,
+      "drqn_hits": 941,
+      "drqn_ir": 0.941,
+      "moe_steps": 1000,
+      "moe_hits": 937,
+      "moe_ir": 0.937,
+      "ir_delta_pts": -0.39999999999998925,
+      "inter_policy_action_agreement_pct": 98.2,
+      "within_moe_q_agreement_pct": 100.0,
+      "fallback_rate_pct": 1.5,
+      "first_divergence_step": 0
+    },
+    "config_119": {
+      "drqn_steps": 1000,
+      "drqn_hits": 524,
+      "drqn_ir": 0.524,
+      "moe_steps": 1000,
+      "moe_hits": 523,
+      "moe_ir": 0.523,
+      "ir_delta_pts": -0.10000000000000009,
+      "inter_policy_action_agreement_pct": 93.8,
+      "within_moe_q_agreement_pct": 100.0,
+      "fallback_rate_pct": 5.6000000000000005,
+      "first_divergence_step": 0
+    },
+    "config_143": {
+      "drqn_steps": 1000,
+      "drqn_hits": 607,
+      "drqn_ir": 0.607,
+      "moe_steps": 1000,
+      "moe_hits": 605,
+      "moe_ir": 0.605,
+      "ir_delta_pts": -0.20000000000000018,
+      "inter_policy_action_agreement_pct": 97.8,
+      "within_moe_q_agreement_pct": 100.0,
+      "fallback_rate_pct": 2.1999999999999997,
+      "first_divergence_step": 0
+    },
+    "config_194": {
+      "drqn_steps": 1000,
+      "drqn_hits": 347,
+      "drqn_ir": 0.347,
+      "moe_steps": 1000,
+      "moe_hits": 347,
+      "moe_ir": 0.347,
+      "ir_delta_pts": 0.0,
+      "inter_policy_action_agreement_pct": 85.39999999999999,
+      "within_moe_q_agreement_pct": 100.0,
+      "fallback_rate_pct": 7.1,
+      "first_divergence_step": 0
+    },
+    "config_195": {
+      "drqn_steps": 1000,
+      "drqn_hits": 384,
+      "drqn_ir": 0.384,
+      "moe_steps": 1000,
+      "moe_hits": 382,
+      "moe_ir": 0.382,
+      "ir_delta_pts": -0.20000000000000018,
+      "inter_policy_action_agreement_pct": 90.2,
+      "within_moe_q_agreement_pct": 100.0,
+      "fallback_rate_pct": 7.000000000000001,
+      "first_divergence_step": 0
+    },
+    "config_241": {
+      "drqn_steps": 1000,
+      "drqn_hits": 857,
+      "drqn_ir": 0.857,
+      "moe_steps": 1000,
+      "moe_hits": 837,
+      "moe_ir": 0.837,
+      "ir_delta_pts": -2.0000000000000018,
+      "inter_policy_action_agreement_pct": 97.89999999999999,
+      "within_moe_q_agreement_pct": 100.0,
+      "fallback_rate_pct": 2.1,
+      "first_divergence_step": 0
+    },
+    "config_29": {
+      "drqn_steps": 1000,
+      "drqn_hits": 605,
+      "drqn_ir": 0.605,
+      "moe_steps": 1000,
+      "moe_hits": 604,
+      "moe_ir": 0.604,
+      "ir_delta_pts": -0.10000000000000009,
+      "inter_policy_action_agreement_pct": 99.0,
+      "within_moe_q_agreement_pct": 100.0,
+      "fallback_rate_pct": 1.0,
+      "first_divergence_step": 0
+    },
+    "config_42": {
+      "drqn_steps": 1000,
+      "drqn_hits": 428,
+      "drqn_ir": 0.428,
+      "moe_steps": 1000,
+      "moe_hits": 426,
+      "moe_ir": 0.426,
+      "ir_delta_pts": -0.20000000000000018,
+      "inter_policy_action_agreement_pct": 90.60000000000001,
+      "within_moe_q_agreement_pct": 100.0,
+      "fallback_rate_pct": 7.000000000000001,
+      "first_divergence_step": 0
+    },
+    "config_64": {
+      "drqn_steps": 1000,
+      "drqn_hits": 607,
+      "drqn_ir": 0.607,
+      "moe_steps": 1000,
+      "moe_hits": 606,
+      "moe_ir": 0.606,
+      "ir_delta_pts": -0.10000000000000009,
+      "inter_policy_action_agreement_pct": 99.1,
+      "within_moe_q_agreement_pct": 100.0,
+      "fallback_rate_pct": 0.8999999999999999,
+      "first_divergence_step": 0
+    },
+    "config_96": {
+      "drqn_steps": 1000,
+      "drqn_hits": 278,
+      "drqn_ir": 0.278,
+      "moe_steps": 1000,
+      "moe_hits": 277,
+      "moe_ir": 0.277,
+      "ir_delta_pts": -0.10000000000000009,
+      "inter_policy_action_agreement_pct": 85.6,
+      "within_moe_q_agreement_pct": 100.0,
+      "fallback_rate_pct": 7.199999999999999,
+      "first_divergence_step": 0
+    }
+  },
+  "reconciliation_verdict": {
+    "root_cause_explanation": "1. Inter-policy trajectory divergence: Standalone DRQN and Full MoE agreed on 93.76% of exact step actions, diverging on 6.24% of steps across the 10 scenarios.\n2. Fallback trigger mechanism: In Full MoE, 4.16% of steps triggered MoE arbitration fallbacks (primarily low DRQN confidence margin), overriding DRQN's raw choice with an occupancy-based or heuristic exploration action.\n3. Trajectory bifurcation: Once a fallback action differs from DRQN's raw choice, the environment transitions to a different state, bifurcating the observations and LSTM hidden trajectories between the two policies for the remainder of the episode.\n4. Clarification of previous 100% agreement report: In gate_50000_report.json, the reported '100% agreement' was computed within MoE's own internal trajectory (comparing MoE's fused action against its own raw q_argmax along that specific trajectory), NOT between standalone DRQN and Full MoE running independent episodes.",
+    "reconciliation_confirmed": true
+  }
+}
