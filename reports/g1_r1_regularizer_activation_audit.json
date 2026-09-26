@@ -1,0 +1,66 @@
+{
+  "n_diagnostic_batches": 50,
+  "batch_size": 32,
+  "seq_len": 16,
+  "burn_in": 8,
+  "diagnostic_verdict": "DORMANT: Mode diversity penalty never triggered (collapse rate threshold never met).",
+  "r1_hyperparameters": {
+    "lambda_entropy": 0.02,
+    "band_diversity_penalty_coef": 0.01,
+    "band_diversity_threshold": 0.6,
+    "mode_diversity_penalty_coef": 0.02,
+    "mode_diversity_threshold": 0.55,
+    "mode_collapse_rate_threshold": 0.2,
+    "q_reg_coef": 0.00025
+  },
+  "mode_diversity_penalty_audit": {
+    "activation_rate_pct": 0.0,
+    "active_batches_count": 0,
+    "mean_penalty_magnitude": 0.0,
+    "max_penalty_magnitude": 0.0,
+    "mean_ratio_to_td_loss_pct": 0.0,
+    "mean_grad_norm": 0.0,
+    "max_grad_norm": 0.0,
+    "mean_grad_norm_ratio_to_td": 0.0,
+    "mean_mode_collapse_rate": 0.02654947906732559,
+    "threshold_required_for_activation": 0.2,
+    "mean_avg_max_mode_prob": 0.44687135100364683,
+    "per_band_threshold": 0.55
+  },
+  "top_band_diversity_penalty_audit": {
+    "activation_rate_pct": 100.0,
+    "active_batches_count": 50,
+    "mean_penalty_magnitude": 0.02431505121290684,
+    "max_penalty_magnitude": 0.02981218323111534,
+    "mean_ratio_to_td_loss_pct": 0.40293718234337805,
+    "mean_grad_norm": 0.025644945427775383,
+    "mean_grad_norm_ratio_to_td": 0.00010927748439029761,
+    "mean_top_band_fraction_softmax": 0.8961628365516663,
+    "threshold_required_for_activation": 0.6
+  },
+  "q2_regularization_audit": {
+    "mean_loss_magnitude": 2.1853169918060305,
+    "max_loss_magnitude": 2.2726306915283203,
+    "mean_ratio_to_td_loss_pct": 36.336827499093836,
+    "mean_grad_norm": 13.392132787704467,
+    "mean_grad_norm_ratio_to_td": 0.051029964241239636
+  },
+  "entropy_regularization_audit": {
+    "mean_loss_magnitude": -0.024204851761460304,
+    "mean_action_entropy_nats": 1.2102426207065582,
+    "mean_grad_norm": 0.11532070890069007,
+    "mean_grad_norm_ratio_to_td": 0.0004991434353471038
+  },
+  "td_loss_baseline": {
+    "mean_td_loss": 6.046685075759887,
+    "min_td_loss": 4.993556022644043,
+    "max_td_loss": 7.070199012756348,
+    "mean_td_grad_norm": 302.6813525390625
+  },
+  "causal_mechanism_diagnosis": {
+    "q1_did_penalties_remain_dormant": false,
+    "q2_did_penalties_activate_too_weak": false,
+    "q3_did_penalties_optimize_wrong_surrogate": false,
+    "mechanistic_explanation": "Mode penalty activation was 0/50 (0.0%). Mean mode collapse rate was 0.0265 (threshold: 0.20). Mean mode penalty gradient ratio to TD loss was 0.0000 (0.00% of TD). Top-band penalty activation was 50/50 (100.0%). Mean top-band softmax was 0.8962 (threshold: 0.60)."
+  }
+}

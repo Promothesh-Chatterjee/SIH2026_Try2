@@ -1,0 +1,291 @@
+{
+  "timestamp_utc": "2026-09-26T16:24:06.904614+00:00",
+  "phase": "Phase G5.1 Objective-Semantics Reconciliation",
+  "code_and_config_audit": {
+    "canonical_model_gamma": 0.99,
+    "g4c_objective_mode": "g3d_hybrid",
+    "g4c_c_dwell": 2.0,
+    "g4c_gamma_explicit": null,
+    "g4c_gamma_resolved": 0.99,
+    "g5_runner_eval_gamma": [
+      0.95,
+      0.95,
+      0.95,
+      0.95
+    ],
+    "g5_runner_train_gamma": [
+      0.95
+    ],
+    "g5_runner_dwell_multipliers_raw": [
+      "0.25, 1.0, 2.5, 1.0, 1.0"
+    ],
+    "g5_runner_eff_reward_expr": [
+      "rew_b - (c_dwell * (tau_b - 1.0))"
+    ],
+    "g5_runner_gamma_eff_expr": [
+      "torch.pow(torch.tensor(gamma, device=device), tau_b)"
+    ]
+  },
+  "dwell_semantics_analysis": {
+    "canonical_contract": {
+      "SHORT_DWELL": {
+        "tau": 0.25,
+        "duration_us": 125.0,
+        "delta_r": 1.5,
+        "gamma_eff_099": 0.9974905699336811,
+        "gamma_eff_095": 0.9872585449014338
+      },
+      "NORMAL_DWELL": {
+        "tau": 1.0,
+        "duration_us": 500.0,
+        "delta_r": -0.0,
+        "gamma_eff_099": 0.99,
+        "gamma_eff_095": 0.95
+      },
+      "LONG_DWELL": {
+        "tau": 2.5,
+        "duration_us": 1250.0,
+        "delta_r": -3.0,
+        "gamma_eff_099": 0.9751871871081982,
+        "gamma_eff_095": 0.8796481896190089
+      },
+      "REVISIT": {
+        "tau": 1.0,
+        "duration_us": 500.0,
+        "delta_r": -0.0,
+        "gamma_eff_099": 0.99,
+        "gamma_eff_095": 0.95
+      },
+      "PREEMPTIVE_INTERCEPT": {
+        "tau": 1.0,
+        "duration_us": 500.0,
+        "delta_r": -0.0,
+        "gamma_eff_099": 0.99,
+        "gamma_eff_095": 0.95
+      }
+    },
+    "report_prose_erroneous": {
+      "SHORT_DWELL": {
+        "tau": 1.0,
+        "delta_r": -0.0,
+        "gamma_eff_099": 0.99,
+        "gamma_eff_095": 0.95
+      },
+      "NORMAL_DWELL": {
+        "tau": 3.0,
+        "delta_r": -4.0,
+        "gamma_eff_099": 0.970299,
+        "gamma_eff_095": 0.8573749999999999
+      },
+      "LONG_DWELL": {
+        "tau": 10.0,
+        "delta_r": -18.0,
+        "gamma_eff_099": 0.9043820750088044,
+        "gamma_eff_095": 0.5987369392383787
+      },
+      "REVISIT": {
+        "tau": 1.0,
+        "delta_r": -0.0,
+        "gamma_eff_099": 0.99,
+        "gamma_eff_095": 0.95
+      },
+      "PREEMPTIVE_INTERCEPT": {
+        "tau": 1.0,
+        "delta_r": -0.0,
+        "gamma_eff_099": 0.99,
+        "gamma_eff_095": 0.95
+      }
+    },
+    "comparison_summary": {
+      "canonical": {
+        "delta_r_swing_short_minus_long": 4.5,
+        "gamma_eff_diff_099": 0.022303382825482942,
+        "gamma_eff_diff_095": 0.10761035528242491
+      },
+      "report_prose": {
+        "delta_r_swing_short_minus_long": 18.0,
+        "gamma_eff_diff_099": 0.08561792499119558,
+        "gamma_eff_diff_095": 0.07035181038099103
+      }
+    }
+  },
+  "diagnostic_batch_targets": {
+    "hit": {
+      "canonical_gamma_099": {
+        "SHORT_DWELL": 31.449811935424805,
+        "NORMAL_DWELL": 29.799999237060547,
+        "LONG_DWELL": 26.50374412536621,
+        "REVISIT": 29.799999237060547,
+        "PREEMPTIVE_INTERCEPT": 29.799999237060547
+      },
+      "g5_runtime_gamma_095": {
+        "SHORT_DWELL": 31.24517059326172,
+        "NORMAL_DWELL": 29.0,
+        "LONG_DWELL": 24.59296226501465,
+        "REVISIT": 29.0,
+        "PREEMPTIVE_INTERCEPT": 29.0
+      },
+      "report_prose_gamma_099": {
+        "SHORT_DWELL": 29.799999237060547,
+        "NORMAL_DWELL": 25.40597915649414,
+        "LONG_DWELL": 10.087642669677734,
+        "REVISIT": 29.799999237060547,
+        "PREEMPTIVE_INTERCEPT": 29.799999237060547
+      },
+      "report_prose_gamma_095": {
+        "SHORT_DWELL": 29.0,
+        "NORMAL_DWELL": 23.147499084472656,
+        "LONG_DWELL": 3.9747371673583984,
+        "REVISIT": 29.0,
+        "PREEMPTIVE_INTERCEPT": 29.0
+      },
+      "target_spread_short_minus_long": {
+        "canonical_gamma_099": 4.946067810058594,
+        "g5_runtime_gamma_095": 6.65220832824707,
+        "report_prose_gamma_099": 19.712356567382812,
+        "report_prose_gamma_095": 25.0252628326416
+      }
+    },
+    "miss": {
+      "canonical_gamma_099": {
+        "SHORT_DWELL": 17.449811935424805,
+        "NORMAL_DWELL": 15.799999237060547,
+        "LONG_DWELL": 12.503744125366211,
+        "REVISIT": 15.799999237060547,
+        "PREEMPTIVE_INTERCEPT": 15.799999237060547
+      },
+      "g5_runtime_gamma_095": {
+        "SHORT_DWELL": 17.24517059326172,
+        "NORMAL_DWELL": 15.0,
+        "LONG_DWELL": 10.592962265014648,
+        "REVISIT": 15.0,
+        "PREEMPTIVE_INTERCEPT": 15.0
+      },
+      "report_prose_gamma_099": {
+        "SHORT_DWELL": 15.799999237060547,
+        "NORMAL_DWELL": 11.40597915649414,
+        "LONG_DWELL": -3.9123573303222656,
+        "REVISIT": 15.799999237060547,
+        "PREEMPTIVE_INTERCEPT": 15.799999237060547
+      },
+      "report_prose_gamma_095": {
+        "SHORT_DWELL": 15.0,
+        "NORMAL_DWELL": 9.147499084472656,
+        "LONG_DWELL": -10.025262832641602,
+        "REVISIT": 15.0,
+        "PREEMPTIVE_INTERCEPT": 15.0
+      },
+      "target_spread_short_minus_long": {
+        "canonical_gamma_099": 4.946067810058594,
+        "g5_runtime_gamma_095": 6.65220832824707,
+        "report_prose_gamma_099": 19.712356567382812,
+        "report_prose_gamma_095": 25.0252628326416
+      }
+    }
+  },
+  "checkpoint_reproducibility": {
+    "g5_flat_26k": {
+      "checkpoint_sha256": "8d1e026a93d626f0925155e1b3455bfd04ad53d92f4111c76ef68a846ee7341e",
+      "global_step": 26000,
+      "100_step_action_sample_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 0,
+        "LONG_DWELL": 100,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "short_count": 0,
+      "long_count": 100,
+      "normal_count": 0,
+      "revisit_count": 0,
+      "status": "VERIFIED_ACTIVE"
+    },
+    "g5_flat_27k": {
+      "checkpoint_sha256": "a606dff72605f3721cbf988d6dfdc6a80b7528dd1dd4332c9c0772d5adc4b796",
+      "global_step": 27000,
+      "100_step_action_sample_modes": {
+        "SHORT_DWELL": 0,
+        "NORMAL_DWELL": 0,
+        "LONG_DWELL": 100,
+        "REVISIT": 0,
+        "PREEMPTIVE_INTERCEPT": 0
+      },
+      "short_count": 0,
+      "long_count": 100,
+      "normal_count": 0,
+      "revisit_count": 0,
+      "status": "VERIFIED_ACTIVE"
+    },
+    "g5_factorized_26k": {
+      "checkpoint_sha256": "03ad391fb741b6364000800396e7d0c5ae78eea555a48e84093625ba371e18ae",
+      "global_step": 26000,
+      "100_step_action_sample_modes": {
+        "SHORT_DWELL": 72,
+        "NORMAL_DWELL": 7,
+        "LONG_DWELL": 6,
+        "REVISIT": 5,
+        "PREEMPTIVE_INTERCEPT": 10
+      },
+      "short_count": 72,
+      "long_count": 6,
+      "normal_count": 7,
+      "revisit_count": 5,
+      "status": "VERIFIED_ACTIVE"
+    },
+    "g5_factorized_27k": {
+      "checkpoint_sha256": "98c2f92f479cda2d463173b2de5ae6987f6587303c788d5c84dda4895c3307d8",
+      "global_step": 27000,
+      "100_step_action_sample_modes": {
+        "SHORT_DWELL": 74,
+        "NORMAL_DWELL": 17,
+        "LONG_DWELL": 0,
+        "REVISIT": 7,
+        "PREEMPTIVE_INTERCEPT": 2
+      },
+      "short_count": 74,
+      "long_count": 0,
+      "normal_count": 17,
+      "revisit_count": 7,
+      "status": "VERIFIED_ACTIVE"
+    }
+  },
+  "reconciliation_verdict": {
+    "gamma_audit": {
+      "canonical_g3_gamma": 0.99,
+      "g4c_actual_gamma": 0.99,
+      "g5_runner_actual_gamma": 0.95,
+      "discrepancy_confirmed": true,
+      "impact_summary": "G5 used gamma=0.95 instead of canonical gamma=0.99. This increased the discount penalty on LONG dwell from 2.2% to 10.7% (a 4.8x steeper temporal discount penalty)."
+    },
+    "dwell_multipliers_audit": {
+      "canonical_dwell_multipliers": [
+        0.25,
+        1.0,
+        2.5,
+        1.0,
+        1.0
+      ],
+      "g5_runner_actual_dwell_multipliers": [
+        0.25,
+        1.0,
+        2.5,
+        1.0,
+        1.0
+      ],
+      "g5_report_prose_erroneous_statement": [
+        1.0,
+        3.0,
+        10.0,
+        1.0,
+        1.0
+      ],
+      "discrepancy_location": "DOCUMENTATION_ONLY",
+      "explanation": "The G5 runner code in scripts/run_g5_experiment.py DID use canonical [0.25, 1.0, 2.5, 1.0, 1.0] and applied delta_r = [+1.5, 0.0, -3.0, 0.0, 0.0]. The report prose erroneously stated penalties of 0 / -4 / -18 based on a misinterpretation of discrete step counts. The runtime code did NOT apply -18 penalty."
+    },
+    "total_effective_short_advantage": {
+      "canonical_g3d_at_gamma_099": "+4.95 target difference (hit)",
+      "g5_runtime_at_gamma_095": "+6.65 target difference (hit)",
+      "report_prose_at_gamma_095": "+25.03 target difference (hit)"
+    }
+  }
+}

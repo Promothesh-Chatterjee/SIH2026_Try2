@@ -211,6 +211,8 @@ def _do_drqn_update(
     mode_diversity_penalty_coef: float = 0.005,
     mode_diversity_threshold: float = 0.80,
     mode_collapse_rate_threshold: float = 0.50,
+    objective_mode: str = "step_based",
+    c_dwell: float = 2.0,
 ) -> float:
 
     """One Double-DQN BPTT update on a sampled batch. Returns loss value.
@@ -257,25 +259,47 @@ def _do_drqn_update(
             c_max = 100.0 if target_q_max is None else float(target_q_max)
             next_q = torch.clamp(next_q, min=c_min, max=c_max)
 
-    # Phase 5: Time-Aware Bellman Target
-    # γ_eff = γ^(Δt / T_base), where T_base = 500.0 µs
-    # Preferred: actual executed dwell duration (µs) recorded in replay batch
-    # Fallback: nominal dwell duration from action mode multiplier
+    # Phase 5 / Phase G4: Objective Formulation Dispatch
+    # Dwell multipliers: Mode 0 (SHORT)=0.25, Mode 1 (NORMAL)=1.0, Mode 2 (LONG)=2.5, Mode 3 (REVISIT)=1.0, Mode 4 (PREEMPTIVE)=1.0
     if "dwell_times_us" in batch and batch["dwell_times_us"] is not None:
         dwell_us_b = torch.tensor(batch["dwell_times_us"], dtype=torch.float32, device=device)
+        tau_b = dwell_us_b / 500.0
     else:
         dwell_multipliers = torch.tensor([0.25, 1.0, 2.5, 1.0, 1.0], dtype=torch.float32, device=device)
-        dwell_us_b = 500.0 * dwell_multipliers[act_b % 5]
+        tau_b = dwell_multipliers[act_b % n_modes]
+        dwell_us_b = 500.0 * tau_b
 
-    gamma_eff = torch.pow(torch.as_tensor(float(gamma), dtype=torch.float32, device=device), dwell_us_b / 500.0)
+    gamma_tensor = torch.as_tensor(float(gamma), dtype=torch.float32, device=device)
+
+    if objective_mode == "step_based":
+        # Standard step-based Bellman objective (fixed gamma, no dwell penalty)
+        gamma_eff = gamma_tensor
+        eff_rew_b = rew_b
+    elif objective_mode in ("g3b_smdp_only", "smdp_only"):
+        # G3-B: Semi-Markov SMDP discounting only (gamma^tau, no dwell penalty)
+        gamma_eff = torch.pow(gamma_tensor, tau_b)
+        eff_rew_b = rew_b
+    elif objective_mode in ("g3d_hybrid", "calibrated_smdp_hybrid"):
+        # G3-D: Calibrated SMDP Hybrid (gamma^tau discounting + opportunity cost dwell penalty)
+        # r' = r - c_dwell * (tau - 1.0)
+        gamma_eff = torch.pow(gamma_tensor, tau_b)
+        eff_rew_b = rew_b - c_dwell * (tau_b - 1.0)
+    elif objective_mode in ("g3a_reward_rate", "reward_rate"):
+        # G3-A: Reward-rate scaling (r' = r / tau, fixed gamma)
+        gamma_eff = gamma_tensor
+        eff_rew_b = rew_b / torch.clamp(tau_b, min=0.1)
+    else:
+        # Backward-compatible fallback: time-aware discounting
+        gamma_eff = torch.pow(gamma_tensor, tau_b)
+        eff_rew_b = rew_b
 
     # Track D: reward centering strictly applied to TD target computation
     if loss_mask.any():
-        batch_mean = float(rew_b[loss_mask].mean().item())
+        batch_mean = float(eff_rew_b[loss_mask].mean().item())
     else:
-        batch_mean = float(rew_b.mean().item())
+        batch_mean = float(eff_rew_b.mean().item())
     updated_baseline = baseline_momentum * reward_baseline + (1.0 - baseline_momentum) * batch_mean
-    centered_rew_b = rew_b - updated_baseline
+    centered_rew_b = eff_rew_b - updated_baseline
 
     targets = centered_rew_b + gamma_eff * next_q * (1.0 - done_b)
     q_loss = loss_fn(q_chosen[loss_mask], targets[loss_mask].detach())
@@ -431,10 +455,15 @@ def _do_drqn_update(
         stats["mean_target_q"] = float(best_next.mean().item())
         stats["max_target_q"] = float(best_next.max().item())
         stats["target_online_gap"] = float((best_next.mean() - qm.mean()).abs().item())
-        stats["signed_target_online_gap"] = float(best_next.mean().item() - qm.mean().item())
-        stats["gamma_eff_mean"] = float(gamma_eff[loss_mask_t].mean().item())
-        stats["gamma_eff_min"] = float(gamma_eff[loss_mask_t].min().item())
-        stats["gamma_eff_max"] = float(gamma_eff[loss_mask_t].max().item())
+        if torch.is_tensor(gamma_eff) and gamma_eff.dim() > 0:
+            stats["gamma_eff_mean"] = float(gamma_eff[loss_mask_t].mean().item())
+            stats["gamma_eff_min"] = float(gamma_eff[loss_mask_t].min().item())
+            stats["gamma_eff_max"] = float(gamma_eff[loss_mask_t].max().item())
+        else:
+            g_val = float(gamma_eff.item() if torch.is_tensor(gamma_eff) else gamma_eff)
+            stats["gamma_eff_mean"] = g_val
+            stats["gamma_eff_min"] = g_val
+            stats["gamma_eff_max"] = g_val
         pre_gn = float(pre_clip_grad_norm.item()) if torch.is_tensor(pre_clip_grad_norm) else float(pre_clip_grad_norm)
         stats["gradient_norm"] = min(1.0, pre_gn)
         stats["pre_clip_gradient_norm"] = pre_gn
@@ -482,6 +511,11 @@ def train_scheduler(
     mode_diversity_penalty_coef: float | None = None,
     mode_diversity_threshold: float | None = None,
     mode_collapse_rate_threshold: float | None = None,
+    objective_mode: str | None = None,
+    c_dwell: float | None = None,
+    fresh_optimizer: bool = False,
+    abort_on_q_max_exceeded: bool = False,
+    max_allowed_q: float = 100.0,
 ) -> None:
     """Full DRQN training with Thompson warmup, BPTT, target network, and MoE eval.
 
@@ -778,6 +812,7 @@ def train_scheduler(
         logger.info("WandB not available: %s", exc)
 
     action_selection_mode = str(drqn_cfg.get("action_selection_mode", sched_cfg.get("action_selection_mode", "flat_argmax")))
+    exploration_schedule = str(sched_cfg.get("exploration_schedule", exploration_schedule))
     ts_explore_modes = bool(sched_cfg.get("thompson_explore_modes", False))
     ts_sampler = ThompsonSamplingExplorer(n_bands=n_bands, n_modes=n_modes, seed=seed, explore_modes=ts_explore_modes)
     ts_warmup = int(sched_cfg.get("thompson_warmup_steps", 5000))
@@ -806,6 +841,15 @@ def train_scheduler(
         mode_diversity_threshold = float(sched_cfg.get("mode_diversity_threshold", 0.80))
     if mode_collapse_rate_threshold is None:
         mode_collapse_rate_threshold = float(sched_cfg.get("mode_collapse_rate_threshold", 0.50))
+    if objective_mode is None:
+        objective_mode = str(sched_cfg.get("objective_mode", "step_based"))
+    if c_dwell is None:
+        c_dwell = float(sched_cfg.get("c_dwell", 2.0))
+    if not fresh_optimizer:
+        fresh_optimizer = bool(sched_cfg.get("fresh_optimizer", False))
+    if not abort_on_q_max_exceeded:
+        abort_on_q_max_exceeded = bool(sched_cfg.get("abort_on_q_max_exceeded", False))
+    max_allowed_q = float(sched_cfg.get("max_allowed_q", max_allowed_q))
     if "targeted_exploration" in sched_cfg:
         targeted_exploration = bool(sched_cfg["targeted_exploration"])
     if "band_discovery_quota" in sched_cfg:
@@ -999,11 +1043,14 @@ def train_scheduler(
         eps = eps_start
     else:
         if isinstance(ckpt, dict):
-            if "optimizer_state_dict" in ckpt and optimizer is not None:
+            if "optimizer_state_dict" in ckpt and optimizer is not None and not fresh_optimizer:
                 try:
                     optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+                    logger.info("Restored optimizer state from checkpoint.")
                 except Exception as exc:
                     logger.warning("Could not restore optimizer state: %s", exc)
+            elif fresh_optimizer:
+                logger.info("Fresh optimizer contract ACTIVE: keeping newly initialized Adam optimizer.")
             if "rng_state" in ckpt:
                 try:
                     torch.set_rng_state(ckpt["rng_state"])
@@ -1150,7 +1197,9 @@ def train_scheduler(
                     "mean_q": 0.0, "max_q": -1e9, "min_q": 1e9, "q_std": 0.0, "max_q_margin": 0.0,
                     "mean_online_q": 0.0, "mean_target_q": 0.0, "max_target_q": -1e9,
                     "target_online_gap": 0.0, "gradient_norm": 0.0,
-                    "replay_hit_frac": 0.0, "replay_seq_hit_frac": 0.0, "pos_scen_concentration": 0.0}
+                    "replay_hit_frac": 0.0, "replay_seq_hit_frac": 0.0, "pos_scen_concentration": 0.0,
+                    "mode_diversity_pen": 0.0, "diversity_penalty": 0.0, "mode_collapse_rate": 0.0,
+                    "batch_action_entropy": 0.0, "top_band_frac": 0.0}
 
         consecutive_empty = 0
         last_band = -1
@@ -1415,6 +1464,8 @@ def train_scheduler(
                         mode_diversity_penalty_coef=mode_diversity_penalty_coef,
                         mode_diversity_threshold=mode_diversity_threshold,
                         mode_collapse_rate_threshold=mode_collapse_rate_threshold,
+                        objective_mode=objective_mode,
+                        c_dwell=c_dwell,
                     )
                     if upd_stats.get("optimizer_update_attempted", False):
                         update_integrity_counters["optimizer_updates_attempted"] += 1
@@ -1430,6 +1481,8 @@ def train_scheduler(
                         logger.error("DRQN update skipped due to NaN loss/gradient (step %d)", global_step)
                         if not diagnostic:
                             raise RuntimeError(f"Fail-closed update failure (NaN/Inf loss or gradient) at step {global_step}")
+                    if abort_on_q_max_exceeded and float(upd_stats.get("max_q", 0.0)) > max_allowed_q:
+                        raise RuntimeError(f"Fail-closed Early Termination: Q_max {upd_stats.get('max_q', 0.0):.2f} exceeded ceiling {max_allowed_q} at step {global_step}")
                     elif upd_stats.get("optimizer_update_completed", False):
                         update_integrity_counters["optimizer_updates_completed"] += 1
                         update_integrity_counters["n_updates_completed"] += 1
@@ -1455,6 +1508,11 @@ def train_scheduler(
                         ep_learn["replay_hit_frac"] += float(upd_stats.get("replay_hit_fraction", 0.0))
                         ep_learn["replay_seq_hit_frac"] += float(upd_stats.get("replay_sequence_hit_fraction", 0.0))
                         ep_learn["pos_scen_concentration"] += float(upd_stats.get("pos_scen_concentration", 0.0))
+                        ep_learn["mode_diversity_pen"] += float(upd_stats.get("mode_diversity_pen", 0.0))
+                        ep_learn["diversity_penalty"] += float(upd_stats.get("diversity_penalty", 0.0))
+                        ep_learn["mode_collapse_rate"] += float(upd_stats.get("mode_collapse_rate", 0.0))
+                        ep_learn["batch_action_entropy"] += float(upd_stats.get("action_entropy", 0.0))
+                        ep_learn["top_band_frac"] += float(upd_stats.get("top_band_frac", 0.0))
                         b_diag_step = band_tracker.get_diagnostics() if band_tracker is not None else {}
                         tot_exp_step = ep_targeted_exp_steps + ep_uniform_exp_steps
                         gate_evaluator.record_step_diagnostics(
@@ -1556,7 +1614,8 @@ def train_scheduler(
                 target_drqn.load_state_dict(online_drqn.state_dict())
 
             # ---- Staged Promotion Gate Evaluation ----
-            logger.info("Evaluation Checkpoint [step %d] | Update Integrity Counters: %s", global_step, update_integrity_counters)
+            if any(global_step >= g and g not in gate_evaluator.completed_gates for g in gate_evaluator.gates):
+                logger.info("Evaluation Checkpoint [step %d] | Update Integrity Counters: %s", global_step, update_integrity_counters)
             gate_evaluator.check_and_run(
                 global_step=global_step,
                 episode=episode,
@@ -1771,6 +1830,11 @@ def train_scheduler(
                 "epsilon": float(eps),
                 "replay_hit_fraction": float(ep_learn["replay_hit_frac"] / n_upd),
                 "replay_sequence_hit_fraction": float(ep_learn["replay_seq_hit_frac"] / n_upd),
+                "mode_diversity_pen": float(ep_learn["mode_diversity_pen"] / n_upd),
+                "diversity_penalty": float(ep_learn["diversity_penalty"] / n_upd),
+                "mode_collapse_rate": float(ep_learn["mode_collapse_rate"] / n_upd),
+                "batch_action_entropy": float(ep_learn["batch_action_entropy"] / n_upd),
+                "top_band_frac": float(ep_learn["top_band_frac"] / n_upd),
             }
         else:
             learning = {"n_updates": 0, "learning_rate": float(optimizer.param_groups[0].get("lr", 0.0)),

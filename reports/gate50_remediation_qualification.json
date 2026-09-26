@@ -1,0 +1,142 @@
+{
+  "preflight": {
+    "timestamp_utc": "2026-09-26T11:28:40.711512+00:00",
+    "git_commit_sha": "6a2fb9fc55594815e5c4b703da5ad5ccf7fda4c3",
+    "gate25_frozen_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+    "gate50_parent_sha256": "f3aab6b824faf8207194594fe52c096ec5b3b00990e37e7c321d4794bfb9d519",
+    "train_cfg_sha256": "89d7056972d9c79a29b9ed0a911240e49e79a813ac901e56f5013e29784b6d91",
+    "model_cfg_sha256": "f9a1a316b0726e37400a5b663b0946372cbbe1a8b6a8dcfa3375e074ea7b1280",
+    "start_step": 50000,
+    "stop_step": 53000,
+    "qualification_steps": 3000,
+    "output_dir": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\scheduler_v2_gate50_remediation_r1",
+    "candidate_r1_hyperparameters": {
+      "q_reg_coef": 0.00025,
+      "lambda_entropy": 0.02,
+      "band_diversity_penalty_coef": 0.01,
+      "band_diversity_threshold": 0.6,
+      "mode_diversity_penalty_coef": 0.02,
+      "mode_diversity_threshold": 0.55,
+      "mode_collapse_rate_threshold": 0.2
+    },
+    "reward_invariants_frozen": {
+      "version": "v2",
+      "variant": "baseline",
+      "w_hit_novel": 10.0,
+      "w_hit_repeat": 8.0,
+      "w_latency": 5.0,
+      "w_agile_bonus": 2.0,
+      "w_prediction": 0.5,
+      "w_miss": -4.0,
+      "w_false_alarm": -1.0,
+      "w_redundant": -0.25,
+      "w_dwell_cost": -0.01
+    }
+  },
+  "execution": {
+    "started_at_utc": "2026-09-26T11:28:40.711512+00:00",
+    "completed_at_utc": "2026-09-26T11:37:36.119594+00:00",
+    "elapsed_seconds": 534.1393072605133,
+    "target_steps": 3000,
+    "gate_evaluated": 53000,
+    "checkpoint_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\scheduler_v2_gate50_remediation_r1\\checkpoint_gate_53000.pt",
+    "report_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\scheduler_v2_gate50_remediation_r1\\gate_53000_report.json"
+  },
+  "decision_tree": {
+    "decision_case": "CASE_C_STOP",
+    "recommendation": "CRITICAL COLLAPSE: Stop. Do not continue to Gate-75k. Escalate for architectural review.",
+    "case_a_criteria_checks": {
+      "c1_collapse_not_critical": {
+        "passed": false,
+        "value": "CRITICAL",
+        "threshold": "!= CRITICAL"
+      },
+      "c2_no_quarantined_collapsed_tag": {
+        "passed": false,
+        "value": "quarantined_collapsed",
+        "threshold": "!= quarantined_collapsed"
+      },
+      "c3_q_max_le_100": {
+        "passed": false,
+        "value": 110.32146453857422,
+        "threshold": "<= 100.0"
+      },
+      "c4_q_std_lt_60": {
+        "passed": false,
+        "value": 65.19111392974854,
+        "threshold": "< 60.0"
+      },
+      "c5_target_online_gap_lt_30": {
+        "passed": false,
+        "value": 45.13035060882568,
+        "threshold": "< 30.0"
+      },
+      "c6_action_entropy_ge_1": {
+        "passed": false,
+        "value": 0.2240317076374947,
+        "threshold": ">= 1.000"
+      },
+      "c7_top_band_fraction_lt_0_85": {
+        "passed": false,
+        "value": 0.998,
+        "threshold": "< 0.850"
+      },
+      "c8_mode_entropy_ge_0_40": {
+        "passed": false,
+        "value": 0.0,
+        "threshold": ">= 0.400"
+      },
+      "c9_sparse_mean_ir_ge_50": {
+        "passed": true,
+        "value": 86.3,
+        "threshold": ">= 50.0%"
+      },
+      "c10_config_143_ir_ge_50": {
+        "passed": true,
+        "value": 72.8,
+        "threshold": ">= 50.0%"
+      },
+      "c11_config_119_ir_ge_50": {
+        "passed": true,
+        "value": 99.8,
+        "threshold": ">= 50.0%"
+      },
+      "c12_config_241_ir_ge_50": {
+        "passed": true,
+        "value": 56.89999999999999,
+        "threshold": ">= 50.0%"
+      },
+      "c13_agile_mean_ir_ge_55": {
+        "passed": true,
+        "value": 73.975,
+        "threshold": ">= 55.0%"
+      },
+      "c14_pd_ge_98": {
+        "passed": false,
+        "value": 97.242917759833,
+        "threshold": ">= 98.0%"
+      },
+      "c15_pfa_le_0_0005": {
+        "passed": true,
+        "value": 0.0,
+        "threshold": "<= 0.0005"
+      }
+    },
+    "measured_metrics": {
+      "mean_ir": 63.94,
+      "sparse_mean_ir": 86.3,
+      "agile_mean_ir": 73.975,
+      "config_143_ir": 72.8,
+      "config_119_ir": 99.8,
+      "config_241_ir": 56.89999999999999,
+      "action_entropy": 0.2240317076374947,
+      "mode_entropy": 0.0,
+      "top_band_fraction": 0.998,
+      "pd": 97.242917759833,
+      "pfa": 0.0,
+      "q_max": 110.32146453857422,
+      "q_std": 65.19111392974854,
+      "target_online_gap": 45.13035060882568
+    }
+  }
+}

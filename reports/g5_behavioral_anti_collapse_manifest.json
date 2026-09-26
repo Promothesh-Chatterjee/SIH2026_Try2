@@ -1,0 +1,1498 @@
+{
+  "timestamp_utc": "2026-09-26T16:01:29.272468+00:00",
+  "task": "Phase G5 Behavioral Anti-Collapse Experiment",
+  "parent_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+  "objective": "G3-D Hybrid (c_dwell=2.0, gamma=0.95)",
+  "beta_mode": 0.5,
+  "arms": {
+    "g5_flat": {
+      "arm_id": "g5_flat",
+      "arm_name": "G5-Flat + Mode Entropy",
+      "is_factorized": false,
+      "elapsed_seconds": 133.1648211479187,
+      "training_telemetry_summary": {
+        "mean_pre_clip_grad_norm": 5.400480357722232,
+        "max_pre_clip_grad_norm": 22.055923461914062,
+        "mean_td_loss": 3.3001284413588676,
+        "mean_mode_entropy_marginal": 1.6089410663905896,
+        "mean_mode_entropy_state": 1.6087523043783087,
+        "greedy_action_fraction": 0.854,
+        "final_epsilon": 0.14801986733067551
+      },
+      "initialization_manifest": {
+        "lineage": "Exact Gate-25k flat checkpoint warm-start"
+      },
+      "gates": {
+        "gate_26000": {
+          "checkpoint_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\g5_behavioral_anti_collapse\\g5_flat\\checkpoint_gate_26000.pt",
+          "checkpoint_sha256": "8d1e026a93d626f0925155e1b3455bfd04ad53d92f4111c76ef68a846ee7341e",
+          "evaluation": {
+            "mode_entropy": 0.3716797064666364,
+            "mode_distribution_pct": {
+              "SHORT_DWELL": 0.0,
+              "NORMAL_DWELL": 12.24,
+              "LONG_DWELL": 87.76,
+              "REVISIT": 0.0,
+              "PREEMPTIVE_INTERCEPT": 0.0
+            },
+            "mode_transition_rate": 0.002000200020002,
+            "short_fraction_pct": 0.0,
+            "agile_scenarios_short_ge_1pct": 0,
+            "q_max": 0.22211766242980957,
+            "q_min": -13.929039001464844,
+            "q_mean": -12.584537506103516,
+            "q_std": 2.1892642974853516,
+            "q_margin_mean": 0.478198940294981,
+            "bellman_td_error_mean": 6.950281006024472,
+            "bellman_td_error_p90": 13.151555167286377,
+            "bellman_loss": 72.19562716029172,
+            "band_entropy": 2.635710521515679,
+            "top_1_band_fraction": 0.2623,
+            "top_2_band_fraction": 0.4133,
+            "distinct_bands": 36,
+            "mean_consecutive_band_run": 3.381805884342239,
+            "max_consecutive_band_run": 997,
+            "repeated_band_dwell_fraction": 0.7043704370437044,
+            "mean_pd": 78.5514682948933,
+            "mean_pfa": 0.0,
+            "first_hit_latency_ms_mean": 216.375,
+            "mean_ir_decision": 47.28,
+            "gross_hits_per_ms": 0.40821965118286996,
+            "novel_hits_per_ms": 0.0024175444655499916,
+            "sparse_pd": 65.8440352777348,
+            "agile_pd": 74.174224152432,
+            "config_29_pd": 74.28571428571429,
+            "scenarios": {
+              "config_117": {
+                "steps": 1000,
+                "hits": 994,
+                "novel_hits": 1,
+                "dwell_ms": 1250.0,
+                "gross_hits_per_ms": 0.7952,
+                "novel_hits_per_ms": 0.0008,
+                "ir_decision": 99.4,
+                "pd": 100.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 5.0,
+                "mean_consecutive_band_run": 250.0,
+                "max_consecutive_band_run": 997,
+                "repeated_band_fraction": 0.996996996996997,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 0,
+                  "LONG_DWELL": 1000,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_119": {
+                "steps": 1000,
+                "hits": 199,
+                "novel_hits": 4,
+                "dwell_ms": 1098.5,
+                "gross_hits_per_ms": 0.18115612198452435,
+                "novel_hits_per_ms": 0.0036413290851160674,
+                "ir_decision": 19.900000000000002,
+                "pd": 70.8185053380783,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 365.5,
+                "mean_consecutive_band_run": 1.941747572815534,
+                "max_consecutive_band_run": 476,
+                "repeated_band_fraction": 0.4854854854854855,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 202,
+                  "LONG_DWELL": 798,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_143": {
+                "steps": 1000,
+                "hits": 84,
+                "novel_hits": 1,
+                "dwell_ms": 1178.0,
+                "gross_hits_per_ms": 0.07130730050933787,
+                "novel_hits_per_ms": 0.0008488964346349745,
+                "ir_decision": 8.4,
+                "pd": 60.86956521739131,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 143.75,
+                "mean_consecutive_band_run": 2.506265664160401,
+                "max_consecutive_band_run": 348,
+                "repeated_band_fraction": 0.6016016016016016,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 96,
+                  "LONG_DWELL": 904,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_194": {
+                "steps": 1000,
+                "hits": 887,
+                "novel_hits": 3,
+                "dwell_ms": 1250.0,
+                "gross_hits_per_ms": 0.7096,
+                "novel_hits_per_ms": 0.0024,
+                "ir_decision": 88.7,
+                "pd": 100.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 7.5,
+                "mean_consecutive_band_run": 166.66666666666666,
+                "max_consecutive_band_run": 995,
+                "repeated_band_fraction": 0.994994994994995,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 0,
+                  "LONG_DWELL": 1000,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_195": {
+                "steps": 1000,
+                "hits": 972,
+                "novel_hits": 3,
+                "dwell_ms": 1250.0,
+                "gross_hits_per_ms": 0.7776,
+                "novel_hits_per_ms": 0.0024,
+                "ir_decision": 97.2,
+                "pd": 99.2849846782431,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 8.75,
+                "mean_consecutive_band_run": 142.85714285714286,
+                "max_consecutive_band_run": 994,
+                "repeated_band_fraction": 0.993993993993994,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 0,
+                  "LONG_DWELL": 1000,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_241": {
+                "steps": 1000,
+                "hits": 68,
+                "novel_hits": 1,
+                "dwell_ms": 1074.5,
+                "gross_hits_per_ms": 0.0632852489530014,
+                "novel_hits_per_ms": 0.0009306654257794323,
+                "ir_decision": 6.800000000000001,
+                "pd": 52.307692307692314,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 401.0,
+                "mean_consecutive_band_run": 2.127659574468085,
+                "max_consecutive_band_run": 314,
+                "repeated_band_fraction": 0.5305305305305306,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 234,
+                  "LONG_DWELL": 766,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_29": {
+                "steps": 1000,
+                "hits": 26,
+                "novel_hits": 1,
+                "dwell_ms": 734.75,
+                "gross_hits_per_ms": 0.035386185777475335,
+                "novel_hits_per_ms": 0.0013610071452875127,
+                "ir_decision": 2.6,
+                "pd": 74.28571428571429,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 703.5,
+                "mean_consecutive_band_run": 1.0256410256410255,
+                "max_consecutive_band_run": 26,
+                "repeated_band_fraction": 0.025025025025025027,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 687,
+                  "LONG_DWELL": 313,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_42": {
+                "steps": 1000,
+                "hits": 86,
+                "novel_hits": 4,
+                "dwell_ms": 1246.25,
+                "gross_hits_per_ms": 0.06900702106318957,
+                "novel_hits_per_ms": 0.0032096288866599798,
+                "ir_decision": 8.6,
+                "pd": 38.05309734513274,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 336.25,
+                "mean_consecutive_band_run": 2.34192037470726,
+                "max_consecutive_band_run": 323,
+                "repeated_band_fraction": 0.5735735735735735,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 5,
+                  "LONG_DWELL": 995,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_64": {
+                "steps": 1000,
+                "hits": 555,
+                "novel_hits": 4,
+                "dwell_ms": 1250.0,
+                "gross_hits_per_ms": 0.444,
+                "novel_hits_per_ms": 0.0032,
+                "ir_decision": 55.50000000000001,
+                "pd": 93.27731092436974,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 93.75,
+                "mean_consecutive_band_run": 13.333333333333334,
+                "max_consecutive_band_run": 926,
+                "repeated_band_fraction": 0.9259259259259259,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 0,
+                  "LONG_DWELL": 1000,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_96": {
+                "steps": 1000,
+                "hits": 857,
+                "novel_hits": 6,
+                "dwell_ms": 1250.0,
+                "gross_hits_per_ms": 0.6856,
+                "novel_hits_per_ms": 0.0048,
+                "ir_decision": 85.7,
+                "pd": 96.61781285231116,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 98.75,
+                "mean_consecutive_band_run": 12.658227848101266,
+                "max_consecutive_band_run": 922,
+                "repeated_band_fraction": 0.9219219219219219,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 0,
+                  "LONG_DWELL": 1000,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              }
+            }
+          }
+        },
+        "gate_27000": {
+          "checkpoint_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\g5_behavioral_anti_collapse\\g5_flat\\checkpoint_gate_27000.pt",
+          "checkpoint_sha256": "a606dff72605f3721cbf988d6dfdc6a80b7528dd1dd4332c9c0772d5adc4b796",
+          "evaluation": {
+            "mode_entropy": 0.40405480092396495,
+            "mode_distribution_pct": {
+              "SHORT_DWELL": 0.0,
+              "NORMAL_DWELL": 13.950000000000001,
+              "LONG_DWELL": 86.05000000000001,
+              "REVISIT": 0.0,
+              "PREEMPTIVE_INTERCEPT": 0.0
+            },
+            "mode_transition_rate": 0.0026002600260026003,
+            "short_fraction_pct": 0.0,
+            "agile_scenarios_short_ge_1pct": 0,
+            "q_max": -0.5758426785469055,
+            "q_min": -14.870609283447266,
+            "q_mean": -14.20571517944336,
+            "q_std": 1.4233484268188477,
+            "q_margin_mean": 0.48274001374840736,
+            "bellman_td_error_mean": 6.953409310877516,
+            "bellman_td_error_p90": 13.295385425307074,
+            "bellman_loss": 74.05646564633201,
+            "band_entropy": 2.6500492226592627,
+            "top_1_band_fraction": 0.2566,
+            "top_2_band_fraction": 0.3739,
+            "distinct_bands": 36,
+            "mean_consecutive_band_run": 3.487966515521451,
+            "max_consecutive_band_run": 997,
+            "repeated_band_dwell_fraction": 0.7133713371337134,
+            "mean_pd": 79.9921401696823,
+            "mean_pfa": 0.0,
+            "first_hit_latency_ms_mean": 210.6,
+            "mean_ir_decision": 47.38,
+            "gross_hits_per_ms": 0.41366364727709265,
+            "novel_hits_per_ms": 0.0024446142093200915,
+            "sparse_pd": 68.49348648270066,
+            "agile_pd": 79.77300605740021,
+            "config_29_pd": 85.9375,
+            "scenarios": {
+              "config_117": {
+                "steps": 1000,
+                "hits": 994,
+                "novel_hits": 1,
+                "dwell_ms": 1250.0,
+                "gross_hits_per_ms": 0.7952,
+                "novel_hits_per_ms": 0.0008,
+                "ir_decision": 99.4,
+                "pd": 100.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 5.0,
+                "mean_consecutive_band_run": 250.0,
+                "max_consecutive_band_run": 997,
+                "repeated_band_fraction": 0.996996996996997,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 0,
+                  "LONG_DWELL": 1000,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_119": {
+                "steps": 1000,
+                "hits": 95,
+                "novel_hits": 4,
+                "dwell_ms": 962.75,
+                "gross_hits_per_ms": 0.09867566865749156,
+                "novel_hits_per_ms": 0.004154764996104908,
+                "ir_decision": 9.5,
+                "pd": 78.51239669421489,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 424.5,
+                "mean_consecutive_band_run": 1.5772870662460567,
+                "max_consecutive_band_run": 269,
+                "repeated_band_fraction": 0.3663663663663664,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 383,
+                  "LONG_DWELL": 617,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_143": {
+                "steps": 1000,
+                "hits": 69,
+                "novel_hits": 1,
+                "dwell_ms": 1094.0,
+                "gross_hits_per_ms": 0.06307129798903108,
+                "novel_hits_per_ms": 0.0009140767824497258,
+                "ir_decision": 6.9,
+                "pd": 58.47457627118644,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 143.75,
+                "mean_consecutive_band_run": 2.100840336134454,
+                "max_consecutive_band_run": 347,
+                "repeated_band_fraction": 0.5245245245245245,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 208,
+                  "LONG_DWELL": 792,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_194": {
+                "steps": 1000,
+                "hits": 887,
+                "novel_hits": 3,
+                "dwell_ms": 1250.0,
+                "gross_hits_per_ms": 0.7096,
+                "novel_hits_per_ms": 0.0024,
+                "ir_decision": 88.7,
+                "pd": 100.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 7.5,
+                "mean_consecutive_band_run": 166.66666666666666,
+                "max_consecutive_band_run": 995,
+                "repeated_band_fraction": 0.994994994994995,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 0,
+                  "LONG_DWELL": 1000,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_195": {
+                "steps": 1000,
+                "hits": 972,
+                "novel_hits": 3,
+                "dwell_ms": 1250.0,
+                "gross_hits_per_ms": 0.7776,
+                "novel_hits_per_ms": 0.0024,
+                "ir_decision": 97.2,
+                "pd": 99.2849846782431,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 8.75,
+                "mean_consecutive_band_run": 142.85714285714286,
+                "max_consecutive_band_run": 994,
+                "repeated_band_fraction": 0.993993993993994,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 0,
+                  "LONG_DWELL": 1000,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_241": {
+                "steps": 1000,
+                "hits": 93,
+                "novel_hits": 1,
+                "dwell_ms": 1179.5,
+                "gross_hits_per_ms": 0.07884696905468419,
+                "novel_hits_per_ms": 0.000847816871555744,
+                "ir_decision": 9.3,
+                "pd": 55.35714285714286,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 339.0,
+                "mean_consecutive_band_run": 2.73224043715847,
+                "max_consecutive_band_run": 406,
+                "repeated_band_fraction": 0.6346346346346347,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 94,
+                  "LONG_DWELL": 906,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_29": {
+                "steps": 1000,
+                "hits": 55,
+                "novel_hits": 1,
+                "dwell_ms": 730.25,
+                "gross_hits_per_ms": 0.07531667237247518,
+                "novel_hits_per_ms": 0.0013693940431359123,
+                "ir_decision": 5.5,
+                "pd": 85.9375,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 661.5,
+                "mean_consecutive_band_run": 1.0649627263045793,
+                "max_consecutive_band_run": 56,
+                "repeated_band_fraction": 0.06106106106106106,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 693,
+                  "LONG_DWELL": 307,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_42": {
+                "steps": 1000,
+                "hits": 161,
+                "novel_hits": 4,
+                "dwell_ms": 1237.25,
+                "gross_hits_per_ms": 0.13012729844413012,
+                "novel_hits_per_ms": 0.0032329763588603757,
+                "ir_decision": 16.1,
+                "pd": 32.45967741935484,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 323.5,
+                "mean_consecutive_band_run": 3.5587188612099645,
+                "max_consecutive_band_run": 545,
+                "repeated_band_fraction": 0.7197197197197197,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 17,
+                  "LONG_DWELL": 983,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_64": {
+                "steps": 1000,
+                "hits": 555,
+                "novel_hits": 4,
+                "dwell_ms": 1250.0,
+                "gross_hits_per_ms": 0.444,
+                "novel_hits_per_ms": 0.0032,
+                "ir_decision": 55.50000000000001,
+                "pd": 93.27731092436974,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 93.75,
+                "mean_consecutive_band_run": 13.333333333333334,
+                "max_consecutive_band_run": 926,
+                "repeated_band_fraction": 0.9259259259259259,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 0,
+                  "LONG_DWELL": 1000,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              },
+              "config_96": {
+                "steps": 1000,
+                "hits": 857,
+                "novel_hits": 6,
+                "dwell_ms": 1250.0,
+                "gross_hits_per_ms": 0.6856,
+                "novel_hits_per_ms": 0.0048,
+                "ir_decision": 85.7,
+                "pd": 96.61781285231116,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 98.75,
+                "mean_consecutive_band_run": 12.658227848101266,
+                "max_consecutive_band_run": 922,
+                "repeated_band_fraction": 0.9219219219219219,
+                "modes": {
+                  "SHORT_DWELL": 0,
+                  "NORMAL_DWELL": 0,
+                  "LONG_DWELL": 1000,
+                  "REVISIT": 0,
+                  "PREEMPTIVE_INTERCEPT": 0
+                },
+                "short_fraction_pct": 0.0
+              }
+            }
+          }
+        }
+      }
+    },
+    "g5_factorized": {
+      "arm_id": "g5_factorized",
+      "arm_name": "G5-Factorized + Mode Entropy",
+      "is_factorized": true,
+      "elapsed_seconds": 129.8445372581482,
+      "training_telemetry_summary": {
+        "mean_pre_clip_grad_norm": 6.231062532726087,
+        "max_pre_clip_grad_norm": 44.09929275512695,
+        "mean_td_loss": 3.2809809433786494,
+        "mean_mode_entropy_marginal": 1.6085040850388377,
+        "mean_mode_entropy_state": 1.6082070824974461,
+        "greedy_action_fraction": 0.854,
+        "final_epsilon": 0.14801986733067551
+      },
+      "initialization_manifest": {
+        "initialization_contract": "G5-Factorized-v1",
+        "initialization_seed": 42,
+        "architecture_hash": "8a7693b23304a564356404fee1dc87d7f7928d029da1579c312d30d4d418b959",
+        "parent_checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+        "lineage_statement": "Gate-25 shared representation inherited; new factorized heads initialized under G5 initialization contract.",
+        "inherited_parameters_count": 28,
+        "newly_initialized_parameters_count": 6,
+        "inherited_parameters": [
+          "input_norm.weight",
+          "input_norm.bias",
+          "lstm.weight_ih_l0",
+          "lstm.weight_hh_l0",
+          "lstm.bias_ih_l0",
+          "lstm.bias_hh_l0",
+          "lstm.weight_ih_l1",
+          "lstm.weight_hh_l1",
+          "lstm.bias_ih_l1",
+          "lstm.bias_hh_l1",
+          "value_stream.0.weight",
+          "value_stream.0.bias",
+          "value_stream.2.weight",
+          "value_stream.2.bias",
+          "band_encoder.0.weight",
+          "band_encoder.0.bias",
+          "ctx_proj.0.weight",
+          "ctx_proj.0.bias",
+          "intercept_prob_head.0.weight",
+          "intercept_prob_head.0.bias",
+          "intercept_prob_head.2.weight",
+          "intercept_prob_head.2.bias",
+          "intercept_time_head.0.weight",
+          "intercept_time_head.0.bias",
+          "intercept_time_head.2.weight",
+          "intercept_time_head.2.bias",
+          "band_head.0.weight",
+          "band_head.0.bias"
+        ],
+        "newly_initialized_parameters": [
+          "band_head.2.weight",
+          "band_head.2.bias",
+          "mode_head.0.weight",
+          "mode_head.0.bias",
+          "mode_head.2.weight",
+          "mode_head.2.bias"
+        ],
+        "mapping_records": [
+          {
+            "dest_name": "input_norm.weight",
+            "src_name": "input_norm.weight",
+            "shape": [
+              360
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "abccc921a8a08c61a6180222b8eae99972de45b06178f0003381543fb61384f6"
+          },
+          {
+            "dest_name": "input_norm.bias",
+            "src_name": "input_norm.bias",
+            "shape": [
+              360
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "31d8fedf8a0edc451891a87caa3a05026f77d99bdc9153edf569edd4cb21009d"
+          },
+          {
+            "dest_name": "lstm.weight_ih_l0",
+            "src_name": "lstm.weight_ih_l0",
+            "shape": [
+              1024,
+              360
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "db0c22a61bd5bbe1e9823cc48b5a883d009df10a236a04b5861bafb5b53fa167"
+          },
+          {
+            "dest_name": "lstm.weight_hh_l0",
+            "src_name": "lstm.weight_hh_l0",
+            "shape": [
+              1024,
+              256
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "47980468ba4932f222327bbe54c185759728d73fbf1dc7711955e63e894ef510"
+          },
+          {
+            "dest_name": "lstm.bias_ih_l0",
+            "src_name": "lstm.bias_ih_l0",
+            "shape": [
+              1024
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "40fa910d1ad28285aaf717d422cac60a0bd15228082d170fd62bbea780be08d6"
+          },
+          {
+            "dest_name": "lstm.bias_hh_l0",
+            "src_name": "lstm.bias_hh_l0",
+            "shape": [
+              1024
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "bf2a28392170633c902ec9d92b66dd86348ea34551bf1d5fb55c8cc8bd1e3d09"
+          },
+          {
+            "dest_name": "lstm.weight_ih_l1",
+            "src_name": "lstm.weight_ih_l1",
+            "shape": [
+              1024,
+              256
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "0759bab34db6bfcc1bc557b39966be245f4216f3e1645f46636096ea50aa4398"
+          },
+          {
+            "dest_name": "lstm.weight_hh_l1",
+            "src_name": "lstm.weight_hh_l1",
+            "shape": [
+              1024,
+              256
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "1d56ba315a440277474854d27eae2d22d8c537521e6747d6af58ecd3e611f78e"
+          },
+          {
+            "dest_name": "lstm.bias_ih_l1",
+            "src_name": "lstm.bias_ih_l1",
+            "shape": [
+              1024
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "816883f181f471268b7efdaa760f5b40bb9cefc3e3945dee973f29014b5b3a26"
+          },
+          {
+            "dest_name": "lstm.bias_hh_l1",
+            "src_name": "lstm.bias_hh_l1",
+            "shape": [
+              1024
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "74834ab96a47770f979d095f217d4cc41a2d6214dc29aa4c29164c682752724f"
+          },
+          {
+            "dest_name": "value_stream.0.weight",
+            "src_name": "value_stream.0.weight",
+            "shape": [
+              128,
+              256
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "0e43cbcc1a66705e2e598e34ba2a6df305ae74e36be3af4a91b071a1125ada78"
+          },
+          {
+            "dest_name": "value_stream.0.bias",
+            "src_name": "value_stream.0.bias",
+            "shape": [
+              128
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "8687f5369a953159da01356ed8696258bca31a8963ae63137744ab84cd1223b0"
+          },
+          {
+            "dest_name": "value_stream.2.weight",
+            "src_name": "value_stream.2.weight",
+            "shape": [
+              1,
+              128
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "9e0c6e6453651b4fa64d54bedf7177d41e66f30f56b550b0dc42112436868bed"
+          },
+          {
+            "dest_name": "value_stream.2.bias",
+            "src_name": "value_stream.2.bias",
+            "shape": [
+              1
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "cfcf4601669288da38e8dc8cd6cd0230f429bcf79e5db47b5541ae011e958079"
+          },
+          {
+            "dest_name": "band_encoder.0.weight",
+            "src_name": "band_encoder.0.weight",
+            "shape": [
+              32,
+              10
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "c5c4425d220f014ccbe4a94f035e67eb745281812a14908d591634475bf0b0c2"
+          },
+          {
+            "dest_name": "band_encoder.0.bias",
+            "src_name": "band_encoder.0.bias",
+            "shape": [
+              32
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "8ea29026306ed155c74073d5ceee00f7da3bc6bfaa748fc93b9153e7633ba134"
+          },
+          {
+            "dest_name": "ctx_proj.0.weight",
+            "src_name": "ctx_proj.0.weight",
+            "shape": [
+              32,
+              256
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "c35020473aed1b4642cd726cad727b63fff2824ad68cedd7ffb73c7cbd890479"
+          },
+          {
+            "dest_name": "ctx_proj.0.bias",
+            "src_name": "ctx_proj.0.bias",
+            "shape": [
+              32
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca"
+          },
+          {
+            "dest_name": "intercept_prob_head.0.weight",
+            "src_name": "intercept_prob_head.0.weight",
+            "shape": [
+              128,
+              256
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "b8b783305b7c5c71cff1d9267903fd8967a84d80a633511283955601957b7c33"
+          },
+          {
+            "dest_name": "intercept_prob_head.0.bias",
+            "src_name": "intercept_prob_head.0.bias",
+            "shape": [
+              128
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "3cab412320a6f55b993359006009fa13ef5f5d19b0aeab59184edf3e508978ca"
+          },
+          {
+            "dest_name": "intercept_prob_head.2.weight",
+            "src_name": "intercept_prob_head.2.weight",
+            "shape": [
+              180,
+              128
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "fc85b74ff93e2f2bcb1575d09b6cfc6a96e206f1f75c5938fc170d548c4c7bca"
+          },
+          {
+            "dest_name": "intercept_prob_head.2.bias",
+            "src_name": "intercept_prob_head.2.bias",
+            "shape": [
+              180
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "2ac01369a273eb091909c872da8517f6ab352f77399e51dda94518098c546eec"
+          },
+          {
+            "dest_name": "intercept_time_head.0.weight",
+            "src_name": "intercept_time_head.0.weight",
+            "shape": [
+              128,
+              256
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "51f58676f5941f2ddf26fc26c5b99da4a492fab5e5f0564955d50b240eb85524"
+          },
+          {
+            "dest_name": "intercept_time_head.0.bias",
+            "src_name": "intercept_time_head.0.bias",
+            "shape": [
+              128
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "86e70c2d9d42b400990a3065fe4f097cde5613f4974dd007b5e33b141867145f"
+          },
+          {
+            "dest_name": "intercept_time_head.2.weight",
+            "src_name": "intercept_time_head.2.weight",
+            "shape": [
+              180,
+              128
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "04c2df133491d6c9caf4c74643bd830d9a7ac7b2a906f2ea2289d6286cc604e4"
+          },
+          {
+            "dest_name": "intercept_time_head.2.bias",
+            "src_name": "intercept_time_head.2.bias",
+            "shape": [
+              180
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "d155f2e5c4695a09ab7f8d1cf9317c27f23adaa5b2e551d10613f71cfb367f58"
+          },
+          {
+            "dest_name": "band_head.0.weight",
+            "src_name": "band_advantage_head.0.weight",
+            "shape": [
+              32,
+              64
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "848020655274eae51bcc2a2083f78f47ca0b804802303a7322152db9fee06ab6"
+          },
+          {
+            "dest_name": "band_head.0.bias",
+            "src_name": "band_advantage_head.0.bias",
+            "shape": [
+              32
+            ],
+            "transformation": "direct_copy",
+            "dest_sha256": "fec23da0cb8c917d7121f04679ca44d274e7eeb74a22ceec2e6b110f77408b0a"
+          },
+          {
+            "dest_name": "band_head.2.weight",
+            "src_name": "band_advantage_head.2.weight",
+            "src_shape": [
+              5,
+              32
+            ],
+            "dest_shape": [
+              1,
+              32
+            ],
+            "transformation": "mean_across_mode_dimension_dim0",
+            "src_sha256": "5a633f9fba191e65bb5b62818487c6a0e8b765898c2e5dd8530146622b737d7a",
+            "dest_sha256": "e88cd13bb64827350c591b910ba8792f5d0cacb05d453892623f0a64d605360d"
+          },
+          {
+            "dest_name": "band_head.2.bias",
+            "src_name": "band_advantage_head.2.bias",
+            "src_shape": [
+              5
+            ],
+            "dest_shape": [
+              1
+            ],
+            "transformation": "mean_across_mode_dimension_dim0",
+            "src_sha256": "dc29cd64da6f1e0fdd78617da80ea7edb8bcdb0bc7d263a251d4ea1afb62de10",
+            "dest_sha256": "b7975ab2ee29b540ba0fb6c7245549fe84b67a383d7299d39587c7074f4b5509"
+          },
+          {
+            "dest_name": "mode_head.0.weight",
+            "shape": [
+              64,
+              256
+            ],
+            "transformation": "xavier_uniform_seed_42",
+            "dest_sha256": "bd0ce400c39afc5ba1258a027392e0441e627522698e003090fde03c038729e3"
+          },
+          {
+            "dest_name": "mode_head.2.weight",
+            "shape": [
+              5,
+              64
+            ],
+            "transformation": "xavier_uniform_gain_0.1_seed_42",
+            "dest_sha256": "4452400ec2886ce696d6b6e8b24e2da2eece947874f00774b6917e40137c768b"
+          }
+        ]
+      },
+      "gates": {
+        "gate_26000": {
+          "checkpoint_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\g5_behavioral_anti_collapse\\g5_factorized\\checkpoint_gate_26000.pt",
+          "checkpoint_sha256": "03ad391fb741b6364000800396e7d0c5ae78eea555a48e84093625ba371e18ae",
+          "evaluation": {
+            "mode_entropy": 0.8401551012899583,
+            "mode_distribution_pct": {
+              "SHORT_DWELL": 19.39,
+              "NORMAL_DWELL": 0.73,
+              "LONG_DWELL": 0.61,
+              "REVISIT": 70.73,
+              "PREEMPTIVE_INTERCEPT": 8.540000000000001
+            },
+            "mode_transition_rate": 0.013201320132013201,
+            "short_fraction_pct": 19.39,
+            "agile_scenarios_short_ge_1pct": 4,
+            "q_max": -0.17750592529773712,
+            "q_min": -13.8928804397583,
+            "q_mean": -12.490315437316895,
+            "q_std": 1.831594467163086,
+            "q_margin_mean": 0.011849290217459202,
+            "bellman_td_error_mean": 5.618081155991151,
+            "bellman_td_error_p90": 15.477352910041809,
+            "bellman_loss": 79.51891623718755,
+            "band_entropy": 3.1071372119679963,
+            "top_1_band_fraction": 0.1733,
+            "top_2_band_fraction": 0.2887,
+            "distinct_bands": 36,
+            "mean_consecutive_band_run": 1.8037518037518037,
+            "max_consecutive_band_run": 997,
+            "repeated_band_dwell_fraction": 0.4456445644564456,
+            "mean_pd": 63.40758738432612,
+            "mean_pfa": 0.0,
+            "first_hit_latency_ms_mean": 166.625,
+            "mean_ir_decision": 35.15,
+            "gross_hits_per_ms": 0.8139164664679152,
+            "novel_hits_per_ms": 0.003473327737416423,
+            "sparse_pd": 25.0,
+            "agile_pd": 39.871794871794876,
+            "config_29_pd": 0.0,
+            "scenarios": {
+              "config_117": {
+                "steps": 1000,
+                "hits": 839,
+                "novel_hits": 1,
+                "dwell_ms": 454.25,
+                "gross_hits_per_ms": 1.8470005503577325,
+                "novel_hits_per_ms": 0.002201430930104568,
+                "ir_decision": 83.89999999999999,
+                "pd": 100.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 5.0,
+                "mean_consecutive_band_run": 250.0,
+                "max_consecutive_band_run": 997,
+                "repeated_band_fraction": 0.996996996996997,
+                "modes": {
+                  "SHORT_DWELL": 136,
+                  "NORMAL_DWELL": 12,
+                  "LONG_DWELL": 7,
+                  "REVISIT": 842,
+                  "PREEMPTIVE_INTERCEPT": 3
+                },
+                "short_fraction_pct": 13.600000000000001
+              },
+              "config_119": {
+                "steps": 1000,
+                "hits": 0,
+                "novel_hits": 0,
+                "dwell_ms": 454.25,
+                "gross_hits_per_ms": 0.0,
+                "novel_hits_per_ms": 0.0,
+                "ir_decision": 0.0,
+                "pd": 0.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 454.25,
+                "mean_consecutive_band_run": 1.0,
+                "max_consecutive_band_run": 1,
+                "repeated_band_fraction": 0.0,
+                "modes": {
+                  "SHORT_DWELL": 134,
+                  "NORMAL_DWELL": 7,
+                  "LONG_DWELL": 6,
+                  "REVISIT": 843,
+                  "PREEMPTIVE_INTERCEPT": 10
+                },
+                "short_fraction_pct": 13.4
+              },
+              "config_143": {
+                "steps": 1000,
+                "hits": 1,
+                "novel_hits": 1,
+                "dwell_ms": 460.625,
+                "gross_hits_per_ms": 0.002170963364993216,
+                "novel_hits_per_ms": 0.002170963364993216,
+                "ir_decision": 0.1,
+                "pd": 50.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 198.125,
+                "mean_consecutive_band_run": 1.0111223458038423,
+                "max_consecutive_band_run": 12,
+                "repeated_band_fraction": 0.011011011011011011,
+                "modes": {
+                  "SHORT_DWELL": 117,
+                  "NORMAL_DWELL": 7,
+                  "LONG_DWELL": 6,
+                  "REVISIT": 860,
+                  "PREEMPTIVE_INTERCEPT": 10
+                },
+                "short_fraction_pct": 11.700000000000001
+              },
+              "config_194": {
+                "steps": 1000,
+                "hits": 994,
+                "novel_hits": 3,
+                "dwell_ms": 472.625,
+                "gross_hits_per_ms": 2.1031473155249936,
+                "novel_hits_per_ms": 0.006347527109230362,
+                "ir_decision": 99.4,
+                "pd": 100.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 7.5,
+                "mean_consecutive_band_run": 166.66666666666666,
+                "max_consecutive_band_run": 995,
+                "repeated_band_fraction": 0.994994994994995,
+                "modes": {
+                  "SHORT_DWELL": 85,
+                  "NORMAL_DWELL": 5,
+                  "LONG_DWELL": 6,
+                  "REVISIT": 892,
+                  "PREEMPTIVE_INTERCEPT": 12
+                },
+                "short_fraction_pct": 8.5
+              },
+              "config_195": {
+                "steps": 1000,
+                "hits": 776,
+                "novel_hits": 3,
+                "dwell_ms": 460.625,
+                "gross_hits_per_ms": 1.6846675712347354,
+                "novel_hits_per_ms": 0.006512890094979647,
+                "ir_decision": 77.60000000000001,
+                "pd": 99.48717948717949,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 72.125,
+                "mean_consecutive_band_run": 4.484304932735426,
+                "max_consecutive_band_run": 778,
+                "repeated_band_fraction": 0.7777777777777778,
+                "modes": {
+                  "SHORT_DWELL": 117,
+                  "NORMAL_DWELL": 7,
+                  "LONG_DWELL": 6,
+                  "REVISIT": 252,
+                  "PREEMPTIVE_INTERCEPT": 618
+                },
+                "short_fraction_pct": 11.700000000000001
+              },
+              "config_241": {
+                "steps": 1000,
+                "hits": 6,
+                "novel_hits": 1,
+                "dwell_ms": 460.625,
+                "gross_hits_per_ms": 0.013025780189959294,
+                "novel_hits_per_ms": 0.002170963364993216,
+                "ir_decision": 0.6,
+                "pd": 60.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 128.125,
+                "mean_consecutive_band_run": 1.016260162601626,
+                "max_consecutive_band_run": 11,
+                "repeated_band_fraction": 0.016016016016016016,
+                "modes": {
+                  "SHORT_DWELL": 117,
+                  "NORMAL_DWELL": 7,
+                  "LONG_DWELL": 6,
+                  "REVISIT": 860,
+                  "PREEMPTIVE_INTERCEPT": 10
+                },
+                "short_fraction_pct": 11.700000000000001
+              },
+              "config_29": {
+                "steps": 1000,
+                "hits": 0,
+                "novel_hits": 0,
+                "dwell_ms": 454.25,
+                "gross_hits_per_ms": 0.0,
+                "novel_hits_per_ms": 0.0,
+                "ir_decision": 0.0,
+                "pd": 0.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 454.25,
+                "mean_consecutive_band_run": 1.0,
+                "max_consecutive_band_run": 1,
+                "repeated_band_fraction": 0.0,
+                "modes": {
+                  "SHORT_DWELL": 134,
+                  "NORMAL_DWELL": 7,
+                  "LONG_DWELL": 6,
+                  "REVISIT": 843,
+                  "PREEMPTIVE_INTERCEPT": 10
+                },
+                "short_fraction_pct": 13.4
+              },
+              "config_42": {
+                "steps": 1000,
+                "hits": 22,
+                "novel_hits": 1,
+                "dwell_ms": 435.875,
+                "gross_hits_per_ms": 0.050473186119873815,
+                "novel_hits_per_ms": 0.002294235732721537,
+                "ir_decision": 2.1999999999999997,
+                "pd": 32.35294117647059,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 204.625,
+                "mean_consecutive_band_run": 1.1160714285714286,
+                "max_consecutive_band_run": 72,
+                "repeated_band_fraction": 0.1041041041041041,
+                "modes": {
+                  "SHORT_DWELL": 183,
+                  "NORMAL_DWELL": 7,
+                  "LONG_DWELL": 6,
+                  "REVISIT": 794,
+                  "PREEMPTIVE_INTERCEPT": 10
+                },
+                "short_fraction_pct": 18.3
+              },
+              "config_64": {
+                "steps": 1000,
+                "hits": 371,
+                "novel_hits": 2,
+                "dwell_ms": 206.375,
+                "gross_hits_per_ms": 1.7976983646274984,
+                "novel_hits_per_ms": 0.009691096305269533,
+                "ir_decision": 37.1,
+                "pd": 99.73118279569893,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 70.125,
+                "mean_consecutive_band_run": 4.566210045662101,
+                "max_consecutive_band_run": 782,
+                "repeated_band_fraction": 0.7817817817817818,
+                "modes": {
+                  "SHORT_DWELL": 795,
+                  "NORMAL_DWELL": 7,
+                  "LONG_DWELL": 6,
+                  "REVISIT": 168,
+                  "PREEMPTIVE_INTERCEPT": 24
+                },
+                "short_fraction_pct": 79.5
+              },
+              "config_96": {
+                "steps": 1000,
+                "hits": 506,
+                "novel_hits": 3,
+                "dwell_ms": 459.125,
+                "gross_hits_per_ms": 1.1020963789817588,
+                "novel_hits_per_ms": 0.006534168254832562,
+                "ir_decision": 50.6,
+                "pd": 92.50457038391224,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 72.125,
+                "mean_consecutive_band_run": 4.484304932735426,
+                "max_consecutive_band_run": 778,
+                "repeated_band_fraction": 0.7777777777777778,
+                "modes": {
+                  "SHORT_DWELL": 121,
+                  "NORMAL_DWELL": 7,
+                  "LONG_DWELL": 6,
+                  "REVISIT": 719,
+                  "PREEMPTIVE_INTERCEPT": 147
+                },
+                "short_fraction_pct": 12.1
+              }
+            }
+          }
+        },
+        "gate_27000": {
+          "checkpoint_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\g5_behavioral_anti_collapse\\g5_factorized\\checkpoint_gate_27000.pt",
+          "checkpoint_sha256": "98c2f92f479cda2d463173b2de5ae6987f6587303c788d5c84dda4895c3307d8",
+          "evaluation": {
+            "mode_entropy": 0.3322917002192319,
+            "mode_distribution_pct": {
+              "SHORT_DWELL": 92.62,
+              "NORMAL_DWELL": 1.69,
+              "LONG_DWELL": 4.81,
+              "REVISIT": 0.6799999999999999,
+              "PREEMPTIVE_INTERCEPT": 0.2
+            },
+            "mode_transition_rate": 0.005000500050005001,
+            "short_fraction_pct": 92.62,
+            "agile_scenarios_short_ge_1pct": 4,
+            "q_max": 25.925485610961914,
+            "q_min": -14.549391746520996,
+            "q_mean": -12.113987922668457,
+            "q_std": 7.350164890289307,
+            "q_margin_mean": 0.024485950623452664,
+            "bellman_td_error_mean": 4.0510883592855,
+            "bellman_td_error_p90": 16.483179607937906,
+            "bellman_loss": 55.91210827382412,
+            "band_entropy": 3.2628026373959944,
+            "top_1_band_fraction": 0.124,
+            "top_2_band_fraction": 0.24180000000000001,
+            "distinct_bands": 36,
+            "mean_consecutive_band_run": 1.513317191283293,
+            "max_consecutive_band_run": 995,
+            "repeated_band_dwell_fraction": 0.3392339233923392,
+            "mean_pd": 56.01655682362161,
+            "mean_pfa": 0.0,
+            "first_hit_latency_ms_mean": 69.5125,
+            "mean_ir_decision": 23.97,
+            "gross_hits_per_ms": 1.269933774834437,
+            "novel_hits_per_ms": 0.006357615894039735,
+            "sparse_pd": 37.5,
+            "agile_pd": 24.65,
+            "config_29_pd": 0.0,
+            "scenarios": {
+              "config_117": {
+                "steps": 1000,
+                "hits": 375,
+                "novel_hits": 1,
+                "dwell_ms": 134.75,
+                "gross_hits_per_ms": 2.782931354359926,
+                "novel_hits_per_ms": 0.0074211502782931356,
+                "ir_decision": 37.5,
+                "pd": 100.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 23.75,
+                "mean_consecutive_band_run": 8.928571428571429,
+                "max_consecutive_band_run": 889,
+                "repeated_band_fraction": 0.8888888888888888,
+                "modes": {
+                  "SHORT_DWELL": 974,
+                  "NORMAL_DWELL": 17,
+                  "LONG_DWELL": 0,
+                  "REVISIT": 7,
+                  "PREEMPTIVE_INTERCEPT": 2
+                },
+                "short_fraction_pct": 97.39999999999999
+              },
+              "config_119": {
+                "steps": 1000,
+                "hits": 0,
+                "novel_hits": 0,
+                "dwell_ms": 134.75,
+                "gross_hits_per_ms": 0.0,
+                "novel_hits_per_ms": 0.0,
+                "ir_decision": 0.0,
+                "pd": 0.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 134.75,
+                "mean_consecutive_band_run": 1.0,
+                "max_consecutive_band_run": 1,
+                "repeated_band_fraction": 0.0,
+                "modes": {
+                  "SHORT_DWELL": 974,
+                  "NORMAL_DWELL": 17,
+                  "LONG_DWELL": 0,
+                  "REVISIT": 7,
+                  "PREEMPTIVE_INTERCEPT": 2
+                },
+                "short_fraction_pct": 97.39999999999999
+              },
+              "config_143": {
+                "steps": 1000,
+                "hits": 3,
+                "novel_hits": 1,
+                "dwell_ms": 134.0,
+                "gross_hits_per_ms": 0.022388059701492536,
+                "novel_hits_per_ms": 0.007462686567164179,
+                "ir_decision": 0.3,
+                "pd": 75.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 3.5,
+                "mean_consecutive_band_run": 1.016260162601626,
+                "max_consecutive_band_run": 10,
+                "repeated_band_fraction": 0.016016016016016016,
+                "modes": {
+                  "SHORT_DWELL": 976,
+                  "NORMAL_DWELL": 16,
+                  "LONG_DWELL": 0,
+                  "REVISIT": 6,
+                  "PREEMPTIVE_INTERCEPT": 2
+                },
+                "short_fraction_pct": 97.6
+              },
+              "config_194": {
+                "steps": 1000,
+                "hits": 984,
+                "novel_hits": 2,
+                "dwell_ms": 134.375,
+                "gross_hits_per_ms": 7.322790697674419,
+                "novel_hits_per_ms": 0.014883720930232559,
+                "ir_decision": 98.4,
+                "pd": 99.8984771573604,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 3.0,
+                "mean_consecutive_band_run": 166.66666666666666,
+                "max_consecutive_band_run": 995,
+                "repeated_band_fraction": 0.994994994994995,
+                "modes": {
+                  "SHORT_DWELL": 975,
+                  "NORMAL_DWELL": 17,
+                  "LONG_DWELL": 0,
+                  "REVISIT": 6,
+                  "PREEMPTIVE_INTERCEPT": 2
+                },
+                "short_fraction_pct": 97.5
+              },
+              "config_195": {
+                "steps": 1000,
+                "hits": 493,
+                "novel_hits": 3,
+                "dwell_ms": 134.75,
+                "gross_hits_per_ms": 3.6586270871985156,
+                "novel_hits_per_ms": 0.022263450834879406,
+                "ir_decision": 49.3,
+                "pd": 98.6,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 19.625,
+                "mean_consecutive_band_run": 3.2051282051282053,
+                "max_consecutive_band_run": 578,
+                "repeated_band_fraction": 0.6886886886886887,
+                "modes": {
+                  "SHORT_DWELL": 974,
+                  "NORMAL_DWELL": 17,
+                  "LONG_DWELL": 0,
+                  "REVISIT": 7,
+                  "PREEMPTIVE_INTERCEPT": 2
+                },
+                "short_fraction_pct": 97.39999999999999
+              },
+              "config_241": {
+                "steps": 1000,
+                "hits": 0,
+                "novel_hits": 0,
+                "dwell_ms": 134.75,
+                "gross_hits_per_ms": 0.0,
+                "novel_hits_per_ms": 0.0,
+                "ir_decision": 0.0,
+                "pd": 0.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 134.75,
+                "mean_consecutive_band_run": 1.0,
+                "max_consecutive_band_run": 1,
+                "repeated_band_fraction": 0.0,
+                "modes": {
+                  "SHORT_DWELL": 974,
+                  "NORMAL_DWELL": 17,
+                  "LONG_DWELL": 0,
+                  "REVISIT": 7,
+                  "PREEMPTIVE_INTERCEPT": 2
+                },
+                "short_fraction_pct": 97.39999999999999
+              },
+              "config_29": {
+                "steps": 1000,
+                "hits": 0,
+                "novel_hits": 0,
+                "dwell_ms": 134.75,
+                "gross_hits_per_ms": 0.0,
+                "novel_hits_per_ms": 0.0,
+                "ir_decision": 0.0,
+                "pd": 0.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 134.75,
+                "mean_consecutive_band_run": 1.0,
+                "max_consecutive_band_run": 1,
+                "repeated_band_fraction": 0.0,
+                "modes": {
+                  "SHORT_DWELL": 974,
+                  "NORMAL_DWELL": 17,
+                  "LONG_DWELL": 0,
+                  "REVISIT": 7,
+                  "PREEMPTIVE_INTERCEPT": 2
+                },
+                "short_fraction_pct": 97.39999999999999
+              },
+              "config_42": {
+                "steps": 1000,
+                "hits": 0,
+                "novel_hits": 0,
+                "dwell_ms": 134.75,
+                "gross_hits_per_ms": 0.0,
+                "novel_hits_per_ms": 0.0,
+                "ir_decision": 0.0,
+                "pd": 0.0,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 134.75,
+                "mean_consecutive_band_run": 1.0,
+                "max_consecutive_band_run": 1,
+                "repeated_band_fraction": 0.0,
+                "modes": {
+                  "SHORT_DWELL": 974,
+                  "NORMAL_DWELL": 17,
+                  "LONG_DWELL": 0,
+                  "REVISIT": 7,
+                  "PREEMPTIVE_INTERCEPT": 2
+                },
+                "short_fraction_pct": 97.39999999999999
+              },
+              "config_64": {
+                "steps": 1000,
+                "hits": 451,
+                "novel_hits": 3,
+                "dwell_ms": 675.875,
+                "gross_hits_per_ms": 0.6672831514703162,
+                "novel_hits_per_ms": 0.004438690586277048,
+                "ir_decision": 45.1,
+                "pd": 94.74789915966386,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 68.625,
+                "mean_consecutive_band_run": 2.1231422505307855,
+                "max_consecutive_band_run": 530,
+                "repeated_band_fraction": 0.5295295295295295,
+                "modes": {
+                  "SHORT_DWELL": 493,
+                  "NORMAL_DWELL": 17,
+                  "LONG_DWELL": 481,
+                  "REVISIT": 7,
+                  "PREEMPTIVE_INTERCEPT": 2
+                },
+                "short_fraction_pct": 49.3
+              },
+              "config_96": {
+                "steps": 1000,
+                "hits": 91,
+                "novel_hits": 2,
+                "dwell_ms": 134.75,
+                "gross_hits_per_ms": 0.6753246753246753,
+                "novel_hits_per_ms": 0.014842300556586271,
+                "ir_decision": 9.1,
+                "pd": 91.91919191919192,
+                "pfa": 0.0,
+                "first_hit_latency_ms": 37.625,
+                "mean_consecutive_band_run": 1.3831258644536653,
+                "max_consecutive_band_run": 262,
+                "repeated_band_fraction": 0.2772772772772773,
+                "modes": {
+                  "SHORT_DWELL": 974,
+                  "NORMAL_DWELL": 17,
+                  "LONG_DWELL": 0,
+                  "REVISIT": 7,
+                  "PREEMPTIVE_INTERCEPT": 2
+                },
+                "short_fraction_pct": 97.39999999999999
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

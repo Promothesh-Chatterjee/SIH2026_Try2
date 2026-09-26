@@ -1,0 +1,467 @@
+{
+  "timestamp_utc": "2026-09-26T15:23:14.843656+00:00",
+  "task": "Phase G5 Preflight Controls",
+  "parent_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+  "controls": {
+    "control_1_zero_step_parity": {
+      "metric_comparison": {
+        "Qmax": {
+          "flat": 2.742889404296875,
+          "factorized": 1.9926891326904297
+        },
+        "Qmin": {
+          "flat": -12.644369125366211,
+          "factorized": -12.693154335021973
+        },
+        "Qmean": {
+          "flat": -11.100915908813477,
+          "factorized": -10.689277648925781
+        },
+        "Qstd": {
+          "flat": 1.911969542503357,
+          "factorized": 2.529609441757202
+        },
+        "Q_margin": {
+          "flat": 0.4729031788229942,
+          "factorized": 0.07075343163013459
+        },
+        "Mode_Entropy": {
+          "flat": 0.3989275028503276,
+          "factorized": 0.2613493251673245
+        },
+        "LONG_pct": {
+          "flat": 86.33,
+          "factorized": 94.02000000000001
+        },
+        "NORMAL_pct": {
+          "flat": 13.669999999999998,
+          "factorized": 0.0
+        },
+        "SHORT_pct": {
+          "flat": 0.0,
+          "factorized": 1.6199999999999999
+        },
+        "Pd_mean": {
+          "flat": 82.17050565307268,
+          "factorized": 80.58719820139888
+        },
+        "Pfa_mean": {
+          "flat": 0.0,
+          "factorized": 0.0
+        },
+        "Decision_IR": {
+          "flat": 46.410000000000004,
+          "factorized": 51.13999999999999
+        },
+        "Gross_Hits_per_ms": {
+          "flat": 0.4044532560622236,
+          "factorized": 0.4264954235556575
+        },
+        "Novel_Hits_per_ms": {
+          "flat": 0.002440140308067714,
+          "factorized": 0.0020015428559514627
+        }
+      },
+      "action_agreement_by_scenario": {
+        "config_117": 99.8,
+        "config_119": 28.599999999999998,
+        "config_143": 59.3,
+        "config_194": 100.0,
+        "config_195": 100.0,
+        "config_241": 28.7,
+        "config_29": 28.599999999999998,
+        "config_42": 13.700000000000001,
+        "config_64": 7.3,
+        "config_96": 99.8
+      },
+      "global_action_agreement_pct": 56.58,
+      "numerical_sanity_check": {
+        "q_finite": true,
+        "q_scale_sane": true,
+        "detection_sane": true,
+        "status": "PASS"
+      }
+    },
+    "control_2_tensor_mapping_manifest": {
+      "initialization_contract": "G5-Factorized-v1",
+      "initialization_seed": 42,
+      "architecture_hash": "8a7693b23304a564356404fee1dc87d7f7928d029da1579c312d30d4d418b959",
+      "parent_checkpoint": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+      "lineage_statement": "Gate-25 shared representation inherited; new factorized heads initialized under G5 initialization contract.",
+      "inherited_parameters_count": 28,
+      "newly_initialized_parameters_count": 6,
+      "inherited_parameters": [
+        "input_norm.weight",
+        "input_norm.bias",
+        "lstm.weight_ih_l0",
+        "lstm.weight_hh_l0",
+        "lstm.bias_ih_l0",
+        "lstm.bias_hh_l0",
+        "lstm.weight_ih_l1",
+        "lstm.weight_hh_l1",
+        "lstm.bias_ih_l1",
+        "lstm.bias_hh_l1",
+        "value_stream.0.weight",
+        "value_stream.0.bias",
+        "value_stream.2.weight",
+        "value_stream.2.bias",
+        "band_encoder.0.weight",
+        "band_encoder.0.bias",
+        "ctx_proj.0.weight",
+        "ctx_proj.0.bias",
+        "intercept_prob_head.0.weight",
+        "intercept_prob_head.0.bias",
+        "intercept_prob_head.2.weight",
+        "intercept_prob_head.2.bias",
+        "intercept_time_head.0.weight",
+        "intercept_time_head.0.bias",
+        "intercept_time_head.2.weight",
+        "intercept_time_head.2.bias",
+        "band_head.0.weight",
+        "band_head.0.bias"
+      ],
+      "newly_initialized_parameters": [
+        "band_head.2.weight",
+        "band_head.2.bias",
+        "mode_head.0.weight",
+        "mode_head.0.bias",
+        "mode_head.2.weight",
+        "mode_head.2.bias"
+      ],
+      "mapping_records": [
+        {
+          "dest_name": "input_norm.weight",
+          "src_name": "input_norm.weight",
+          "shape": [
+            360
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "abccc921a8a08c61a6180222b8eae99972de45b06178f0003381543fb61384f6"
+        },
+        {
+          "dest_name": "input_norm.bias",
+          "src_name": "input_norm.bias",
+          "shape": [
+            360
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "31d8fedf8a0edc451891a87caa3a05026f77d99bdc9153edf569edd4cb21009d"
+        },
+        {
+          "dest_name": "lstm.weight_ih_l0",
+          "src_name": "lstm.weight_ih_l0",
+          "shape": [
+            1024,
+            360
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "db0c22a61bd5bbe1e9823cc48b5a883d009df10a236a04b5861bafb5b53fa167"
+        },
+        {
+          "dest_name": "lstm.weight_hh_l0",
+          "src_name": "lstm.weight_hh_l0",
+          "shape": [
+            1024,
+            256
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "47980468ba4932f222327bbe54c185759728d73fbf1dc7711955e63e894ef510"
+        },
+        {
+          "dest_name": "lstm.bias_ih_l0",
+          "src_name": "lstm.bias_ih_l0",
+          "shape": [
+            1024
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "40fa910d1ad28285aaf717d422cac60a0bd15228082d170fd62bbea780be08d6"
+        },
+        {
+          "dest_name": "lstm.bias_hh_l0",
+          "src_name": "lstm.bias_hh_l0",
+          "shape": [
+            1024
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "bf2a28392170633c902ec9d92b66dd86348ea34551bf1d5fb55c8cc8bd1e3d09"
+        },
+        {
+          "dest_name": "lstm.weight_ih_l1",
+          "src_name": "lstm.weight_ih_l1",
+          "shape": [
+            1024,
+            256
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "0759bab34db6bfcc1bc557b39966be245f4216f3e1645f46636096ea50aa4398"
+        },
+        {
+          "dest_name": "lstm.weight_hh_l1",
+          "src_name": "lstm.weight_hh_l1",
+          "shape": [
+            1024,
+            256
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "1d56ba315a440277474854d27eae2d22d8c537521e6747d6af58ecd3e611f78e"
+        },
+        {
+          "dest_name": "lstm.bias_ih_l1",
+          "src_name": "lstm.bias_ih_l1",
+          "shape": [
+            1024
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "816883f181f471268b7efdaa760f5b40bb9cefc3e3945dee973f29014b5b3a26"
+        },
+        {
+          "dest_name": "lstm.bias_hh_l1",
+          "src_name": "lstm.bias_hh_l1",
+          "shape": [
+            1024
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "74834ab96a47770f979d095f217d4cc41a2d6214dc29aa4c29164c682752724f"
+        },
+        {
+          "dest_name": "value_stream.0.weight",
+          "src_name": "value_stream.0.weight",
+          "shape": [
+            128,
+            256
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "0e43cbcc1a66705e2e598e34ba2a6df305ae74e36be3af4a91b071a1125ada78"
+        },
+        {
+          "dest_name": "value_stream.0.bias",
+          "src_name": "value_stream.0.bias",
+          "shape": [
+            128
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "8687f5369a953159da01356ed8696258bca31a8963ae63137744ab84cd1223b0"
+        },
+        {
+          "dest_name": "value_stream.2.weight",
+          "src_name": "value_stream.2.weight",
+          "shape": [
+            1,
+            128
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "9e0c6e6453651b4fa64d54bedf7177d41e66f30f56b550b0dc42112436868bed"
+        },
+        {
+          "dest_name": "value_stream.2.bias",
+          "src_name": "value_stream.2.bias",
+          "shape": [
+            1
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "cfcf4601669288da38e8dc8cd6cd0230f429bcf79e5db47b5541ae011e958079"
+        },
+        {
+          "dest_name": "band_encoder.0.weight",
+          "src_name": "band_encoder.0.weight",
+          "shape": [
+            32,
+            10
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "c5c4425d220f014ccbe4a94f035e67eb745281812a14908d591634475bf0b0c2"
+        },
+        {
+          "dest_name": "band_encoder.0.bias",
+          "src_name": "band_encoder.0.bias",
+          "shape": [
+            32
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "8ea29026306ed155c74073d5ceee00f7da3bc6bfaa748fc93b9153e7633ba134"
+        },
+        {
+          "dest_name": "ctx_proj.0.weight",
+          "src_name": "ctx_proj.0.weight",
+          "shape": [
+            32,
+            256
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "c35020473aed1b4642cd726cad727b63fff2824ad68cedd7ffb73c7cbd890479"
+        },
+        {
+          "dest_name": "ctx_proj.0.bias",
+          "src_name": "ctx_proj.0.bias",
+          "shape": [
+            32
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca"
+        },
+        {
+          "dest_name": "intercept_prob_head.0.weight",
+          "src_name": "intercept_prob_head.0.weight",
+          "shape": [
+            128,
+            256
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "b8b783305b7c5c71cff1d9267903fd8967a84d80a633511283955601957b7c33"
+        },
+        {
+          "dest_name": "intercept_prob_head.0.bias",
+          "src_name": "intercept_prob_head.0.bias",
+          "shape": [
+            128
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "3cab412320a6f55b993359006009fa13ef5f5d19b0aeab59184edf3e508978ca"
+        },
+        {
+          "dest_name": "intercept_prob_head.2.weight",
+          "src_name": "intercept_prob_head.2.weight",
+          "shape": [
+            180,
+            128
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "fc85b74ff93e2f2bcb1575d09b6cfc6a96e206f1f75c5938fc170d548c4c7bca"
+        },
+        {
+          "dest_name": "intercept_prob_head.2.bias",
+          "src_name": "intercept_prob_head.2.bias",
+          "shape": [
+            180
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "2ac01369a273eb091909c872da8517f6ab352f77399e51dda94518098c546eec"
+        },
+        {
+          "dest_name": "intercept_time_head.0.weight",
+          "src_name": "intercept_time_head.0.weight",
+          "shape": [
+            128,
+            256
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "51f58676f5941f2ddf26fc26c5b99da4a492fab5e5f0564955d50b240eb85524"
+        },
+        {
+          "dest_name": "intercept_time_head.0.bias",
+          "src_name": "intercept_time_head.0.bias",
+          "shape": [
+            128
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "86e70c2d9d42b400990a3065fe4f097cde5613f4974dd007b5e33b141867145f"
+        },
+        {
+          "dest_name": "intercept_time_head.2.weight",
+          "src_name": "intercept_time_head.2.weight",
+          "shape": [
+            180,
+            128
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "04c2df133491d6c9caf4c74643bd830d9a7ac7b2a906f2ea2289d6286cc604e4"
+        },
+        {
+          "dest_name": "intercept_time_head.2.bias",
+          "src_name": "intercept_time_head.2.bias",
+          "shape": [
+            180
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "d155f2e5c4695a09ab7f8d1cf9317c27f23adaa5b2e551d10613f71cfb367f58"
+        },
+        {
+          "dest_name": "band_head.0.weight",
+          "src_name": "band_advantage_head.0.weight",
+          "shape": [
+            32,
+            64
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "848020655274eae51bcc2a2083f78f47ca0b804802303a7322152db9fee06ab6"
+        },
+        {
+          "dest_name": "band_head.0.bias",
+          "src_name": "band_advantage_head.0.bias",
+          "shape": [
+            32
+          ],
+          "transformation": "direct_copy",
+          "dest_sha256": "fec23da0cb8c917d7121f04679ca44d274e7eeb74a22ceec2e6b110f77408b0a"
+        },
+        {
+          "dest_name": "band_head.2.weight",
+          "src_name": "band_advantage_head.2.weight",
+          "src_shape": [
+            5,
+            32
+          ],
+          "dest_shape": [
+            1,
+            32
+          ],
+          "transformation": "mean_across_mode_dimension_dim0",
+          "src_sha256": "5a633f9fba191e65bb5b62818487c6a0e8b765898c2e5dd8530146622b737d7a",
+          "dest_sha256": "e88cd13bb64827350c591b910ba8792f5d0cacb05d453892623f0a64d605360d"
+        },
+        {
+          "dest_name": "band_head.2.bias",
+          "src_name": "band_advantage_head.2.bias",
+          "src_shape": [
+            5
+          ],
+          "dest_shape": [
+            1
+          ],
+          "transformation": "mean_across_mode_dimension_dim0",
+          "src_sha256": "dc29cd64da6f1e0fdd78617da80ea7edb8bcdb0bc7d263a251d4ea1afb62de10",
+          "dest_sha256": "b7975ab2ee29b540ba0fb6c7245549fe84b67a383d7299d39587c7074f4b5509"
+        },
+        {
+          "dest_name": "mode_head.0.weight",
+          "shape": [
+            64,
+            256
+          ],
+          "transformation": "xavier_uniform_seed_42",
+          "dest_sha256": "bd0ce400c39afc5ba1258a027392e0441e627522698e003090fde03c038729e3"
+        },
+        {
+          "dest_name": "mode_head.2.weight",
+          "shape": [
+            5,
+            64
+          ],
+          "transformation": "xavier_uniform_gain_0.1_seed_42",
+          "dest_sha256": "4452400ec2886ce696d6b6e8b24e2da2eece947874f00774b6917e40137c768b"
+        }
+      ]
+    },
+    "control_3_additive_hypothesis": {
+      "hypothesis_name": "Additively Separable Spatial/Temporal Factorization",
+      "mathematical_formulation": "Q(s, b, m) = V(s) + A_b_tilde(s, b) + A_m_tilde(s, m)",
+      "modeling_limitation_statement": "G5-Factorized assumes additive separability between band selection and dwell mode selection. It does NOT include an explicit band x mode interaction term. A failure of G5-Factorized to qualify tests the additive factorization hypothesis specifically, not the broader class of all non-additive factorized architectures."
+    },
+    "control_4_gradient_preflight": {
+      "beta_mode": 0.5,
+      "td_grad_norm": 24.473045349121094,
+      "entropy_grad_norm": 0.0573248416185379,
+      "r_entropy": 0.0023423665016251965,
+      "h_mode_marginal": 1.6014962196350098,
+      "mean_state_h_mode": 1.6008890867233276,
+      "status": "PASS"
+    },
+    "control_5_gradient_hard_stop": {
+      "sentinel_definition": "pre_clipping_total_gradient_norm",
+      "hard_stop_threshold": 50.0,
+      "post_clipping_norm_cap": 1.0,
+      "status": "ENFORCED"
+    }
+  },
+  "all_controls_passed": true
+}

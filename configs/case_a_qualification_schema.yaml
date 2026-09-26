@@ -1,0 +1,171 @@
+# Case-A Qualification Contract Schema (Authoritative & Frozen)
+# Version: 1.0.0
+# Frozen Date: 2026-09-26
+#
+# Rules of Engagement:
+# 1. To qualify for continuation (Case A), ALL 15 criteria (C1-C15) MUST pass simultaneously.
+# 2. Overall Mean IR is strictly a secondary reporting metric; it cannot compensate
+#    for failures in collapse severity, detection quality, spatial/mode diversity, or value stability.
+# 3. Time-normalized efficiency (hits/ms) must be reported alongside decision-based metrics.
+
+schema_version: "1.0.0"
+contract_status: "FROZEN"
+
+criteria:
+  - id: "C1"
+    name: "Staged Collapse Severity"
+    category: "collapse"
+    field: "collapse_diagnostics.severity"
+    operator: "!="
+    target: "CRITICAL"
+    critical: true
+    description: "Evaluator collapse detector must not flag CRITICAL severity."
+
+  - id: "C2"
+    name: "Checkpoint Status Tag"
+    category: "lineage"
+    field: "checkpoint_tag"
+    operator: "!="
+    target: "quarantined_collapsed"
+    critical: true
+    description: "Evaluator must not assign quarantined_collapsed tag to the checkpoint."
+
+  - id: "C3"
+    name: "Runtime Online Q_max Ceiling"
+    category: "value_stability"
+    field: "collapse_diagnostics.metrics.q_max"
+    operator: "<="
+    target: 100.0
+    critical: true
+    description: "Online network Q_max must not violate the runtime safety sentinel ceiling."
+
+  - id: "C4"
+    name: "Online Q_std Volatility"
+    category: "value_stability"
+    field: "collapse_diagnostics.metrics.q_std"
+    operator: "<"
+    target: 60.0
+    critical: true
+    description: "Online network Q standard deviation across actions must stay below 60.0."
+
+  - id: "C5"
+    name: "Target-Online Network Gap"
+    category: "value_stability"
+    field: "collapse_diagnostics.metrics.target_online_gap"
+    operator: "<"
+    target: 30.0
+    critical: true
+    description: "Absolute divergence between target and online Q values must stay below 30.0."
+
+  - id: "C6"
+    name: "Policy Action Entropy"
+    category: "policy_diversity"
+    field: "collapse_diagnostics.metrics.action_entropy"
+    operator: ">="
+    target: 1.000
+    critical: true
+    description: "Action distribution entropy across all 180 actions must be at least 1.000 nat."
+
+  - id: "C7"
+    name: "Top-Band Spatial Concentration"
+    category: "spatial_diversity"
+    field: "collapse_diagnostics.metrics.top_band_fraction"
+    operator: "<"
+    target: 0.850
+    critical: true
+    description: "Fraction of actions concentrated in the most frequently visited band must be under 85.0%."
+
+  - id: "C8"
+    name: "Mode Entropy"
+    category: "mode_diversity"
+    field: "collapse_diagnostics.metrics.mode_entropy"
+    operator: ">="
+    target: 0.400
+    critical: true
+    description: "Shannon entropy across the 5 dwell modes must be at least 0.400 nat."
+
+  - id: "C9"
+    name: "Sparse Emitter Aggregate IR"
+    category: "protected_performance"
+    field: "collapse_diagnostics.metrics.sparse_ir"
+    operator: ">="
+    target: 50.0
+    critical: false
+    description: "Aggregate intercept rate on sparse emitter scenarios must be at least 50.0% (Gate-25k: 17.6%)."
+
+  - id: "C10"
+    name: "Sparse config_143 IR"
+    category: "protected_performance"
+    field: "collapse_diagnostics.metrics.scenario_irs.config_143"
+    operator: ">="
+    target: 50.0
+    critical: false
+    description: "Intercept rate on ultra-sparse config_143 must be at least 50.0% (Gate-25k: 12.4%)."
+
+  - id: "C11"
+    name: "Sparse config_119 IR"
+    category: "protected_performance"
+    field: "collapse_diagnostics.metrics.scenario_irs.config_119"
+    operator: ">="
+    target: 50.0
+    critical: false
+    description: "Intercept rate on sparse config_119 must be at least 50.0% (Gate-25k: 22.8%)."
+
+  - id: "C12"
+    name: "Agile config_241 IR"
+    category: "protected_performance"
+    field: "collapse_diagnostics.metrics.scenario_irs.config_241"
+    operator: ">="
+    target: 50.0
+    critical: false
+    description: "Intercept rate on agile hopping config_241 must be at least 50.0% (Gate-25k: 16.9%)."
+
+  - id: "C13"
+    name: "Agile Emitter Aggregate IR"
+    category: "protected_performance"
+    field: "collapse_diagnostics.metrics.agile_ir"
+    operator: ">="
+    target: 55.0
+    critical: false
+    description: "Aggregate intercept rate on agile emitter scenarios must be at least 55.0% (Gate-25k: 46.7%)."
+
+  - id: "C14"
+    name: "Detection Probability (Pd)"
+    category: "detection_quality"
+    field: "collapse_diagnostics.metrics.pd"
+    operator: ">="
+    target: 98.0
+    critical: false
+    description: "Detection probability across validation scenarios must be at least 98.0%."
+
+  - id: "C15"
+    name: "False Alarm Probability (Pfa)"
+    category: "detection_quality"
+    field: "collapse_diagnostics.metrics.pfa"
+    operator: "<="
+    target: 0.0005
+    critical: false
+    description: "False alarm probability across validation scenarios must not exceed 0.0005 (0.05%)."
+
+reporting_metrics:
+  - name: "Overall Mean IR"
+    field: "collapse_diagnostics.metrics.mean_ir"
+    role: "reporting_only"
+    caution: "High mean IR does not imply robust or uncollapsed policy."
+
+  - name: "Median IR"
+    field: "collapse_diagnostics.metrics.median_ir"
+    role: "reporting_only"
+
+  - name: "Worst-Case Scenario IR"
+    field: "collapse_diagnostics.metrics.worst_case_ir"
+    role: "reporting_only"
+
+  - name: "Time-Normalized Interception Efficiency"
+    unit: "hits/ms"
+    formula: "total_hits / total_dwell_time_ms"
+    role: "primary_efficiency_diagnostic"
+
+  - name: "Distinct Bands Visited"
+    field: "collapse_diagnostics.metrics.distinct_bands"
+    role: "spatial_coverage_diagnostic"

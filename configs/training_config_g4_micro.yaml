@@ -1,0 +1,149 @@
+# Training Config — Phase G4 Micro-Training Program
+#
+# Lineage: Controlled 1,000-step objective alignment and continuation-state micro-training.
+# Evaluates 4 branches (G4-A, G4-B, G4-C, G4-D) to causally isolate dwell preference,
+# SMDP discounting, explicit opportunity cost dwell penalty, and epsilon schedules.
+#
+# Checkpoint Invariants:
+#   - Gate-25k Frozen Baseline SHA-256: 7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0
+#   - Gate-50k Candidate Lineage SHA-256: f3aab6b824faf8207194594fe52c096ec5b3b00990e37e7c321d4794bfb9d519
+#
+# DO NOT modify obs_dim, n_bands, n_modes, n_actions — these are frozen canonical.
+# Architecture: 36 bands x 5 modes = 180 actions, obs_dim = 360 (frozen).
+
+# ── Dataset ─────────────────────────────────────────────────────────────────
+data_dir: "D:/TSRD"
+seed: 42
+subset: "train"
+mode: "scan"
+world_mode: "stare"
+observation_mode: "scan"
+training_mode: "real_tsrd"
+
+# ── Checkpoint & Lineage ───────────────────────────────────────────────────
+# Base parent is overridden dynamically per branch by runner
+scheduler_ckpt: "experiments/checkpoints/scheduler_v2_continuation_100k/checkpoint_gate_50000.pt"
+expected_parent_sha: "f3aab6b824faf8207194594fe52c096ec5b3b00990e37e7c321d4794bfb9d519"
+weights_only: false
+output_dir: "experiments/checkpoints/g4_micro_training"
+
+# ── Perception ──────────────────────────────────────────────────────────────
+deinterleaver_ckpt: "experiments/checkpoints/deinterleaver/best.pt"
+normalization_stats: "experiments/checkpoints/deinterleaver/normalization_stats.json"
+expected_norm_hash: "bacee02ac1c29428"
+strict_perception: true
+
+# ── Scheduler Training ──────────────────────────────────────────────────────
+scheduler:
+  version: "v2"
+  action_selection_mode: "flat_argmax"
+  weights_only: false
+
+  # Micro-training interval: 1,000 steps bounded per branch
+  start_step: 50000
+  total_timesteps: 51000
+
+  # Exploration schedule: slower schedule (eps ~0.11 at step 50k, ~0.128 at step 25k)
+  eps_start: 0.15
+  eps_end: 0.05
+  eps_decay: 50000
+  exploration_schedule: "slower"
+
+  # Learning parameters (fixed across all branches)
+  learning_rate: 2.5e-5
+  replay_buffer_size: 50000
+  batch_size: 32
+  seq_len: 16
+  burn_in: 8
+  update_freq: 4
+  target_update_freq: 250
+
+  # Objective formulation parameters (overridden per branch)
+  objective_mode: "step_based"
+  c_dwell: 2.0
+  fresh_optimizer: true
+  abort_on_q_max_exceeded: true
+  max_allowed_q: 100.0
+
+  # Target-Q stabilization parameters
+  target_q_max: 100.0
+  target_q_min: -50.0
+  q_reg_coef: 2.5e-4
+
+  # Anti-Collapse Regularization Hyperparameters (Candidate R1 constants)
+  lambda_entropy: 0.02
+  band_diversity_penalty_coef: 0.01
+  band_diversity_threshold: 0.60
+  mode_diversity_penalty_coef: 0.02
+  mode_diversity_threshold: 0.55
+  mode_collapse_rate_threshold: 0.20
+
+  # LR schedule: cosine decay
+  lr_schedule: "cosine"
+  min_lr: 5.0e-6
+
+  # Targeted band exploration
+  targeted_exploration: true
+  band_discovery_quota: 2
+
+# ── Environment ─────────────────────────────────────────────────────────────
+environment:
+  n_bands: 36
+  band_features: 10
+  obs_dim: 360
+  n_modes: 5
+  n_actions: 180
+  freq_min_mhz: 0.0
+  freq_max_mhz: 18000.0
+  ibw_mhz: 500.0
+  dwell_time_us: 500.0
+  detection_threshold_db: -140.0
+  frequency_step_mhz: 500.0
+  time_horizon_us: 30000000.0
+  max_pulses: 50000
+  chunk_mode: "random"
+  max_steps_per_episode: 1000
+  receiver:
+    sensitivity_dbm: -110.0
+    cfar_guard_cells: 2
+    cfar_ref_cells: 8
+    cfar_pfa: 0.001
+    noise_floor_isolation: true
+  belief:
+    ema_alpha: 0.30
+    ema_alpha_miss_confirmed: 0.20
+  reward:
+    version: "v2"
+    variant: "baseline"
+    w_hit_novel: 10.0
+    w_hit_repeat: 8.0
+    w_latency: 5.0
+    w_agile_bonus: 2.0
+    w_prediction: 0.5
+    w_miss: -4.0
+    w_false_alarm: -1.0
+    w_redundant: -0.25
+    w_dwell_cost: -0.01
+
+# ── Reward (Phase C Invariant: Strictly Frozen) ─────────────────────────────
+reward:
+  version: "v2"
+  variant: "baseline"
+  w_hit_novel: 10.0
+  w_hit_repeat: 8.0
+  w_latency: 5.0
+  w_agile_bonus: 2.0
+  w_prediction: 0.5
+  w_miss: -4.0
+  w_false_alarm: -1.0
+  w_redundant: -0.25
+  w_dwell_cost: -0.01
+
+# ── Distribution Shift Monitoring ──────────────────────────────────────────
+distribution_shift:
+  enabled: true
+  window_size: 500
+  threshold: 0.15
+  critical_threshold: 0.40
+  eval_interval_steps: 50
+  monitor_only: true

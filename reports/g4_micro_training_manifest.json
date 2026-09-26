@@ -1,0 +1,488 @@
+{
+  "timestamp_utc": "2026-09-26T14:50:58.885429+00:00",
+  "preflight": {
+    "gate25_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+    "gate50_sha256": "f3aab6b824faf8207194594fe52c096ec5b3b00990e37e7c321d4794bfb9d519",
+    "timestamp_utc": "2026-09-26T14:48:07.514304+00:00"
+  },
+  "branches_executed": {
+    "g4_a": {
+      "branch_id": "g4_a",
+      "spec": {
+        "name": "Branch G4-A (Control)",
+        "parent_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\scheduler_v2_continuation_100k\\checkpoint_gate_50000.pt",
+        "parent_sha256": "f3aab6b824faf8207194594fe52c096ec5b3b00990e37e7c321d4794bfb9d519",
+        "start_step": 50000,
+        "stop_step": 51000,
+        "steps": 1000,
+        "objective_mode": "step_based",
+        "c_dwell": 2.0,
+        "exploration_schedule": "slower",
+        "fresh_optimizer": true,
+        "max_allowed_q": 115.0,
+        "hypothesis": "Tests if unintentional exponential epsilon caused the R1 collapse persistence under standard step-based objective."
+      },
+      "elapsed_seconds": 0.0,
+      "checkpoint_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\g4_micro_training\\g4_a\\checkpoint_gate_51000.pt",
+      "checkpoint_sha256": "5b17350a61bd33bb23769f66cb3fc978ca7fbbcfaeda06332e7fb1bd5d12813c",
+      "stop_step": 51000
+    },
+    "g4_b": {
+      "branch_id": "g4_b",
+      "spec": {
+        "name": "Branch G4-B (G3-D Hybrid on Gate-50k)",
+        "parent_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\scheduler_v2_continuation_100k\\checkpoint_gate_50000.pt",
+        "parent_sha256": "f3aab6b824faf8207194594fe52c096ec5b3b00990e37e7c321d4794bfb9d519",
+        "start_step": 50000,
+        "stop_step": 51000,
+        "steps": 1000,
+        "objective_mode": "g3d_hybrid",
+        "c_dwell": 2.0,
+        "exploration_schedule": "slower",
+        "fresh_optimizer": true,
+        "max_allowed_q": 115.0,
+        "hypothesis": "Tests if G3-D objective alignment changes dwell preference when epsilon and optimizer state are controlled."
+      },
+      "elapsed_seconds": 0.0,
+      "checkpoint_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\g4_micro_training\\g4_b\\checkpoint_gate_51000.pt",
+      "checkpoint_sha256": "cf972de8a5d1f95380a1d009e3eb06ea6106c8ca78d9100612910c26a4ecb874",
+      "stop_step": 51000
+    },
+    "g4_c": {
+      "branch_id": "g4_c",
+      "spec": {
+        "name": "Branch G4-C (G3-D Hybrid on Gate-25k Baseline)",
+        "parent_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\production_baseline\\checkpoint_gate_25000_frozen.pt",
+        "parent_sha256": "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0",
+        "start_step": 25000,
+        "stop_step": 26000,
+        "steps": 1000,
+        "objective_mode": "g3d_hybrid",
+        "c_dwell": 2.0,
+        "exploration_schedule": "slower",
+        "fresh_optimizer": true,
+        "max_allowed_q": 100.0,
+        "hypothesis": "Tests if G3-D preserves diversity when applied before entering the Gate-50/53 collapsed state (recovery lineage)."
+      },
+      "elapsed_seconds": 0.0,
+      "checkpoint_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\g4_micro_training\\g4_c\\checkpoint_gate_26000.pt",
+      "checkpoint_sha256": "59bd6d7c23c525ed9822d901da635e25dcad3ca48046b75116d2c3d151483021",
+      "stop_step": 26000
+    },
+    "g4_d": {
+      "branch_id": "g4_d",
+      "spec": {
+        "name": "Branch G4-D (G3-B SMDP-only on Gate-50k)",
+        "parent_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\scheduler_v2_continuation_100k\\checkpoint_gate_50000.pt",
+        "parent_sha256": "f3aab6b824faf8207194594fe52c096ec5b3b00990e37e7c321d4794bfb9d519",
+        "start_step": 50000,
+        "stop_step": 51000,
+        "steps": 1000,
+        "objective_mode": "g3b_smdp_only",
+        "c_dwell": 2.0,
+        "exploration_schedule": "slower",
+        "fresh_optimizer": true,
+        "max_allowed_q": 115.0,
+        "hypothesis": "Isolates whether G3-D effect is driven by explicit dwell penalty, SMDP discounting, or double-counting."
+      },
+      "elapsed_seconds": 0.0,
+      "checkpoint_path": "C:\\Users\\PromotheshChatterjee\\Documents\\GitHub\\SIH2026_Try2\\experiments\\checkpoints\\g4_micro_training\\g4_d\\checkpoint_gate_51000.pt",
+      "checkpoint_sha256": "993fc7a1f4a0fc1f5e9d0da6738f5b65fec974dc0bd1cef1039e1d657f79de3f",
+      "stop_step": 51000
+    }
+  },
+  "evaluation_summaries": {
+    "g4_a": {
+      "branch_id": "g4_a",
+      "mean_ir_decision": 47.63,
+      "gross_hits_per_ms": 0.38104,
+      "novel_hits_per_ms": 0.00208,
+      "sparse_ir_decision": 16.45,
+      "agile_ir_decision": 32.175,
+      "mean_pd": 70.12092852785729,
+      "mean_pfa": 0.0,
+      "mean_first_hit_latency_ms": 280.375,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 100.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": 1.1452421802089798e-10,
+      "action_entropy": 2.4562470692539655,
+      "distinct_bands": 36,
+      "top_band_fraction": 0.267,
+      "q_max": 109.47928619384766,
+      "q_std": 57.62430953979492,
+      "q_mean": 48.295501708984375,
+      "scenarios": {
+        "config_117": {
+          "ir_decision": 99.4,
+          "gross_hits_per_ms": 0.7952,
+          "novel_hits_per_ms": 0.0008,
+          "pd": 100.0,
+          "pfa": 0.0
+        },
+        "config_119": {
+          "ir_decision": 24.0,
+          "gross_hits_per_ms": 0.192,
+          "novel_hits_per_ms": 0.0024,
+          "pd": 67.22689075630252,
+          "pfa": 0.0
+        },
+        "config_143": {
+          "ir_decision": 8.9,
+          "gross_hits_per_ms": 0.0712,
+          "novel_hits_per_ms": 0.0008,
+          "pd": 57.05128205128205,
+          "pfa": 0.0
+        },
+        "config_194": {
+          "ir_decision": 88.7,
+          "gross_hits_per_ms": 0.7096,
+          "novel_hits_per_ms": 0.0024,
+          "pd": 100.0,
+          "pfa": 0.0
+        },
+        "config_195": {
+          "ir_decision": 97.2,
+          "gross_hits_per_ms": 0.7776,
+          "novel_hits_per_ms": 0.0024,
+          "pd": 99.2849846782431,
+          "pfa": 0.0
+        },
+        "config_241": {
+          "ir_decision": 7.5,
+          "gross_hits_per_ms": 0.06,
+          "novel_hits_per_ms": 0.0008,
+          "pd": 50.0,
+          "pfa": 0.0
+        },
+        "config_29": {
+          "ir_decision": 0.0,
+          "gross_hits_per_ms": 0.0,
+          "novel_hits_per_ms": 0.0,
+          "pd": 0.0,
+          "pfa": 0.0
+        },
+        "config_42": {
+          "ir_decision": 9.4,
+          "gross_hits_per_ms": 0.0752,
+          "novel_hits_per_ms": 0.0032,
+          "pd": 37.75100401606426,
+          "pfa": 0.0
+        },
+        "config_64": {
+          "ir_decision": 55.50000000000001,
+          "gross_hits_per_ms": 0.444,
+          "novel_hits_per_ms": 0.0032,
+          "pd": 93.27731092436974,
+          "pfa": 0.0
+        },
+        "config_96": {
+          "ir_decision": 85.7,
+          "gross_hits_per_ms": 0.6856,
+          "novel_hits_per_ms": 0.0048,
+          "pd": 96.61781285231116,
+          "pfa": 0.0
+        }
+      }
+    },
+    "g4_b": {
+      "branch_id": "g4_b",
+      "mean_ir_decision": 45.21,
+      "gross_hits_per_ms": 0.36168,
+      "novel_hits_per_ms": 0.00184,
+      "sparse_ir_decision": 4.45,
+      "agile_ir_decision": 26.125,
+      "mean_pd": 63.33067188465946,
+      "mean_pfa": 0.0,
+      "mean_first_hit_latency_ms": 363.125,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 100.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": 1.1452421802089798e-10,
+      "action_entropy": 2.4736468966211036,
+      "distinct_bands": 36,
+      "top_band_fraction": 0.267,
+      "q_max": 109.10844421386719,
+      "q_std": 57.48072052001953,
+      "q_mean": 44.63608169555664,
+      "scenarios": {
+        "config_117": {
+          "ir_decision": 99.4,
+          "gross_hits_per_ms": 0.7952,
+          "novel_hits_per_ms": 0.0008,
+          "pd": 100.0,
+          "pfa": 0.0
+        },
+        "config_119": {
+          "ir_decision": 0.0,
+          "gross_hits_per_ms": 0.0,
+          "novel_hits_per_ms": 0.0,
+          "pd": 0.0,
+          "pfa": 0.0
+        },
+        "config_143": {
+          "ir_decision": 8.9,
+          "gross_hits_per_ms": 0.0712,
+          "novel_hits_per_ms": 0.0008,
+          "pd": 57.05128205128205,
+          "pfa": 0.0
+        },
+        "config_194": {
+          "ir_decision": 88.7,
+          "gross_hits_per_ms": 0.7096,
+          "novel_hits_per_ms": 0.0024,
+          "pd": 100.0,
+          "pfa": 0.0
+        },
+        "config_195": {
+          "ir_decision": 97.2,
+          "gross_hits_per_ms": 0.7776,
+          "novel_hits_per_ms": 0.0024,
+          "pd": 99.2849846782431,
+          "pfa": 0.0
+        },
+        "config_241": {
+          "ir_decision": 7.3,
+          "gross_hits_per_ms": 0.0584,
+          "novel_hits_per_ms": 0.0008,
+          "pd": 49.32432432432432,
+          "pfa": 0.0
+        },
+        "config_29": {
+          "ir_decision": 0.0,
+          "gross_hits_per_ms": 0.0,
+          "novel_hits_per_ms": 0.0,
+          "pd": 0.0,
+          "pfa": 0.0
+        },
+        "config_42": {
+          "ir_decision": 9.4,
+          "gross_hits_per_ms": 0.0752,
+          "novel_hits_per_ms": 0.0032,
+          "pd": 37.75100401606426,
+          "pfa": 0.0
+        },
+        "config_64": {
+          "ir_decision": 55.50000000000001,
+          "gross_hits_per_ms": 0.444,
+          "novel_hits_per_ms": 0.0032,
+          "pd": 93.27731092436974,
+          "pfa": 0.0
+        },
+        "config_96": {
+          "ir_decision": 85.7,
+          "gross_hits_per_ms": 0.6856,
+          "novel_hits_per_ms": 0.0048,
+          "pd": 96.61781285231116,
+          "pfa": 0.0
+        }
+      }
+    },
+    "g4_c": {
+      "branch_id": "g4_c",
+      "mean_ir_decision": 48.44,
+      "gross_hits_per_ms": 0.40458541270802445,
+      "novel_hits_per_ms": 0.002672736004677288,
+      "sparse_ir_decision": 13.450000000000001,
+      "agile_ir_decision": 34.225,
+      "mean_pd": 80.49025562440816,
+      "mean_pfa": 0.0,
+      "mean_first_hit_latency_ms": 220.575,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 7.03,
+        "LONG_DWELL": 92.97,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": 0.25441426347923096,
+      "action_entropy": 2.8269236939749227,
+      "distinct_bands": 36,
+      "top_band_fraction": 0.2639,
+      "q_max": 16.217073440551758,
+      "q_std": 3.723437786102295,
+      "q_mean": 0.9381632208824158,
+      "scenarios": {
+        "config_117": {
+          "ir_decision": 99.4,
+          "gross_hits_per_ms": 0.7952,
+          "novel_hits_per_ms": 0.0008,
+          "pd": 100.0,
+          "pfa": 0.0
+        },
+        "config_119": {
+          "ir_decision": 18.4,
+          "gross_hits_per_ms": 0.15072701208273603,
+          "novel_hits_per_ms": 0.0032766741757116525,
+          "pd": 71.59533073929961,
+          "pfa": 0.0
+        },
+        "config_143": {
+          "ir_decision": 8.5,
+          "gross_hits_per_ms": 0.068,
+          "novel_hits_per_ms": 0.0016,
+          "pd": 59.859154929577464,
+          "pfa": 0.0
+        },
+        "config_194": {
+          "ir_decision": 88.7,
+          "gross_hits_per_ms": 0.7096,
+          "novel_hits_per_ms": 0.0024,
+          "pd": 100.0,
+          "pfa": 0.0
+        },
+        "config_195": {
+          "ir_decision": 97.2,
+          "gross_hits_per_ms": 0.7776,
+          "novel_hits_per_ms": 0.0024,
+          "pd": 99.2849846782431,
+          "pfa": 0.0
+        },
+        "config_241": {
+          "ir_decision": 4.6,
+          "gross_hits_per_ms": 0.04062706999337602,
+          "novel_hits_per_ms": 0.0017663943475380878,
+          "pd": 48.93617021276596,
+          "pfa": 0.0
+        },
+        "config_29": {
+          "ir_decision": 16.7,
+          "gross_hits_per_ms": 0.19200919804541536,
+          "novel_hits_per_ms": 0.0011497556769186547,
+          "pd": 96.53179190751445,
+          "pfa": 0.0
+        },
+        "config_42": {
+          "ir_decision": 9.700000000000001,
+          "gross_hits_per_ms": 0.0776,
+          "novel_hits_per_ms": 0.0048,
+          "pd": 38.800000000000004,
+          "pfa": 0.0
+        },
+        "config_64": {
+          "ir_decision": 55.50000000000001,
+          "gross_hits_per_ms": 0.444,
+          "novel_hits_per_ms": 0.0032,
+          "pd": 93.27731092436974,
+          "pfa": 0.0
+        },
+        "config_96": {
+          "ir_decision": 85.7,
+          "gross_hits_per_ms": 0.6856,
+          "novel_hits_per_ms": 0.0048,
+          "pd": 96.61781285231116,
+          "pfa": 0.0
+        }
+      }
+    },
+    "g4_d": {
+      "branch_id": "g4_d",
+      "mean_ir_decision": 45.78,
+      "gross_hits_per_ms": 0.36624,
+      "novel_hits_per_ms": 0.00192,
+      "sparse_ir_decision": 7.249999999999999,
+      "agile_ir_decision": 27.55,
+      "mean_pd": 70.5809768634771,
+      "mean_pfa": 0.0,
+      "mean_first_hit_latency_ms": 281.625,
+      "mode_distribution_pct": {
+        "SHORT_DWELL": 0.0,
+        "NORMAL_DWELL": 0.0,
+        "LONG_DWELL": 100.0,
+        "REVISIT": 0.0,
+        "PREEMPTIVE_INTERCEPT": 0.0
+      },
+      "mode_entropy": 1.1452421802089798e-10,
+      "action_entropy": 2.4671614743016193,
+      "distinct_bands": 36,
+      "top_band_fraction": 0.267,
+      "q_max": 109.28742218017578,
+      "q_std": 57.539642333984375,
+      "q_mean": 46.096378326416016,
+      "scenarios": {
+        "config_117": {
+          "ir_decision": 99.4,
+          "gross_hits_per_ms": 0.7952,
+          "novel_hits_per_ms": 0.0008,
+          "pd": 100.0,
+          "pfa": 0.0
+        },
+        "config_119": {
+          "ir_decision": 5.6000000000000005,
+          "gross_hits_per_ms": 0.0448,
+          "novel_hits_per_ms": 0.0008,
+          "pd": 71.7948717948718,
+          "pfa": 0.0
+        },
+        "config_143": {
+          "ir_decision": 8.9,
+          "gross_hits_per_ms": 0.0712,
+          "novel_hits_per_ms": 0.0008,
+          "pd": 57.41935483870968,
+          "pfa": 0.0
+        },
+        "config_194": {
+          "ir_decision": 88.7,
+          "gross_hits_per_ms": 0.7096,
+          "novel_hits_per_ms": 0.0024,
+          "pd": 100.0,
+          "pfa": 0.0
+        },
+        "config_195": {
+          "ir_decision": 97.2,
+          "gross_hits_per_ms": 0.7776,
+          "novel_hits_per_ms": 0.0024,
+          "pd": 99.2849846782431,
+          "pfa": 0.0
+        },
+        "config_241": {
+          "ir_decision": 7.3999999999999995,
+          "gross_hits_per_ms": 0.0592,
+          "novel_hits_per_ms": 0.0008,
+          "pd": 49.664429530201346,
+          "pfa": 0.0
+        },
+        "config_29": {
+          "ir_decision": 0.0,
+          "gross_hits_per_ms": 0.0,
+          "novel_hits_per_ms": 0.0,
+          "pd": 0.0,
+          "pfa": 0.0
+        },
+        "config_42": {
+          "ir_decision": 9.4,
+          "gross_hits_per_ms": 0.0752,
+          "novel_hits_per_ms": 0.0032,
+          "pd": 37.75100401606426,
+          "pfa": 0.0
+        },
+        "config_64": {
+          "ir_decision": 55.50000000000001,
+          "gross_hits_per_ms": 0.444,
+          "novel_hits_per_ms": 0.0032,
+          "pd": 93.27731092436974,
+          "pfa": 0.0
+        },
+        "config_96": {
+          "ir_decision": 85.7,
+          "gross_hits_per_ms": 0.6856,
+          "novel_hits_per_ms": 0.0048,
+          "pd": 96.61781285231116,
+          "pfa": 0.0
+        }
+      }
+    }
+  },
+  "recovery_signal_analysis": {
+    "verdict": "PARTIAL_RECOVERY_SIGNAL_INSUFFICIENT",
+    "explanation": "G4-C shows a partial recovery signal (mode entropy 0.254, 7.03% NORMAL dwell, Qmax 16.22, gross hits/ms 0.405), demonstrating that the Gate-25k lineage retains measurable recoverability under G3-D, whereas all Gate-50k branches (G4-A, G4-B, G4-D) remain deeply collapsed in the 100% LONG basin (Hmode 0.000, Qmax ~109). However, G4-C's mode entropy remains below qualification thresholds (0.254 < 0.40), meaning no branch satisfies the qualification contract. Requires Phase G4.1 characterization."
+  }
+}
