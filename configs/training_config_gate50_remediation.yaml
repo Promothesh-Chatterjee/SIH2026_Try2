@@ -1,0 +1,163 @@
+# Training Config — Gate-50k Anti-Collapse Remediation (R1 Qualification Run)
+#
+# Lineage: Resumes from Gate-50k in-flight checkpoint under fresh-replay continuation semantics.
+# Checkpoint SHA-256: f3aab6b824faf8207194594fe52c096ec5b3b00990e37e7c321d4794bfb9d519
+#
+# DO NOT modify obs_dim, n_bands, n_modes, n_actions — these are frozen canonical.
+# Architecture: 36 bands × 5 modes = 180 actions, obs_dim = 360 (frozen).
+
+# ── Dataset ─────────────────────────────────────────────────────────────────
+data_dir: "D:/TSRD"
+seed: 42
+subset: "train"
+mode: "scan"
+world_mode: "stare"
+observation_mode: "scan"
+training_mode: "real_tsrd"
+
+# ── Checkpoint & Lineage ───────────────────────────────────────────────────
+# In-flight continuation: restores online/target network, optimizer state, RNG state,
+# global_step=50000, epsilon, and reward_baseline.
+# Replay buffer starts fresh and warms up over initial transitions.
+# Dual weights_only: false is mandatory to prevent optimizer reset.
+scheduler_ckpt: "experiments/checkpoints/scheduler_v2_continuation_100k/checkpoint_gate_50000.pt"
+expected_parent_sha: "f3aab6b824faf8207194594fe52c096ec5b3b00990e37e7c321d4794bfb9d519"
+weights_only: false
+output_dir: "experiments/checkpoints/scheduler_v2_gate50_remediation_r1"
+
+# ── Perception ──────────────────────────────────────────────────────────────
+deinterleaver_ckpt: "experiments/checkpoints/deinterleaver/best.pt"
+normalization_stats: "experiments/checkpoints/deinterleaver/normalization_stats.json"
+expected_norm_hash: "bacee02ac1c29428"
+strict_perception: true
+
+# ── Scheduler Training ──────────────────────────────────────────────────────
+scheduler:
+  version: "v2"
+  action_selection_mode: "flat_argmax"
+  weights_only: false
+
+  # Remediation qualification interval: 50,000 → 53,000 (3,000 steps)
+  start_step: 50000
+  total_timesteps: 53000
+
+  # Epsilon: in-flight checkpoint restores epsilon (~0.15 at step 50k)
+  # Exploration continues along the established trajectory
+  eps_start: 0.15
+  eps_end: 0.05
+  eps_decay: 50000
+  exploration_schedule: "slower"
+
+  # Learning parameters
+  learning_rate: 2.5e-5
+  replay_buffer_size: 50000
+  batch_size: 32
+  seq_len: 16
+  burn_in: 8
+  update_freq: 4
+  target_update_freq: 250
+
+  # Hard scenario oversampling
+  replay_strategy: "sparse_and_mode2_positive_balanced"
+  thompson_warmup_steps: 0
+
+  # Staged gate evaluation at end of 3k qualification
+  staged_gates: "53000"
+
+  # Q-value stability (tightened for R1 remediation)
+  target_q_max: 100.0
+  target_q_min: -50.0
+  q_reg_coef: 2.5e-4              # Strengthened from 1e-4 to enforce Q_max <= 100 and Q_std < 60
+
+  # Anti-Collapse Regularization Hyperparameters (Phase D Parameterization - Candidate R1)
+  lambda_entropy: 0.02            # Action entropy regularization (strengthened from 0.01)
+  band_diversity_penalty_coef: 0.01   # Top-band concentration penalty (strengthened from 0.005)
+  band_diversity_threshold: 0.60      # Top-band threshold (tightened from 0.80)
+  mode_diversity_penalty_coef: 0.02   # Differentiable mode diversity penalty (strengthened from 0.005)
+  mode_diversity_threshold: 0.55      # Active threshold (>55% prob triggers per-band mode concentration)
+  mode_collapse_rate_threshold: 0.20  # Active trigger: >=20% of bands concentrating activates penalty
+
+  # LR schedule: cosine decay
+  lr_schedule: "cosine"
+  min_lr: 5.0e-6
+
+  # Targeted band exploration
+  targeted_exploration: true
+  band_discovery_quota: 2
+
+# ── Environment ─────────────────────────────────────────────────────────────
+environment:
+  n_bands: 36
+  band_features: 10
+  obs_dim: 360
+  n_modes: 5
+  n_actions: 180
+  freq_min_mhz: 0.0
+  freq_max_mhz: 18000.0
+  ibw_mhz: 500.0
+  dwell_time_us: 500.0
+  detection_threshold_db: -140.0
+  frequency_step_mhz: 500.0
+  time_horizon_us: 30000000.0
+  max_pulses: 50000
+  chunk_mode: "random"
+  max_steps_per_episode: 1000
+  receiver:
+    sensitivity_dbm: -110.0
+    cfar_guard_cells: 2
+    cfar_ref_cells: 8
+    cfar_pfa: 0.001
+    noise_floor_isolation: true
+  belief:
+    ema_alpha: 0.30
+    ema_alpha_miss_confirmed: 0.20
+  reward:
+    version: "v2"
+    variant: "baseline"
+    w_hit_novel: 10.0
+    w_hit_repeat: 8.0
+    w_latency: 5.0
+    w_agile_bonus: 2.0
+    w_prediction: 0.5
+    w_miss: -4.0
+    w_false_alarm: -1.0
+    w_redundant: -0.25
+    w_dwell_cost: -0.01
+
+# ── Reward (Phase C Invariant: Strictly Frozen) ─────────────────────────────
+reward:
+  version: "v2"
+  variant: "baseline"
+  w_hit_novel: 10.0
+  w_hit_repeat: 8.0
+  w_latency: 5.0
+  w_agile_bonus: 2.0
+  w_prediction: 0.5
+  w_miss: -4.0
+  w_false_alarm: -1.0
+  w_redundant: -0.25
+  w_dwell_cost: -0.01
+
+# ── Validation ──────────────────────────────────────────────────────────────
+validation:
+  subset: "val"
+  n_files: 10
+  seed: 42
+  allow_synthetic_fallback: false
+  chunk_mode: "first"
+
+# ── Distribution Shift Monitoring ───────────────────────────────────────────
+distribution_shift:
+  enabled: true
+  monitor_only: true
+  threshold: 0.15
+  critical_threshold: 0.40
+  window_size: 500
+  eval_interval_steps: 50
+  action_on_threshold: "warn"
+  auto_adjust_learning_rate: false
+  auto_adjust_replay_ratio: false
+
+# ── Telemetry ────────────────────────────────────────────────────────────────
+telemetry:
+  schema_version: "2.0"

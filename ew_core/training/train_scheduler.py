@@ -205,7 +205,14 @@ def _do_drqn_update(
     q_reg_coef: float = 1e-4,
     n_bands: int = 36,
     n_modes: int = 5,
+    lambda_entropy: float = 0.01,
+    band_diversity_penalty_coef: float = 0.005,
+    band_diversity_threshold: float = 0.80,
+    mode_diversity_penalty_coef: float = 0.005,
+    mode_diversity_threshold: float = 0.80,
+    mode_collapse_rate_threshold: float = 0.50,
 ) -> float:
+
     """One Double-DQN BPTT update on a sampled batch. Returns loss value.
 
     Phase 9B-R2 Q-Value Stabilization:
@@ -281,17 +288,16 @@ def _do_drqn_update(
 
     loss: torch.Tensor = q_loss + q_reg_loss
 
-    # Phase-1 Anti-Collapse: entropy regulariser (λ_ent=0.01)
+    # Phase-1 Anti-Collapse: entropy regulariser (lambda_entropy)
     # Penalise Q-value concentration — prevents the policy collapsing to a
     # single dominant action across all bands (top_band_fraction → 100%).
     # Applied only on graded (non-burn-in) transitions in loss_mask.
     q_probs = torch.softmax(q_all[loss_mask] / 1.0, dim=-1)  # temperature=1.0
     action_entropy = -(q_probs * torch.log(q_probs + 1e-8)).sum(dim=-1).mean()
-    lambda_ent = 0.01
-    loss = loss - lambda_ent * action_entropy
+    loss = loss - lambda_entropy * action_entropy
 
     # Phase-1 Anti-Collapse: top-band diversity penalty (LIVE gradients)
-    # If a single band dominates >80% of the Q-mass across graded transitions,
+    # If a single band dominates > threshold of the Q-mass across graded transitions,
     # apply a differentiable penalty proportional to the excess concentration.
     _diversity_pen = torch.zeros((), device=device)
     _n_graded = loss_mask.sum().item()
@@ -304,13 +310,13 @@ def _do_drqn_update(
     else:
         _top_band_frac = torch.zeros((), device=device)
         _top_band_frac_val = 0.0
-    if _top_band_frac_val > 0.80:
-        _diversity_pen = 0.005 * (_top_band_frac - 0.80).clamp(min=0.0) * loss.abs().detach()
+    if _top_band_frac_val > band_diversity_threshold:
+        _diversity_pen = band_diversity_penalty_coef * (_top_band_frac - band_diversity_threshold).clamp(min=0.0) * loss.abs().detach()
         loss = loss + _diversity_pen
 
     # Per-band mode diversity penalty on LIVE computation graph (Phase 1 fix — mode collapse)
     # For each of the 36 bands, compute the softmax distribution over its 5 modes directly
-    # from the live q_all computation graph. If any mode dominates (>80%), backpropagate a
+    # from the live q_all computation graph. If any mode dominates (> threshold), backpropagate a
     # gradient to penalise mode collapse and actively train the network toward mode diversity.
     mode_collapse_rate = torch.tensor(0.0)
     mode_diversity_pen = torch.zeros((), device=device)
@@ -321,11 +327,11 @@ def _do_drqn_update(
             band_mode_softmax = torch.softmax(q_banded_live / 1.0, dim=-1)  # (N, n_bands, n_modes)
             max_mode_prob_per_band = band_mode_softmax.max(dim=-1).values  # (N, n_bands), differentiable!
             with torch.no_grad():
-                mode_collapse_rate = (max_mode_prob_per_band > 0.80).float().mean()
-            if mode_collapse_rate > 0.5:  # more than half the bands have mode collapse
+                mode_collapse_rate = (max_mode_prob_per_band > mode_diversity_threshold).float().mean()
+            if mode_collapse_rate > mode_collapse_rate_threshold:
                 # Differentiable penalty: pushes down probability of dominant mode with live gradients
                 avg_max_mode_prob = max_mode_prob_per_band.mean()
-                mode_diversity_pen = 0.005 * (avg_max_mode_prob - 0.80).clamp(min=0.0) * loss.abs().detach()
+                mode_diversity_pen = mode_diversity_penalty_coef * (avg_max_mode_prob - mode_diversity_threshold).clamp(min=0.0) * loss.abs().detach()
                 loss = loss + mode_diversity_pen
             else:
                 mode_diversity_pen = torch.zeros((), device=device)
@@ -333,6 +339,7 @@ def _do_drqn_update(
             mode_diversity_pen = torch.zeros((), device=device)
             mode_collapse_rate = torch.tensor(0.0)
     except (RuntimeError, ValueError, IndexError) as exc:
+
         logging.getLogger(__name__).warning("mode-diversity penalty skipped: %s", exc)
         mode_diversity_pen = torch.tensor(0.0)
         mode_collapse_rate = torch.tensor(0.0)
@@ -469,6 +476,12 @@ def train_scheduler(
     qualification_steps: int | None = None,
     diagnostic: bool = False,
     expected_parent_sha: str | None = None,
+    lambda_entropy: float | None = None,
+    band_diversity_penalty_coef: float | None = None,
+    band_diversity_threshold: float | None = None,
+    mode_diversity_penalty_coef: float | None = None,
+    mode_diversity_threshold: float | None = None,
+    mode_collapse_rate_threshold: float | None = None,
 ) -> None:
     """Full DRQN training with Thompson warmup, BPTT, target network, and MoE eval.
 
@@ -781,11 +794,22 @@ def train_scheduler(
     target_q_max = float(sched_cfg.get("target_q_max", target_q_max))
     target_q_min = float(sched_cfg.get("target_q_min", target_q_min))
     q_reg_coef = float(sched_cfg.get("q_reg_coef", q_reg_coef))
+    if lambda_entropy is None:
+        lambda_entropy = float(sched_cfg.get("lambda_entropy", 0.01))
+    if band_diversity_penalty_coef is None:
+        band_diversity_penalty_coef = float(sched_cfg.get("band_diversity_penalty_coef", 0.005))
+    if band_diversity_threshold is None:
+        band_diversity_threshold = float(sched_cfg.get("band_diversity_threshold", 0.80))
+    if mode_diversity_penalty_coef is None:
+        mode_diversity_penalty_coef = float(sched_cfg.get("mode_diversity_penalty_coef", 0.005))
+    if mode_diversity_threshold is None:
+        mode_diversity_threshold = float(sched_cfg.get("mode_diversity_threshold", 0.80))
+    if mode_collapse_rate_threshold is None:
+        mode_collapse_rate_threshold = float(sched_cfg.get("mode_collapse_rate_threshold", 0.50))
     if "targeted_exploration" in sched_cfg:
         targeted_exploration = bool(sched_cfg["targeted_exploration"])
     if "band_discovery_quota" in sched_cfg:
         band_discovery_quota = int(sched_cfg["band_discovery_quota"])
-    target_q_max = float(sched_cfg.get("target_q_max", 100.0))
     band_tracker = (
         BandDiscoveryTracker(n_bands=n_bands, discovery_quota=band_discovery_quota)
         if targeted_exploration
@@ -910,12 +934,11 @@ def train_scheduler(
     parent_sha256 = sha256_hash.hexdigest()
     logger.info("Parent checkpoint resolved: %s (SHA-256: %s)", parent_path, parent_sha256)
 
+    if expected_parent_sha is None:
+        expected_parent_sha = train_cfg.get("expected_parent_sha") or sched_cfg.get("expected_parent_sha")
+
     FROZEN_25K_SHA = "7a99c659affda277fa63fd612a3564d08a8d2e3cf7d033fe892d778871c186b0"
-    is_gate25k_launch = bool(
-        qualification_run
-        or (resume_checkpoint and "checkpoint_gate_25000_frozen" in Path(resume_checkpoint).name)
-        or (not resume_checkpoint and "checkpoint_gate_25000_frozen" in parent_path.name)
-    )
+    is_gate25k_launch = bool("checkpoint_gate_25000_frozen" in parent_path.name)
     if is_gate25k_launch:
         if parent_sha256 != FROZEN_25K_SHA:
             raise RuntimeError(
@@ -1386,6 +1409,12 @@ def train_scheduler(
                         q_reg_coef=q_reg_coef,
                         n_bands=n_bands,
                         n_modes=n_modes,
+                        lambda_entropy=lambda_entropy,
+                        band_diversity_penalty_coef=band_diversity_penalty_coef,
+                        band_diversity_threshold=band_diversity_threshold,
+                        mode_diversity_penalty_coef=mode_diversity_penalty_coef,
+                        mode_diversity_threshold=mode_diversity_threshold,
+                        mode_collapse_rate_threshold=mode_collapse_rate_threshold,
                     )
                     if upd_stats.get("optimizer_update_attempted", False):
                         update_integrity_counters["optimizer_updates_attempted"] += 1
@@ -2156,6 +2185,12 @@ if __name__ == "__main__":
     parser.add_argument("--disable-targeted-exploration", action="store_false", dest="targeted_exploration", help="Disable targeted exploration (revert to pure uniform).")
     parser.add_argument("--band-discovery-quota", type=int, default=2, help="Discovery visit quota per band per episode (Phase 9B-R3 default=2).")
     parser.add_argument("--targeted-mode-strategy", type=str, default="balanced_modes", choices=["balanced_modes", "uniform"], help="Mode sampling strategy during targeted band exploration.")
+    parser.add_argument("--lambda-entropy", type=float, default=None, help="Action entropy regularization coefficient.")
+    parser.add_argument("--band-diversity-penalty-coef", type=float, default=None, help="Top-band diversity penalty coefficient.")
+    parser.add_argument("--band-diversity-threshold", type=float, default=None, help="Top-band concentration threshold.")
+    parser.add_argument("--mode-diversity-penalty-coef", type=float, default=None, help="Per-band mode diversity penalty coefficient.")
+    parser.add_argument("--mode-diversity-threshold", type=float, default=None, help="Per-band mode concentration threshold.")
+    parser.add_argument("--mode-collapse-rate-threshold", type=float, default=None, help="Fraction of bands with mode concentration required to trigger penalty.")
     args = parser.parse_args()
     if args.device:
         os.environ["DEVICE"] = args.device
@@ -2181,5 +2216,11 @@ if __name__ == "__main__":
         q_reg_coef=args.q_reg_coef,
         targeted_exploration=args.targeted_exploration,
         band_discovery_quota=args.band_discovery_quota,
+        lambda_entropy=args.lambda_entropy,
+        band_diversity_penalty_coef=args.band_diversity_penalty_coef,
+        band_diversity_threshold=args.band_diversity_threshold,
+        mode_diversity_penalty_coef=args.mode_diversity_penalty_coef,
+        mode_diversity_threshold=args.mode_diversity_threshold,
+        mode_collapse_rate_threshold=args.mode_collapse_rate_threshold,
     )
 
