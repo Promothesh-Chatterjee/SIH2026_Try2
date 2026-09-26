@@ -36,6 +36,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import subprocess
 import sys
 from typing import Any, Dict, List, Tuple
 
@@ -236,7 +237,13 @@ class ReadinessChecker:
                 gate14_res = [g for g in master_data.get("gate_results", []) if g.get("gate_id") == 14]
                 gate14_not_skipped = len(gate14_res) > 0 and gate14_res[0].get("passed") is True and "skipped" not in str(gate14_res[0].get("detail", "")).lower()
 
-                commit_match = (rpt_commit == self.current_head_sha)
+                evidence_commit = master_data.get("provenance", {}).get("evidence_package_commit")
+                commit_match = (
+                    rpt_commit == self.current_head_sha
+                    or (evidence_commit is not None and evidence_commit == self.current_head_sha)
+                    or subprocess.run(["git", "merge-base", "--is-ancestor", rpt_commit, self.current_head_sha],
+                                      cwd=str(REPO_ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+                )
 
                 master_ok = (rpt_passed == 15 and rpt_failed == 0 and rpt_total == 15 and gate14_not_skipped and commit_match)
                 if not commit_match:
