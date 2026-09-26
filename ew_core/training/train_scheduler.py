@@ -1084,6 +1084,16 @@ def train_scheduler(
     consecutive_ooms = 0
     consecutive_val_failures = 0
 
+    latest_shift_telemetry: dict[str, Any] | None = None
+    if dist_shift_detector is not None:
+        latest_shift_telemetry = {
+            "shift_score_kl": None,
+            "shift_severity": "none",
+            "shift_threshold": float(dist_shift_detector.alert_threshold),
+            "shift_critical_threshold": float(dist_shift_detector.critical_threshold),
+            "shift_action": "monitor_only",
+        }
+
     while global_step < total_steps:
         obs, _ = env.reset()
         if band_tracker is not None:
@@ -1276,6 +1286,13 @@ def train_scheduler(
                 shift_res = dist_shift_detector.update(np.asarray(next_obs, dtype=np.float32))
                 shift_kl = float(shift_res.get("kl", 0.0))
                 shift_sev = str(shift_res.get("severity", "none"))
+                latest_shift_telemetry = {
+                    "shift_score_kl": shift_kl,
+                    "shift_severity": shift_sev,
+                    "shift_threshold": float(dist_shift_detector.alert_threshold),
+                    "shift_critical_threshold": float(dist_shift_detector.critical_threshold),
+                    "shift_action": "monitor_only",
+                }
                 if shift_res.get("shift_detected"):
                     logger.warning(
                         "[DISTRIBUTION SHIFT MONITOR] Policy-observation shift detected at step %d: KL=%.4f (severity: %s, action: monitor_only)",
@@ -1772,6 +1789,9 @@ def train_scheduler(
         record["band_selection_entropy"] = float(fom.get("band_selection_coverage", 0.0) or 0.0)
         record["reward_breakdown"] = reward_breakdown
         record["reconstructed_reward_sum"] = reconstructed_sum
+        if latest_shift_telemetry is not None:
+            record.update(latest_shift_telemetry)
+            record["distribution_shift"] = dict(latest_shift_telemetry)
         telemetry.update(**record)
 
         # Periodic MoE evaluation on fixed val scenarios every 5000 steps

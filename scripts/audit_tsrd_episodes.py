@@ -103,7 +103,8 @@ def audit_file(
     distinct_bands_all = int(len(set(bands_all)))
     distinct_bands_retained = int(len(set(bands_retained)))
 
-    # 6. PRI statistics (computed strictly from positive deltas of retained sorted sequence)
+    # 6. PRI / inter-pulse arrival intervals (computed strictly from positive global chronological deltas
+    # ΔToA > 0 of the retained sorted sequence, measuring arrival interval distribution across the scenario pulse stream)
     toas_retained = retained[:, 0] if retained_pulses > 0 else np.array([], dtype=np.float64)
     pris = np.diff(toas_retained) if len(toas_retained) > 1 else np.array([], dtype=np.float64)
     pos_pris = pris[pris > 0]

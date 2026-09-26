@@ -79,8 +79,16 @@ class ReadinessChecker:
             logger.error("[CHECK %02d FAIL] %s — %s", num, title, detail)
 
     def check_all(self) -> bool:
+        try:
+            self.current_head_sha = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=str(REPO_ROOT), text=True
+            ).strip()
+        except Exception:
+            self.current_head_sha = "UNKNOWN"
+
         logger.info("================================================================================")
         logger.info("PRE-RETRAINING READINESS GATE: Gate-25k -> Gate-100k TSRD Continuation")
+        logger.info("Repository Git HEAD: %s", self.current_head_sha)
         logger.info("Continuation Config: %s", self.resume_config_path)
         logger.info("================================================================================")
 
@@ -207,11 +215,46 @@ class ReadinessChecker:
         c14_ok = (resume_cfg.get("training_mode") == "real_tsrd")
         self.run_check(14, "Real TSRD Training Mode Enforcement", c14_ok, f"training_mode={resume_cfg.get('training_mode')}")
 
-        # Check 15: Continuation config adheres to project semantic weights_only: true contract
+        # Check 15: Continuation contract + fresh master-verification provenance
         sched_sec = resume_cfg.get("scheduler", {})
-        c15_ok = bool(resume_cfg.get("weights_only", False)) and bool(sched_sec.get("weights_only", False))
-        self.run_check(15, "Project Continuation Contract (weights_only: true)", c15_ok,
-                       "Model weights restored; optimizer, replay, RNG, epsilon, and LR scheduler start clean")
+        weights_only_ok = bool(resume_cfg.get("weights_only", False)) and bool(sched_sec.get("weights_only", False))
+        real_tsrd_ok = (resume_cfg.get("training_mode") == "real_tsrd")
+
+        master_rpt_path = REPO_ROOT / "reports" / "master_verification_results.json"
+        master_ok = False
+        master_detail = ""
+        if master_rpt_path.is_file():
+            try:
+                with open(master_rpt_path, "r", encoding="utf-8") as f:
+                    master_data = json.load(f)
+                rpt_passed = master_data.get("passed_gates", 0)
+                rpt_failed = master_data.get("failed_gates", 0)
+                rpt_total = master_data.get("total_gates", 0)
+                rpt_commit = master_data.get("provenance", {}).get("verification_orchestrator_commit") or master_data.get("verification_orchestrator_commit")
+
+                # Check gate 14 was NOT skipped
+                gate14_res = [g for g in master_data.get("gate_results", []) if g.get("gate_id") == 14]
+                gate14_not_skipped = len(gate14_res) > 0 and gate14_res[0].get("passed") is True and "skipped" not in str(gate14_res[0].get("detail", "")).lower()
+
+                commit_match = (rpt_commit == self.current_head_sha)
+
+                master_ok = (rpt_passed == 15 and rpt_failed == 0 and rpt_total == 15 and gate14_not_skipped and commit_match)
+                if not commit_match:
+                    master_detail = f"Report commit {str(rpt_commit)[:8]} != HEAD {str(self.current_head_sha)[:8]}"
+                elif not gate14_not_skipped:
+                    master_detail = "Gate 14 smoke was skipped or failed"
+                else:
+                    master_detail = f"15/15 passed, Gate14 smoke verified, commit={str(rpt_commit)[:8]} (matches HEAD)"
+            except Exception as exc:
+                master_ok = False
+                master_detail = f"Error reading master report: {exc}"
+        else:
+            master_detail = f"Missing {master_rpt_path}"
+
+        c15_ok = weights_only_ok and real_tsrd_ok and master_ok
+        c15_title = "Continuation Contract & Master Verification Provenance"
+        c15_msg = f"weights_only: {weights_only_ok}; Master 15-Gate: {master_detail}"
+        self.run_check(15, c15_title, c15_ok, c15_msg)
 
         # Check 16: Parent checkpoint is exactly the frozen 25k SHA
         parent_ckpt_rel = resume_cfg.get("scheduler_ckpt")
@@ -239,17 +282,17 @@ class ReadinessChecker:
         post_sha = _sha256(FROZEN_CKPT_PATH)
         c18_ok = (post_sha == self.pre_sha == CANONICAL_FROZEN_SHA)
         self.run_check(18, "Frozen Baseline Checkpoint Bit-Exact Immutability", c18_ok,
-                       "Pre/post SHA identical; no training executed")
+                       "Pre/post SHA identical; no production continuation training executed (Gate 14 isolated smoke only)")
 
         # Final verdict
         all_passed = (len(self.blockers) == 0)
         logger.info("================================================================================")
         if all_passed:
-            print("\nREADY_FOR_TSRD_RETRAINING\n")
-            logger.info("READINESS GATE STATUS: READY_FOR_TSRD_RETRAINING (All 18 criteria satisfied cleanly)")
+            print(f"\nREADY_FOR_TSRD_RETRAINING (HEAD: {self.current_head_sha})\n")
+            logger.info("READINESS GATE STATUS: READY_FOR_TSRD_RETRAINING (All 18 criteria satisfied cleanly at HEAD %s)", self.current_head_sha)
         else:
-            print("\nNOT_READY_FOR_TSRD_RETRAINING\n")
-            logger.error("READINESS GATE STATUS: NOT_READY_FOR_TSRD_RETRAINING (%d blocking issues)", len(self.blockers))
+            print(f"\nNOT_READY_FOR_TSRD_RETRAINING (HEAD: {self.current_head_sha})\n")
+            logger.error("READINESS GATE STATUS: NOT_READY_FOR_TSRD_RETRAINING (%d blocking issues at HEAD %s)", len(self.blockers), self.current_head_sha)
             for b in self.blockers:
                 logger.error("  BLOCKER: %s", b)
         logger.info("================================================================================")

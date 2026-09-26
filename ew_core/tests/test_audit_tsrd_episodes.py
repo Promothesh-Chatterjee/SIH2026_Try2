@@ -176,3 +176,21 @@ def test_all_invariants_non_negative(tmp_path: Path):
         assert rep["pri_mean_us"] >= 0.0
         assert rep["pri_p50_us"] >= 0.0
         assert rep["pri_p90_us"] >= 0.0
+
+
+def test_interleaved_multi_emitter_global_chronological_deltas(tmp_path: Path):
+    """Verify that in interleaved multi-emitter scenarios, audit measures positive global chronological deltas."""
+    h5_path = tmp_path / "interleaved.h5"
+    # Interleaved pulse train from 2 emitters
+    toas = np.array([10.0, 15.0, 30.0, 35.0])
+    emitters = np.array([0, 1, 0, 1], dtype=np.int64)
+    _create_test_h5(h5_path, toas=toas, emitters=emitters)
+
+    rep = audit_file(h5_path, max_pulses=4)
+    # Global chronological deltas: 15-10=5, 30-15=15, 35-30=5 -> mean = 25/3 = 8.33 us
+    assert rep["pri_sample_count"] == 3
+    assert rep["pri_mean_us"] == pytest.approx(25.0 / 3.0, 0.01)
+    assert rep["pri_p50_us"] == pytest.approx(5.0, 0.01)
+    assert rep["all_emitters_count"] == 2
+    assert rep["retained_emitters_count"] == 2
+
