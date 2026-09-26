@@ -29,8 +29,9 @@ Checklist (23 required gates):
                                      (tests/test_windowed_deinterleave.py::ReconcileClusterNodesTests)
   21. replay-mask tests pass          (tests/test_replay_aux_targets.py)
   22. auxiliary-head tests pass       (tests/test_drqn_aux_heads.py)
-  23. baseline-contract tests pass    (tests/test_baseline_suite.py,
+   23. baseline-contract tests pass    (tests/test_baseline_suite.py,
                                        tests/test_evaluate_baseline.py)
+   24. temporal integrity              (finite ToA, raw non-decreasing ordering, duplicate/negative counts)
 
 Exit code 0 = READY, 1 = NOT READY (blocking reasons printed).
 """
@@ -78,6 +79,7 @@ RID = {
     "replay": 21,
     "aux": 22,
     "baseline": 23,
+    "temporal": 24,
 }
 
 
@@ -171,6 +173,70 @@ def _check_readability(root: Path) -> tuple[list[str], list[str]]:
                     f"[note {RID['readable']}] {mode}/{split}: {empty}/{len(files)} "
                     f"empty zero-pulse scenes (structurally valid, excluded from eligibility)"
                 )
+    return problems, notes
+
+
+def _check_temporal_integrity(root: Path) -> tuple[list[str], list[str]]:
+    """Check 24: verify temporal integrity across all 6 splits.
+
+    For every .h5 file in stare/train, stare/val, stare/test, scan/train,
+    scan/val, scan/test:
+      1. toa_us values are finite (missing or non-finite are blocking errors).
+      2. Raw ToA ordering is non-decreasing.
+      3. Negative temporal deltas are counted; any negative delta fails closed.
+      4. Duplicate timestamps are counted and noted.
+    """
+    import h5py  # type: ignore
+    import numpy as np  # type: ignore
+    from ew_core.data.tsrd_manifest import resolve_split_dirs
+
+    problems: list[str] = []
+    notes: list[str] = []
+    total_files_scanned = 0
+    total_dup_files = 0
+    total_dup_pulses = 0
+
+    for mode in MODES:
+        splits = resolve_split_dirs(root, mode)
+        for split in SPLITS:
+            directory = splits[split]
+            if not directory.is_dir():
+                continue
+            files = sorted(directory.glob("*.h5"))
+            for path in files:
+                total_files_scanned += 1
+                try:
+                    with h5py.File(path, "r") as f:
+                        if "data" not in f:
+                            continue
+                        d = f["data"]
+                        if d.shape[0] < 2:
+                            continue
+                        toa = np.asarray(d[:, 0], dtype=np.float64)
+                    if not np.all(np.isfinite(toa)):
+                        problems.append(
+                            f"[{RID['temporal']}] {mode}/{split} {path.name}: non-finite or missing ToA values detected"
+                        )
+                        continue
+                    diffs = np.diff(toa)
+                    neg_count = int(np.sum(diffs < 0))
+                    dup_count = int(np.sum(diffs == 0))
+                    if neg_count > 0:
+                        problems.append(
+                            f"[{RID['temporal']}] {mode}/{split} {path.name}: {neg_count} negative ToA deltas; temporal ordering invalid"
+                        )
+                    if dup_count > 0:
+                        total_dup_files += 1
+                        total_dup_pulses += dup_count
+                except Exception as exc:
+                    problems.append(
+                        f"[{RID['temporal']}] {mode}/{split} {path.name}: failed to read temporal data: {exc}"
+                    )
+
+    if total_dup_files > 0:
+        notes.append(
+            f"[note {RID['temporal']}] observed {total_dup_pulses} duplicate ToA pulses across {total_dup_files} files (allowed by radar overlap contract)"
+        )
     return problems, notes
 
 
@@ -425,6 +491,9 @@ def main() -> int:
     elif os.getenv("CHECKPOINTS_DIR"):
         checkpoints_dir = Path(os.getenv("CHECKPOINTS_DIR")).resolve()
         ckpt_source = "ENV"
+    elif (ROOT / "experiments" / "checkpoints" / "deinterleaver" / "best.pt").is_file():
+        checkpoints_dir = ROOT / "experiments" / "checkpoints"
+        ckpt_source = "EXPERIMENTS_DEFAULT"
     else:
         checkpoints_dir = ROOT / "checkpoints"
         ckpt_source = "DEFAULT"
@@ -441,6 +510,11 @@ def main() -> int:
     read_problems, read_notes = _check_readability(data_root)
     errors.extend(read_problems)
     notes.extend(read_notes)
+
+    # Check 24: strict temporal integrity scan across all 6 splits.
+    temp_problems, temp_notes = _check_temporal_integrity(data_root)
+    errors.extend(temp_problems)
+    notes.extend(temp_notes)
 
     # Checks 11-15: gate + dwell contracts (observation / action / reward /
     # receiver / dwell).

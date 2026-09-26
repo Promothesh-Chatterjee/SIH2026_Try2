@@ -37,12 +37,71 @@ from ..preprocessing.normalise import load_normalization_stats, normalization_st
 from ..telemetry.publisher import TelemetryPublisher
 from ..telemetry.run_manager import RunManager
 from ..telemetry.schema import TELEMETRY_SCHEMA_VERSION, coerce, make_episode_record, make_val_record, reward_reconstruction, shannon_entropy
+from ..training.distribution_shift_detector import DistributionShiftDetector
 from ..training.replay_buffer import SequenceReplayBuffer
 from ..training.thompson_sampling import ThompsonSamplingExplorer
 from ..training.training_gate import require_training_gate
 from ..training.val_set import FixedValidationSet
 
 logger = logging.getLogger(__name__)
+
+
+def build_training_distribution_reference(
+    data_dir: Path | str,
+    env_config: dict[str, Any],
+    deinterleaver_model: Any,
+    fit_stats: Any,
+    seed: int = 42,
+    n_calibration_scenarios: int = 5,
+    steps_per_scenario: int = 40,
+) -> np.ndarray:
+    """Generate reference observations exclusively from TSRD training distribution (stare/train).
+
+    Uses a deterministic calibration subset and the canonical causal environment/perception
+    pipeline to record true 360-D policy observation vectors. Validation and test sets are never accessed.
+    """
+    calib_source = ScenarioSource(
+        data_root=data_dir,
+        mode="stare",
+        subset="train",
+        freq_min_mhz=float(env_config.get("freq_min_mhz", 0.0)),
+        freq_max_mhz=float(env_config.get("freq_max_mhz", 18000.0)),
+        time_horizon_us=float(env_config.get("time_horizon_us", 0.0)) or None,
+        max_pulses=int(env_config.get("max_pulses", 50000)),
+        seed=seed,
+        source_type="world",
+        allow_synthetic_fallback=False,
+        chunk_mode="first",
+    )
+    calib_env_config = copy.deepcopy(env_config)
+    calib_env_config["semantic_memory_enabled"] = False
+    calib_env = CognitiveRFScanEnv(
+        calib_env_config,
+        records=None,
+        seed=seed,
+        records_provider=calib_source.sample,
+        deinterleaver_model=deinterleaver_model,
+        deinterleaver_config={"fit_stats": fit_stats} if fit_stats else {},
+        semantic_memory_path=":memory:",
+    )
+    obs_samples: list[np.ndarray] = []
+    n_scenarios = min(n_calibration_scenarios, max(1, len(calib_source)))
+    rng = np.random.default_rng(seed)
+    n_actions = int(env_config.get("n_actions", 180))
+
+    for sc_idx in range(n_scenarios):
+        obs, _ = calib_env.reset()
+        obs_samples.append(np.asarray(obs, dtype=np.float32).copy())
+        for _ in range(steps_per_scenario):
+            action = int(rng.integers(0, n_actions))
+            obs, _, done, truncated, _ = calib_env.step(action)
+            obs_samples.append(np.asarray(obs, dtype=np.float32).copy())
+            if done or truncated:
+                break
+    ref_obs_matrix = np.array(obs_samples, dtype=np.float32)
+    logger.info("Built policy-observation distribution reference from TSRD stare/train: %d observations (dim=%d)",
+                len(ref_obs_matrix), ref_obs_matrix.shape[1] if ref_obs_matrix.ndim > 1 else 0)
+    return ref_obs_matrix
 
 
 def _observable_priorities(obs: np.ndarray, features_per_band: int = 10) -> np.ndarray:
@@ -627,6 +686,36 @@ def train_scheduler(
         assert env.perception_enabled, "Strict TSRD training requires perception_enabled=True"
         assert env.emitter_tracker is not None, "Strict TSRD training requires EmitterTracker"
 
+    # Distribution Shift Monitoring setup (Policy-Observation Distribution)
+    dist_shift_cfg = train_cfg.get("distribution_shift", {})
+    dist_shift_enabled = bool(dist_shift_cfg.get("enabled", True))
+    dist_shift_detector: DistributionShiftDetector | None = None
+    dist_shift_eval_interval = int(dist_shift_cfg.get("eval_interval_steps", 50))
+    dist_shift_monitor_only = bool(dist_shift_cfg.get("monitor_only", True))
+
+    if dist_shift_enabled and world_mode == "stare" and data_dir is not None:
+        try:
+            ref_obs = build_training_distribution_reference(
+                data_dir=data_dir,
+                env_config=train_env_config,
+                deinterleaver_model=deinterleaver_model,
+                fit_stats=fit_stats,
+                seed=seed,
+                n_calibration_scenarios=5,
+                steps_per_scenario=40,
+            )
+            dist_shift_detector = DistributionShiftDetector(
+                obs_dim=obs_dim,
+                window_size=int(dist_shift_cfg.get("window_size", 500)),
+                alert_threshold=float(dist_shift_cfg.get("threshold", 0.15)),
+                critical_threshold=float(dist_shift_cfg.get("critical_threshold", 0.40)),
+            )
+            dist_shift_detector.set_reference(ref_obs)
+            logger.info("Distribution shift monitoring INITIALIZED from stare/train (monitor_only=%s, eval_interval=%d)",
+                        dist_shift_monitor_only, dist_shift_eval_interval)
+        except Exception as exc:
+            logger.warning("Failed to initialize distribution shift detector: %s", exc)
+
     lstm_hidden = int(drqn_cfg.get("lstm_hidden", 256))
     lstm_layers = int(drqn_cfg.get("lstm_layers", 2))
 
@@ -1181,6 +1270,17 @@ def train_scheduler(
             next_obs, reward, terminated, truncated, info = env.step(action, mode_context=mode_ctx)
 
             done = bool(terminated or truncated)
+
+            # Distribution Shift Monitoring (policy observations, strictly monitor_only)
+            if dist_shift_detector is not None and (global_step % dist_shift_eval_interval == 0):
+                shift_res = dist_shift_detector.update(np.asarray(next_obs, dtype=np.float32))
+                shift_kl = float(shift_res.get("kl", 0.0))
+                shift_sev = str(shift_res.get("severity", "none"))
+                if shift_res.get("shift_detected"):
+                    logger.warning(
+                        "[DISTRIBUTION SHIFT MONITOR] Policy-observation shift detected at step %d: KL=%.4f (severity: %s, action: monitor_only)",
+                        global_step, shift_kl, shift_sev,
+                    )
 
             ep_steps += 1
             band_idx = int(action // n_modes)

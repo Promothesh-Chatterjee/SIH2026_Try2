@@ -143,6 +143,15 @@ def load_h5_records(
     for r in records:
         r.toa_us -= t0
     records.sort(key=lambda r: r.toa_us)
+
+    # Invariant: returned records must be strictly non-decreasing in ToA
+    for i in range(len(records) - 1):
+        if records[i].toa_us > records[i + 1].toa_us:
+            raise ValueError(
+                f"Canonical ingestion invariant violated: "
+                f"records[{i}].toa_us ({records[i].toa_us}) > records[{i+1}].toa_us ({records[i+1].toa_us})"
+            )
+
     return records
 
 

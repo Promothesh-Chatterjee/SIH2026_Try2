@@ -46,11 +46,13 @@ def test_generate_api_key():
 def test_get_valid_api_keys_empty(monkeypatch):
     """When SMARTSCAN_API_KEYS is unset, valid set is empty."""
     monkeypatch.delenv("SMARTSCAN_API_KEYS", raising=False)
+    monkeypatch.delenv("SMARTSCAN_API_KEY", raising=False)
     assert get_valid_api_keys() == set()
 
 
 def test_get_valid_api_keys_configured(monkeypatch):
     """Parses comma-separated and trimmed API keys."""
+    monkeypatch.delenv("SMARTSCAN_API_KEY", raising=False)
     monkeypatch.setenv("SMARTSCAN_API_KEYS", "key1, key2,  key3  ")
     assert get_valid_api_keys() == {"key1", "key2", "key3"}
 
@@ -58,6 +60,7 @@ def test_get_valid_api_keys_configured(monkeypatch):
 def test_require_api_key_open_dev_mode(monkeypatch):
     """When SMARTSCAN_API_KEYS is empty, open-dev fallback returns 'dev-open'."""
     monkeypatch.delenv("SMARTSCAN_API_KEYS", raising=False)
+    monkeypatch.delenv("SMARTSCAN_API_KEY", raising=False)
     assert require_api_key(None) == "dev-open"
     assert require_api_key("some-key") == "dev-open"
 

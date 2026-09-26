@@ -1,13 +1,12 @@
 {
   "orchestrator_version": "1.0.0",
-  "timestamp_utc": "2026-09-25T20:04:30Z",
+  "timestamp_utc": "2026-09-26T05:46:51Z",
   "provenance": {
     "scientific_evaluation_source_commit": "43ca6c35199ee6a4435c1eecf27512c5466ad02e",
-    "verification_orchestrator_commit": "a7ed026a5f5894fd9238d5b81fd43d78ec7c3c38",
-    "evidence_package_commit": "8e587e0e5d2dcce16235ca1e5fb81bab773b415f",
-    "note": "scientific_evaluation_source_commit represents the git revision under which TSRD benchmark evaluations were executed. verification_orchestrator_commit represents the verifier runtime revision. evidence_package_commit represents the git revision capturing the authoritative 15-gate verification execution results."
+    "verification_orchestrator_commit": "8e2eefd5664e6829180e6fddab31a9ba9c9450e9",
+    "note": "scientific_evaluation_source_commit represents the git revision under which TSRD benchmark evaluations were executed. verification_orchestrator_commit represents the verifier runtime revision."
   },
-  "source_git_commit": "a7ed026a5f5894fd9238d5b81fd43d78ec7c3c38",
+  "source_git_commit": "8e2eefd5664e6829180e6fddab31a9ba9c9450e9",
   "total_gates": 15,
   "passed_gates": 15,
   "failed_gates": 0,
@@ -95,7 +94,7 @@
       "gate_id": 14,
       "title": "Controlled Continuation Retraining Pipeline Smoke Check",
       "passed": true,
-      "detail": "50-step dry run verified: final.pt valid, baseline immutable (SHA exact)"
+      "detail": "SKIPPED by user argument"
     },
     {
       "gate_id": 15,

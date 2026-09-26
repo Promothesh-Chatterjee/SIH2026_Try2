@@ -95,6 +95,17 @@ validation:
   seed: 42
   allow_synthetic_fallback: false
 
+distribution_shift:
+  enabled: true
+  monitor_only: true
+  threshold: 0.15           # KL alert threshold in bits (policy-observation drift)
+  critical_threshold: 0.40  # KL critical threshold in bits
+  window_size: 500          # rolling observation window size
+  eval_interval_steps: 50   # compute shift every 50 steps
+  action_on_threshold: "warn"
+  auto_adjust_learning_rate: false
+  auto_adjust_replay_ratio: false
+
 # RC-2.10: explicit telemetry schema version (all records carry this field).
 telemetry:
   schema_version: "2.0"
